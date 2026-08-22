@@ -72,62 +72,39 @@ extraction, and that diff must be justified in the PR.
 
 ## Pre-push CI simulation
 
-Run these **before every commit** to catch the fastest CI failures locally:
-
-```bash
-gofmt -w .                          # catches gofmt (saves ~13s CI)
-go vet ./...                        # catches vet warnings (saves ~52s CI/lint)
-make lint                           # golangci-lint at CI's pin + repolint
-go test ./internal/tool/builtin/ ./internal/boot/  # catches tool/boot test breaks
-```
-
-`make lint` runs both gates CI runs, at the version in `.golangci-version`;
-`make lint-install` installs it. Do not skip it: a `modernize` finding never
-shows up in `go vet`, and the CI round trip that catches it instead costs ten
-minutes.
+Before every commit run `gofmt -w .`, `go vet ./...`, `make lint`, then
+`go test ./internal/tool/builtin/ ./internal/boot/`. `make lint` runs both
+gates at the pin in `.golangci-version`; a `modernize` finding never shows up
+in `go vet`.
 
 ## Import cycle rule
 
-Before importing a new internal package from a non-test file, verify the target package's **test files** aren't already importing back to you:
-
-```
-# BAD: agent(_test.go) → tool/builtin(sessions.go) → agent  → setup failed
-```
-
-Use `go test ./path/to/target/` to detect cycles **before** pushing. A `[setup failed]` message means a cycle exists.
+Before importing a new internal package from a non-test file, run
+`go test ./path/to/target/` — a `[setup failed]` means its test files already
+import back to you.
 
 ## PR hygiene
 
-- **One force-push per round of review feedback.** Multiple force-pushes destroy review history and confuse reviewers.
-- **Keep the PR diff minimal.** Only the files relevant to the PR's purpose — no stray changes from other branches.
-- **Amend, don't add commits, for review feedback** — keeps the commit history clean.
+- **One force-push per round of review feedback** — multiple force-pushes destroy review history.
+- **Keep the PR diff minimal** — only files relevant to the PR's purpose.
+- **Amend, don't add commits, for review feedback.**
 
 ## PR metadata gates
 
-Two CI guards read the PR body. The scripts are the source of truth and both
-run locally: `scripts/check-cache-impact.sh`, `scripts/check-docs-impact.sh`.
-Separators must be an ASCII `-` or `:` — an em dash fails the docs guard.
+Two CI guards read the PR body; the scripts are the source of truth and run
+locally: `scripts/check-cache-impact.sh`, `scripts/check-docs-impact.sh`.
+Separators must be ASCII `-` or `:` — an em dash fails the docs guard.
 
-Cache-sensitive diffs (`internal/tool/`, `internal/provider/`,
-`internal/boot/`, `internal/agent/agent.go`, and the rest of the list in the
-script) require:
-
-```
-Cache-impact: <none|low|medium|high> - <reason>
-Cache-guard: <focused guard test/command or existing guard rationale>
-```
-
-`none` is a legitimate impact when the provider-visible prefix stays
-byte-identical; only an empty value, `todo`, or `tbd` is rejected. If the diff
-also touches `internal/config/`, `internal/memory/`, `internal/outputstyle/`,
-`internal/skill/`, or `internal/boot/`, add `System-prompt-review: <note>` —
-that field additionally rejects `none` and `n/a`, so it must name a reviewer.
-
-User-visible diffs (`cmd/reasonix/`, `desktop/`, `npm/`, and most of
-`internal/`; tests and lockfiles are exempt) require one of these, chosen by
-whether the same PR edited `docs/*.md`:
-
-```
-Documentation-impact: updated - <what changed>            # docs/*.md edited
-Documentation-impact: none - <why the docs stay correct>  # not edited
-```
+- Cache-sensitive diffs (`internal/tool/`, `internal/provider/`,
+  `internal/boot/`, `internal/agent/agent.go`, and the rest in the script)
+  need `Cache-impact: <none|low|medium|high> - <reason>` plus
+  `Cache-guard: <focused guard test/command or existing guard rationale>`.
+  `none` is fine only when the provider-visible prefix stays byte-identical;
+  empty/`todo`/`tbd` are rejected.
+- Diffs also touching `internal/config/`, `internal/memory/`,
+  `internal/outputstyle/`, `internal/skill/`, or `internal/boot/` additionally
+  need `System-prompt-review: <reviewer>` (`none`/`n/a` rejected).
+- User-visible diffs (`cmd/reasonix/`, `desktop/`, `npm/`, most `internal/`;
+  tests and lockfiles exempt) need `Documentation-impact: updated - <what
+  changed>` when `docs/*.md` was edited, else
+  `Documentation-impact: none - <why the docs stay correct>`.
