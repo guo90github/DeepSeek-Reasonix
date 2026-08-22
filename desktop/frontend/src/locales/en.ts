@@ -2906,6 +2906,11 @@ export const en = {
   "msg.thinkingRunning": "thinking…",
   "msg.thinkingDone": "done",
   "msg.thinkingDuration": "lasted {s}s",
+
+  // structured reasoning steps
+  "reasoning.stepsDetected": "{n} steps detected",
+  "reasoning.stepsComplete": "{n}/{total} steps complete",
+  "reasoning.collapseCompleted": "Collapse completed steps",
   "msg.memoryCitationsCount": "{n} memory references",
   "msg.memoryCompilerCitationsCount": "{n} Memory v5 compiler references",
   "msg.memoryCompilerApplied": "Memory v5 compiler applied to this message",

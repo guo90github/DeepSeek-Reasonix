@@ -2009,6 +2009,11 @@ export const zhTW: Record<DictKey, string> = {
   "msg.thinkingRunning": "思考中…",
   "msg.thinkingDone": "已完成",
   "msg.thinkingDuration": "持續了 {s} 秒",
+
+  // structured reasoning steps
+  "reasoning.stepsDetected": "已檢測 {n} 個步驟",
+  "reasoning.stepsComplete": "{n}/{total} 步完成",
+  "reasoning.collapseCompleted": "摺疊已完成步驟",
   "msg.memoryCitationsCount": "{n} 條記憶引用",
   "msg.memoryCompilerCitationsCount": "{n} 條 Memory v5 編譯引用",
   "msg.memoryCompilerApplied": "此訊息已套用 Memory v5 編譯器",

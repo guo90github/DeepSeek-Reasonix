@@ -94,7 +94,10 @@ console.log("\nbundle budgets");
 // its filtered count matches the assistant Sources panel. The measured build
 // is 431.509 KiB gzip; keep 0.1 KiB of explicit headroom for hash/toolchain
 // drift instead of relying on a rounded equality.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 431.6 : 431.6;
+// The structured reasoning steps renderer (segmenter + timing hook + step
+// cards) adds ~0.3 KiB gzip to that measured build; keep the explicit
+// 0.3 KiB headroom.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 431.9 : 431.9;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via

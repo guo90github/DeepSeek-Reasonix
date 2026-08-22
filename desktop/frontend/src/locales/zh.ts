@@ -2909,6 +2909,11 @@ export const zh: Record<DictKey, string> = {
   "msg.thinkingRunning": "思考中…",
   "msg.thinkingDone": "已完成",
   "msg.thinkingDuration": "持续了 {s} 秒",
+
+  // structured reasoning steps
+  "reasoning.stepsDetected": "已检测 {n} 个步骤",
+  "reasoning.stepsComplete": "{n}/{total} 步完成",
+  "reasoning.collapseCompleted": "折叠已完成步骤",
   "msg.memoryCitationsCount": "{n} 条记忆引用",
   "msg.memoryCompilerCitationsCount": "{n} 条 Memory v5 编译引用",
   "msg.memoryCompilerApplied": "此消息已应用 Memory v5 编译器",

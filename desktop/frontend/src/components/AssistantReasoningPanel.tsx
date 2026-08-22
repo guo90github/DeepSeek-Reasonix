@@ -4,10 +4,12 @@ import { useReasoningDisplayMode } from "../lib/reasoningDisplayPreference";
 import { useCollapseAnimation } from "../lib/useCollapseAnimation";
 import { useT } from "../lib/i18n";
 import type { Item } from "../lib/useController";
+import { useReasoningSteps } from "../lib/useReasoningSteps";
 import { Markdown } from "./Markdown";
 import { ProcessBrainIcon } from "./ProcessCard";
 import { ReasoningSummary } from "./ReasoningSummary";
 import { StreamingReasoningText } from "./StreamingReasoningText";
+import { StructuredReasoningSteps } from "./StructuredReasoningSteps";
 
 type AssistantItem = Extract<Item, { kind: "assistant" }>;
 
@@ -36,6 +38,15 @@ export function AssistantReasoningPanel({
   const previousStreaming = useRef(item.streaming);
   const previousComplete = useRef(item.reasoningComplete ?? false);
   const previousMode = useRef(displayMode);
+  const stepsResult = useReasoningSteps(
+    item.reasoning,
+    {
+      reasoningComplete: item.reasoningComplete ?? false,
+      totalDurationMs: item.reasoningDurationMs,
+    },
+    open && displayMode !== "hidden" && displayMode !== "pending",
+  );
+  const showSteps = stepsResult.steps.length >= 2;
 
   useEffect(() => {
     const wasStreaming = previousStreaming.current;
@@ -74,9 +85,17 @@ export function AssistantReasoningPanel({
       </button>
       {open ? (
         <div ref={bodyRef} className="reasoning__body" data-transcript-selectable="reasoning">
-          {running
-            ? <StreamingReasoningText text={item.reasoning} />
-            : <Markdown text={item.reasoning} streaming={false} />}
+          {showSteps ? (
+            <StructuredReasoningSteps
+              result={stepsResult}
+              followStreaming={followsWhileStreaming}
+              defaultAllOpen={keepExpanded}
+            />
+          ) : running ? (
+            <StreamingReasoningText text={item.reasoning} />
+          ) : (
+            <Markdown text={item.reasoning} streaming={false} />
+          )}
         </div>
       ) : (
         <ReasoningSummary text={item.reasoning} streaming={running} onOpen={toggle} />
