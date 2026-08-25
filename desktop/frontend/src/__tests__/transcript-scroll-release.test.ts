@@ -8,6 +8,7 @@ import {
   type TranscriptScrollEvent,
   type TranscriptScrollState,
 } from "../lib/transcriptScrollArbiter";
+import { resolveManualMeasurementFreeze } from "../lib/useTranscriptScrollArbiter";
 import { pinTranscriptScrollerToNativeTail, pinTranscriptTailAfterViewportShrink } from "../lib/transcriptScrollGeometry";
 
 let passed = 0;
@@ -270,6 +271,19 @@ check(
   pinTranscriptTailAfterViewportShrink(foldScroller, { contentExtent: 500, viewportExtent: 100 }, false) === null,
   "manual reading suppresses viewport-shrink pinning",
 );
+
+// Measurement freeze must arm only for genuine upward reader gestures (or an
+// explicit caller like the native scrollbar / middle-button pan). A plain
+// click that ends tail-follow through cancelStreamingAndFollow calls with no
+// gesture delta: freezing there snapped rows back to static estimates for the
+// intent lease and scroll anchoring turned the height shift into a visible
+// jump on click (frontend diagnostics trace, row sizes oscillating ±120px).
+check(resolveManualMeasurementFreeze(undefined, undefined) === false, "plain click tail release does not freeze measurements");
+check(resolveManualMeasurementFreeze(undefined, false) === false, "explicit non-freeze stays non-freeze");
+check(resolveManualMeasurementFreeze(undefined, true) === true, "native scrollbar / middle-pan keeps the freeze");
+check(resolveManualMeasurementFreeze(-120, false) === true, "upward reader gesture freezes row measurements");
+check(resolveManualMeasurementFreeze(120, false) === false, "downward tail-claiming gesture keeps measuring");
+check(resolveManualMeasurementFreeze(0, false) === false, "a zero-delta gesture never freezes");
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

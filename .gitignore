@@ -77,3 +77,5 @@ site/.generated/
 
 # Committed pointer at REASONIX.md; overrides a global CLAUDE.md ignore rule.
 !/CLAUDE.md
+/.playwright-mcp/
+/mobile/.expo/dev/logs/

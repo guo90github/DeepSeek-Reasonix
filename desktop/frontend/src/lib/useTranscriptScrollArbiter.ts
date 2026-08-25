@@ -52,7 +52,17 @@ export type {
 } from "./transcriptScrollRecovery";
 export { hasTranscriptScrollableRange, nativeTranscriptBottomTop, nativeTranscriptDistanceFromBottom, TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX };
 
+// Freeze decision for the manual reader gesture. A no-arg tail release (plain
+// click / selection) must not freeze: rows would snap to static estimates for
+// the intent lease, shifting the list and making scroll anchoring "jump".
+export function resolveManualMeasurementFreeze(readerDeltaY?: number, freezeMeasurements?: boolean): boolean {
+  return readerDeltaY !== undefined ? readerDeltaY < 0 : freezeMeasurements === true;
+}
+
 const READER_INTENT_IDLE_MS = 180;
+// A pointer movement below this distance is a plain click, not a selection
+// drag; only plain clicks may re-claim the tail after starting at the bottom.
+const CLICK_TAIL_RESTORE_DISTANCE_PX = 8;
 // Slow WebView2 rows need a wall-clock mount budget. Expiry suspends without
 // an intermediate scrollBy, then retries after a bounded quiet window.
 const ANCHOR_RESTORE_BUDGET_MS = 1_000;
@@ -88,6 +98,11 @@ export function useTranscriptScrollArbiter({
   const touchStartYRef = useRef<number | null>(null);
   const nativeScrollbarDragRef = useRef(false);
   const middlePointerScrollRef = useRef(false);
+  // Left-click anchor for the click-at-bottom tail restore: a plain click
+  // (no drag) that began while the view was at the bottom must leave it at
+  // the bottom, because row heights can re-measure on click and strand the
+  // reader above the fold otherwise.
+  const pointerDownAnchorRef = useRef<{ x: number; y: number; atBottom: boolean } | null>(null);
   const deliverScrollRef = useRef<((element?: HTMLDivElement) => void) | null>(null);
   const generationRef = useRef(0);
   const followFrameRef = useRef<number | null>(null);
@@ -419,7 +434,11 @@ export function useTranscriptScrollArbiter({
     switch (mode) {
       case "tail-follow": reset(); break;
       case "manual":
-        manualMeasurementFreezeRef.current = true;
+        // Mode transitions back to manual (selection/resize/restore end) are
+        // not reader gestures: only releaseTailFollow arms the measurement
+        // freeze for a genuine upward wheel/touch/key gesture. Arming it here
+        // re-froze every row to its static estimate right after a click's
+        // pointerup, flipping the list height and bouncing the viewport.
         dispatch({ type: "MANUAL_READING" });
         break;
       case "user-resize": dispatch({ type: "USER_RESIZE_BEGIN" }); break;
@@ -445,13 +464,28 @@ export function useTranscriptScrollArbiter({
     );
   }, [deliverScroll, dispatch, endReaderIntent, tailSettle]);
 
-  const finishPointerIntent = useCallback(() => {
+  const finishPointerIntent = useCallback((event?: PointerEvent) => {
     if (nativeScrollbarDragRef.current) finishNativeScrollbarDrag();
     if (middlePointerScrollRef.current) {
       middlePointerScrollRef.current = false;
       endReaderIntent();
+      return;
     }
-  }, [endReaderIntent, finishNativeScrollbarDrag]);
+    const down = pointerDownAnchorRef.current;
+    pointerDownAnchorRef.current = null;
+    const element = scrollRef.current;
+    if (
+      down && event && event.type === "pointerup" && down.atBottom && element
+      && Math.hypot(event.clientX - down.x, event.clientY - down.y) < CLICK_TAIL_RESTORE_DISTANCE_PX
+    ) {
+      // A plain click that began at the bottom must leave the view at the
+      // bottom. Row heights re-measure shortly AFTER the pointerup (markdown
+      // pending flips), so re-claim the tail now — unconditionally — and let
+      // tail-follow's re-aim keep the view pinned when the drift lands. The
+      // next frame defers past the selection owner's mode transition.
+      requestAnimationFrame(() => scrollToBottom());
+    }
+  }, [endReaderIntent, finishNativeScrollbarDrag, scrollToBottom]);
 
   const finishAllReaderIntent = useCallback(() => {
     finishPointerIntent();
@@ -567,15 +601,13 @@ export function useTranscriptScrollArbiter({
     setScrollElement((current) => current === element ? current : element);
   }, [deliverScroll, finishNativeScrollbarDrag, invalidateAsyncFrames]);
 
-  const releaseTailFollow = useCallback((claimPhysicalBottom = false, readerDeltaY?: number) => {
+  const releaseTailFollow = useCallback((claimPhysicalBottom = false, readerDeltaY?: number, freezeMeasurements = false) => {
     if (isTranscriptSelectionMode(modeRef.current)) return;
     const element = scrollRef.current;
     if (element && !stateRef.current.scrollable && hasTranscriptScrollableRange(element)) {
       deliverScroll(element);
     }
-    manualMeasurementFreezeRef.current = readerDeltaY !== undefined
-      ? readerDeltaY < 0
-      : !claimPhysicalBottom;
+    manualMeasurementFreezeRef.current = resolveManualMeasurementFreeze(readerDeltaY, freezeMeasurements);
     dispatch({ type: "USER_SCROLL_INTENT", canClaimTail: claimPhysicalBottom });
     if (
       claimPhysicalBottom
@@ -717,18 +749,25 @@ export function useTranscriptScrollArbiter({
 
   const onPointerDownIntent = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     const element = scrollRef.current;
+    if (event.button === 0) {
+      pointerDownAnchorRef.current = element && !isNativeVerticalScrollbarPointer(element, event.nativeEvent)
+        ? { x: event.clientX, y: event.clientY, atBottom: nativeTranscriptDistanceFromBottom(element) <= TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX }
+        : null;
+    } else {
+      pointerDownAnchorRef.current = null;
+    }
     if (element && isNativeVerticalScrollbarPointer(element, event.nativeEvent)) {
       if (!nativeScrollbarDragRef.current) {
         nativeScrollbarDragRef.current = true;
         element.dataset.nativeScrollbarDrag = "true";
         setNativeScrollbarDragging(true);
       }
-      releaseTailFollow();
+      releaseTailFollow(false, undefined, true);
       return true;
     }
     if (event.button !== 1 || restoreTailIfNotScrollable()) return false;
     middlePointerScrollRef.current = true;
-    releaseTailFollow();
+    releaseTailFollow(false, undefined, true);
     return true;
   }, [releaseTailFollow, restoreTailIfNotScrollable]);
 

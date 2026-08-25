@@ -274,6 +274,101 @@ check(
   "user scroll intent cancels a pending anchor compensation",
 );
 
+// ── Click-at-bottom tail restore: a plain left click that began while the
+// view was at the bottom must leave it at the bottom. Row heights can
+// re-measure on click (markdown pending flips) and the browser's anchoring
+// strands the reader above the fold; the pointerup restores the tail for a
+// plain click only, never for a selection drag or a click above the bottom.
+await act(async () => arbiter?.reset());
+scrollExtent = 500;
+scrollElement.scrollTop = 400; // native bottom: extent 500, clientHeight 100
+await act(async () => arbiter?.releaseTailFollow());
+await wheelDown();
+await wheelDown();
+check(arbiter?.modeRef.current === "tail-follow", "setup: re-entered tail-follow at the bottom");
+await act(async () => arbiter?.onPointerDownIntent({
+  button: 0,
+  clientX: 10,
+  clientY: 10,
+  nativeEvent: { button: 0, clientX: 10 },
+} as React.PointerEvent<HTMLElement>));
+// The click re-measures rows and strands the view above the fold.
+scrollElement.scrollTop = 300;
+await act(async () => {
+  dom.window.dispatchEvent(Object.assign(new dom.window.Event("pointerup"), { clientX: 10, clientY: 10 }));
+});
+await flushFrames(); // the deferred scrollToBottom runs on the next frame
+check(arbiter?.modeRef.current === "tail-follow", "a plain click at the bottom re-claims the tail");
+check(scrollElement.scrollTop === 400, "a plain click at the bottom restores the native tail offset");
+
+// A selection drag (pointer moved) must not yank the manual position.
+await act(async () => arbiter?.onPointerDownIntent({
+  button: 0,
+  clientX: 10,
+  clientY: 10,
+  nativeEvent: { button: 0, clientX: 10 },
+} as React.PointerEvent<HTMLElement>));
+scrollElement.scrollTop = 300;
+await act(async () => {
+  dom.window.dispatchEvent(Object.assign(new dom.window.Event("pointerup"), { clientX: 120, clientY: 12 }));
+});
+await flushFrames();
+check(scrollElement.scrollTop === 300, "a selection drag leaves the stranded manual position untouched");
+
+// A click that began above the bottom never re-pins.
+await act(async () => arbiter?.onPointerDownIntent({
+  button: 0,
+  clientX: 10,
+  clientY: 10,
+  nativeEvent: { button: 0, clientX: 10 },
+} as React.PointerEvent<HTMLElement>));
+scrollElement.scrollTop = 300;
+await act(async () => {
+  dom.window.dispatchEvent(Object.assign(new dom.window.Event("pointerup"), { clientX: 10, clientY: 10 }));
+});
+await flushFrames();
+check(scrollElement.scrollTop === 300, "a click that began above the bottom never re-pins");
+
+// The row-height drift can land AFTER the pointerup (markdown re-measures on
+// click); the tail restore must not depend on the pointerup-time distance.
+scrollElement.scrollTop = 400;
+await act(async () => arbiter?.onPointerDownIntent({
+  button: 0,
+  clientX: 10,
+  clientY: 10,
+  nativeEvent: { button: 0, clientX: 10 },
+} as React.PointerEvent<HTMLElement>));
+// Pointerup while the view is still at the bottom (no drift yet).
+await act(async () => {
+  dom.window.dispatchEvent(Object.assign(new dom.window.Event("pointerup"), { clientX: 10, clientY: 10 }));
+});
+await flushFrames();
+check(arbiter?.modeRef.current === "tail-follow", "a plain click at the bottom re-claims the tail before the drift lands");
+check(scrollElement.scrollTop === 400, "re-claiming the tail keeps the current bottom position");
+// The drift then lands; the click's pending jump-tail transaction (240ms)
+// re-aims it back to the bottom.
+scrollElement.scrollTop = 300;
+await act(async () => arbiter?.followGrowingTail());
+await advanceClock(250);
+await flushFrames();
+check(scrollElement.scrollTop === 400, "tail-follow re-aims the late row-height drift back to the bottom");
+
+// The measurement freeze must not re-arm on the mode transition back to
+// manual (selection end). The click's releaseTailFollow clears it; the
+// pointerup's setMode("manual") must not re-freeze rows to their static
+// estimates, or the list height flips and the viewport bounces mid-position.
+rowElement.dataset.transcriptEstimate = "200";
+rowElement.dataset.rowKind = "answer";
+rowElement.dataset.rowKey = "row-freeze-probe";
+rowElement.dataset.transcriptLayoutVariant = "text-flow";
+await act(async () => arbiter?.setMode("manual", "selection-end"));
+const measuredAfterManualEnd = arbiter?.itemSize(rowElement, "offsetHeight");
+check(measuredAfterManualEnd === 100, "selection end must not re-freeze rows to their static estimates");
+delete rowElement.dataset.transcriptEstimate;
+delete rowElement.dataset.rowKind;
+delete rowElement.dataset.rowKey;
+delete rowElement.dataset.transcriptLayoutVariant;
+
 await act(async () => root.unmount());
 Date.now = originalDateNow;
 dom.window.setTimeout = originalSetTimeout;
