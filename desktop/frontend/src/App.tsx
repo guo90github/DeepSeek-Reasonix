@@ -12,8 +12,6 @@ import {
   SquarePen,
   PanelLeft,
   PanelRight,
-  FileText,
-  GitBranch,
   MessageSquare,
   Settings as SettingsIcon,
   RotateCw,
@@ -2703,6 +2701,15 @@ export default function App() {
     setRightDockMode("files");
   }, [desktopLayoutStyle, rightDockMode, setRightDockMode]);
 
+  // The dock no longer has a standalone 文件 tab: files live inside 概览, so a
+  // "files" mode (legacy state or the remote-gone fallback) lands on the
+  // composite overview instead of showing a dock with no selected tab.
+  useEffect(() => {
+    if (desktopLayoutStyle === "creation") return;
+    if (rightDockMode !== "files") return;
+    setRightDockMode("context");
+  }, [desktopLayoutStyle, rightDockMode, setRightDockMode]);
+
   const setExpandedSidebarWidth = useCallback((width: number) => {
     closeTransientOverlays();
     const next = sidebarWidthClamp(width);
@@ -5239,26 +5246,6 @@ export default function App() {
                     <span className="workbench-dock__tab-label">{t("rightDock.overview")}</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={rightDockMode === "files"}
-                  className={`workbench-dock__tab${rightDockMode === "files" ? " workbench-dock__tab--active" : ""}`}
-                  onClick={() => openRightDockMode("files")}
-                >
-                  <FileText size={13} />
-                  <span className="workbench-dock__tab-label">{t("workspace.filesTab")}</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={rightDockMode === "changed"}
-                  className={`workbench-dock__tab${rightDockMode === "changed" ? " workbench-dock__tab--active" : ""}`}
-                  onClick={() => openRightDockMode("changed")}
-                >
-                  <GitBranch size={13} />
-                  <span className="workbench-dock__tab-label">{t("workspace.changedTab")}</span>
-                </button>
                 {remoteHosts.length > 0 && (
                   <button
                     type="button"
@@ -5278,60 +5265,63 @@ export default function App() {
                 <Suspense fallback={null}>
                   <RemotePanel onClose={() => setWorkspacePanel(false)} />
                 </Suspense>
-              ) : rightDockMode === "context" && desktopLayoutStyle !== "creation" ? (
-                <Suspense fallback={null}>
-                  <ContextPanel
-                    tabId={activeTabId}
-                    context={state.context}
-                    usage={state.usage}
-                    sessionTokens={state.sessionTokens}
-                    sessionCost={state.sessionCost}
-                    sessionCurrency={state.sessionCurrency}
-                    sessionTurns={sessionTurns}
-                    turnTokens={state.turnTotalTokens}
-                    turnCost={state.turnCost}
-                    turnRateBand={state.turnRateBand}
-                    balance={state.balance}
-                    sessionGen={state.sessionGen}
-                    refreshKey={dockRefreshKey + state.contextPanelSeq}
-                    usageSeq={state.usageSeq}
-                  />
-                </Suspense>
               ) : (
-                <Suspense fallback={null}>
-                  <WorkspacePanel
-                    key={workspaceTreeMemoryKey}
-                    open={effectiveWorkspacePanelRenderable}
-                    tabId={activeTabId}
-                    cwd={state.meta?.cwd}
-                    workspaceScopeKey={workspaceScopeKey}
-                    workspaceMemoryKey={workspaceTreeMemoryKey}
-                    dockTreeWidth={rightDockTreeWidth}
-                    dockPreviewWidth={rightDockPreviewWidth}
-                    onRestoreDockWidths={restoreWorkspaceDockWidths}
-                    maximized={workspacePanelMaximized}
-                    panelWidth={workspacePanelRenderWidth}
-                    onClose={() => setWorkspacePanel(false)}
-                    onToggleMaximized={() => {
-                      closeTransientOverlays();
-                      setWorkspacePanelMaximized((value) => !value);
-                    }}
-                    onPreviewModeChange={handleWorkspacePreviewModeChange}
-                    onAddToChat={addWorkspaceTextToComposer}
-                    onAddCodeToChat={addWorkspaceCodeToComposer}
-                    onRequestPanelWidth={ensureWorkspacePanelWidth}
-                    onFileTreeRefresh={refreshComposerFileRefs}
-                    onSessionRevertCommitted={handleSessionRevertCommitted}
-                    onOpenInTerminal={openTerminalForPath}
-                    initialViewMode={rightDockMode === "changed" ? "changed" : "files"}
-                    completionSummary={state.completionSummary}
-                    turnStartAt={state.turnStartAt}
-                    verificationRevealRequest={verificationRevealRequest}
-                    qualityFloor={composerProfile.qualityFloor}
-                    showViewTabs={false}
-                    creationMode={sidebarCreation}
-                  />
-                </Suspense>
+                <div className="workbench-dock__stack">
+                  {rightDockMode === "context" && desktopLayoutStyle !== "creation" && (
+                    <Suspense fallback={null}>
+                      <ContextPanel
+                        tabId={activeTabId}
+                        context={state.context}
+                        usage={state.usage}
+                        sessionTokens={state.sessionTokens}
+                        sessionCost={state.sessionCost}
+                        sessionCurrency={state.sessionCurrency}
+                        sessionTurns={sessionTurns}
+                        turnTokens={state.turnTotalTokens}
+                        turnCost={state.turnCost}
+                        turnRateBand={state.turnRateBand}
+                        balance={state.balance}
+                        sessionGen={state.sessionGen}
+                        refreshKey={dockRefreshKey + state.contextPanelSeq}
+                        usageSeq={state.usageSeq}
+                      />
+                    </Suspense>
+                  )}
+                  <Suspense fallback={null}>
+                    <WorkspacePanel
+                      key={workspaceTreeMemoryKey}
+                      open={effectiveWorkspacePanelRenderable}
+                      tabId={activeTabId}
+                      cwd={state.meta?.cwd}
+                      workspaceScopeKey={workspaceScopeKey}
+                      workspaceMemoryKey={workspaceTreeMemoryKey}
+                      dockTreeWidth={rightDockTreeWidth}
+                      dockPreviewWidth={rightDockPreviewWidth}
+                      onRestoreDockWidths={restoreWorkspaceDockWidths}
+                      maximized={workspacePanelMaximized}
+                      panelWidth={workspacePanelRenderWidth}
+                      onClose={() => setWorkspacePanel(false)}
+                      onToggleMaximized={() => {
+                        closeTransientOverlays();
+                        setWorkspacePanelMaximized((value) => !value);
+                      }}
+                      onPreviewModeChange={handleWorkspacePreviewModeChange}
+                      onAddToChat={addWorkspaceTextToComposer}
+                      onAddCodeToChat={addWorkspaceCodeToComposer}
+                      onRequestPanelWidth={ensureWorkspacePanelWidth}
+                      onFileTreeRefresh={refreshComposerFileRefs}
+                      onSessionRevertCommitted={handleSessionRevertCommitted}
+                      onOpenInTerminal={openTerminalForPath}
+                      initialViewMode={rightDockMode === "changed" ? "changed" : "files"}
+                      completionSummary={state.completionSummary}
+                      turnStartAt={state.turnStartAt}
+                      verificationRevealRequest={verificationRevealRequest}
+                      qualityFloor={composerProfile.qualityFloor}
+                      showViewTabs={false}
+                      creationMode={sidebarCreation}
+                    />
+                  </Suspense>
+                </div>
               )}
             </div>
           </aside>

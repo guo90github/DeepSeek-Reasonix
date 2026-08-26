@@ -25934,6 +25934,28 @@ body > .mermaid-diagram--fullscreen {
   border-left: none;
 }
 
+/* 概览 stacks the context snapshot above the full files panel: the top is
+   content-sized (capped, scrolls internally), the files panel fills the rest. */
+.workbench-dock__body > .workbench-dock__stack {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.workbench-dock__stack > .context-panel {
+  flex: 0 0 auto;
+  height: auto;
+  max-height: 46%;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.workbench-dock__stack > .workspace-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
 .layout--workspace-maximized .context-inspector,
 .layout--workspace-maximized .workbench-dock {
   grid-column: 2;
