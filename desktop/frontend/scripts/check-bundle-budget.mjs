@@ -130,12 +130,7 @@ if (initialCSS.length > 0) {
 // Navigation overlay styles add a bounded 0.1 KiB to the deferred shell.
 // The cleaned source panel adds 0.1 KiB gzip to the deferred shell on top of
 // the retained-transcript navigation allowance; keep the ratchet explicit.
-// The measured gzip varies by Node/zlib build (0.3 KiB locally vs CI); retain
-// a narrow headroom so the gate stays platform-stable.
-// The composer input-optimize preview card, direction menu, and trigger button
-// add ~0.3 KiB gzip to the deferred app-shell stylesheet. Keep the narrow
-// attributable headroom instead of weakening the optimize feature.
-assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 115.3 * 1024);
+assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 114.3 * 1024);
 if (localeChunks.length !== 2) {
   throw new Error(`expected 2 on-demand Chinese locale chunks, found ${localeChunks.length}`);
 }
