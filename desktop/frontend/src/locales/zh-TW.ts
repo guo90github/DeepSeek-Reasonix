@@ -173,6 +173,12 @@ export const zhTW: Record<DictKey, string> = {
   "rightDock.remote": "遠端",
   "rightDock.terminal": "終端機",
 
+  // 分欄布局
+  "split.emptyTurn": "（空回合）",
+  "split.awaitingAnswer": "正在等待回答…",
+  "split.resizeProcessPane": "調整過程欄寬度",
+  "split.toggleProcessPane": "過程欄",
+
   // 話題欄
   "topicBar.renameSession": "重新命名會話",
   "topicBar.more": "更多",
@@ -1416,6 +1422,7 @@ export const zhTW: Record<DictKey, string> = {
   "settings.desktopLayoutStyle.classic": "經典",
   "settings.desktopLayoutStyle.workbench": "工作臺",
   "settings.desktopLayoutStyle.creation": "創作",
+  "settings.desktopLayoutStyle.split": "分欄",
   "settings.manageProviders": "管理模型服務",
   "settings.activeProvider": "當前模型服務",
   "settings.plannerStatus": "規劃方式",

@@ -25916,6 +25916,30 @@ body > .mermaid-diagram--fullscreen {
   height: 100%;
 }
 
+/* Overview merge: context window + session metrics pinned on top, the file
+   tree fills the remaining dock height and scrolls internally. */
+.workbench-dock__body--merged {
+  display: flex;
+  flex-direction: column;
+}
+
+.workbench-dock__body--merged > .context-panel {
+  flex: 0 0 auto;
+  height: auto;
+  overflow: visible;
+}
+
+.workbench-dock__body--merged > .context-panel .context-panel__body {
+  flex: none;
+  overflow-y: visible;
+}
+
+.workbench-dock__body--merged > .workspace-panel {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
 .workbench-dock__body > .workspace-panel {
   border-left: none;
 }

@@ -175,7 +175,7 @@ export interface TurnModel {
   actionText: string;
 }
 
-function turnStableIdentity(model: TurnModel): string {
+export function turnStableIdentity(model: TurnModel): string {
   if (model.user) {
     const user = model.user;
     return JSON.stringify([user.id, user.submissionId ?? "", user.createdAt ?? null, user.text, user.submitText ?? "", user.historyTurn ?? null, user.checkpointTurn ?? null]);

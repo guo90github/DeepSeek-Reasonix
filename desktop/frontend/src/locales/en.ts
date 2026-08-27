@@ -236,6 +236,12 @@ export const en = {
   "rightDock.remote": "Remote",
   "rightDock.terminal": "Terminal",
 
+  // split layout
+  "split.emptyTurn": "(empty turn)",
+  "split.awaitingAnswer": "Waiting for answer…",
+  "split.resizeProcessPane": "Resize process pane",
+  "split.toggleProcessPane": "Process",
+
   // topic bar
   "topicBar.renameSession": "Rename session",
   "topicBar.more": "More",
@@ -1782,6 +1788,7 @@ export const en = {
   "settings.desktopLayoutStyle.classic": "Classic",
   "settings.desktopLayoutStyle.workbench": "Workbench",
   "settings.desktopLayoutStyle.creation": "Creation",
+  "settings.desktopLayoutStyle.split": "Split",
   "settings.displayMode": "Conversation density",
   "settings.displayModeHint": "Adjust the amount of space used by messages and working steps.",
   "settings.displayMode.standard": "Standard",

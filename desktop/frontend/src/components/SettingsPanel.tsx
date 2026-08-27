@@ -1509,11 +1509,12 @@ function normalizeDisplayMode(mode: string | undefined): DisplayMode {
   return mode === "standard" || mode === "compact" ? mode : "standard";
 }
 
-type DesktopLayoutStyle = "classic" | "workbench" | "creation";
+type DesktopLayoutStyle = "classic" | "workbench" | "creation" | "split";
 
 function normalizeDesktopLayoutStyle(style: string | undefined): DesktopLayoutStyle {
   if (style === "classic") return "classic";
   if (style === "creation") return "creation";
+  if (style === "split") return "split";
   return "workbench";
 }
 
@@ -1673,7 +1674,7 @@ function GeneralSection({ s, busy, apply, agentRunning }: SectionProps & { agent
       <SettingsSection title={t("settings.general.sectionAppearance")} description={t("settings.general.sectionAppearanceHint")}>
       <SettingsField label={t("settings.desktopLayoutStyle")} hint={t("settings.desktopLayoutStyleHint")} icon={<Monitor size={18} />}>
         <div className="set-seg">
-          {(["workbench", "classic", "creation"] as const).map((style) => (
+          {(["workbench", "classic", "creation", "split"] as const).map((style) => (
             <button
               key={style}
               className={`set-seg__btn${desktopLayoutStyle === style ? " set-seg__btn--on" : ""}`}

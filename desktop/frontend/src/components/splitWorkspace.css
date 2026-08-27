@@ -1,0 +1,268 @@
+/* Split layout: grid the .chat-pane into topicbar / panes / composer rows.
+   .main and .split-workspace dissolve (display:contents) so the panes and the
+   footer become direct grid children: the composer owns the bottom row of the
+   conversation column only, and the process column spans the full height —
+   composer growth never squeezes the process pane. */
+
+.app--split .chat-pane {
+  display: grid;
+  grid-template-rows: var(--topicbar-height) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) 8px minmax(0, var(--split-process-width, 60%));
+}
+
+.app--split .chat-pane .topicbar {
+  grid-row: 1;
+  grid-column: 1 / 4;
+}
+
+.app--split .chat-pane .main,
+.app--split .chat-pane .transcript-navigation-surface,
+.app--split .chat-pane .transcript-navigation-content,
+.app--split .split-workspace {
+  display: contents;
+}
+
+.conversation-pane {
+  grid-row: 2;
+  grid-column: 1;
+  min-height: 0;
+}
+
+.split-workspace__divider {
+  grid-row: 2;
+  grid-column: 2;
+  cursor: col-resize;
+  touch-action: none;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.split-workspace__divider:hover,
+.split-workspace__divider--active {
+  background: var(--border);
+}
+
+.split-workspace--resizing {
+  cursor: col-resize;
+}
+
+.split-workspace--resizing * {
+  user-select: none;
+}
+
+.process-pane {
+  grid-row: 2 / 4;
+  grid-column: 3;
+  min-height: 0;
+}
+
+.app--split .chat-pane .footer {
+  grid-row: 3;
+  grid-column: 1;
+  min-width: 0;
+}
+
+/* Virtuoso needs real heights: content-visibility placeholders hide growth
+   from its measurement, which breaks tail-follow and the scroll range. */
+.conversation-pane *,
+.process-pane * {
+  content-visibility: visible !important;
+  contain-intrinsic-size: none !important;
+}
+
+/* ── turn cards ─────────────────────────────────────────────────────────── */
+
+.conversation-pane,
+.process-pane {
+  --pane-inline-pad: 20px;
+}
+
+.conversation-pane__turn,
+.process-pane__turn {
+  margin: 0 var(--pane-inline-pad);
+  border-radius: 10px;
+}
+
+.conversation-pane__turn {
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.process-pane__turn {
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
+.conversation-pane__turn-head,
+.process-pane__turn-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 6px 8px;
+  user-select: none;
+}
+
+.conversation-pane__turn-head:hover,
+.process-pane__turn-head:hover {
+  background: var(--bg-elev, rgba(128, 128, 128, 0.08));
+}
+
+.turn-badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--accent-soft, rgba(99, 102, 241, 0.16));
+  color: var(--accent, #6366f1);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.conversation-pane__turn-question,
+.process-pane__turn-question {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm, 13px);
+  color: var(--fg-dim, inherit);
+}
+
+.conversation-pane__turn-body,
+.process-pane__turn-body {
+  padding: 2px 4px 6px;
+}
+
+.conversation-pane__turn--collapsed .conversation-pane__turn-body,
+.process-pane__turn--collapsed .process-pane__turn-body {
+  display: none;
+}
+
+.conversation-pane__spacer {
+  flex: 0 0 auto;
+  min-height: 8px;
+}
+
+.conversation-pane__older {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  padding: 10px var(--pane-inline-pad);
+  font-size: var(--text-sm, 13px);
+  color: var(--fg-dim, inherit);
+}
+
+.conversation-pane__empty-answer,
+.process-pane__empty-segment {
+  color: var(--fg-faint, var(--fg-dim));
+  font-size: var(--text-sm, 13px);
+  padding: 4px 8px;
+}
+
+.process-pane__segment {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Decision surfaces (approval/ask/clear-context shelves) render inside the
+   footer, which the split grid pins to the narrow conversation column. Let
+   them escape as a full-width overlay anchored to the chat-pane bottom. */
+.app--split .chat-pane .footer.footer--decision {
+  overflow: visible;
+  max-height: none;
+}
+
+.app--split .chat-pane .footer.footer--decision .prompt-shelf {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  margin-bottom: 0;
+  max-width: none;
+  z-index: var(--z-floating-menu);
+}
+
+.app--split .chat-pane .footer.footer--decision .prompt-shelf__card {
+  background: var(--bg-elev);
+  border-color: var(--border);
+}
+
+/* ── narrow viewport: the process pane becomes an overlay drawer ─────────── */
+
+.process-pane-host {
+  display: contents;
+}
+
+.split-workspace__process-toggle {
+  display: none;
+}
+
+@media (max-width: 1100px) {
+  .app--split .chat-pane {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .split-workspace__divider {
+    display: none;
+  }
+
+  /* Virtuoso sets position:relative inline on its root, so the drawer moves
+     to an absolute wrapper and the list itself fills it. */
+  .process-pane-host {
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(86%, 680px);
+    background: var(--chat-bg);
+    box-shadow: -8px 0 24px rgba(0, 0, 0, 0.22);
+    transform: translateX(102%);
+    transition: transform 0.18s ease;
+    z-index: var(--z-drawer-backdrop);
+  }
+
+  .process-pane-host .process-pane {
+    height: 100%;
+  }
+
+  .split-workspace--process-open .process-pane-host {
+    transform: none;
+  }
+
+  .split-workspace__process-backdrop {
+    position: absolute;
+    inset: 0;
+    z-index: var(--z-local-raised);
+  }
+
+  .split-workspace__process-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: var(--z-floating-menu);
+    padding: 5px 12px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    color: var(--fg);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .split-workspace__process-toggle:hover,
+  .split-workspace__process-toggle--active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}

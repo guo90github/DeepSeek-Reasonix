@@ -387,6 +387,8 @@ func normalizeDesktopLayoutStyle(style string) string {
 		return "workbench"
 	case "creation":
 		return "creation"
+	case "split":
+		return "split"
 	default:
 		return "workbench"
 	}

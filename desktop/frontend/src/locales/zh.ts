@@ -237,6 +237,12 @@ export const zh: Record<DictKey, string> = {
   "rightDock.remote": "远程",
   "rightDock.terminal": "终端",
 
+  // 分栏布局
+  "split.emptyTurn": "（空回合）",
+  "split.awaitingAnswer": "正在等待回答…",
+  "split.resizeProcessPane": "调整过程栏宽度",
+  "split.toggleProcessPane": "过程栏",
+
   // 话题栏
   "topicBar.renameSession": "重命名会话",
   "topicBar.more": "更多",
@@ -1784,6 +1790,7 @@ export const zh: Record<DictKey, string> = {
   "settings.desktopLayoutStyle.classic": "经典",
   "settings.desktopLayoutStyle.workbench": "工作台",
   "settings.desktopLayoutStyle.creation": "创作",
+  "settings.desktopLayoutStyle.split": "分栏",
   "settings.displayMode": "会话密度",
   "settings.displayModeHint": "调整消息和工作过程在界面中占用的空间。",
   "settings.displayMode.standard": "标准",

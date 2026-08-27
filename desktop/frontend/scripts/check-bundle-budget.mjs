@@ -125,7 +125,12 @@ console.log("\nbundle budgets");
 // headroom with the smallest existing decimal ratchet.
 // Direct pending-prompt recovery and authoritative remote Goal state bring the
 // measured path to 445.473 KiB. Retain 0.027 KiB of bounded headroom.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 445.5 : 445.5;
+// Desktop split layout (SplitWorkspace + conversation/process panes statically
+// imported, CSS in a lazy chunk) brings the measured path to 447.582 KiB;
+// retain 0.418 KiB of bounded build/toolchain headroom.
+// Narrow-viewport process drawer + toggle add 0.2 KiB gzip; ratchet to 448.1
+// KiB with 0.4 KiB of headroom.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 448.5 : 448.5;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -196,6 +201,12 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Final remote-runtime parity measures 2384.4 KiB raw. The current main-v2
 // runtime additions bring the combined path to 2404.364 KiB; retain 0.136 KiB
 // of bounded headroom alongside the gzip ratchet above.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_404.5 : 2_404.5;
+// Desktop split layout adds 8.2 KiB raw to the combined path; retain 0.1 KiB
+// of headroom alongside the gzip ratchet above.
+// Localized divider label + resize key add 0.3 KiB; ratchet the combined path
+// to 2413.3 KiB with 0.7 KiB of headroom.
+// Narrow-viewport drawer + toggle add 0.8 KiB raw; ratchet to 2414.3 KiB with
+// 0.7 KiB of headroom.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_415.0 : 2_415.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

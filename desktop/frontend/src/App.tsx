@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { SplitWorkspace } from "./components/SplitWorkspace";
 import { ShellExpandProvider, useShellExpand } from "./lib/shellExpand";
 import {
   Activity,
@@ -12,7 +13,6 @@ import {
   PanelLeft,
   PanelRight,
   FileText,
-  GitBranch,
   MessageSquare,
   Settings as SettingsIcon,
   RotateCw,
@@ -317,11 +317,12 @@ function isThemeMode(value: string): value is Theme {
   return value === "auto" || value === "light" || value === "dark";
 }
 
-type DesktopLayoutStyle = "classic" | "workbench" | "creation";
+type DesktopLayoutStyle = "classic" | "workbench" | "creation" | "split";
 
 function normalizeDesktopLayoutStyle(style: string | undefined): DesktopLayoutStyle {
   if (style === "workbench") return "workbench";
   if (style === "creation") return "creation";
+  if (style === "split") return "split";
   return "classic";
 }
 const SHOW_CONTEXT_DOCK = true;
@@ -2902,12 +2903,15 @@ export default function App() {
   const openWorkspacePanel = useCallback(
     (mode: RightDockMode = rightDockMode) => {
       closeTransientOverlays();
-      if (mode === "context" || mode !== rightDockMode) {
+      // Outside creation, the files tab merges into the overview; opening the
+      // dock from the topic-bar toggle lands on the merged overview.
+      const resolvedMode: RightDockMode = mode === "files" && desktopLayoutStyle !== "creation" ? "context" : mode;
+      if (resolvedMode === "context" || resolvedMode !== rightDockMode) {
         setWorkspacePreviewActive(false);
       }
-      setRightDockMode(mode);
+      setRightDockMode(resolvedMode);
       let nextMaximized = workspacePanelMaximized;
-      if (mode === "context") {
+      if (resolvedMode === "context") {
         nextMaximized = false;
         setWorkspacePanelMaximized(false);
       } else {
@@ -2922,7 +2926,7 @@ export default function App() {
       setWorkspacePanelOpen(true);
       saveWorkspacePanelOpen(true, activeWorkspaceRoot);
     },
-    [activeWorkspaceRoot, closeTransientOverlays, rightDockMode, workspacePanelMaximized, workspacePanelOpen],
+    [activeWorkspaceRoot, closeTransientOverlays, desktopLayoutStyle, rightDockMode, workspacePanelMaximized, workspacePanelOpen],
   );
 
   const closeWorkspacePanel = useCallback(() => {
@@ -4299,6 +4303,7 @@ export default function App() {
   const workspacePanelResizeMinWidth = workspacePanelAriaMinWidth(workspacePanelMinWidth, workspacePanelRenderWidth);
   const workspacePanelResizeMaxWidth = workspacePanelAvailableWidth;
   const sidebarCreation = desktopLayoutStyle === "creation";
+  const sidebarSplit = desktopLayoutStyle === "split";
   // Command palette shortcut label (⌘K / Ctrl+K), platform-aware.
   const commandPaletteShortcut = formatShortcutCombo(
     resolvedShortcutCombo("commandPalette.open", desktopPlatform),
@@ -4379,7 +4384,8 @@ export default function App() {
         browserPreviewChrome ? "app--browser-preview" : "",
         sidebarWorkbench ? "app--workbench" : "",
         sidebarCreation ? "app--creation" : "",
-        !sidebarWorkbench && !sidebarCreation ? "app--classic" : "",
+        sidebarSplit ? "app--split" : "",
+        !sidebarWorkbench && !sidebarCreation && !sidebarSplit ? "app--classic" : "",
       ].filter(Boolean).join(" ")}
     >
       <ThemeBackground />
@@ -4389,6 +4395,7 @@ export default function App() {
         className={[
           "layout",
           sidebarWorkbench ? "layout--workbench" : "",
+          sidebarSplit ? "layout--split" : "",
           workbenchChromeHidden ? "layout--workbench-chrome-hidden" : "",
           sidebarCreation ? "layout--creation-chrome-hidden" : "",
           sidebarImDetailConnection ? "layout--statusbar-hidden" : "",
@@ -4885,43 +4892,62 @@ export default function App() {
                       (node as HTMLElement & { inert?: boolean }).inert = runtimeTransitioning;
                     }}
                   >
-                    <Transcript
-                      items={visibleTranscriptItems}
-                      live={runtimeTransitioning ? undefined : state.live}
-                      liveStore={liveStore}
-                      tabId={visibleTranscriptTabId}
-                      geometrySessionKey={visibleTranscriptGeometryKey}
-                      footerHeight={footerHeight}
-                      onPrompt={handleTranscriptPrompt}
-                      onDeliveryContinue={() => void handleDeliveryContinue()}
-                      onAcceptDelivery={() => void app.AcceptDeliveryToTab(activeTabIdRef.current ?? "")}
-                      onOpenChanges={() => openRightDockMode("changed")}
-                      onOpenVerification={openTurnVerification}
-                      onEditPrompt={handleEditPrompt}
-                      onRewind={handleMessageAction}
-                      checkpoints={state.checkpoints}
-                      actionPending={state.messageAction != null}
-                      rewindDisabled={Boolean(activeTab?.readOnly) || !controllerReady || hydratePlaceholderActive || rewindState != null || rewindCommitting || state.running || state.messageAction != null || state.approval != null || state.ask != null || clearContextPending || runtimeTransitioning}
-                      running={state.running || rewindCommitting}
-                      turnStartAt={state.turnStartAt}
-                      contentRevision={state.historyLayoutRevision}
-                      historyMutation={state.historyMutation}
-                      welcomeVariant={sidebarCreation ? "creation" : "default"}
-                      creationMode={sidebarCreation}
-                      actionHoverMenus={sidebarCreation && !hydratePlaceholderActive && !runtimeTransitioning}
-                      rewindSignal={rewindSignal}
-                      revealSignal={transcriptRevealSignal}
-                      hydrating={transcriptHydrating || (runtimeTransitioning && !navigationTargetDataReady)}
-                      hasOlderHistory={!runtimeTransitioning && state.historyHasOlder && !rewindState}
-                      historyStartTurn={state.historyStartTurn}
-                      historyTotalTurns={state.historyTotalTurns}
-                      loadingOlderHistory={state.historyOlderLoading}
-                      olderHistoryError={state.historyOlderError}
-                      onLoadOlderHistory={handleLoadOlderHistory}
-                      invocationMetadata={visibleTranscriptTabId ? invocationMetadataByTab[visibleTranscriptTabId] : undefined}
-                      surfaceCommitToken={surfaceCommitToken}
-                      onSurfacePaintReady={handleSurfacePaintReady}
-                    />
+                    {sidebarSplit ? (
+                      <SplitWorkspace
+                        items={visibleTranscriptItems}
+                        live={runtimeTransitioning ? undefined : state.live}
+                        liveStore={liveStore}
+                        tabId={visibleTranscriptTabId}
+                        footerHeight={footerHeight}
+                        running={state.running || rewindCommitting}
+                        turnStartAt={state.turnStartAt}
+                        hydrating={transcriptHydrating || (runtimeTransitioning && !navigationTargetDataReady)}
+                        hasOlderHistory={!runtimeTransitioning && state.historyHasOlder && !rewindState}
+                        loadingOlderHistory={state.historyOlderLoading}
+                        olderHistoryError={state.historyOlderError}
+                        onLoadOlderHistory={handleLoadOlderHistory}
+                        surfaceCommitToken={surfaceCommitToken}
+                        onSurfacePaintReady={handleSurfacePaintReady}
+                      />
+                    ) : (
+                      <Transcript
+                        items={visibleTranscriptItems}
+                        live={runtimeTransitioning ? undefined : state.live}
+                        liveStore={liveStore}
+                        tabId={visibleTranscriptTabId}
+                        geometrySessionKey={visibleTranscriptGeometryKey}
+                        footerHeight={footerHeight}
+                        onPrompt={handleTranscriptPrompt}
+                        onDeliveryContinue={() => void handleDeliveryContinue()}
+                        onAcceptDelivery={() => void app.AcceptDeliveryToTab(activeTabIdRef.current ?? "")}
+                        onOpenChanges={() => openRightDockMode("changed")}
+                        onOpenVerification={openTurnVerification}
+                        onEditPrompt={handleEditPrompt}
+                        onRewind={handleMessageAction}
+                        checkpoints={state.checkpoints}
+                        actionPending={state.messageAction != null}
+                        rewindDisabled={Boolean(activeTab?.readOnly) || !controllerReady || hydratePlaceholderActive || rewindState != null || rewindCommitting || state.running || state.messageAction != null || state.approval != null || state.ask != null || clearContextPending || runtimeTransitioning}
+                        running={state.running || rewindCommitting}
+                        turnStartAt={state.turnStartAt}
+                        contentRevision={state.historyLayoutRevision}
+                        historyMutation={state.historyMutation}
+                        welcomeVariant={sidebarCreation ? "creation" : "default"}
+                        creationMode={sidebarCreation}
+                        actionHoverMenus={sidebarCreation && !hydratePlaceholderActive && !runtimeTransitioning}
+                        rewindSignal={rewindSignal}
+                        revealSignal={transcriptRevealSignal}
+                        hydrating={transcriptHydrating || (runtimeTransitioning && !navigationTargetDataReady)}
+                        hasOlderHistory={!runtimeTransitioning && state.historyHasOlder && !rewindState}
+                        historyStartTurn={state.historyStartTurn}
+                        historyTotalTurns={state.historyTotalTurns}
+                        loadingOlderHistory={state.historyOlderLoading}
+                        olderHistoryError={state.historyOlderError}
+                        onLoadOlderHistory={handleLoadOlderHistory}
+                        invocationMetadata={visibleTranscriptTabId ? invocationMetadataByTab[visibleTranscriptTabId] : undefined}
+                        surfaceCommitToken={surfaceCommitToken}
+                        onSurfacePaintReady={handleSurfacePaintReady}
+                      />
+                    )}
                   </div>
                   {runtimeTransitioning ? (
                     <div className="transcript-navigation-overlay" role="status" aria-live="polite">
@@ -5231,14 +5257,15 @@ export default function App() {
                   <button
                     type="button"
                     role="tab"
-                    aria-selected={rightDockMode === "context"}
-                    className={`workbench-dock__tab${rightDockMode === "context" ? " workbench-dock__tab--active" : ""}`}
+                    aria-selected={rightDockMode === "context" || rightDockMode === "changed"}
+                    className={`workbench-dock__tab${rightDockMode === "context" || rightDockMode === "changed" ? " workbench-dock__tab--active" : ""}`}
                     onClick={() => openRightDockMode("context")}
                   >
                     <Activity size={13} />
                     <span className="workbench-dock__tab-label">{t("rightDock.overview")}</span>
                   </button>
                 )}
+                {desktopLayoutStyle === "creation" && (
                 <button
                   type="button"
                   role="tab"
@@ -5249,16 +5276,7 @@ export default function App() {
                   <FileText size={13} />
                   <span className="workbench-dock__tab-label">{t("workspace.filesTab")}</span>
                 </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={rightDockMode === "changed"}
-                  className={`workbench-dock__tab${rightDockMode === "changed" ? " workbench-dock__tab--active" : ""}`}
-                  onClick={() => openRightDockMode("changed")}
-                >
-                  <GitBranch size={13} />
-                  <span className="workbench-dock__tab-label">{t("workspace.changedTab")}</span>
-                </button>
+                )}
                 {remoteHosts.length > 0 && (
                   <button
                     type="button"
@@ -5273,12 +5291,13 @@ export default function App() {
                 )}
               </div>
             </div>
-            <div className="workbench-dock__body">
+            <div className={["workbench-dock__body", (rightDockMode === "context" || rightDockMode === "changed") && desktopLayoutStyle !== "creation" ? "workbench-dock__body--merged" : ""].filter(Boolean).join(" ")}>
               {rightDockMode === "remote" ? (
                 <Suspense fallback={null}>
                   <RemotePanel onClose={() => setWorkspacePanel(false)} />
                 </Suspense>
-              ) : rightDockMode === "context" && desktopLayoutStyle !== "creation" ? (
+              ) : (rightDockMode === "context" || rightDockMode === "changed") && desktopLayoutStyle !== "creation" ? (
+                <>
                 <Suspense fallback={null}>
                   <ContextPanel
                     tabId={remoteSurfaceActive ? undefined : activeTabId}
@@ -5297,6 +5316,41 @@ export default function App() {
                     usageSeq={visibleRuntimeState.usageSeq}
                   />
                 </Suspense>
+                <Suspense fallback={null}>
+                  <WorkspacePanel
+                    key={`${workspaceTreeMemoryKey}:${rightDockMode === "changed" ? "changed" : "overview"}`}
+                    open={surfaceWorkspacePanelRenderable}
+                    tabId={activeTabId}
+                    cwd={state.meta?.cwd}
+                    workspaceScopeKey={workspaceScopeKey}
+                    workspaceMemoryKey={workspaceTreeMemoryKey}
+                    dockTreeWidth={rightDockTreeWidth}
+                    dockPreviewWidth={rightDockPreviewWidth}
+                    onRestoreDockWidths={restoreWorkspaceDockWidths}
+                    maximized={workspacePanelMaximized}
+                    panelWidth={workspacePanelRenderWidth}
+                    onClose={() => setWorkspacePanel(false)}
+                    onToggleMaximized={() => {
+                      closeTransientOverlays();
+                      setWorkspacePanelMaximized((value) => !value);
+                    }}
+                    onPreviewModeChange={handleWorkspacePreviewModeChange}
+                    onAddToChat={addWorkspaceTextToComposer}
+                    onAddCodeToChat={addWorkspaceCodeToComposer}
+                    onRequestPanelWidth={ensureWorkspacePanelWidth}
+                    onFileTreeRefresh={refreshComposerFileRefs}
+                    onSessionRevertCommitted={handleSessionRevertCommitted}
+                    onOpenInTerminal={remoteSurfaceActive ? undefined : openTerminalForPath}
+                    initialViewMode={rightDockMode === "changed" ? "changed" : "files"}
+                    completionSummary={state.completionSummary}
+                    turnStartAt={state.turnStartAt}
+                    verificationRevealRequest={verificationRevealRequest}
+                    qualityFloor={composerProfile.qualityFloor}
+                    showViewTabs
+                    creationMode={false}
+                  />
+                </Suspense>
+                </>
               ) : (
                 <Suspense fallback={null}>
                   <WorkspacePanel
@@ -5328,7 +5382,7 @@ export default function App() {
                     turnStartAt={state.turnStartAt}
                     verificationRevealRequest={verificationRevealRequest}
                     qualityFloor={composerProfile.qualityFloor}
-                    showViewTabs={false}
+                    showViewTabs
                     creationMode={sidebarCreation}
                   />
                 </Suspense>

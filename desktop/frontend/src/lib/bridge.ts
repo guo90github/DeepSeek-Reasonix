@@ -4941,7 +4941,7 @@ function makeMockApp(): AppBindings {
           return "";
         },
         async SetDesktopLayoutStyle(style: string) {
-          settings.desktopLayoutStyle = style === "workbench" || style === "creation" ? style : "classic";
+          settings.desktopLayoutStyle = style === "workbench" || style === "creation" || style === "split" ? style : "classic";
         },
         async SetDesktopZoomFactor(factor: number) {
           mockDesktopZoomFactor = Math.min(2.0, Math.max(0.5, Number.isFinite(factor) ? factor : 1.0));
