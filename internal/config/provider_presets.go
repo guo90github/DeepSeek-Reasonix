@@ -40,6 +40,8 @@ const (
 	longCatOpenAIBaseURL         = "https://api.longcat.chat/openai/v1"
 	longCatAnthropicBaseURL      = "https://api.longcat.chat/anthropic"
 	deepSeekAnthropicBaseURL     = "https://api.deepseek.com/anthropic"
+	defaultOptimizeBaseURL       = "https://ws-k3iawfpdfjuhaysc.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+	defaultOptimizeModel         = "qwen3.7-plus"
 )
 
 // CuratedProviderPresets returns one-click provider templates for common

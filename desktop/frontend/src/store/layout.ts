@@ -283,7 +283,7 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setTerminalHeight: (height) => set({ terminalHeight: height }),
 }));
 
-export function applyLayoutStyleDefaults(style: "classic" | "workbench" | "creation"): void {
+export function applyLayoutStyleDefaults(style: "classic" | "workbench" | "creation" | "split"): void {
   const state = useLayoutStore.getState();
   if (loadOptionalLayoutSize("sidebarWidthGraphite", clampStoredSidebarWidth) === null) {
     state.setSidebarWidth(style === "creation" ? defaultCreationSidebarWidth() : defaultSidebarWidth());

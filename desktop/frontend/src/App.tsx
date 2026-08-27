@@ -62,6 +62,7 @@ import { StartupSplash } from "./components/StartupSplash";
 import { OnboardingOverlay } from "./components/OnboardingOverlay";
 import { dismissOnboarding, shouldOpenOnboarding } from "./lib/onboarding";
 import { AppChrome } from "./components/AppChrome";
+import { SplitWorkspace } from "./components/SplitWorkspace";
 import { ShortcutsCheatsheet } from "./components/ShortcutsCheatsheet";
 import { WorktreeBadge } from "./components/WorktreeBadge";
 import { CopyButton } from "./components/CopyButton";
@@ -310,11 +311,12 @@ function isThemeMode(value: string): value is Theme {
   return value === "auto" || value === "light" || value === "dark";
 }
 
-type DesktopLayoutStyle = "classic" | "workbench" | "creation";
+type DesktopLayoutStyle = "classic" | "workbench" | "creation" | "split";
 
 function normalizeDesktopLayoutStyle(style: string | undefined): DesktopLayoutStyle {
   if (style === "workbench") return "workbench";
   if (style === "creation") return "creation";
+  if (style === "split") return "split";
   return "classic";
 }
 const SHOW_CONTEXT_DOCK = true;
@@ -4362,6 +4364,7 @@ export default function App() {
   const topicbarCanRename = !sidebarImDetailConnection && Boolean(activeTab?.topicId);
   const topicbarTitleEditSize = Math.min(56, Math.max(4, topicTitleDraft.length || topicbarTitle.length || 1));
   const sidebarWorkbench = desktopLayoutStyle === "workbench";
+  const sidebarSplit = desktopLayoutStyle === "split";
   // The Wails drag runtime ignores anything with detail !== 1, so a double click
   // on a --wails-draggable region never reaches the OS. Both platforms that hide
   // their native title bar need this handled here.
@@ -4403,6 +4406,7 @@ export default function App() {
         browserPreviewChrome ? "app--browser-preview" : "",
         sidebarWorkbench ? "app--workbench" : "",
         sidebarCreation ? "app--creation" : "",
+        sidebarSplit ? "app--split" : "",
         !sidebarWorkbench && !sidebarCreation ? "app--classic" : "",
       ].filter(Boolean).join(" ")}
     >
@@ -4413,6 +4417,7 @@ export default function App() {
         className={[
           "layout",
           sidebarWorkbench ? "layout--workbench" : "",
+          sidebarSplit ? "layout--split" : "",
           workbenchChromeHidden ? "layout--workbench-chrome-hidden" : "",
           sidebarCreation ? "layout--creation-chrome-hidden" : "",
           sidebarImDetailConnection ? "layout--statusbar-hidden" : "",
@@ -4895,6 +4900,27 @@ export default function App() {
               />
             ) : noticePreviewMockEnabled() ? (
               <NoticePreviewPanel />
+            ) : sidebarSplit ? (
+              <Suspense fallback={null}>
+                <SplitWorkspace
+                  items={visibleTranscriptItems}
+                  live={state.live}
+                  liveStore={liveStore}
+                  tabId={visibleTranscriptTabId}
+                  running={state.running || rewindCommitting}
+                  creationMode={sidebarCreation}
+                  onEditPrompt={handleEditPrompt}
+                  hasOlderHistory={!runtimeTransitioning && state.historyHasOlder && !rewindState}
+                  loadingOlderHistory={state.historyOlderLoading}
+                  olderHistoryError={state.historyOlderError}
+                  onLoadOlderHistory={handleLoadOlderHistory}
+                  rewindDisabled={
+                    Boolean(activeTab?.readOnly) || !controllerReady || hydratePlaceholderActive || rewindState != null
+                    || rewindCommitting || state.running || state.messageAction != null || state.approval != null
+                    || state.ask != null || clearContextPending || runtimeTransitioning
+                  }
+                />
+              </Suspense>
             ) : (
               <>
                 <div className="transcript-navigation-surface" aria-busy={runtimeTransitioning}>

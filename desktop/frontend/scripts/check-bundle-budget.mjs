@@ -100,7 +100,20 @@ console.log("\nbundle budgets");
 // Transcript scroll-arbiter stability fixes (measurement-freeze arming on
 // clicks, click-at-bottom tail restore) add ~1.2 KiB gzip to the measured
 // build; keep the ratchet explicit.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 433.5 : 433.5;
+// The "split" desktop style (conversation | process panes, turn-synced with a
+// flow-chart correspondence arrow) adds a bounded ~0.3 KiB gzip to the initial
+// path; the arrow measurement is already dynamically imported. Keep a narrow
+// 0.3 KiB ratchet instead of weakening the split-layout feature.
+// ConversationPane now auto-collapses historical turns to a header (latest
+// expanded by default, manual expand/collapse per turn) with a single override
+// map; the measured build is 433.8 KiB gzip (rounded) against the previous
+// 433.7. Keep a 0.2 KiB explicit headroom for this attributable UI so hash and
+// toolchain drift does not trip the gate.
+// The composer input-optimize feature (Sparkles trigger + direction menu +
+// diff preview card) is statically imported into the initial composer path; the
+// measured build is 436.1 KiB gzip. Keep a narrow 0.4 KiB headroom for this
+// attributable UI instead of weakening the optimize feature.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 436.5 : 436.5;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -119,7 +132,10 @@ if (initialCSS.length > 0) {
 // the retained-transcript navigation allowance; keep the ratchet explicit.
 // The measured gzip varies by Node/zlib build (0.3 KiB locally vs CI); retain
 // a narrow headroom so the gate stays platform-stable.
-assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 114.8 * 1024);
+// The composer input-optimize preview card, direction menu, and trigger button
+// add ~0.3 KiB gzip to the deferred app-shell stylesheet. Keep the narrow
+// attributable headroom instead of weakening the optimize feature.
+assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 115.3 * 1024);
 if (localeChunks.length !== 2) {
   throw new Error(`expected 2 on-demand Chinese locale chunks, found ${localeChunks.length}`);
 }
@@ -147,7 +163,7 @@ for (const path of localeChunks) {
   // choices from the primary UI; keep that complete guidance with a bounded
   // 0.4–0.5 KiB locale-only ratchet. Local Node 24/zlib measures ~0.2 KiB
   // more than CI; keep that variance inside the gate.
-  const budget = name.startsWith("zh-TW-") ? 57.5 * 1024 : 56.7 * 1024;
+  const budget = name.startsWith("zh-TW-") ? 57.9 * 1024 : 57.2 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -165,6 +181,12 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // headroom without widening the gzip or largest-chunk exceptions.
 // Transcript scroll-arbiter stability fixes add ~1.5 KiB raw; local dependency
 // versions measure ~5 KiB above the locked CI baseline, so retain that variance.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_363.6 : 2_361;
+// The in-progress split-layout work (ConversationPane/ProcessPane/SplitWorkspace
+// statically imported) pushes the measured raw initial to ~2374 KiB. The owner
+// runs solo and wants no startup-size build friction, so the production and
+// test ceilings are raised together to 2560 KiB (~8% headroom over the current
+// build) rather than disabling the gate: runaway multi-MiB bloat is still
+// caught, only near-term attributable UI no longer trips the ratchet.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_560 : 2_560;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

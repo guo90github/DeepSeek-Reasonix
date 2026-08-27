@@ -1,0 +1,292 @@
+/* Split desktop style (loaded lazily with SplitWorkspace, so it never hits the
+   app-shell stylesheet budget). Conversation (left) | process (right), with the
+   Composer footer docked in the LEFT column so it never spans the process side.
+
+   Grid rows: topicbar | content | composer. `.main` and `.split-workspace`
+   dissolve (display:contents) so the two panes become direct grid children:
+   conversation owns the left content cell, the footer (Composer) owns the left
+   bottom cell, and process spans BOTH content rows on the right. Because process
+   spans rows 2-3 while the composer only owns row 3, growing the composer
+   (multi-line input) shrinks only the conversation row — the process pane keeps
+   its height and scroll position, which is exactly the required behavior. */
+
+.app--split .chat-pane {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+}
+.app--split .chat-pane .topicbar {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  min-width: 0;
+}
+.app--split .chat-pane .main {
+  display: contents;
+}
+.app--split .chat-pane .footer {
+  grid-column: 1;
+  grid-row: 3;
+  min-width: 0;
+}
+/* A decision popup (ask / tool approval / …) is a full-width surface near the
+   composer, but the input footer must stay confined to the LEFT column (it can
+   only sit at the bottom of the conversation pane). So instead of growing the
+   footer (which traps the popup in the narrow left cell and clips it), overlay
+   the popup over the chat-pane: take it out of the footer's flow with absolute
+   positioning relative to the chat-pane and let the footer stop clipping it. */
+.app--split .chat-pane .footer.footer--decision {
+  overflow: visible;
+}
+.app--split .chat-pane .footer.footer--decision .prompt-shelf {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 12px;
+  margin-bottom: 0;
+}
+/* The overlaid decision popup sits on top of conversation/process content, so
+   its card must be opaque — the base rgba fill would let the content show
+   through. */
+.app--split .chat-pane .footer.footer--decision .prompt-shelf__card {
+  background: var(--bg-elev-2, var(--bg-elev));
+  border-color: var(--border);
+}
+.split-workspace {
+  display: contents;
+}
+/* Flowchart-style arrow connecting the focused conversation rows (right edge)
+   to the focused process turn (left edge). Absolutely positioned over the whole
+   chat-pane (which is position:relative); pointer-events none so it never
+   blocks scrolling. */
+.split-workspace__connector {
+  grid-column: 1 / -1;
+  grid-row: 2 / span 2;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: var(--z-inline-sticky);
+}
+.split-workspace__connector .connector-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+  fill: none;
+  stroke-linecap: round;
+}
+.split-workspace__connector .connector-head {
+  fill: var(--accent);
+}
+.conversation-pane,
+.process-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.app--split .conversation-pane {
+  grid-column: 1;
+  grid-row: 2;
+}
+.app--split .process-pane {
+  grid-column: 2;
+  grid-row: 2 / span 2;
+  border-left: 1px solid var(--border-soft);
+}
+.conversation-pane__list,
+.process-pane__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+}
+/* The single-column transcript disables content-visibility inside its rows so
+   Virtuoso measures real heights instead of contain-intrinsic-size placeholders
+   (styles.css ~3598). The split panes need the same override: otherwise growing
+   answer/reasoning/tool content is culled and its height not perceived, so the
+   panes can't scroll to (or auto-follow) the growth. */
+.conversation-pane .msg,
+.conversation-pane .md > *,
+.process-pane .msg,
+.process-pane .turn-collapse,
+.process-pane .turn-collapse__reasoning-phase,
+.process-pane .reasoning__body,
+.process-pane .reasoning__stream-text,
+.process-pane .tool,
+.process-pane .process-card,
+.process-pane .readonly-batch,
+.process-pane .tool-group,
+.process-pane .md > *,
+/* Catch-all: any descendant may carry content-visibility / contain-intrinsic
+   that culls offscreen real content and makes Virtuoso under-measure a turn,
+   which clips/overlaps cards and stops the pane from scrolling to grown
+   content. Virtuoso already unmounts offscreen rows, so this culling is
+   redundant inside the panes (same rationale as styles.css ~3598). */
+.conversation-pane *,
+.process-pane * {
+  content-visibility: visible !important;
+  contain-intrinsic-size: none !important;
+}
+.conversation-pane__empty,
+.process-pane__empty {
+  padding: 48px 24px;
+  color: var(--fg-dim);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+.conversation-pane__older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--fg-dim);
+  font-size: var(--text-sm);
+}
+.conversation-pane__spacer {
+  height: 24px;
+}
+.conversation-pane__turn {
+  margin: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border-soft);
+  background: var(--bg-elev-2, var(--bg-elev));
+  overflow: hidden;
+  transition: box-shadow 0.15s ease;
+}
+/* Corresponding turns are framed (not background-filled) so the link reads as
+   an outer box. The arrow connector anchors on this frame's right edge. */
+.conversation-pane__turn[data-focused] {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+/* Collapsible header: badge + question label (history) + caret. Click toggles;
+   the latest turn is expanded by default and history collapses to this strip. */
+.conversation-pane__turn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.conversation-pane__turn-head:hover {
+  background: var(--bg-elev);
+}
+.conversation-pane__turn-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-dim);
+}
+.conversation-pane__turn-caret {
+  flex: 0 0 auto;
+  color: var(--fg-dim);
+  font-size: 10px;
+  width: 12px;
+}
+.conversation-pane__turn-body {
+  padding: 0 12px 8px;
+}
+/* Keep message spacing compact inside the card (theme sets .msg margin 16px). */
+.conversation-pane__turn .msg {
+  margin: 0 0 8px !important;
+}
+.process-pane__title {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--fg-dim);
+  border-bottom: 1px solid var(--border-soft);
+}
+.process-pane__title-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 9px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--bg-elev-2, var(--bg-elev));
+}
+.process-pane__turn {
+  border-bottom: 1px solid var(--border-soft);
+}
+.process-pane__turn-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 16px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  cursor: pointer;
+}
+.process-pane__turn-header:hover {
+  background: var(--bg-elev);
+}
+.process-pane__turn[data-focused] .process-pane__turn-header {
+  background: var(--bg-elev);
+  font-weight: 600;
+}
+.process-pane__turn-caret {
+  color: var(--fg-dim);
+  font-size: 10px;
+  width: 12px;
+  flex: 0 0 auto;
+}
+.process-pane__turn-round {
+  flex: 0 0 auto;
+  min-width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--fg-dim);
+  background: var(--bg-elev-2, var(--bg-elev));
+}
+.process-pane__turn[data-focused] .process-pane__turn-round {
+  color: var(--fg);
+  background: var(--accent-soft, var(--bg-elev-2));
+}
+.process-pane__turn-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process-pane__turn-duration {
+  flex: 0 0 auto;
+  color: var(--fg-faint);
+  font-size: var(--text-xs);
+}
+.process-pane__turn-body {
+  padding: 0 16px 12px;
+}
+.process-pane__segment + .process-pane__segment {
+  margin-top: 8px;
+}
+.process-pane__segment-item + .process-pane__segment-item {
+  margin-top: 8px;
+}

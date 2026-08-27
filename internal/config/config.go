@@ -67,6 +67,7 @@ type Config struct {
 	Serve            ServeConfig         `toml:"serve"`
 	Secrets          SecretsConfig       `toml:"secrets"`
 	Remote           RemoteConfig        `toml:"remote"`
+	Optimize         OptimizeConfig      `toml:"optimize"`
 
 	systemPromptFileSource     promptFileSource
 	providerSources            map[string]providerSourceScope
@@ -107,6 +108,37 @@ func (c *Config) KeepProjectSkillKey(key string) error {
 
 func (c *Config) keepsProjectSkillKey(key string) bool {
 	return c != nil && c.explicitProjectSkillKeys[key]
+}
+
+// OptimizeConfig configures the composer's input-optimize feature. It drives a
+// standalone, no-tool OpenAI-compatible chat completion (its own base_url /
+// api_key / model) that rewrites the draft before send; the call never touches
+// the main turn, its conversation history, or the cache-stable prompt prefix.
+type OptimizeConfig struct {
+	BaseURL   string `toml:"base_url"`
+	APIKey    string `toml:"api_key"`
+	Model     string `toml:"model"`
+	MaxTokens int    `toml:"max_tokens"`
+	TimeoutMS int    `toml:"timeout_ms"`
+	// IncludeHistory opts the optimize call into sending recent user turns (and
+	// the topic title) as DATA-ONLY auxiliary context so follow-up drafts that
+	// reference earlier turns are rewriteable. Off by default because the
+	// optimize endpoint may be a different provider than the main turn, so the
+	// user must explicitly accept that recent conversation leaves the session.
+	IncludeHistory bool `toml:"include_history"`
+	// HistoryTurns caps how many recent user turns are injected as context
+	// (0 = inject none even when include_history is on). Defaults to 8.
+	HistoryTurns int `toml:"history_turns"`
+}
+
+// Enabled reports whether an optimize call can be made: base_url, model, and
+// an api_key are all configured.
+func (c *Config) OptimizeEnabled() bool {
+	if c == nil {
+		return false
+	}
+	opt := c.Optimize
+	return opt.BaseURL != "" && opt.Model != "" && opt.APIKey != ""
 }
 
 type promptFileSource uint8
@@ -387,6 +419,8 @@ func normalizeDesktopLayoutStyle(style string) string {
 		return "workbench"
 	case "creation":
 		return "creation"
+	case "split":
+		return "split"
 	default:
 		return "workbench"
 	}
@@ -1912,6 +1946,14 @@ func Default() *Config {
 			Feishu:             FeishuBotConfig{Domain: "feishu", AppSecretEnv: "FEISHU_BOT_APP_SECRET", Mode: "webhook", WebhookPort: 8080, RequireMention: true},
 			Dingtalk:           DingtalkBotConfig{RequireMention: true},
 			Weixin:             WeixinBotConfig{AccountID: "default", TokenEnv: "WEIXIN_BOT_TOKEN", APIBase: "https://ilinkai.weixin.qq.com"},
+		},
+		Optimize: OptimizeConfig{
+			BaseURL:   defaultOptimizeBaseURL,
+			Model:     defaultOptimizeModel,
+			MaxTokens: 1024,
+			TimeoutMS: 30000,
+			// History depth for the DATA-ONLY recent-turn aux (see OptimizeConfig).
+			HistoryTurns: 8,
 		},
 		// New installs use DeepSeek's Anthropic-compatible Messages endpoint so
 		// provider-executed web search is available by default. Existing explicit

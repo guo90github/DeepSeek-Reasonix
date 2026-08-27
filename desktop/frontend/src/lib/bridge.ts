@@ -333,6 +333,7 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   PurgeTrashedSession(path: string): Promise<void>;
   PurgeRecoveryCopy(path: string): Promise<void>;
   RenameSession(path: string, title: string): Promise<void>;
+  OptimizeDraft(text: string, direction: string, context?: string): Promise<string>;
   ScanPromptHistory(nonce: string): Promise<PromptHistoryResult>;
   ListWorkspaces(): Promise<WorkspaceView[]>;
   PickWorkspace(): Promise<string>;
@@ -3408,6 +3409,20 @@ function makeMockApp(): AppBindings {
       const s = sessions.find((x) => x.path === path);
       if (s) s.title = title.trim() || undefined;
     },
+    async OptimizeDraft(text: string, direction: string, context?: string) {
+      // Dev mock for the composer input-optimize feature: returns a canned
+      // rewrite so the preview card is testable without a backend/provider.
+      const head = (text || "").trim();
+      if (!head) return "";
+      const tags: Record<string, string> = {
+        professional: "（更专业）",
+        concise: "（更简洁）",
+        expand: "（更详细）",
+        contextual: "（补全上下文）",
+        all: "",
+      };
+      return `[已优化${tags[direction] ?? ""}] ${head}${context ? " · 已参考上下文" : ""}`;
+    },
 	    async ScanPromptHistory(nonce: string) {
 	      // Dev mock returns a static set of sample prompts for UI development.
 	      const entries: PromptHistoryEntry[] = [
@@ -4926,7 +4941,7 @@ function makeMockApp(): AppBindings {
           return "";
         },
         async SetDesktopLayoutStyle(style: string) {
-          settings.desktopLayoutStyle = style === "workbench" || style === "creation" ? style : "classic";
+          settings.desktopLayoutStyle = style === "workbench" || style === "creation" || style === "split" ? style : "classic";
         },
         async SetDesktopZoomFactor(factor: number) {
           mockDesktopZoomFactor = Math.min(2.0, Math.max(0.5, Number.isFinite(factor) ? factor : 1.0));

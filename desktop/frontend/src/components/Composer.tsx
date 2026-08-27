@@ -44,6 +44,7 @@ import {
   WORKSPACE_REF_DRAG_TYPE,
 } from "../lib/workspaceDrag";
 import { SlashMenu, sortSlashCommandsForMenu } from "./SlashMenu";
+import { OptimizeDraftPreview, OptimizeDraftTrigger, type OptimizeDirection, type OptimizePreview } from "./OptimizeDraftPanel";
 import { ArgMenu } from "./ArgMenu";
 import { ANCHORED_POPOVER_CLOSE_MS, AnchoredPopover } from "./AnchoredPopover";
 import { EffortSwitcher } from "./EffortSwitcher";
@@ -767,6 +768,12 @@ export function Composer({
   const pendingGuidanceRef = useRef<PendingGuidance[]>([]);
   const guidanceExpandedRef = useRef(false);
   const guidanceSendingIdRef = useRef<string | null>(null);
+  // Input-optimize feature state (transient, not persisted across tab switches).
+  const [optimizeLoading, setOptimizeLoading] = useState(false);
+  const [optimizeError, setOptimizeError] = useState<string | null>(null);
+  const [optimizePreview, setOptimizePreview] = useState<OptimizePreview | null>(null);
+  const [optimizeDirection, setOptimizeDirection] = useState<OptimizeDirection | null>(null);
+  const optimizeInFlightRef = useRef(false);
   const [loadingPastChats, setLoadingPastChats] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const cancelSettlingDraftsRef = useRef(new Set<string>());
@@ -1738,6 +1745,83 @@ export function Composer({
       beforeEdit,
       composerEditSnapshot(targetDraftKey, { start: pos, end: pos }),
     );
+  };
+
+  // Bounded auxiliary metadata for the optimize model: referenced files,
+  // attachments, session titles, selections, and pasted-block labels. Never
+  // file bodies — the optimize model is a separate endpoint, so we do not
+  // exfiltrate contents; only names/labels so it can make the draft concrete.
+  const buildOptimizeContext = (): string => {
+    const parts: string[] = [];
+    const files = workspaceRefsRef.current.map((r) => formatWorkspaceReference(r.path, r.isDir));
+    if (files.length) parts.push(`Files: ${files.join(", ")}`);
+    const atts = attachmentsRef.current.map(formatAttachmentDisplayReference);
+    if (atts.length) parts.push(`Attachments: ${atts.join(", ")}`);
+    const sessions = sessionRefsRef.current.map((s) => s.title || s.path).filter(Boolean);
+    if (sessions.length) parts.push(`Referenced sessions: ${sessions.join(", ")}`);
+    const selections = selectedTextRefsRef.current.map(formatSelectionLabel);
+    if (selections.length) parts.push(`Selections: ${selections.join(", ")}`);
+    const pasted = pastedBlocksRef.current.map((b) => b.label).filter(Boolean);
+    if (pasted.length) parts.push(`Pasted blocks: ${pasted.join(", ")}`);
+    return parts.join("\n");
+  };
+
+  const runOptimize = (direction: OptimizeDirection) => {
+    const source = textRef.current.trim();
+    if (!source) {
+      setComposerPrompt(t("composer.optimizeEmpty"));
+      requestActiveDraftFrame(focusComposerInput);
+      return;
+    }
+    if (optimizeInFlightRef.current) return;
+    optimizeInFlightRef.current = true;
+    setOptimizeLoading(true);
+    setOptimizeError(null);
+    setOptimizePreview(null);
+    setOptimizeDirection(direction);
+    app.OptimizeDraft(source, direction, buildOptimizeContext()).then(
+      (rewritten) => {
+        optimizeInFlightRef.current = false;
+        setOptimizeLoading(false);
+        setOptimizePreview({ original: source, rewritten });
+      },
+      (err: unknown) => {
+        optimizeInFlightRef.current = false;
+        setOptimizeLoading(false);
+        const message = err instanceof Error ? err.message : String(err);
+        setOptimizeError(t("composer.optimizeError", { error: message }));
+      },
+    );
+  };
+
+  const applyOptimize = (rewritten: string) => {
+    const targetDraftKey = activeDraftKeyRef.current;
+    const current = textRef.current;
+    const selection = getComposerSelection();
+    const beforeEdit = composerEditSnapshot(targetDraftKey, selection);
+    const updated = replaceInvocationTextRange(current, invocationsRef.current, 0, current.length, rewritten);
+    textRef.current = updated.text;
+    invocationsRef.current = updated.invocations;
+    setText(updated.text);
+    setInvocations(updated.invocations);
+    const caret = updated.text.length;
+    setComposerSelection(caret);
+    recordComposerEdit(
+      targetDraftKey,
+      beforeEdit,
+      composerEditSnapshot(targetDraftKey, { start: caret, end: caret }),
+    );
+    setOptimizePreview(null);
+    setOptimizeError(null);
+    setOptimizeLoading(false);
+  };
+
+  const clearOptimize = () => {
+    optimizeInFlightRef.current = false;
+    setOptimizePreview(null);
+    setOptimizeError(null);
+    setOptimizeLoading(false);
+    setOptimizeDirection(null);
   };
 
   const replaceComposerText = (next: string) => {
@@ -4432,6 +4516,17 @@ export function Composer({
           })}
         </div>
       )}
+      {(optimizeLoading || optimizeError || optimizePreview) && (
+        <OptimizeDraftPreview
+          loading={optimizeLoading}
+          error={optimizeError}
+          preview={optimizePreview}
+          direction={optimizeDirection}
+          onApply={applyOptimize}
+          onDiscard={clearOptimize}
+          onRetry={() => optimizeDirection && runOptimize(optimizeDirection)}
+        />
+      )}
       <div
         className={`composer-card${composerHeight !== null || composerResizing ? " composer-card--resized" : ""}${composerAutoExpanded ? " composer-card--autosized" : ""}${composerAutoOverflow ? " composer-card--auto-overflow" : ""}${composerResizing ? " composer-card--resizing" : ""}${running ? (waitingPrompt ? " composer-card--waiting" : " composer-card--running") : ""}`}
         ref={composerCardRef}
@@ -4586,6 +4681,11 @@ export function Composer({
                 {composerPrompt}
               </span>
             )}
+            <OptimizeDraftTrigger
+              disabled={disabled || readOnly || running || !text.trim()}
+              optimizing={optimizeLoading}
+              onSelect={runOptimize}
+            />
             {running && (
               <Tooltip label={t("composer.stop")}>
                 <button
