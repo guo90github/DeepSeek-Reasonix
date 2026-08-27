@@ -9,7 +9,6 @@ import {
   type TranscriptScrollState,
 } from "../lib/transcriptScrollArbiter";
 import { resolveManualMeasurementFreeze } from "../lib/useTranscriptScrollArbiter";
-import { pinTranscriptScrollerToNativeTail, pinTranscriptTailAfterViewportShrink } from "../lib/transcriptScrollGeometry";
 import { pinTranscriptTailAfterViewportShrink } from "../lib/transcriptScrollGeometry";
 import {
   TRANSCRIPT_TAIL_REARM_MIN_HEIGHT_PX,
