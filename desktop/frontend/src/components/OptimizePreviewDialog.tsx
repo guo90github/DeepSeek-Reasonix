@@ -30,6 +30,9 @@ const RESIZE_CURSOR: Record<ResizeHandle, string> = {
 const OPTIMIZE_DIALOG_MIN_WIDTH = 440;
 const OPTIMIZE_DIALOG_MIN_HEIGHT = 300;
 const OPTIMIZE_DIALOG_VIEWPORT_MARGIN = 96;
+// Below this distance from the bottom, a scroll event counts as "at the tail"
+// and the stream may keep the view pinned there (mirrors the transcript tail).
+const STREAM_FOLLOW_THRESHOLD_PX = 24;
 let lastDialogSize: { width: number; height: number } | null = null;
 
 // Preview/confirm panel for the composer's prompt-optimization utility: the
@@ -53,6 +56,8 @@ export function OptimizePreviewDialog({
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const streamBodyRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  const scrolledUpRef = useRef(false);
+  const followFrameRef = useRef<number | null>(null);
   const [showOriginal, setShowOriginal] = useState(false);
   const [edited, setEdited] = useState<string | null>(null);
 
@@ -119,10 +124,25 @@ export function OptimizePreviewDialog({
   }, []);
 
   // Keep the latest streamed text visible while the optimizer is producing.
+  // The follow write is rAF-batched (chunk growth never forces a synchronous
+  // layout) and suppressed while the user reads above the tail.
+  const applyStreamFollow = useCallback(() => {
+    followFrameRef.current = null;
+    const el = streamBodyRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
+  const noteStreamScroll = useCallback(() => {
+    const el = streamBodyRef.current;
+    if (!el) return;
+    scrolledUpRef.current = el.scrollTop + el.clientHeight < el.scrollHeight - STREAM_FOLLOW_THRESHOLD_PX;
+  }, []);
   useEffect(() => {
-    if (!streaming || !streamBodyRef.current) return;
-    streamBodyRef.current.scrollTop = streamBodyRef.current.scrollHeight;
-  }, [run.text, streaming]);
+    if (!streaming || scrolledUpRef.current) return;
+    if (followFrameRef.current === null) followFrameRef.current = requestAnimationFrame(applyStreamFollow);
+  }, [applyStreamFollow, run.text, streaming]);
+  useEffect(() => () => {
+    if (followFrameRef.current !== null) cancelAnimationFrame(followFrameRef.current);
+  }, []);
 
   useLayoutEffect(() => {
     restoreFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -195,7 +215,7 @@ export function OptimizePreviewDialog({
               </button>
             </div>
             {streaming ? (
-              <div className="reasonix-optimize-dialog__streaming" ref={streamBodyRef}>
+              <div className="reasonix-optimize-dialog__streaming" ref={streamBodyRef} onScroll={noteStreamScroll}>
                 {run.text ? (
                   <pre className="reasonix-optimize-dialog__text reasonix-optimize-dialog__text--stream">{run.text}</pre>
                 ) : (

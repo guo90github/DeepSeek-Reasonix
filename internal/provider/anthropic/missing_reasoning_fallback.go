@@ -46,6 +46,9 @@ func (c *client) applyDeepSeekThinking(r *anthRequest, req provider.Request, rec
 	if c.effort == "disabled" {
 		t = "disabled"
 	}
+	if req.ThinkingDisabled() {
+		t = "disabled" // per-request override beats the configured depth
+	}
 	r.Thinking = &thinkingConfig{Type: t}
 	if t == "disabled" {
 		return

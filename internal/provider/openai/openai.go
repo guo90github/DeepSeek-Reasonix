@@ -159,9 +159,9 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		// NormalizeEffort remaps them to "adaptive" already, so anything
 		// reaching here is expected to be one of: "", "adaptive", "disabled".
 		effort = strings.ToLower(strings.TrimSpace(effort))
+		// "" = auto: leave empty so the wire emits thinking.type=adaptive.
 		switch effort {
-		case "": // auto — leave empty so the wire emits thinking.type=adaptive
-		case "adaptive", "disabled":
+		case "", "adaptive", "disabled":
 		default:
 			return nil, fmt.Errorf("openai: provider %q uses MiniMax thinking; effort must be adaptive or disabled", name)
 		}
@@ -706,10 +706,8 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		}
 		// DeepSeek thinking mode 400s an assistant tool_calls turn whose
 		// reasoning_content KEY is absent from the request JSON ("reasoning_content
-		// … must be passed back"). The API accepts an empty string, and only
-		// validates turns after the last user message, but emitting the field on
-		// every tool_calls turn is uniform and verified accepted — so always send
-		// it (empty included) rather than fail the request when reasoning was lost
+		// … must be passed back"). The API accepts an empty string, so always send
+		// the key (empty included) rather than fail when reasoning was lost
 		// upstream (e.g. a gateway renamed the field). With thinking disabled the
 		// API tolerates every shape, so keep the exact pre-fix bytes there: send
 		// the key only when a thinking-mode round left reasoning in the history
@@ -812,7 +810,7 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		// DeepSeek's CoT is controlled by `thinking` plus `reasoning_effort` for
 		// depth. Thinking is on by default but can be turned off via
 		// effort=disabled / thinking=disabled (credit @eghrhegpe, #5063).
-		if c.thinkingType == "disabled" {
+		if thinkingDisabled(c.thinkingType, req) {
 			out.Thinking = &thinkingMode{Type: "disabled"}
 		} else {
 			out.Thinking = &thinkingMode{Type: "enabled"}
@@ -853,6 +851,8 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 		}
 		out.Thinking = &thinkingMode{Type: t}
 		out.ReasoningEffort = ""
+	case IsQwenCompatible(c.baseURL):
+		out.ExtraBody = c.thinkingOffExtraBody(out.ExtraBody, req) // enable_thinking=false on a thinking-off request
 	case c.thinkingType != "":
 		// Generic OpenAI-compatible provider with an explicit `thinking` config
 		// field (e.g. opencode.ai) — emit thinking.type; reasoning_effort, if any,

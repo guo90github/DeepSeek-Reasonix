@@ -219,6 +219,9 @@ const TEST_TAB_ID = "optimize-tab";
 async function emitChunk(chunk: string) {
   await act(async () => {
     __emitMockOptimizePromptChunk(TEST_TAB_ID, chunk);
+    // The composer coalesces stream deltas per animation frame (createRafBatch,
+    // like the turn stream), so wait one frame for the batch to flush.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
     await flushTimers();
   });
 }

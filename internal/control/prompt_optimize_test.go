@@ -70,6 +70,12 @@ func TestOptimizePromptStreamsThroughDedicatedModel(t *testing.T) {
 	if strings.Contains(stub.lastRequest.Messages[1].Content, "最近会话上下文") {
 		t.Fatalf("empty session must not inject a context block: %q", stub.lastRequest.Messages[1].Content)
 	}
+	if stub.lastRequest.EffortOverride != "disabled" {
+		t.Fatalf("EffortOverride = %q, want disabled (the optimizer must never think)", stub.lastRequest.EffortOverride)
+	}
+	if stub.lastRequest.Temperature == nil || *stub.lastRequest.Temperature != 0 {
+		t.Fatalf("temperature = %v, want 0", stub.lastRequest.Temperature)
+	}
 }
 
 func TestOptimizePromptStreamDeliversChunksInOrder(t *testing.T) {

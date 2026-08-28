@@ -73,6 +73,9 @@ func promptOptimizeSessionContext(msgs []provider.Message, goal string) string {
 // model (PromptOptimizeModel), which is deliberately independent of the session
 // model. It reads recent conversation as reference context only; it never
 // touches the turn stream, session history, or the provider-visible prefix.
+// The call is deterministic (temperature 0) and never thinks: the disabled
+// reasoning override maps onto the model's own thinking-off knob, leaving the
+// session model's thinking config untouched.
 func (c *Controller) OptimizePrompt(ctx context.Context, text string) (string, error) {
 	return c.optimizePrompt(ctx, text, nil)
 }
@@ -123,7 +126,7 @@ func (c *Controller) optimizePrompt(ctx context.Context, text string, onChunk fu
 		},
 		Temperature:    provider.TemperaturePtr(0),
 		MaxTokens:      promptOptimizeMaxTokens,
-		EffortOverride: "low",
+		EffortOverride: "disabled",
 	})
 	if err != nil {
 		return "", fmt.Errorf("提示词优化失败：%w", err)

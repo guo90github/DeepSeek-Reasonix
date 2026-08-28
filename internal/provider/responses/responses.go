@@ -259,7 +259,7 @@ func (c *client) buildRequestBody(req provider.Request) (map[string]any, bool, [
 	messages := provider.SanitizeToolPairing(provider.ModelMessages(req.Messages))
 	body := map[string]any{"model": c.model, "stream": true}
 
-	effort := strings.ToLower(strings.TrimSpace(c.effort))
+	effort := requestEffort(c.effort, req)
 	if c.vendor == "deepseek" && (strings.EqualFold(strings.TrimSpace(c.model), "deepseek-v4-flash") || strings.EqualFold(strings.TrimSpace(c.model), "deepseek-v4-pro")) {
 		if effort == "medium" || effort == "xhigh" {
 			effort = "high"
@@ -655,8 +655,7 @@ func (c *client) readStream(ctx context.Context, resp *http.Response, out chan<-
 				case "reasoning":
 					// The done event carries the final item status
 					// ("completed" after the thinking stream finishes);
-					// round-trip it with the reasoning item so the input
-					// matches the wire schema.
+					// round-trip it so the input matches the wire schema.
 					if event.Item.Status != "" {
 						reasoningStatus = event.Item.Status
 					}

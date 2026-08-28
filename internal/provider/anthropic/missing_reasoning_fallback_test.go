@@ -31,3 +31,18 @@ func TestBuildRequestDeepSeekMissingReasoningFallbackDisablesThinkingAndKeepsToo
 		t.Fatal("native Anthropic must not declare a mode-switch fallback")
 	}
 }
+
+func TestBuildRequestDeepSeekRequestOverrideDisablesThinking(t *testing.T) {
+	c := &client{model: "deepseek-v4-flash", deepseek: true, thinking: "enabled", effort: "high"}
+	r := c.buildRequest(context.Background(), provider.Request{
+		Messages:       []provider.Message{{Role: provider.RoleUser, Content: "do it"}},
+		EffortOverride: "disabled",
+	})
+	if r.Thinking == nil || r.Thinking.Type != "disabled" || r.OutputConfig != nil {
+		t.Fatalf("override disabled thinking = %+v / %+v, want disabled/no output_config", r.Thinking, r.OutputConfig)
+	}
+	normal := c.buildRequest(context.Background(), provider.Request{Messages: []provider.Message{{Role: provider.RoleUser, Content: "do it"}}})
+	if normal.Thinking == nil || normal.Thinking.Type != "enabled" {
+		t.Fatalf("no override must keep thinking %+v, want enabled", normal.Thinking)
+	}
+}

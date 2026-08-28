@@ -18,6 +18,7 @@ import { sessionTurnsLabel } from "../lib/sessionCatalogPresentation";
 import { SPINNER_WORDS, useI18n, type Translator } from "../lib/i18n";
 import { detectShortcutPlatform, formatShortcutCombo, isReservedComposerHistoryShortcut, matchesShortcut, useShortcutComboLabel } from "../lib/keyboardShortcuts";
 import { fallbackCopyText } from "../lib/clipboard";
+import { createRafBatch } from "../lib/rafBatch";
 import {
   commandAvailableAtSlashPosition,
   commandUsesStructuredInvocation,
@@ -3863,10 +3864,18 @@ export function Composer({
     optimizingPromptRef.current = true;
     setOptimizingPrompt(true);
     setOptimizeRun({ status: "streaming", original: raw, text: "" });
+    // Coalesce stream deltas per animation frame like the turn stream: a fast
+    // provider chunk cadence would otherwise re-render the composer subtree
+    // and the preview panel once per event (see rafBatch).
+    const chunkBatch = createRafBatch((chunks: string[]) => {
+      const delta = chunks.join("");
+      setOptimizeRun((run) => (run && run.status === "streaming" ? { ...run, text: run.text + delta } : run));
+    });
     const offChunk = onOptimizePromptChunk((_tabId, chunk) => {
-      setOptimizeRun((run) => (run && run.status === "streaming" ? { ...run, text: run.text + chunk } : run));
+      chunkBatch.push(chunk);
     });
     const offDone = onOptimizePromptDone(() => {
+      chunkBatch.drain(); // flush any frame-pending chunks before the final state
       setOptimizeRun((run) => (run && run.status === "streaming" ? { ...run, status: "done" } : run));
       optimizingPromptRef.current = false;
       setOptimizingPrompt(false);

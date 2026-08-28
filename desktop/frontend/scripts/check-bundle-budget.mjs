@@ -219,6 +219,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // 0.7 KiB of headroom.
 // Pane tail-follow (usePaneTailFollow + ProcessPane wiring) adds 0.9 KiB raw;
 // step the gate to 2417.5 KiB with the measured 2417.119 KiB path.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_417.5 : 2_417.5;
+// Composer/optimize-preview iteration (transcriptStore, OptimizePreviewDialog)
+// adds 0.4 KiB raw; step the gate to 2417.6 KiB with 2417.537 KiB measured.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_417.6 : 2_417.6;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

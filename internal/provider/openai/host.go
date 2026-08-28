@@ -194,3 +194,17 @@ func IsKimiAPI(baseURL string) bool {
 func IsOllamaCloud(baseURL string) bool {
 	return matchesVendorHost(baseURL, "ollama.com", "ollama.com")
 }
+
+// IsQwenCompatible reports whether baseURL is an Aliyun DashScope or MaaS
+// OpenAI-compatible endpoint. These gate chain-of-thought via a top-level
+// enable_thinking body field, not thinking.type or reasoning_effort.
+func IsQwenCompatible(baseURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(u.Hostname())
+	return host == "dashscope.aliyuncs.com" ||
+		strings.HasSuffix(host, ".dashscope.aliyuncs.com") ||
+		strings.HasSuffix(host, ".maas.aliyuncs.com")
+}

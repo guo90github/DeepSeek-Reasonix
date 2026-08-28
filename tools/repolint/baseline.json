@@ -3,9 +3,9 @@
     "banner": 15,
     "commented-code": 0,
     "complexity": 2000,
-    "essay": 1962,
-    "file-size": 108528,
-    "function-size": 8616,
+    "essay": 1959,
+    "file-size": 108536,
+    "function-size": 8615,
     "layering": 1,
     "marker": 0,
     "narrative": 64,
@@ -102,7 +102,7 @@
       "file-size": 2641
     },
     "desktop/frontend/src/components/Composer.tsx": {
-      "file-size": 4089
+      "file-size": 4098
     },
     "desktop/frontend/src/components/HistoryPanel.tsx": {
       "file-size": 65
@@ -1213,7 +1213,7 @@
     },
     "internal/provider/openai/openai.go": {
       "complexity": 67,
-      "essay": 35,
+      "essay": 33,
       "file-size": 541,
       "function-size": 250,
       "struct-state": 9
@@ -1233,9 +1233,9 @@
     },
     "internal/provider/responses/responses.go": {
       "complexity": 54,
-      "essay": 18,
-      "file-size": 82,
-      "function-size": 181,
+      "essay": 17,
+      "file-size": 81,
+      "function-size": 180,
       "struct-state": 6
     },
     "internal/provider/responses/responses_test.go": {
