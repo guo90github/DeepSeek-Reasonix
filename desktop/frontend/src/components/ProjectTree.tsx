@@ -1334,7 +1334,7 @@ export function ProjectTree({
             >
               <Tooltip label={pinLabel} side="top" className="project-tree__topic-action-slot">
                 <button
-                  className={`project-tree__topic-action${pinned ? " project-tree__topic-action--pinned" : ""}`}
+                  className={`project-tree__topic-action project-tree__topic-action--pin${pinned ? " project-tree__topic-action--pinned" : ""}`}
                   type="button"
                   aria-label={pinLabel}
                   aria-pressed={pinned}

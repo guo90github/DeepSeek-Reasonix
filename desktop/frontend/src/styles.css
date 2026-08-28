@@ -24845,15 +24845,17 @@ body > .mermaid-diagram--fullscreen {
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: var(--fg-faint);
+  color: var(--accent-strong);
   font-size: 11px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: color 0.12s;
+  transition: color 0.12s, background 0.12s;
 }
 
 .project-tree__topic-window-toggle:hover {
-  color: var(--fg-faint);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .project-tree__topic-window-toggle:focus-visible {
@@ -25504,20 +25506,24 @@ body > .mermaid-diagram--fullscreen {
 }
 
 /* Weaken topic time display */
-:root[data-theme-style] .sidebar--workbench .project-tree__topic-side {
+:root[data-theme-style] .sidebar--workbench .project-tree__topic-side,
+:root[data-theme-style] .app--split .project-tree__topic-side {
   font-size: 11px;
   color: color-mix(in srgb, var(--fg-faint) 72%, transparent);
 }
-:root[data-theme-style] .sidebar--workbench .project-tree__topic-side--empty {
+:root[data-theme-style] .sidebar--workbench .project-tree__topic-side--empty,
+:root[data-theme-style] .app--split .project-tree__topic-side--empty {
   visibility: hidden;
 }
 /* Ensure consistent topic height regardless of time/status presence */
-:root[data-theme-style] .sidebar--workbench .project-tree__topic {
+:root[data-theme-style] .sidebar--workbench .project-tree__topic,
+:root[data-theme-style] .app--split .project-tree__topic {
   min-height: 34px;
   height: 34px;
   box-sizing: border-box;
 }
-:root[data-theme-style] .sidebar--workbench .project-tree__topic-main {
+:root[data-theme-style] .sidebar--workbench .project-tree__topic-main,
+:root[data-theme-style] .app--split .project-tree__topic-main {
   min-height: 34px;
   height: 34px;
   box-sizing: border-box;
@@ -25565,13 +25571,15 @@ body > .mermaid-diagram--fullscreen {
 
 /* Topic action icons (pin, archive): clean, no background, no border */
 :root[data-theme-style] .sidebar--workbench .project-tree__topic-action,
-:root[data-theme-style] .app--classic .project-tree__topic-action {
+:root[data-theme-style] .app--classic .project-tree__topic-action,
+:root[data-theme-style] .app--split .project-tree__topic-action {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
 }
 :root[data-theme-style] .sidebar--workbench .project-tree__topic-action:hover,
-:root[data-theme-style] .app--classic .project-tree__topic-action:hover {
+:root[data-theme-style] .app--classic .project-tree__topic-action:hover,
+:root[data-theme-style] .app--split .project-tree__topic-action:hover {
   background: transparent;
   border-color: transparent;
   box-shadow: none;
@@ -25591,19 +25599,6 @@ body > .mermaid-diagram--fullscreen {
   pointer-events: auto;
 }
 
-/* Remove right-side slide animations on topic hover */
-:root[data-theme-style] .sidebar--workbench .project-tree__topic-actions,
-:root[data-theme-style] .app--classic .project-tree__topic-actions {
-  transform: translateY(-50%) translateX(0);
-}
-:root[data-theme-style] .sidebar--workbench .project-tree__topic:hover .project-tree__topic-actions,
-:root[data-theme-style] .sidebar--workbench .project-tree__topic:focus-within .project-tree__topic-actions,
-:root[data-theme-style] .sidebar--workbench .project-tree__topic--menu-open .project-tree__topic-actions,
-:root[data-theme-style] .app--classic .project-tree__topic:hover .project-tree__topic-actions,
-:root[data-theme-style] .app--classic .project-tree__topic:focus-within .project-tree__topic-actions,
-:root[data-theme-style] .app--classic .project-tree__topic--menu-open .project-tree__topic-actions {
-  transform: translateY(-50%) translateX(0);
-}
 :root[data-theme-style] .sidebar--workbench .project-tree__topic:hover .project-tree__topic-side,
 :root[data-theme-style] .sidebar--workbench .project-tree__topic:focus-within .project-tree__topic-side,
 :root[data-theme-style] .sidebar--workbench .project-tree__topic--menu-open .project-tree__topic-side,
@@ -31090,28 +31085,64 @@ body > .mermaid-diagram--fullscreen {
   font-size: 10px;
 }
 
-.sidebar--workbench .project-tree__topic-side {
-  flex: 0 0 auto;
-  min-width: 44px;
+/* Session history rows: fixed geometry so adjacent rows share one height and
+   the time column stays pinned to the sidebar's right edge. */
+.sidebar--workbench .project-tree__topic:not(.project-tree__topic--has-meta),
+.app--split .project-tree__topic:not(.project-tree__topic--has-meta) {
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.sidebar--workbench .project-tree__topic-main,
+.app--split .project-tree__topic-main {
+  height: 100%;
+  min-height: 0;
+}
+
+.sidebar--workbench .project-tree__topic-side,
+.app--split .project-tree__topic-side {
+  --sidebar-topic-time-col: 64px;
+  flex: 0 0 var(--sidebar-topic-time-col);
+  width: var(--sidebar-topic-time-col);
+  min-width: var(--sidebar-topic-time-col);
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
   justify-content: flex-end;
-  gap: 7px;
+  gap: 4px;
   color: var(--fg-faint);
   font-size: 13px;
   font-weight: 520;
   line-height: 1;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
   transition: opacity var(--dur-fast), transform var(--dur-fast);
 }
 
-.sidebar--workbench .project-tree__topic-time {
+.sidebar--workbench .project-tree__topic-time,
+.app--split .project-tree__topic-time {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--fg-faint) 14%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fg-faint) 8%, transparent);
+  color: var(--fg-faint);
 }
 
-.sidebar--workbench .project-tree__topic-state {
+.sidebar--workbench .project-tree__topic--active .project-tree__topic-time,
+.app--split .project-tree__topic--active .project-tree__topic-time {
+  color: color-mix(in srgb, var(--accent) 82%, var(--fg));
+  border-color: color-mix(in srgb, var(--accent) 26%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.sidebar--workbench .project-tree__topic-state,
+.app--split .project-tree__topic-state {
   width: 12px;
   height: 12px;
   border-radius: 999px;
@@ -31121,10 +31152,11 @@ body > .mermaid-diagram--fullscreen {
 
 .sidebar--workbench .project-tree__topic-unread-dot,
 .app--classic .project-tree__topic-unread-dot,
-.app--creation .project-tree__topic-unread-dot {
+.app--creation .project-tree__topic-unread-dot,
+.app--split .project-tree__topic-unread-dot {
   position: absolute;
   top: 50%;
-  right: 18px;
+  right: 72px;
   z-index: var(--z-local-raised);
   width: 8px;
   height: 8px;
@@ -31138,7 +31170,6 @@ body > .mermaid-diagram--fullscreen {
   transition: opacity var(--dur-fast), transform var(--dur-fast);
 }
 
-.app--classic .project-tree__topic-unread-dot,
 .app--creation .project-tree__topic-unread-dot {
   right: 10px;
 }
@@ -31189,19 +31220,28 @@ body > .mermaid-diagram--fullscreen {
   color: var(--fg-faint);
 }
 
+/* Actions are in-flow at the row end and always visible next to the time
+   cluster: no absolute overlay, no hover swap, nothing to overlap. */
 .sidebar--workbench .project-tree__topic-actions,
-.app--classic .project-tree__topic-actions {
-  position: absolute;
-  top: 50%;
-  right: 8px;
+.app--classic .project-tree__topic-actions,
+.app--split .project-tree__topic-actions {
+  position: static;
   z-index: var(--z-local-raised);
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-50%) translateX(4px);
-  transition: opacity var(--dur-fast), transform var(--dur-fast);
+  opacity: 0.8;
+  pointer-events: auto;
+  transition: opacity var(--dur-fast);
+}
+
+:root[data-theme-style] .sidebar--workbench .project-tree__topic,
+:root[data-theme-style] .app--classic .project-tree__topic,
+:root[data-theme-style] .app--split .project-tree__topic,
+.sidebar--workbench .project-tree__topic,
+.app--classic .project-tree__topic,
+.app--split .project-tree__topic {
+  margin-right: 0;
 }
 
 .sidebar--workbench .project-tree__topic:hover .project-tree__topic-actions,
@@ -31209,28 +31249,12 @@ body > .mermaid-diagram--fullscreen {
 .sidebar--workbench .project-tree__topic--menu-open .project-tree__topic-actions,
 .app--classic .project-tree__topic:hover .project-tree__topic-actions,
 .app--classic .project-tree__topic:focus-within .project-tree__topic-actions,
-.app--classic .project-tree__topic--menu-open .project-tree__topic-actions {
+.app--classic .project-tree__topic--menu-open .project-tree__topic-actions,
+.app--split .project-tree__topic:hover .project-tree__topic-actions,
+.app--split .project-tree__topic:focus-within .project-tree__topic-actions,
+.app--split .project-tree__topic--menu-open .project-tree__topic-actions {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(-50%) translateX(0);
-}
-
-.sidebar--workbench .project-tree__topic:hover .project-tree__topic-side,
-.sidebar--workbench .project-tree__topic:focus-within .project-tree__topic-side,
-.sidebar--workbench .project-tree__topic--menu-open .project-tree__topic-side,
-.sidebar--workbench .project-tree__topic--unread .project-tree__topic-side,
-.app--classic .project-tree__topic:hover .project-tree__topic-side,
-.app--classic .project-tree__topic:focus-within .project-tree__topic-side,
-.app--classic .project-tree__topic--menu-open .project-tree__topic-side,
-.app--classic .project-tree__topic--unread .project-tree__topic-side {
-  opacity: 0;
-  transform: translateX(-3px);
-}
-
-.app--classic .project-tree__topic:hover .project-tree__topic-side,
-.app--classic .project-tree__topic:focus-within .project-tree__topic-side,
-.app--classic .project-tree__topic--menu-open .project-tree__topic-side {
-  min-width: 56px;
 }
 
 .app--creation .project-tree__topic--unread .project-tree__topic-side,
@@ -31240,7 +31264,8 @@ body > .mermaid-diagram--fullscreen {
 }
 
 .sidebar--workbench .project-tree__topic-action-slot,
-.app--classic .project-tree__topic-action-slot {
+.app--classic .project-tree__topic-action-slot,
+.app--split .project-tree__topic-action-slot {
   flex: 0 0 auto;
   width: 26px;
   height: 26px;
@@ -31248,7 +31273,8 @@ body > .mermaid-diagram--fullscreen {
 }
 
 .sidebar--workbench .project-tree__topic-action,
-.app--classic .project-tree__topic-action {
+.app--classic .project-tree__topic-action,
+.app--split .project-tree__topic-action {
   --wails-draggable: no-drag;
   width: 26px;
   height: 26px;
@@ -31265,7 +31291,8 @@ body > .mermaid-diagram--fullscreen {
 }
 
 .sidebar--workbench .project-tree__topic-action:hover,
-.app--classic .project-tree__topic-action:hover {
+.app--classic .project-tree__topic-action:hover,
+.app--split .project-tree__topic-action:hover {
   color: var(--fg);
   border-color: color-mix(in srgb, var(--fg-faint) 28%, transparent);
   background: var(--bg-elev);
@@ -31275,21 +31302,48 @@ body > .mermaid-diagram--fullscreen {
 .sidebar--workbench .project-tree__topic-action--pinned,
 .sidebar--workbench .project-tree__topic-action--pinned:hover,
 .app--classic .project-tree__topic-action--pinned,
-.app--classic .project-tree__topic-action--pinned:hover {
+.app--classic .project-tree__topic-action--pinned:hover,
+.app--split .project-tree__topic-action--pinned,
+.app--split .project-tree__topic-action--pinned:hover {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 30%, transparent);
   background: var(--accent-soft);
 }
 
+.sidebar--workbench .project-tree__topic-action--pin,
+.app--classic .project-tree__topic-action--pin,
+.app--split .project-tree__topic-action--pin {
+  color: color-mix(in srgb, var(--accent) 66%, var(--fg-faint));
+}
+
+.sidebar--workbench .project-tree__topic-action--pin:hover,
+.app--classic .project-tree__topic-action--pin:hover,
+.app--split .project-tree__topic-action--pin:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  background: var(--accent-soft);
+}
+
+.sidebar--workbench .project-tree__topic-action--archive,
+.app--classic .project-tree__topic-action--archive,
+.app--split .project-tree__topic-action--archive {
+  color: color-mix(in srgb, var(--err) 62%, var(--fg-faint));
+}
+
 .sidebar--workbench .project-tree__topic-action--archive:hover,
-.app--classic .project-tree__topic-action--archive:hover {
-  color: var(--fg);
+.app--classic .project-tree__topic-action--archive:hover,
+.app--split .project-tree__topic-action--archive:hover {
+  color: var(--err);
+  border-color: color-mix(in srgb, var(--err) 38%, transparent);
+  background: color-mix(in srgb, var(--err) 10%, transparent);
 }
 
 .sidebar--workbench .project-tree__topic-action:disabled,
 .sidebar--workbench .project-tree__topic-action:disabled:hover,
 .app--classic .project-tree__topic-action:disabled,
-.app--classic .project-tree__topic-action:disabled:hover {
+.app--classic .project-tree__topic-action:disabled:hover,
+.app--split .project-tree__topic-action:disabled,
+.app--split .project-tree__topic-action:disabled:hover {
   cursor: not-allowed;
   opacity: 0.4;
   color: var(--fg-faint);
