@@ -4240,6 +4240,7 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
   const plannerRef = toRef(s.plannerModel, s);
   const subagentRef = toRef(s.subagentModel, s);
   const visionRef = s.visionModel === "auto" ? "auto" : toRef(s.visionModel, s);
+  const optimizeRef = toRef(s.promptOptimizeModel, s);
   const plannerSelectRef = plannerRef === defaultRef ? "" : plannerRef;
   const [defaultProvider] = defaultRef.split("/");
   const defaultProviderView = s.providers.find((p) => p.name === defaultProvider);
@@ -4477,6 +4478,18 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
                 emptyOptionLabel={t("common.none")}
                 autoOptionLabel={t("common.auto")}
                 onPick={(ref) => void apply(() => app.SetVisionModel(ref))}
+              />
+            </SettingsField>
+
+            <SettingsField label={t("settings.promptOptimizeModel")} hint={t("settings.promptOptimizeModelHint")}>
+              <ModelPicker
+                s={s}
+                refs={refs}
+                value={optimizeRef}
+                disabled={busy}
+                ariaLabel={t("settings.promptOptimizeModel")}
+                emptyOptionLabel={t("common.none")}
+                onPick={(ref) => void apply(() => app.SetPromptOptimizeModel(ref))}
               />
             </SettingsField>
 

@@ -2138,6 +2138,7 @@ export interface SettingsView {
   defaultModel: string;
   plannerModel: string;
   visionModel: string;
+  promptOptimizeModel: string; // "" = off; explicit provider/model ref only (no "auto")
   subagentModel: string;
   subagentEffort: string;
   autoPlan: string;

@@ -109,6 +109,27 @@ func (c *Config) SetVisionModel(name string) error {
 	return nil
 }
 
+// SetPromptOptimizeModel sets (or clears) the standalone model used by the
+// composer's prompt-optimization utility. It deliberately has no "auto"
+// resolution: the value must be explicit so the utility never touches the
+// session model or its provider-visible prefix.
+func (c *Config) SetPromptOptimizeModel(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		c.Agent.PromptOptimizeModel = ""
+		return nil
+	}
+	entry, ok := c.ResolveModel(name)
+	if !ok {
+		return fmt.Errorf("set prompt optimize model: no such model %q (configured: %s)", name, c.providerNames())
+	}
+	if !entry.Configured() {
+		return fmt.Errorf("set prompt optimize model: provider %q has no key", entry.Name)
+	}
+	c.Agent.PromptOptimizeModel = entry.Name + "/" + entry.Model
+	return nil
+}
+
 // SetAutoPlan is retained for source compatibility with older desktop clients.
 // Automatic plan mode is retired: "off" is an idempotent compatibility write,
 // while every attempt to enable it is rejected explicitly.
@@ -580,7 +601,8 @@ func (c *Config) RemoveProvider(name string) error {
 
 	fallback := ""
 	visionRefsProvider := c.modelRefTargetsProvider(c.Agent.VisionModel, name)
-	if defaultRefsProvider || plannerRefsProvider || visionRefsProvider || subagentRefsProvider || len(subagentModelRefsProvider) > 0 {
+	optimizeRefsProvider := c.modelRefTargetsProvider(c.Agent.PromptOptimizeModel, name)
+	if defaultRefsProvider || plannerRefsProvider || visionRefsProvider || optimizeRefsProvider || subagentRefsProvider || len(subagentModelRefsProvider) > 0 {
 		fallback = c.providerRemovalFallback(name)
 	}
 	if defaultRefsProvider && fallback == "" {
@@ -597,6 +619,9 @@ func (c *Config) RemoveProvider(name string) error {
 	}
 	if visionRefsProvider {
 		c.Agent.VisionModel = ""
+	}
+	if optimizeRefsProvider {
+		c.Agent.PromptOptimizeModel = ""
 	}
 	if subagentRefsProvider {
 		c.Agent.SubagentModel = fallback

@@ -258,6 +258,11 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# vision_model = \"auto\"   # optional: summarize images for text-only models\n")
 	}
+	if c.Agent.PromptOptimizeModel != "" {
+		fmt.Fprintf(&b, "prompt_optimize_model = %q   # standalone model for the composer's prompt-optimization utility\n", c.Agent.PromptOptimizeModel)
+	} else {
+		b.WriteString("# prompt_optimize_model = \"qwen-cn/qwen3.7-plus\"   # optional: composer prompt-optimization model\n")
+	}
 	if c.Agent.SubagentModel != "" {
 		fmt.Fprintf(&b, "subagent_model = %q   # default model for runAs=subagent skills\n", c.Agent.SubagentModel)
 	} else {

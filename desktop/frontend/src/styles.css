@@ -7421,6 +7421,25 @@ body > .mermaid-diagram--fullscreen {
   outline: none;
   box-shadow: var(--focus-ring);
 }
+.composer__btn--optimize {
+  margin-right: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border-soft));
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg-elev-2));
+  color: var(--accent);
+}
+.composer__btn--optimize:not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 20%, var(--bg-elev-2));
+}
+.composer__btn--optimize:not(:disabled):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.composer__btn--optimize:disabled {
+  border-color: var(--border-soft);
+  background: var(--control-disabled-bg);
+  color: var(--control-disabled-fg);
+  cursor: default;
+}
 .composer-meta {
   --composer-control-height: 32px;
   --composer-control-radius: 7px;

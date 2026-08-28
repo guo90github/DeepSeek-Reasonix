@@ -1733,6 +1733,13 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		return resolveProvider(effectiveResolver, cfg, proxySpec, provider.Selection{Ref: modelRefFromEntry(ve)})
 	}
+	promptOptimizeProviderResolver := func(ref string) (provider.Provider, error) {
+		pe, ok := resolveOptionalEntry(effectiveResolver, cfg, strings.TrimSpace(ref))
+		if !ok || pe == nil || strings.TrimSpace(pe.Model) == "" {
+			return nil, fmt.Errorf("unknown prompt optimize model %q", ref)
+		}
+		return resolveProvider(effectiveResolver, cfg, proxySpec, provider.Selection{Ref: modelRefFromEntry(pe)})
+	}
 	visionModelSelector := func(currentRef, _ string) (string, bool) {
 		current, ok := resolveOptionalEntry(effectiveResolver, cfg, strings.TrimSpace(currentRef))
 		if !ok || current == nil {
@@ -1776,6 +1783,8 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		VisionModel:                    cfg.Agent.VisionModel,
 		VisionProviderResolver:         visionProviderResolver,
 		VisionModelSelector:            visionModelSelector,
+		PromptOptimizeModel:            cfg.Agent.PromptOptimizeModel,
+		PromptOptimizeProviderResolver: promptOptimizeProviderResolver,
 		SystemPrompt:                   sysPrompt,
 		SessionDir:                     sessionDir,
 		Host:                           pluginHost,

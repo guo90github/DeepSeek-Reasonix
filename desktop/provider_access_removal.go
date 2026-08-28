@@ -163,6 +163,7 @@ func providerRemovalStateFingerprint(c *config.Config, credentialsRevision strin
 	write(c.DefaultModel)
 	write(c.Agent.PlannerModel)
 	write(c.Agent.VisionModel)
+	write(c.Agent.PromptOptimizeModel)
 	write(c.Agent.GuardianModel)
 	write(c.Agent.RecoveryModel)
 	write(c.Agent.SubagentModel)
@@ -252,6 +253,9 @@ func retargetProviderReferences(c *config.Config, names []string, fallbackRef st
 	}
 	if providerRefMatchesAny(c, c.Agent.VisionModel, names) {
 		c.Agent.VisionModel = ""
+	}
+	if providerRefMatchesAny(c, c.Agent.PromptOptimizeModel, names) {
+		c.Agent.PromptOptimizeModel = ""
 	}
 	if providerRefMatchesAny(c, c.Agent.GuardianModel, names) {
 		c.Agent.GuardianModel = fallbackRef

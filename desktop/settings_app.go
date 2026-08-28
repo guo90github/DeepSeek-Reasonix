@@ -314,6 +314,7 @@ type SettingsView struct {
 	DefaultModel                 string               `json:"defaultModel"`
 	PlannerModel                 string               `json:"plannerModel"`
 	VisionModel                  string               `json:"visionModel"`
+	PromptOptimizeModel          string               `json:"promptOptimizeModel"`
 	SubagentModel                string               `json:"subagentModel"`
 	SubagentEffort               string               `json:"subagentEffort"`
 	AutoPlan                     string               `json:"autoPlan"`
@@ -1010,15 +1011,16 @@ func (a *App) Settings() SettingsView {
 	}
 	effectiveShell := sandbox.ResolveShell(cfg.Tools.Shell.Prefer, cfg.Tools.Shell.Path, nil)
 	v := SettingsView{
-		DefaultModel:      cfg.DefaultModel,
-		PlannerModel:      cfg.Agent.PlannerModel,
-		VisionModel:       cfg.Agent.VisionModel,
-		SubagentModel:     cfg.Agent.SubagentModel,
-		SubagentEffort:    cfg.Agent.SubagentEffort,
-		AutoPlan:          "off", // deprecated JSON compatibility for older frontends
-		Providers:         []ProviderView{},
-		OfficialProviders: []ProviderView{},
-		ProviderPresets:   []ProviderPresetView{},
+		DefaultModel:        cfg.DefaultModel,
+		PlannerModel:        cfg.Agent.PlannerModel,
+		VisionModel:         cfg.Agent.VisionModel,
+		PromptOptimizeModel: cfg.Agent.PromptOptimizeModel,
+		SubagentModel:       cfg.Agent.SubagentModel,
+		SubagentEffort:      cfg.Agent.SubagentEffort,
+		AutoPlan:            "off", // deprecated JSON compatibility for older frontends
+		Providers:           []ProviderView{},
+		OfficialProviders:   []ProviderView{},
+		ProviderPresets:     []ProviderPresetView{},
 		Permissions: PermissionsView{
 			Mode:  orDefault(cfg.Permissions.Mode, "ask"),
 			Allow: nonNil(cfg.Permissions.Allow),
@@ -2212,6 +2214,25 @@ func (a *App) SetVisionModel(ref string) error {
 			return err
 		}
 		c.Agent.VisionModel = resolved
+		return nil
+	})
+}
+
+// SetPromptOptimizeModel sets (or clears) the standalone model behind the
+// composer's prompt-optimization utility. Unlike the vision model it has no
+// "auto" value: the utility must never run on the session model.
+func (a *App) SetPromptOptimizeModel(ref string) error {
+	return a.applyConfigChange(func(c *config.Config) error {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			c.Agent.PromptOptimizeModel = ""
+			return nil
+		}
+		resolved, err := selectableDesktopModelRef(c, ref)
+		if err != nil {
+			return err
+		}
+		c.Agent.PromptOptimizeModel = resolved
 		return nil
 	})
 }

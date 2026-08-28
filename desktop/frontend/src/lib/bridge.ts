@@ -511,6 +511,7 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   SetDefaultModel(ref: string): Promise<void>;
   SetPlannerModel(ref: string): Promise<void>;
   SetVisionModel(ref: string): Promise<void>;
+  SetPromptOptimizeModel(ref: string): Promise<void>;
   SetSubagentModel(ref: string): Promise<void>;
   SetSubagentEffort(level: string): Promise<void>;
   SetMaxSubagentDepth(depth: number): Promise<void>;
@@ -576,6 +577,7 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   ExportThemePack(id: string, destPath: string): Promise<string>;
   PickThemeBackground(): Promise<string>;
   SetDesktopLayoutStyle(style: string): Promise<void>;
+  OptimizePrompt(text: string): Promise<string>;
   SetDesktopZoomFactor(factor: number): Promise<void>;
   GetDesktopZoomFactor(): Promise<number>;
   RestartApplication(): Promise<void>;
@@ -1678,6 +1680,7 @@ function makeMockApp(): AppBindings {
     defaultModel: "deepseek",
     plannerModel: "",
     visionModel: "",
+    promptOptimizeModel: "",
     subagentModel: "",
     subagentEffort: "",
     autoPlan: "off",
@@ -4482,6 +4485,9 @@ function makeMockApp(): AppBindings {
     async SetVisionModel(ref: string) {
       settings.visionModel = ref;
     },
+    async SetPromptOptimizeModel(ref: string) {
+      settings.promptOptimizeModel = ref;
+    },
     async SetSubagentModel(ref: string) {
       settings.subagentModel = ref;
     },
@@ -5034,6 +5040,13 @@ function makeMockApp(): AppBindings {
     },
     async Version() {
       return "v1.0.0 (browser dev)";
+    },
+    async OptimizePrompt(text: string) {
+      const trimmed = text.trim();
+      if (!trimmed) return "";
+      // Deterministic dev stand-in: visibly rewrites the draft so the button
+      // flow is testable in the browser without a live provider.
+      return `请完成以下任务：\n${trimmed}`;
     },
     async CheckUpdate(channel: string) {
       void channel;

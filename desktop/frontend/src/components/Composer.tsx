@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties, ClipboardEvent, DragEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
-import { ArrowRight, ArrowUp, Check, ChevronsUpDown, CornerDownRight, Equal, Eye, FileText, Folder, Gauge, List, MessageSquare, PackageCheck, Plus, Search, Shield, ShieldAlert, ShieldCheck, Square, Target, Trash2, X } from "lucide-react";
+import { ArrowRight, ArrowUp, Check, ChevronsUpDown, CornerDownRight, Equal, Eye, FileText, Folder, Gauge, List, MessageSquare, PackageCheck, Plus, Search, Shield, ShieldAlert, ShieldCheck, Sparkles, Square, Target, Trash2, X } from "lucide-react";
 import { asArray } from "../lib/array";
 import { filterAtMatches } from "../lib/atMatches";
 import { DedupIndex, sha256 } from "../lib/attachDedup";
@@ -779,6 +779,8 @@ export function Composer({
   const guidanceSendingIdRef = useRef<string | null>(null);
   const [loadingPastChats, setLoadingPastChats] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [optimizingPrompt, setOptimizingPrompt] = useState(false);
+  const optimizingPromptRef = useRef(false);
   const cancelSettlingDraftsRef = useRef(new Set<string>());
   const [, setCancelSettlingRevision] = useState(0);
   const [inputMenuPoint, setInputMenuPoint] = useState<ContextMenuPoint | null>(null);
@@ -3841,6 +3843,39 @@ export function Composer({
   const submitEmpty = !text.trim() && attachments.length === 0 && workspaceRefs.length === 0 &&
     !invocations.some((invocation) => invocation.command.kind === "skill");
   const submitBlocked = submitting || pendingPaste > 0 || (submitEmpty && !(goalModeOn && !activeGoal)) || disabled || (!running && submitDisabled) || readOnly;
+  // Optimize prompt: rewrite the raw draft via the session's configured model,
+  // then fill the result back for the user to review before sending.
+  const optimizePromptDraft = useCallback(async () => {
+    const raw = textRef.current.trim();
+    if (!raw || optimizingPromptRef.current) return;
+    optimizingPromptRef.current = true;
+    setOptimizingPrompt(true);
+    try {
+      const optimized = (await app.OptimizePrompt(raw)).trim();
+      if (!optimized) {
+        showToast(t("composer.optimizePromptFailed"), "warn");
+        return;
+      }
+      textRef.current = optimized;
+      setText(optimized);
+      const selection = { start: optimized.length, end: optimized.length };
+      lastSelectionRef.current = selection;
+      setPlainSelection(selection);
+      setRichSelection(selection);
+      resetPromptHistoryNavigation();
+      if (composerPrompt) setComposerPrompt(null);
+      requestAnimationFrame(() => {
+        taRef.current?.focus();
+        taRef.current?.setSelectionRange(optimized.length, optimized.length);
+      });
+    } catch (error) {
+      console.error("[composer] optimize prompt failed", error);
+      showToast(error instanceof Error && error.message ? error.message : t("composer.optimizePromptFailed"), "warn");
+    } finally {
+      optimizingPromptRef.current = false;
+      setOptimizingPrompt(false);
+    }
+  }, [composerPrompt, resetPromptHistoryNavigation, showToast, t]);
   const submitTooltip = running
     ? t("composer.queueGuidance", { combo: sendComboLabel })
     : t("composer.send", { combo: sendComboLabel });
@@ -4578,6 +4613,17 @@ export function Composer({
                 {composerPrompt}
               </span>
             )}
+            <Tooltip label={optimizingPrompt ? t("composer.optimizePrompting") : t("composer.optimizePrompt")}>
+              <button
+                className="composer__btn composer__btn--optimize"
+                type="button"
+                onClick={() => void optimizePromptDraft()}
+                disabled={optimizingPrompt || disabled || readOnly || running || !text.trim()}
+                aria-label={t("composer.optimizePrompt")}
+              >
+                <Sparkles size={16} />
+              </button>
+            </Tooltip>
             {running && (
               <Tooltip label={t("composer.stop")}>
                 <button

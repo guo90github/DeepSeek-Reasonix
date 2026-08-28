@@ -119,14 +119,16 @@ type Controller struct {
 	// one — sub-agents then keep whatever gate they were constructed with.
 	subagentGate *SharedHeadlessGate
 
-	label                  string
-	modelRef               string
-	visionModel            string
-	visionProviderResolver func(string) (provider.Provider, error)
-	visionModelSelector    func(string, string) (string, bool)
-	systemPrompt           string
-	sessionDir             string
-	commands               atomic.Pointer[[]command.Command]
+	label                          string
+	modelRef                       string
+	visionModel                    string
+	visionProviderResolver         func(string) (provider.Provider, error)
+	visionModelSelector            func(string, string) (string, bool)
+	promptOptimizeModel            string
+	promptOptimizeProviderResolver func(string) (provider.Provider, error)
+	systemPrompt                   string
+	sessionDir                     string
+	commands                       atomic.Pointer[[]command.Command]
 	// skills owns the session's discovered skills (enabled subset, full set, and
 	// the reloadable stores) — the skills slice of the Capabilities concern. See
 	// skill.go.
@@ -483,15 +485,20 @@ type Options struct {
 	VisionModel            string
 	VisionProviderResolver func(string) (provider.Provider, error)
 	VisionModelSelector    func(string, string) (string, bool)
-	SystemPrompt           string
-	SessionDir             string
-	SessionPath            string
-	Host                   *plugin.Host
-	Commands               []command.Command
-	Skills                 []skill.Skill
-	AllSkills              []skill.Skill
-	SkillStore             *skill.Store
-	AllSkillStore          *skill.Store
+	// PromptOptimizeModel is the standalone model behind the composer's
+	// prompt-optimization utility; empty means off. The resolver is assembled
+	// by boot; the optimizer never runs on the session model.
+	PromptOptimizeModel            string
+	PromptOptimizeProviderResolver func(string) (provider.Provider, error)
+	SystemPrompt                   string
+	SessionDir                     string
+	SessionPath                    string
+	Host                           *plugin.Host
+	Commands                       []command.Command
+	Skills                         []skill.Skill
+	AllSkills                      []skill.Skill
+	SkillStore                     *skill.Store
+	AllSkillStore                  *skill.Store
 	// DisableImplicitSkillInvocation controls model-facing discovery only;
 	// explicit /skill commands and management remain host-side capabilities.
 	DisableImplicitSkillInvocation bool
@@ -656,6 +663,8 @@ func New(opts Options) *Controller {
 		visionModel:                       strings.TrimSpace(opts.VisionModel),
 		visionProviderResolver:            opts.VisionProviderResolver,
 		visionModelSelector:               opts.VisionModelSelector,
+		promptOptimizeModel:               strings.TrimSpace(opts.PromptOptimizeModel),
+		promptOptimizeProviderResolver:    opts.PromptOptimizeProviderResolver,
 		systemPrompt:                      opts.SystemPrompt,
 		sessionDir:                        opts.SessionDir,
 		sessionPath:                       opts.SessionPath,

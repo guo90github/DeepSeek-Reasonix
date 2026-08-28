@@ -177,7 +177,10 @@ for (const path of localeChunks) {
   // choices from the primary UI; keep that complete guidance with a bounded
   // 0.4–0.5 KiB locale-only ratchet.
   // Remote-session actions and disconnected-shell guidance add bounded copy.
-  const budget = name.startsWith("zh-TW-") ? 58.5 * 1024 : 57.8 * 1024;
+  // The prompt-optimization utility adds its model label/hint to each locale
+  // (~0.1 KiB gzip), so both Chinese gates step up 0.1 KiB to keep the same
+  // platform-variance headroom the comment above demands.
+  const budget = name.startsWith("zh-TW-") ? 58.6 * 1024 : 57.9 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

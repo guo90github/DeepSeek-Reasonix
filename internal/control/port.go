@@ -248,6 +248,7 @@ type Input interface {
 	HasRefs(line string) bool
 	ImageInputEnabled() bool
 	RegisterExternalFolderRef(path string) (token, displayPath string, err error)
+	OptimizePrompt(ctx context.Context, text string) (string, error)
 }
 
 // Settings covers runtime session settings that don't fit a richer domain.
