@@ -4,7 +4,7 @@ import { ArrowRight, ArrowUp, Check, ChevronsUpDown, CornerDownRight, Equal, Eye
 import { asArray } from "../lib/array";
 import { filterAtMatches } from "../lib/atMatches";
 import { DedupIndex, sha256 } from "../lib/attachDedup";
-import { app, onFilesDropped } from "../lib/bridge";
+import { app, onFilesDropped, onOptimizePromptChunk, onOptimizePromptDone } from "../lib/bridge";
 import { enqueueInboxGuidanceForActiveTurn, steerInboxItemForActiveTurn } from "../lib/inboxSubmit";
 import { formatInboxError, isInboxItemMissing } from "../lib/inboxError";
 import { inboxScopeKey } from "../lib/composerInboxQueue";
@@ -51,6 +51,7 @@ import { EffortSwitcher } from "./EffortSwitcher";
 import { ModelSwitcher } from "./ModelSwitcher";
 import { Tooltip } from "./Tooltip";
 import { ComposerContextCard } from "./ComposerContextCard";
+import { OptimizePreviewDialog, type OptimizeRun } from "./OptimizePreviewDialog";
 import { Markdown } from "./Markdown";
 import { CodeViewer } from "./CodeViewer";
 import { ContextWindowRing } from "./ContextWindowRing";
@@ -781,6 +782,15 @@ export function Composer({
   const [submitting, setSubmitting] = useState(false);
   const [optimizingPrompt, setOptimizingPrompt] = useState(false);
   const optimizingPromptRef = useRef(false);
+  const [optimizeRun, setOptimizeRun] = useState<OptimizeRun | null>(null);
+  const optimizeStreamCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(
+    () => () => {
+      optimizeStreamCleanupRef.current?.();
+      optimizeStreamCleanupRef.current = null;
+    },
+    [],
+  );
   const cancelSettlingDraftsRef = useRef(new Set<string>());
   const [, setCancelSettlingRevision] = useState(0);
   const [inputMenuPoint, setInputMenuPoint] = useState<ContextMenuPoint | null>(null);
@@ -3843,39 +3853,67 @@ export function Composer({
   const submitEmpty = !text.trim() && attachments.length === 0 && workspaceRefs.length === 0 &&
     !invocations.some((invocation) => invocation.command.kind === "skill");
   const submitBlocked = submitting || pendingPaste > 0 || (submitEmpty && !(goalModeOn && !activeGoal)) || disabled || (!running && submitDisabled) || readOnly;
-  // Optimize prompt: rewrite the raw draft via the session's configured model,
-  // then fill the result back for the user to review before sending.
+  // Optimize prompt: rewrite the raw draft via the standalone optimize model
+  // (independent of the turn stream). The panel opens immediately with a
+  // loading state and renders each streamed chunk as it arrives; the result
+  // only lands in the composer after the user confirms the preview.
   const optimizePromptDraft = useCallback(async () => {
     const raw = textRef.current.trim();
     if (!raw || optimizingPromptRef.current) return;
     optimizingPromptRef.current = true;
     setOptimizingPrompt(true);
-    try {
-      const optimized = (await app.OptimizePrompt(raw)).trim();
-      if (!optimized) {
-        showToast(t("composer.optimizePromptFailed"), "warn");
-        return;
-      }
-      textRef.current = optimized;
-      setText(optimized);
-      const selection = { start: optimized.length, end: optimized.length };
-      lastSelectionRef.current = selection;
-      setPlainSelection(selection);
-      setRichSelection(selection);
-      resetPromptHistoryNavigation();
-      if (composerPrompt) setComposerPrompt(null);
-      requestAnimationFrame(() => {
-        taRef.current?.focus();
-        taRef.current?.setSelectionRange(optimized.length, optimized.length);
-      });
-    } catch (error) {
-      console.error("[composer] optimize prompt failed", error);
-      showToast(error instanceof Error && error.message ? error.message : t("composer.optimizePromptFailed"), "warn");
-    } finally {
+    setOptimizeRun({ status: "streaming", original: raw, text: "" });
+    const offChunk = onOptimizePromptChunk((_tabId, chunk) => {
+      setOptimizeRun((run) => (run && run.status === "streaming" ? { ...run, text: run.text + chunk } : run));
+    });
+    const offDone = onOptimizePromptDone(() => {
+      setOptimizeRun((run) => (run && run.status === "streaming" ? { ...run, status: "done" } : run));
       optimizingPromptRef.current = false;
       setOptimizingPrompt(false);
+      optimizeStreamCleanupRef.current = null;
+      offChunk();
+      offDone();
+    });
+    optimizeStreamCleanupRef.current = () => {
+      offChunk();
+      offDone();
+    };
+    try {
+      await app.OptimizePrompt(raw);
+      // The done event signals completion; the resolved promise only means no
+      // error (the async event queue may still be flushing chunks).
+    } catch (error) {
+      console.error("[composer] optimize prompt failed", error);
+      optimizeStreamCleanupRef.current = null;
+      offChunk();
+      offDone();
+      optimizingPromptRef.current = false;
+      setOptimizingPrompt(false);
+      setOptimizeRun(null);
+      showToast(error instanceof Error && error.message ? error.message : t("composer.optimizePromptFailed"), "warn");
     }
-  }, [composerPrompt, resetPromptHistoryNavigation, showToast, t]);
+  }, [showToast, t]);
+  // Confirm the previewed (possibly edited) rewrite: backfill the composer.
+  const applyOptimizedPrompt = useCallback((editedText: string) => {
+    const optimized = editedText.trim();
+    if (!optimized) {
+      setOptimizeRun(null);
+      return;
+    }
+    textRef.current = optimized;
+    setText(optimized);
+    const selection = { start: optimized.length, end: optimized.length };
+    lastSelectionRef.current = selection;
+    setPlainSelection(selection);
+    setRichSelection(selection);
+    resetPromptHistoryNavigation();
+    if (composerPrompt) setComposerPrompt(null);
+    setOptimizeRun(null);
+    requestAnimationFrame(() => {
+      taRef.current?.focus();
+      taRef.current?.setSelectionRange(optimized.length, optimized.length);
+    });
+  }, [composerPrompt, resetPromptHistoryNavigation]);
   const submitTooltip = running
     ? t("composer.queueGuidance", { combo: sendComboLabel })
     : t("composer.send", { combo: sendComboLabel });
@@ -4618,10 +4656,10 @@ export function Composer({
                 className="composer__btn composer__btn--optimize"
                 type="button"
                 onClick={() => void optimizePromptDraft()}
-                disabled={optimizingPrompt || disabled || readOnly || running || !text.trim()}
+                disabled={optimizingPrompt || disabled || readOnly || !text.trim()}
                 aria-label={t("composer.optimizePrompt")}
               >
-                <Sparkles size={16} />
+                {optimizingPrompt ? <span className="composer__btn--optimize__spinner" aria-hidden="true" /> : <Sparkles size={16} />}
               </button>
             </Tooltip>
             {running && (
@@ -4839,6 +4877,13 @@ export function Composer({
           </div>
         </div>
       </div>
+      {optimizeRun && (
+        <OptimizePreviewDialog
+          run={optimizeRun}
+          onApply={applyOptimizedPrompt}
+          onCancel={() => setOptimizeRun(null)}
+        />
+      )}
     </div>
   );
 }

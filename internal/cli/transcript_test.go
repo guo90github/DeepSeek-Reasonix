@@ -55,6 +55,28 @@ func TestReplaySectionsKeepAssistantIdentity(t *testing.T) {
 	}
 }
 
+func TestReplaySectionsFilterSyntheticUserNudges(t *testing.T) {
+	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
+	activeColorProfile = colorprofile.NoTTY
+	configureCLITheme("dark")
+
+	sections := replaySectionsFor([]provider.Message{
+		{Role: provider.RoleUser, Content: "Which version?"},
+		{Role: provider.RoleAssistant, Content: "Version 1.2.3"},
+		// Persisted shape: withTurnPreferences wraps the repair nudge in
+		// transient blocks. It must not surface as a user bubble.
+		{Role: provider.RoleUser, Content: "<reasoning-language>\nzh\n</reasoning-language>\n\nProtocol repair: finish this turn now. A visible final answer has already been provided, so do not repeat it. Call finish exactly once as the only tool call with outcome completed, partial, or blocked."},
+		{Role: provider.RoleAssistant, Content: "", ToolCalls: []provider.ToolCall{{ID: "f1", Name: "finish", Arguments: `{"outcome":"completed"}`}}},
+	}, 48)
+	plain := ansi.Strip(strings.Join(sections, ""))
+	if strings.Contains(plain, "Protocol repair") {
+		t.Fatalf("replay surfaced the finish-protocol repair nudge:\n%s", plain)
+	}
+	if !strings.Contains(plain, "Version 1.2.3") {
+		t.Fatalf("replayed assistant answer missing:\n%s", plain)
+	}
+}
+
 func TestReplaySectionsRestoreInterruptedLocalOutput(t *testing.T) {
 	defer restoreThemeForTest(activeColorProfile, activeCLITheme)
 	activeColorProfile = colorprofile.NoTTY

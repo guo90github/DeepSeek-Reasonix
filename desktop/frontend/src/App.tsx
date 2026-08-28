@@ -4900,7 +4900,6 @@ export default function App() {
                         tabId={visibleTranscriptTabId}
                         footerHeight={footerHeight}
                         running={state.running || rewindCommitting}
-                        turnStartAt={state.turnStartAt}
                         hydrating={transcriptHydrating || (runtimeTransitioning && !navigationTargetDataReady)}
                         hasOlderHistory={!runtimeTransitioning && state.historyHasOlder && !rewindState}
                         loadingOlderHistory={state.historyOlderLoading}

@@ -7440,6 +7440,19 @@ body > .mermaid-diagram--fullscreen {
   color: var(--control-disabled-fg);
   cursor: default;
 }
+.composer__btn--optimize__spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: reasonix-spin 0.7s linear infinite;
+}
+.composer__btn--optimize:disabled .composer__btn--optimize__spinner {
+  border-color: color-mix(in srgb, var(--control-disabled-fg) 35%, transparent);
+  border-top-color: var(--control-disabled-fg);
+}
 .composer-meta {
   --composer-control-height: 32px;
   --composer-control-radius: 7px;
@@ -8953,6 +8966,128 @@ body > .mermaid-diagram--fullscreen {
 }
 .reasonix-confirm-dialog__actions .btn { min-width: 84px; }
 .reasonix-confirm-dialog__actions .btn--danger { font-weight: 600; }
+/* ── optimize prompt preview/confirm dialog ─────────────────────────────── */
+/* Defined after `.modal` so the default size wins the cascade (the shared
+   440px modal cap used to win and kept the dialog small). The dialog is a
+   flex column: title and actions stay fixed, the body fills the remaining
+   height and its streaming/textarea areas scroll on their own. */
+.reasonix-optimize-backdrop {
+  --wails-draggable: no-drag;
+  z-index: var(--z-overlay-backdrop);
+}
+.reasonix-optimize-dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(680px, calc(100vw - 96px));
+  height: min(560px, calc(100vh - 96px));
+  min-width: 440px;
+  min-height: 300px;
+  overflow: hidden;
+  color: var(--fg);
+}
+.reasonix-optimize-dialog__title { margin-bottom: 8px; }
+.reasonix-optimize-dialog__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0 0 16px;
+  overflow: hidden;
+}
+.reasonix-optimize-dialog__block {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.reasonix-optimize-dialog__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: var(--font-control);
+  color: var(--fg-dim);
+}
+.reasonix-optimize-dialog__toggle {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  font-size: var(--font-control);
+  cursor: pointer;
+}
+.reasonix-optimize-dialog__toggle:hover { text-decoration: underline; }
+.reasonix-optimize-dialog__toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+  border-radius: 3px;
+}
+.reasonix-optimize-dialog__text {
+  margin: 0;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+}
+.reasonix-optimize-dialog__block > .reasonix-optimize-dialog__text,
+.reasonix-optimize-dialog__textarea {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  font-family: inherit;
+  color: var(--fg);
+}
+.reasonix-optimize-dialog__text--original { opacity: 0.65; }
+.reasonix-optimize-dialog__text--stream { flex: 1; overflow: visible; }
+.reasonix-optimize-dialog__streaming {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: auto;
+  padding: 2px;
+}
+.reasonix-optimize-dialog__placeholder {
+  padding: 10px 12px;
+  color: var(--fg-dim);
+  font-size: var(--font-control);
+}
+.reasonix-optimize-dialog__spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: reasonix-spin 0.7s linear infinite;
+  margin: 2px 12px 12px;
+}
+@keyframes reasonix-spin {
+  to { transform: rotate(360deg); }
+}
+.reasonix-optimize-dialog__actions .btn { min-width: 84px; }
+.reasonix-optimize-dialog__handle {
+  position: absolute;
+  --wails-draggable: no-drag;
+  z-index: var(--z-local-handle);
+}
+.reasonix-optimize-dialog__handle--n { top: -4px; left: 12px; right: 12px; height: 8px; cursor: ns-resize; }
+.reasonix-optimize-dialog__handle--s { bottom: -4px; left: 12px; right: 12px; height: 8px; cursor: ns-resize; }
+.reasonix-optimize-dialog__handle--e { right: -4px; top: 12px; bottom: 12px; width: 8px; cursor: ew-resize; }
+.reasonix-optimize-dialog__handle--w { left: -4px; top: 12px; bottom: 12px; width: 8px; cursor: ew-resize; }
+.reasonix-optimize-dialog__handle--ne { top: -4px; right: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
+.reasonix-optimize-dialog__handle--nw { top: -4px; left: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+.reasonix-optimize-dialog__handle--se { bottom: -4px; right: -4px; width: 14px; height: 14px; cursor: nwse-resize; }
+.reasonix-optimize-dialog__handle--sw { bottom: -4px; left: -4px; width: 14px; height: 14px; cursor: nesw-resize; }
 .blank-project-backdrop {
   --wails-draggable: no-drag;
   z-index: var(--z-overlay-backdrop);

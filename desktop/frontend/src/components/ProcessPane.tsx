@@ -4,9 +4,10 @@
 // PhaseCard / NoticeCard / CompactionCard so rendering matches the single
 // column's process folds.
 
-import { useCallback, useState, type Ref } from "react";
+import { useCallback, useRef, useState, type Ref } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { ProcessPaneTurn } from "../lib/transcriptPanes";
+import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { InlineAssistantReasoning } from "./InlineAssistantReasoning";
 import { ToolCard } from "./ToolCard";
 import { PhaseCard, NoticeCard, CompactionCard } from "./TranscriptCards";
@@ -91,13 +92,11 @@ function ProcessTurnCard({
 
 export function ProcessPane({
   turns,
-  running,
   listRef,
   onUserInteract,
   scrollerRef,
 }: {
   turns: readonly ProcessPaneTurn[];
-  running: boolean;
   listRef?: Ref<VirtuosoHandle>;
   onUserInteract?: () => void;
   scrollerRef?: (node: HTMLElement | Window | null) => void;
@@ -119,6 +118,25 @@ export function ProcessPane({
     />
   ), [overrides, toggle, turns.length]);
 
+  // Tail-follow replaces Virtuoso's followOutput: stream chunks and the
+  // reasoning fold (an internal row state change, not a data change) re-arm a
+  // native-geometry settle loop, so the pane converges to the true bottom.
+  const scrollerElRef = useRef<HTMLDivElement | null>(null);
+  const setScroller = useCallback((node: HTMLElement | Window | null) => {
+    scrollerElRef.current = node as HTMLDivElement | null;
+    scrollerRef?.(node);
+  }, [scrollerRef]);
+  const virtuosoObjectRef = listRef && typeof listRef === "object" ? listRef : null;
+  const { onUserGesture, reaim } = usePaneTailFollow({
+    virtuosoRef: virtuosoObjectRef,
+    scrollerRef: scrollerElRef,
+    contentVersion: turns,
+  });
+  const onUserGestureCapture = useCallback(() => {
+    onUserGesture();
+    onUserInteract?.();
+  }, [onUserGesture, onUserInteract]);
+
   return (
     <Virtuoso<ProcessPaneTurn>
       ref={listRef}
@@ -126,12 +144,12 @@ export function ProcessPane({
       data={turns}
       computeItemKey={(_index, turn) => turn.key}
       itemContent={itemContent}
-      followOutput={running ? (isAtBottom) => (isAtBottom ? "smooth" : false) : false}
       increaseViewportBy={{ top: 320, bottom: 320 }}
-      onWheelCapture={onUserInteract}
-      onTouchStartCapture={onUserInteract}
-      onPointerDownCapture={onUserInteract}
-      scrollerRef={scrollerRef}
+      totalListHeightChanged={reaim}
+      onWheelCapture={onUserGestureCapture}
+      onTouchStartCapture={onUserGestureCapture}
+      onPointerDownCapture={onUserGestureCapture}
+      scrollerRef={setScroller}
     />
   );
 }

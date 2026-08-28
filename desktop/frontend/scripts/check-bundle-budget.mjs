@@ -130,7 +130,9 @@ console.log("\nbundle budgets");
 // retain 0.418 KiB of bounded build/toolchain headroom.
 // Narrow-viewport process drawer + toggle add 0.2 KiB gzip; ratchet to 448.1
 // KiB with 0.4 KiB of headroom.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 448.5 : 448.5;
+// Pane tail-follow (usePaneTailFollow + ProcessPane wiring) adds ~1.0 KiB
+// gzip to the measured 448.601 KiB path; step the gate to 448.7 KiB.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 448.7 : 448.7;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -180,7 +182,9 @@ for (const path of localeChunks) {
   // The prompt-optimization utility adds its model label/hint to each locale
   // (~0.1 KiB gzip), so both Chinese gates step up 0.1 KiB to keep the same
   // platform-variance headroom the comment above demands.
-  const budget = name.startsWith("zh-TW-") ? 58.6 * 1024 : 57.9 * 1024;
+  // Local prompt-optimize preview work (OptimizePreviewDialog + composer
+  // wiring) measures 58.62 KiB gzip in zh-TW; step that gate to 58.7 KiB.
+  const budget = name.startsWith("zh-TW-") ? 58.7 * 1024 : 57.9 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -210,6 +214,11 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // to 2413.3 KiB with 0.7 KiB of headroom.
 // Narrow-viewport drawer + toggle add 0.8 KiB raw; ratchet to 2414.3 KiB with
 // 0.7 KiB of headroom.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_415.0 : 2_415.0;
+// The optimize preview dialog's resize handles (8 edge/corner pointers + rAF
+// gesture) add 1.3 KiB raw to the combined path; ratchet to 2416.3 KiB with
+// 0.7 KiB of headroom.
+// Pane tail-follow (usePaneTailFollow + ProcessPane wiring) adds 0.9 KiB raw;
+// step the gate to 2417.5 KiB with the measured 2417.119 KiB path.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_417.5 : 2_417.5;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

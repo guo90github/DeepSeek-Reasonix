@@ -74,6 +74,17 @@ func promptOptimizeSessionContext(msgs []provider.Message, goal string) string {
 // model. It reads recent conversation as reference context only; it never
 // touches the turn stream, session history, or the provider-visible prefix.
 func (c *Controller) OptimizePrompt(ctx context.Context, text string) (string, error) {
+	return c.optimizePrompt(ctx, text, nil)
+}
+
+// OptimizePromptStream is OptimizePrompt with a per-chunk callback so callers
+// can forward incremental text (e.g. a desktop event channel) while the final
+// result is still being assembled.
+func (c *Controller) OptimizePromptStream(ctx context.Context, text string, onChunk func(string)) (string, error) {
+	return c.optimizePrompt(ctx, text, onChunk)
+}
+
+func (c *Controller) optimizePrompt(ctx context.Context, text string, onChunk func(string)) (string, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return "", fmt.Errorf("输入为空，无法优化")
@@ -122,6 +133,9 @@ func (c *Controller) OptimizePrompt(ctx context.Context, text string) (string, e
 		switch chunk.Type {
 		case provider.ChunkText:
 			out.WriteString(chunk.Text)
+			if onChunk != nil {
+				onChunk(chunk.Text)
+			}
 		case provider.ChunkError:
 			if chunk.Err != nil {
 				return "", fmt.Errorf("提示词优化失败：%w", chunk.Err)

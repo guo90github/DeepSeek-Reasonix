@@ -280,6 +280,20 @@ func TestHistoryMessagesPreserveToolDetails(t *testing.T) {
 	}
 }
 
+func TestHistoryMessagesFiltersSyntheticUserNudges(t *testing.T) {
+	// Persisted repair nudges carry transient preference blocks and must not
+	// surface as user messages.
+	got := historyMessages([]provider.Message{
+		{Role: provider.RoleUser, Content: "first"},
+		{Role: provider.RoleAssistant, Content: "answer"},
+		{Role: provider.RoleUser, Content: "<reasoning-language>\nzh\n</reasoning-language>\n\nProtocol repair: finish this turn now. A visible final answer has already been provided, so do not repeat it. Call finish exactly once as the only tool call with outcome completed, partial, or blocked."},
+		{Role: provider.RoleAssistant, Content: "", ToolCalls: []provider.ToolCall{{ID: "f1", Name: "finish", Arguments: `{"outcome":"completed"}`}}},
+	})
+	if len(got) != 3 || got[0].Role != "user" || got[0].Content != "first" || len(got[2].ToolCalls) != 1 || got[2].ToolCalls[0].Name != "finish" {
+		t.Fatalf("history = %+v, want authored user + answer + finish call, repair nudge dropped", got)
+	}
+}
+
 func TestSessionsListPreviewStripsTransientReasoningLanguageBlock(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "session.jsonl")

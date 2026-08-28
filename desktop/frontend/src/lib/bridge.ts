@@ -824,6 +824,35 @@ export function onUpdaterProgress(cb: (p: UpdateProgress) => void): () => void {
   };
 }
 
+// onOptimizePromptChunk subscribes to the prompt-optimization stream (one text
+// chunk per event; must match the emits in desktop/prompt_optimize.go). The
+// callback receives (tabId, chunk); the composer routes by run, not by tab.
+export function onOptimizePromptChunk(cb: (tabId: string, chunk: string) => void): () => void {
+  if (realApp() && typeof window !== "undefined" && window.runtime) {
+    return window.runtime.EventsOn("prompt-optimize:chunk", (tabId?: unknown, chunk?: unknown) => {
+      if (typeof tabId === "string" && typeof chunk === "string") cb(tabId, chunk);
+    });
+  }
+  optimizePromptChunkListeners.add(cb);
+  return () => {
+    optimizePromptChunkListeners.delete(cb);
+  };
+}
+
+// onOptimizePromptDone fires once the stream has fully flushed (after the last
+// chunk); the binding's resolved promise only means "no error".
+export function onOptimizePromptDone(cb: (tabId: string) => void): () => void {
+  if (realApp() && typeof window !== "undefined" && window.runtime) {
+    return window.runtime.EventsOn("prompt-optimize:done", (tabId?: unknown) => {
+      if (typeof tabId === "string") cb(tabId);
+    });
+  }
+  optimizePromptDoneListeners.add(cb);
+  return () => {
+    optimizePromptDoneListeners.delete(cb);
+  };
+}
+
 function errorMessage(err: unknown): string {
   if (err && typeof err === "object" && "message" in err) {
     const msg = (err as { message?: unknown }).message;
@@ -1163,6 +1192,19 @@ const updaterListeners = new Set<(p: UpdateProgress) => void>();
 
 function emitUpdater(p: UpdateProgress) {
   updaterListeners.forEach((l) => l(p));
+}
+
+// Prompt-optimization stream mock sets: the browser dev mock and the tsx tests
+// drive the same listener path the real Wails event channel uses.
+const optimizePromptChunkListeners = new Set<(tabId: string, chunk: string) => void>();
+const optimizePromptDoneListeners = new Set<(tabId: string) => void>();
+
+export function __emitMockOptimizePromptChunk(tabId: string, chunk: string): void {
+  optimizePromptChunkListeners.forEach((l) => l(tabId, chunk));
+}
+
+export function __emitMockOptimizePromptDone(tabId: string): void {
+  optimizePromptDoneListeners.forEach((l) => l(tabId));
 }
 
 // Test seam for the browser-dev updater state machine. Production Wails builds
@@ -5044,9 +5086,18 @@ function makeMockApp(): AppBindings {
     async OptimizePrompt(text: string) {
       const trimmed = text.trim();
       if (!trimmed) return "";
-      // Deterministic dev stand-in: visibly rewrites the draft so the button
-      // flow is testable in the browser without a live provider.
-      return `请完成以下任务：\n${trimmed}`;
+      // Deterministic dev stand-in: visibly rewrites the draft and replays the
+      // backend's event stream (chunks then done) so the browser build
+      // exercises the same incremental path as the real provider.
+      const result = `请完成以下任务：\n${trimmed}`;
+      const tabId = mockTabs.find((tab) => tab.active)?.id ?? "";
+      const size = Math.max(1, Math.ceil(result.length / 4));
+      for (let i = 0; i < result.length; i += size) {
+        const piece = result.slice(i, i + size);
+        setTimeout(() => __emitMockOptimizePromptChunk(tabId, piece), 60 + i);
+      }
+      setTimeout(() => __emitMockOptimizePromptDone(tabId), 80 + result.length);
+      return result;
     },
     async CheckUpdate(channel: string) {
       void channel;

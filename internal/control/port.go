@@ -249,6 +249,9 @@ type Input interface {
 	ImageInputEnabled() bool
 	RegisterExternalFolderRef(path string) (token, displayPath string, err error)
 	OptimizePrompt(ctx context.Context, text string) (string, error)
+	// OptimizePromptStream is OptimizePrompt with per-chunk callbacks so the
+	// desktop can stream incremental text over its event channel.
+	OptimizePromptStream(ctx context.Context, text string, onChunk func(string)) (string, error)
 }
 
 // Settings covers runtime session settings that don't fit a richer domain.

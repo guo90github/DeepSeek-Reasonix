@@ -530,7 +530,9 @@ ok(
     /state\.meta\?\.cwd/.test(appSource) &&
     /state\.sessionGen/.test(appSource) &&
     /workspaceControllerEpoch/.test(appSource) &&
-    Array.from(appSource.matchAll(/workspaceScopeKey=\{workspaceScopeKey\}/g)).length === 3,
+    // The overview-dock merge added a second WorkspacePanel instance (the
+    // in-panel files/changes switcher), so four surfaces carry the scope key.
+    Array.from(appSource.matchAll(/workspaceScopeKey=\{workspaceScopeKey\}/g)).length === 4,
   "workspace file consumers receive a session and controller scoped identity",
 );
 

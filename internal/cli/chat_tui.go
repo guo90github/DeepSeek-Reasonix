@@ -5102,6 +5102,11 @@ func (m *chatTUI) runExportCommand(input string) {
 			if _, isSteer := agent.SteerText(msg.Content); isSteer {
 				continue
 			}
+			// Skip host-injected synthetic nudges (finish-protocol repair,
+			// stream recovery, compaction folds) — never the user's words.
+			if agent.IsSyntheticUserText(msg.Content) {
+				continue
+			}
 			content := exportUserContent(msg.Content)
 			if content == "" {
 				continue
@@ -5404,6 +5409,11 @@ func replaySectionsForWithAssistantRenderer(
 				if text != "" {
 					out = append(out, fmt.Sprintf("  ↪ %s\n\n", text))
 				}
+				continue
+			}
+			// Host-injected user-role nudges (finish-protocol repair, stream
+			// recovery, compaction folds) are model context, not user input.
+			if agent.IsSyntheticUserText(m.Content) {
 				continue
 			}
 			content := control.StripComposePrefixes(m.Content)

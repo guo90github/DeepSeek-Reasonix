@@ -72,6 +72,24 @@ func TestOptimizePromptStreamsThroughDedicatedModel(t *testing.T) {
 	}
 }
 
+func TestOptimizePromptStreamDeliversChunksInOrder(t *testing.T) {
+	stub := &promptOptimizeTestProvider{}
+	c, _ := optimizeTestController(t, stub, nil)
+	var chunks []string
+	got, err := c.OptimizePromptStream(context.Background(), "帮我改个 bug", func(chunk string) {
+		chunks = append(chunks, chunk)
+	})
+	if err != nil {
+		t.Fatalf("OptimizePromptStream: %v", err)
+	}
+	if len(chunks) != 1 || chunks[0] != got {
+		t.Fatalf("chunks = %q, want exactly the assembled result %q", chunks, got)
+	}
+	if !strings.Contains(got, "鉴权漏洞") {
+		t.Fatalf("optimized = %q", got)
+	}
+}
+
 func TestOptimizePromptIncludesRecentSessionContext(t *testing.T) {
 	session := agent.NewSession("system")
 	session.Add(provider.Message{Role: provider.RoleUser, Content: "我要重构登录模块"})

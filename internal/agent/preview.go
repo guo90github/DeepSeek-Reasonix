@@ -260,13 +260,14 @@ const (
 )
 
 // SyntheticUserPrefixes lists the openings of host-injected user-role messages
-// (legacy readiness markers, stream recovery, Goal-loop nudges, compaction
-// folds).
+// (legacy readiness markers, stream recovery, finish-protocol repairs,
+// Goal-loop nudges, compaction folds).
 // They are persisted with role "user" for provider-contract reasons but are not
 // user-authored: previews, titles, and user-turn counts must skip them, and the
 // chat UI never renders them as user bubbles. Keep in sync with the injection
-// sites in internal/agent/agent.go, internal/agent/compact.go, and
-// internal/control (plan approval, goal loop).
+// sites in internal/agent/agent.go, internal/agent/finalization.go,
+// internal/agent/run_loop.go, internal/agent/goal_run_boundary.go,
+// internal/agent/compact.go, and internal/control (plan approval, goal loop).
 var SyntheticUserPrefixes = []string{
 	"<reasoning-language>",
 	"Plan approved — plan mode is off",
@@ -277,6 +278,13 @@ var SyntheticUserPrefixes = []string{
 	"The previous assistant response was interrupted during streaming",
 	"The previous assistant response was interrupted before visible",
 	"The previous assistant response finished without any visible answer",
+	"Protocol repair: finish this turn now.",
+	"The following tools are unavailable in the current workflow phase: ",
+	"Auto recovery has reached its limit for this turn. ",
+	"Host progress check: the current todo has produced no new completion",
+	"Host progress redirect: the current todo still has no new completion",
+	"This task has reached its ",
+	"Your tool-call round limit (",
 	"<compaction-summary>",
 	"Summary of the later conversation (compacted from here on):",
 	"Summary of earlier conversation (compacted up to here):",

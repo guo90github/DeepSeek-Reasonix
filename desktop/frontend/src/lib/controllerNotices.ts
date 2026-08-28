@@ -82,6 +82,7 @@ function backendNoticeKey(msg: string): DictKey | "" {
     case "The assistant answered before taking action; asking it to use the required tools.": return "notice.executorHandoff";
     case "Tool round limit reached; asking the assistant to summarize progress.": return "notice.toolBudget";
     case "The assistant is stuck retrying a blocked action; asking it to change approach.": return "notice.loopGuard";
+    case "The model did not complete the required turn protocol; requesting one repair.": return "notice.protocolRepair";
     case "Context is getting large; preserving cache until cleanup is needed.": return "notice.contextLarge";
     case "Context cleanup skipped for now.": return "notice.contextCleanupSkipped";
     case "Automatic context cleanup paused because the context window is too small.": return "notice.contextCleanupPaused";

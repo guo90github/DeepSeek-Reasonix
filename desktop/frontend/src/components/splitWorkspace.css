@@ -266,3 +266,11 @@
     color: var(--accent);
   }
 }
+
+/* Pane scrollers own the logical anchor: browser scroll anchoring reacts to
+   async markdown boxes before Virtuoso receives their size and can fight the
+   pane tail writer. Mirrors .transcript's overflow-anchor: none. */
+.conversation-pane [data-virtuoso-scroller],
+.process-pane [data-virtuoso-scroller] {
+  overflow-anchor: none;
+}

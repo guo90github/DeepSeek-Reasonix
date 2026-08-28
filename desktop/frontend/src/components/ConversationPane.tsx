@@ -4,9 +4,10 @@
 // (UserMessage / LiveAssistantMessage / NoticeCard / SteerCard / ExtensionCard)
 // so markdown and live streaming behave identically to the single column.
 
-import { useCallback, useEffect, useMemo, useState, type Ref } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useT } from "../lib/i18n";
+import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { isSteerNoticeText } from "../lib/useController";
 import type { ConversationPaneTurn } from "../lib/transcriptPanes";
 import { UserMessage } from "./Message";
@@ -17,13 +18,11 @@ import { TurnBadge } from "./ProcessPane";
 
 function ConversationTurnCard({
   turn,
-  turnStartAt,
   running,
   open,
   onToggle,
 }: {
   turn: ConversationPaneTurn;
-  turnStartAt?: number;
   running: boolean;
   open: boolean;
   onToggle: () => void;
@@ -72,7 +71,7 @@ function ConversationTurnCard({
             }
             return <ExtensionCard key={item.id} item={item} tabId={undefined} />;
           })}
-          {turn.answers.length === 0 && turn.user && turnStartAt !== undefined && (
+          {turn.answers.length === 0 && turn.user && turn.isActive && (
             <div className="conversation-pane__empty-answer">{t("split.awaitingAnswer")}</div>
           )}
         </div>
@@ -84,7 +83,6 @@ function ConversationTurnCard({
 export function ConversationPane({
   turns,
   running,
-  turnStartAt,
   footerHeight,
   hasOlderHistory,
   loadingOlderHistory,
@@ -97,7 +95,6 @@ export function ConversationPane({
 }: {
   turns: readonly ConversationPaneTurn[];
   running: boolean;
-  turnStartAt?: number;
   footerHeight: number;
   hasOlderHistory?: boolean;
   loadingOlderHistory?: boolean;
@@ -144,16 +141,35 @@ export function ConversationPane({
     <ConversationTurnCard
       turn={turn}
       running={running}
-      turnStartAt={turnStartAt}
       open={overrides.get(turn.key) ?? (turn.isActive || index === turns.length - 1)}
       onToggle={() => toggle(turn.key)}
     />
-  ), [overrides, running, toggle, turnStartAt, turns.length]);
+  ), [overrides, running, toggle, turns.length]);
 
   const listComponents = useMemo(() => ({
     Header: () => olderHeader,
     Footer: () => <div className="conversation-pane__spacer" style={footerHeight > 0 ? { height: footerHeight } : undefined} />,
   }), [footerHeight, olderHeader]);
+
+  // Tail-follow replaces Virtuoso's followOutput: stream chunks and async row
+  // growth (worker markdown, images) re-arm a native-geometry settle loop, so
+  // the pane converges to the true bottom instead of parking above it.
+  const scrollerElRef = useRef<HTMLDivElement | null>(null);
+  const setScroller = useCallback((node: HTMLElement | Window | null) => {
+    scrollerElRef.current = node as HTMLDivElement | null;
+    scrollerRef?.(node);
+  }, [scrollerRef]);
+  const virtuosoObjectRef = listRef && typeof listRef === "object" ? listRef : null;
+  const { onUserGesture, reaim } = usePaneTailFollow({
+    virtuosoRef: virtuosoObjectRef,
+    scrollerRef: scrollerElRef,
+    contentVersion: turns,
+    enabled: !hydrating,
+  });
+  const onUserGestureCapture = useCallback(() => {
+    onUserGesture();
+    onUserInteract?.();
+  }, [onUserGesture, onUserInteract]);
 
   return (
     <Virtuoso<ConversationPaneTurn>
@@ -163,12 +179,12 @@ export function ConversationPane({
       computeItemKey={(_index, turn) => turn.key}
       itemContent={itemContent}
       components={listComponents}
-      followOutput={running ? (isAtBottom) => (isAtBottom ? "smooth" : false) : false}
       increaseViewportBy={{ top: 320, bottom: 320 }}
-      onWheelCapture={onUserInteract}
-      onTouchStartCapture={onUserInteract}
-      onPointerDownCapture={onUserInteract}
-      scrollerRef={scrollerRef}
+      totalListHeightChanged={reaim}
+      onWheelCapture={onUserGestureCapture}
+      onTouchStartCapture={onUserGestureCapture}
+      onPointerDownCapture={onUserGestureCapture}
+      scrollerRef={setScroller}
     />
   );
 }

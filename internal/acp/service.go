@@ -2895,7 +2895,7 @@ func sessionInfoMatchesCwd(info SessionInfo, filter string) bool {
 
 func titleFromHistory(history []provider.Message) string {
 	for _, m := range history {
-		if m.Role == provider.RoleUser {
+		if m.Role == provider.RoleUser && agent.IsUserAuthoredTurn(m.Content) {
 			if title := previewTitle(m.Content); title != "" {
 				return title
 			}

@@ -2,15 +2,15 @@
   "limits": {
     "banner": 15,
     "commented-code": 0,
-    "complexity": 2001,
-    "essay": 1965,
-    "file-size": 108732,
-    "function-size": 8634,
+    "complexity": 2000,
+    "essay": 1962,
+    "file-size": 108528,
+    "function-size": 8616,
     "layering": 1,
     "marker": 0,
     "narrative": 64,
     "struct-state": 117,
-    "test-file-size": 69483
+    "test-file-size": 69481
   },
   "files": {
     "cmd/e2ebench/main.go": {
@@ -23,10 +23,10 @@
       "essay": 19
     },
     "desktop/app.go": {
-      "complexity": 58,
+      "complexity": 57,
       "essay": 64,
-      "file-size": 11109,
-      "function-size": 360,
+      "file-size": 11092,
+      "function-size": 343,
       "struct-state": 15
     },
     "desktop/app_test.go": {
@@ -66,10 +66,10 @@
       "essay": 2
     },
     "desktop/frontend/src/App.tsx": {
-      "file-size": 4793
+      "file-size": 4781
     },
     "desktop/frontend/src/__tests__/app-chrome-tabs.test.ts": {
-      "test-file-size": 27
+      "test-file-size": 29
     },
     "desktop/frontend/src/__tests__/capabilities-panel-actions.test.ts": {
       "test-file-size": 307
@@ -102,10 +102,7 @@
       "file-size": 2641
     },
     "desktop/frontend/src/components/Composer.tsx": {
-      "file-size": 4044
-    },
-    "desktop/frontend/src/components/ContextPanel.tsx": {
-      "file-size": 64
+      "file-size": 4089
     },
     "desktop/frontend/src/components/HistoryPanel.tsx": {
       "file-size": 65
@@ -117,7 +114,7 @@
       "file-size": 43
     },
     "desktop/frontend/src/components/ProjectTree.tsx": {
-      "file-size": 1469
+      "file-size": 1444
     },
     "desktop/frontend/src/components/RichComposerInput.tsx": {
       "file-size": 141
@@ -147,19 +144,19 @@
       "file-size": 180
     },
     "desktop/frontend/src/lib/bridge.ts": {
-      "file-size": 4885
+      "file-size": 4936
     },
     "desktop/frontend/src/lib/crash.ts": {
       "file-size": 225
     },
     "desktop/frontend/src/lib/transcriptStore.ts": {
-      "file-size": 265
+      "file-size": 264
     },
     "desktop/frontend/src/lib/types.ts": {
       "file-size": 1498
     },
     "desktop/frontend/src/lib/useController.ts": {
-      "file-size": 4268
+      "file-size": 4168
     },
     "desktop/heartbeat.go": {
       "essay": 7
@@ -208,7 +205,7 @@
       "essay": 4
     },
     "desktop/remote_app.go": {
-      "file-size": 765
+      "file-size": 764
     },
     "desktop/remote_markdown_image.go": {
       "complexity": 12
@@ -266,8 +263,8 @@
     },
     "desktop/tabs.go": {
       "complexity": 39,
-      "essay": 69,
-      "file-size": 7842,
+      "essay": 68,
+      "file-size": 7803,
       "function-size": 364,
       "struct-state": 23
     },
@@ -677,7 +674,7 @@
     "internal/cli/chat_tui.go": {
       "complexity": 321,
       "essay": 86,
-      "file-size": 4684,
+      "file-size": 4694,
       "function-size": 1299
     },
     "internal/cli/chat_tui_paste.go": {
@@ -690,8 +687,8 @@
     "internal/cli/cli.go": {
       "complexity": 75,
       "essay": 24,
-      "file-size": 1939,
-      "function-size": 504
+      "file-size": 1936,
+      "function-size": 501
     },
     "internal/cli/cli_test.go": {
       "essay": 1,
@@ -872,7 +869,7 @@
     },
     "internal/control/approval.go": {
       "essay": 5,
-      "file-size": 92
+      "file-size": 67
     },
     "internal/control/controller.go": {
       "complexity": 11,
@@ -884,7 +881,7 @@
     },
     "internal/control/controller_test.go": {
       "essay": 1,
-      "test-file-size": 4619
+      "test-file-size": 4617
     },
     "internal/control/extension_ui.go": {
       "essay": 4,
@@ -963,7 +960,7 @@
     },
     "internal/event/event.go": {
       "essay": 6,
-      "file-size": 118,
+      "file-size": 92,
       "narrative": 1
     },
     "internal/eventwire/wire.go": {
@@ -1359,11 +1356,11 @@
       "essay": 1
     },
     "internal/serve/serve.go": {
-      "essay": 17,
-      "file-size": 851
+      "essay": 15,
+      "file-size": 856
     },
     "internal/serve/serve_test.go": {
-      "test-file-size": 422
+      "test-file-size": 420
     },
     "internal/sessioncatalog/lineage.go": {
       "complexity": 29,

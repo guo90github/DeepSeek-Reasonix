@@ -41,7 +41,6 @@ export function SplitWorkspace({
   liveStore,
   tabId,
   running,
-  turnStartAt,
   footerHeight = 0,
   hasOlderHistory,
   loadingOlderHistory,
@@ -56,7 +55,6 @@ export function SplitWorkspace({
   liveStore?: ControllerLiveStore;
   tabId?: string;
   running: boolean;
-  turnStartAt?: number;
   footerHeight?: number;
   hasOlderHistory?: boolean;
   loadingOlderHistory?: boolean;
@@ -90,7 +88,7 @@ export function SplitWorkspace({
 
   const models = useMemo(() => buildTurnModels(items, liveFlags, running, false), [items, liveFlags, running]);
   const conversationTurns = useMemo(() => conversationPaneTurns(models), [models]);
-  const processTurns = useMemo(() => processPaneTurns(models), [models]);
+  const processTurns = useMemo(() => processPaneTurns(models, liveFlags), [models, liveFlags]);
 
   const [processWidth, setProcessWidth] = useState<number>(loadSplitProcessWidth);
   const [processWidthResizing, setProcessWidthResizing] = useState(false);
@@ -232,7 +230,6 @@ export function SplitWorkspace({
         <ConversationPane
           turns={conversationTurns}
           running={running}
-          turnStartAt={turnStartAt}
           footerHeight={footerHeight}
           hasOlderHistory={hasOlderHistory}
           loadingOlderHistory={loadingOlderHistory}
@@ -259,7 +256,6 @@ export function SplitWorkspace({
         <div className="process-pane-host">
           <ProcessPane
             turns={processTurns}
-            running={running}
             listRef={processRef}
             onUserInteract={markUserInteracted}
             scrollerRef={setProcScroller}

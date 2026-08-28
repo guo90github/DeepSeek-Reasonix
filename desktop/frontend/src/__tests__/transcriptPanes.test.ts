@@ -1,6 +1,6 @@
 // Run: tsx src/__tests__/transcriptPanes.test.ts
 
-import { buildTurnModels, NO_LIVE, type Item } from "../lib/transcriptRows";
+import { buildTurnModels, NO_LIVE, type Item, type TranscriptLiveFlags } from "../lib/transcriptRows";
 import { conversationPaneTurns, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
 
 let passed = 0;
@@ -83,6 +83,37 @@ const recoveryModels = buildTurnModels([{ kind: "notice", id: "n0", level: "info
 const recoveryConversation = conversationPaneTurns(recoveryModels);
 eq(recoveryConversation.length, 1, "recovery-only prelude still appears");
 eq(turnHasShownContent(recoveryModels[0]), false, "recovery-only turn has no shown content");
+
+// Streaming reasoning must survive the pane filter: during a live turn the
+// reasoning text lives in the LiveStream (item.reasoning is still empty), so
+// the process pane must keep the item when live flags point at it. This is the
+// split-layout regression: the right pane showed no thinking while streaming.
+const streamingItems: Item[] = [
+  user("u4", "第四问"),
+  { kind: "assistant", id: "a4", text: "", reasoning: "", streaming: true, reasoningComplete: false },
+];
+const streamingLive: TranscriptLiveFlags = { id: "a4", hasAnswerText: false, hasReasoning: true, reasoningComplete: false };
+const streamingModels = buildTurnModels(streamingItems, streamingLive, true, false);
+const streamingProcess = processPaneTurns(streamingModels, streamingLive);
+eq(streamingProcess.length, 1, "streaming turn keeps one process turn");
+eq(streamingProcess[0].segments[0].items.length, 1, "streaming reasoning item survives the live-aware filter");
+eq(streamingProcess[0].segments[0].items[0].kind, "assistant", "streaming reasoning renders as an assistant item");
+const streamingConversation = conversationPaneTurns(streamingModels);
+eq(streamingConversation[0].answers.length, 0, "reasoning-only streaming turn has no conversation answer yet");
+
+// Without matching live flags the filter still drops empty-reasoning items
+// (settled turns and stale live ids), so the old contract is preserved.
+const staleLive: TranscriptLiveFlags = { id: "other", hasAnswerText: true, hasReasoning: true, reasoningComplete: false };
+eq(processPaneTurns(streamingModels, staleLive)[0].segments[0].items.length, 0, "non-matching live id still filters the empty-reasoning item out");
+eq(processPaneTurns(streamingModels, NO_LIVE)[0].segments[0].items.length, 0, "no live still filters the empty-reasoning item out");
+
+// Answer streaming keeps the reasoning copy in the process pane while the
+// answer itself lands in the conversation pane.
+const answerLive: TranscriptLiveFlags = { id: "a4", hasAnswerText: true, hasReasoning: true, reasoningComplete: false };
+const answerModels = buildTurnModels(streamingItems, answerLive, true, false);
+const answerProcess = processPaneTurns(answerModels, answerLive);
+eq(answerProcess[0].segments[0].items.length, 1, "reasoning copy survives while the answer streams");
+eq(conversationPaneTurns(answerModels)[0].answers.length, 1, "streaming answer lands in the conversation pane");
 
 if (failed > 0) {
   process.stdout.write(`\ntranscriptPanes: ${failed} FAILED, ${passed} passed\n`);

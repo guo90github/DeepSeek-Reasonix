@@ -13,6 +13,21 @@ func TestReasoningLanguageDirectiveIsNotUserAuthored(t *testing.T) {
 	}
 }
 
+func TestFinishProtocolRepairIsNotUserAuthored(t *testing.T) {
+	for _, injected := range []string{
+		"Protocol repair: finish this turn now. A visible final answer has already been provided, so do not repeat it. Call finish exactly once as the only tool call with outcome completed, partial, or blocked.",
+		"Protocol repair: finish this turn now. The finish call has already been accepted, so do not call it again. Provide the visible final answer now.",
+		"Protocol repair: finish this turn now. Provide the visible final answer and call finish exactly once as the only tool call. If you need the user's answer instead, call ask and do not call finish.",
+		// withTurnPreferences wraps the injected prompt in transient blocks;
+		// the persisted shape must still classify as synthetic.
+		"<reasoning-language>\nzh\n</reasoning-language>\n\n<response-language>\nzh\n</response-language>\n\nProtocol repair: finish this turn now. A visible final answer has already been provided, so do not repeat it.",
+	} {
+		if IsUserAuthoredTurn(injected) {
+			t.Fatalf("finish protocol repair %q must not count as user-authored", injected)
+		}
+	}
+}
+
 func TestStripPasteDisplayLabel(t *testing.T) {
 	tests := []struct {
 		name string

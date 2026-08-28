@@ -7,7 +7,7 @@
 
 import { stableStringHash } from "./stableStringHash";
 import type { ExtensionItem, Item } from "./useController";
-import { turnStableIdentity, type AssistantItem, type NoticeItem, type TurnModel } from "./transcriptRows";
+import { NO_LIVE, turnStableIdentity, type AssistantItem, type NoticeItem, type TranscriptLiveFlags, type TurnModel } from "./transcriptRows";
 
 export type PaneAnswerItem = AssistantItem | NoticeItem | ExtensionItem;
 
@@ -48,10 +48,13 @@ export function turnHasShownContent(model: TurnModel): boolean {
 
 // Mirror of transcriptRows.foldDisplayItems for the pane model: assistant
 // items reach the pane stripped to their reasoning (answer text renders in the
-// conversation pane), parented/plan-bookkeeping tools never surface.
-function processSegmentItems(segment: TurnModel["segments"][number]): Item[] {
+// conversation pane), parented/plan-bookkeeping tools never surface. The live
+// check mirrors foldDisplayItems too: during streaming the reasoning text
+// lives in the LiveStream, not the item, so an empty item.reasoning must not
+// drop the active turn's thinking from the process pane.
+function processSegmentItems(segment: TurnModel["segments"][number], live: TranscriptLiveFlags): Item[] {
   return segment.processItems.filter((item) => {
-    if (item.kind === "assistant") return Boolean(item.reasoning);
+    if (item.kind === "assistant") return Boolean(item.reasoning || (live.id === item.id && live.hasReasoning));
     if (item.kind === "phase" || item.kind === "notice" || item.kind === "compaction") return true;
     if (item.kind !== "tool") return false;
     if (item.parentId || item.name === "todo_write" || item.name === "exit_plan_mode") return false;
@@ -78,12 +81,12 @@ export function conversationPaneTurns(models: readonly TurnModel[]): Conversatio
   return turns;
 }
 
-export function processPaneTurns(models: readonly TurnModel[]): ProcessPaneTurn[] {
+export function processPaneTurns(models: readonly TurnModel[], live: TranscriptLiveFlags = NO_LIVE): ProcessPaneTurn[] {
   const turns: ProcessPaneTurn[] = [];
   for (const model of models) {
     const segments: ProcessPaneSegment[] = model.segments.map((segment, index) => ({
       key: segment.key,
-      items: processSegmentItems(segment),
+      items: processSegmentItems(segment, live),
       hasRunningWork: segment.hasRunningWork,
       isLast: index === model.segments.length - 1,
       durationMs: segment.durationMs,

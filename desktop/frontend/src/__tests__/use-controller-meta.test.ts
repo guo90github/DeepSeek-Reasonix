@@ -268,6 +268,11 @@ console.log("\nuse controller meta");
     "an unknown notice code falls back to exact-text matching",
   );
   eq(
+    localizedNoticeText("The model did not complete the required turn protocol; requesting one repair."),
+    "The model did not complete the required turn protocol; requesting one repair.",
+    "the finish-protocol repair notice is recognized and localized",
+  );
+  eq(
     localizedNoticeText("some free-form backend message"),
     "some free-form backend message",
     "a codeless unmatched notice keeps its raw text",

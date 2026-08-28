@@ -853,6 +853,11 @@ func historyMessages(msgs []provider.Message) []historyMessage {
 				}
 				continue
 			}
+			// Host-injected user-role nudges (finish-protocol repair, stream
+			// recovery, compaction folds) are model context, never user input.
+			if agent.IsSyntheticUserText(m.Content) {
+				continue
+			}
 		}
 		hm := historyMessage{Role: string(m.Role), Content: m.Content}
 		if m.Role == provider.RoleAssistant {

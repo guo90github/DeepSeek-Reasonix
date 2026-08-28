@@ -1064,11 +1064,27 @@ function ensureAssistant(s: State): { items: Item[]; id: string; seq: number } {
   }
   // The backend turn id survives Stop/Ask patches and event replay, so current
   // turn state never remounts merely because its presentation status changed.
+  // The anchor is reused only while its round is still streaming: a settled
+  // anchor (its message already emitted) must not absorb the next round's
+  // deltas. Every model round gets its own assistant item, so multi-round
+  // turns (think → tool → think → answer) keep each round's reasoning and
+  // intermediate answer visible, matching the session transcript and the
+  // replayed history path.
   const stableTurnID = s.activeTurnId ? `a:${s.activeTurnId}` : undefined;
-  if (stableTurnID && s.items.some((item) => item.id === stableTurnID && item.kind === "assistant")) {
-    return { items: s.items, id: stableTurnID, seq: s.seq };
+  if (stableTurnID) {
+    const anchored = s.items.find((it): it is Extract<Item, { kind: "assistant" }> => it.id === stableTurnID && it.kind === "assistant");
+    if (anchored && anchored.streaming !== false) {
+      return { items: s.items, id: stableTurnID, seq: s.seq };
+    }
   }
-  const id = stableTurnID ?? `a${s.seq}`;
+  let id = stableTurnID ?? `a${s.seq}`;
+  if (stableTurnID) {
+    const round = s.items.reduce(
+      (n, it) => (it.kind === "assistant" && (it.id === stableTurnID || it.id.startsWith(`${stableTurnID}:`)) ? n + 1 : n),
+      0,
+    );
+    if (round > 0) id = `${stableTurnID}:${round + 1}`;
+  }
   const item: Item = {
     kind: "assistant",
     id,
@@ -1078,6 +1094,29 @@ function ensureAssistant(s: State): { items: Item[]; id: string; seq: number } {
     searchSources: s.pendingSearchSources?.length ? s.pendingSearchSources : undefined,
   };
   return { items: [...s.items, item], id, seq: s.seq + 1 };
+}
+
+// resolveSettledAssistant finds the assistant item a Message event should
+// settle, restricted to the newest turn's region (items after the last user
+// message). It never creates: a Message without a visible active-turn bubble
+// is stale (missed turn_started, replayed/duplicated delivery) and must be
+// dropped rather than appended under a newer turn's question or overwrite its
+// stream. Inside the region the round currently streaming wins (a later
+// round's message must settle its own item, never an earlier round's), then
+// the turn anchor (`a:<turnId>`), then the newest assistant item.
+function resolveSettledAssistant(s: State): Extract<Item, { kind: "assistant" }> | undefined {
+  const anchorId = s.activeTurnId ? `a:${s.activeTurnId}` : undefined;
+  let anchored: Extract<Item, { kind: "assistant" }> | undefined;
+  let fallback: Extract<Item, { kind: "assistant" }> | undefined;
+  for (let i = s.items.length - 1; i >= 0; i--) {
+    const it = s.items[i];
+    if (it.kind === "user") break; // newest turn region ends at the last user
+    if (it.kind !== "assistant") continue;
+    if (s.currentAssistant && it.id === s.currentAssistant) return it;
+    if (anchorId && it.id === anchorId) anchored = it;
+    if (!fallback) fallback = it;
+  }
+  return anchored ?? fallback;
 }
 
 function liveReasoningDurationMs(live?: LiveStream): number | undefined {
@@ -1559,24 +1598,45 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
       return applyDeltaSegments(s, [{ kind: e.kind, delta: e.text ?? e.reasoning ?? "" }]);
     }
     case "message": {
-      const existingAssistant =
-        s.currentAssistant === undefined
-          ? undefined
-          : s.items.find((it): it is Extract<Item, { kind: "assistant" }> => it.kind === "assistant" && it.id === s.currentAssistant);
+      // The settle target must be the active turn's own assistant item: the
+      // item opened by turn_started (`a:<turnId>`), falling back to the
+      // currentAssistant mirror inside the newest turn's region (after its
+      // user item). A Message with no target and no live stream is stale
+      // (missed turn_started, replayed/duplicated delivery) — drop it without
+      // touching the current turn, or it would overwrite a newer turn's
+      // output or append an answer under the next turn's question. With a
+      // live stream still open the message is that stream's own settle: the
+      // bubble was retracted or turn_started missed, so recreate the item and
+      // let the answer land instead of freezing the panes in "waiting".
+      const existingAssistant = resolveSettledAssistant(s);
       const text = e.text ?? s.live?.text ?? existingAssistant?.text ?? "";
       const reasoning = e.reasoning ?? s.live?.reasoning ?? existingAssistant?.reasoning ?? "";
       if (text.trim() === "" && reasoning.trim() === "") {
         const keepEmpty =
           Boolean(existingAssistant?.memoryCitations?.length) || Boolean(existingAssistant?.searchSources?.length);
-        const items =
-          existingAssistant && existingAssistant.text.trim() === "" && existingAssistant.reasoning.trim() === "" && !keepEmpty
-            ? s.items.filter((it) => !(it.kind === "assistant" && it.id === existingAssistant.id))
-            : s.items;
-        return { ...endTurnModelActivity(s, Date.now(), true), items, live: undefined, currentAssistant: undefined, turnOutputCharsAtUsage: 0 };
+        if (existingAssistant && existingAssistant.text.trim() === "" && existingAssistant.reasoning.trim() === "" && !keepEmpty) {
+          const items = s.items.filter((it) => !(it.kind === "assistant" && it.id === existingAssistant.id));
+          return { ...endTurnModelActivity(s, Date.now(), true), items, live: undefined, currentAssistant: undefined, turnOutputCharsAtUsage: 0 };
+        }
+        if (existingAssistant) {
+          return { ...endTurnModelActivity(s, Date.now(), true), live: undefined, currentAssistant: undefined, turnOutputCharsAtUsage: 0 };
+        }
+        return s;
+      }
+      if (!existingAssistant && !s.live) {
+        // No settle target and no live stream: the message is stale (missed
+        // turn_started, replay/duplicate) — drop it without touching the
+        // current turn. With a live stream still open it is that stream's own
+        // settle (the pre-bubble was retracted or turn_started missed):
+        // recreate the item so the answer lands and the panes never freeze
+        // in "waiting".
+        return s;
       }
       const now = Date.now();
       const settled = endTurnModelActivity(s, now, true);
-      const { items, id, seq } = ensureAssistant(settled);
+      const { items, id, seq } = existingAssistant
+        ? { items: settled.items, id: existingAssistant.id, seq: settled.seq }
+        : ensureAssistant(settled);
       const streamedChars = settled.live?.id === id ? settled.live.text.length + settled.live.reasoning.length : 0;
       const turnOutputChars = Math.max(0, settled.turnOutputChars - streamedChars + text.length + reasoning.length);
       const completedLive = settled.live?.id === id ? completeLiveReasoning({ ...settled.live, text, reasoning }, now) : undefined;
@@ -1945,6 +2005,7 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
         items: applyTurnCheckpoint(items, e.submissionId, e.checkpointTurn),
         live: undefined,
         streamAttemptJournal: undefined,
+        turnStartAt: 0,
         running: keepPlanApproval,
         turnActive: keepPlanApproval,
         turnPhase: keepPlanApproval ? s.turnPhase : undefined,
@@ -2612,6 +2673,10 @@ export function useController() {
   const metaRefreshSeq = useRef(new Map<string, number>());
   const sessionLoadSeq = useRef(new Map<string, number>());
   const historyOlderSeq = useRef(new Map<string, number>());
+  // One auto-retry per tab for "history identity changed": the session
+  // revision can move while an older page is in flight during first-open
+  // restore, and the retry against the settled identity normally succeeds.
+  const historyOlderAutoRetried = useRef(new Map<string, boolean>());
   const cancelHydrateSeq = useRef(new Map<string, number>());
   const turnEventProjector = useRef(new TurnEventProjector()).current;
   const sessionLoadInFlight = useRef(new Map<string, { sessionPath: string; revision?: number; digest?: string; promise: Promise<void> }>());
@@ -3042,10 +3107,20 @@ export function useController() {
       // A replace-level hydrate while the page was in flight clears
       // historyOlderLoading; a metadata or canonical-identity change also
       // makes the page belong to a different transcript generation.
-      if (!current.historyOlderLoading || (current.meta?.sessionPath ?? "") !== sessionPath ||
+      const identityMismatch =
+        (current.meta?.sessionPath ?? "") !== sessionPath ||
         !fingerprintMatches(sessionRevision, currentRevision) || !digestMatches(sessionDigest, currentDigest) ||
         (result !== undefined && (!fingerprintMatches(sessionRevision, result.revisionKnown ? result.revision : undefined) ||
-          !digestMatches(sessionDigest, result.digest)))) {
+          !digestMatches(sessionDigest, result.digest)));
+      if (!current.historyOlderLoading || identityMismatch) {
+        if (identityMismatch && !historyOlderAutoRetried.current.get(targetTabId)) {
+          // First-open restore can bump the session identity while the page
+          // is in flight; re-request once against the settled identity before
+          // surfacing the manual retry.
+          historyOlderAutoRetried.current.set(targetTabId, true);
+          setTimeout(() => { void loadOlderHistory(targetTabId, targetTurn, "retry"); }, 0);
+          return false;
+        }
         dispatchTo(targetTabId, { type: "history_older_error", error: "history identity changed" });
         return false;
       }
@@ -3082,6 +3157,7 @@ export function useController() {
         "tab.hydrate",
         `history older ${targetTabId} trigger=${trigger} kind=${result.kind} items=${result.kind === "prepend" ? result.prependItems.length : result.items.length} turns=${result.startTurn}-${result.endTurn}/${result.totalTurns} ms=${Date.now() - startedAt}`,
       );
+      historyOlderAutoRetried.current.set(targetTabId, false);
       return true;
     } catch (err) {
       if (historyOlderSeq.current.get(targetTabId) !== requestSeq) return false;
