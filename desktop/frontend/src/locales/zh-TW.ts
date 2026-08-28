@@ -178,6 +178,7 @@ export const zhTW: Record<DictKey, string> = {
   "split.awaitingAnswer": "正在等待回答…",
   "split.resizeProcessPane": "調整過程欄寬度",
   "split.toggleProcessPane": "過程欄",
+  "split.autoProcessPane": "過程欄自動寬度",
 
   // 話題欄
   "topicBar.renameSession": "重新命名會話",

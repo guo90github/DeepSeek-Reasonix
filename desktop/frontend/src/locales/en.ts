@@ -241,6 +241,7 @@ export const en = {
   "split.awaitingAnswer": "Waiting for answer…",
   "split.resizeProcessPane": "Resize process pane",
   "split.toggleProcessPane": "Process",
+  "split.autoProcessPane": "Auto-width process pane",
 
   // topic bar
   "topicBar.renameSession": "Rename session",

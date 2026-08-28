@@ -143,7 +143,16 @@ console.log("\nbundle budgets");
 // gzip to the measured 448.601 KiB path; step the gate to 448.7 KiB.
 // AskCard collapse + WorkspacePanel copy-name actions and locale copy add
 // 0.294 KiB gzip; step the gate to 449.0 KiB (measured 448.895 KiB).
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 449.0 : 449.0;
+// Split divider upgrade (magnetic snap, keyboard stepping, luminous rail
+// badge) adds snapSplitWidth/stepSplitWidth and the badge wiring, measuring
+// 449.163 KiB gzip; step the gate to 449.2 KiB with 0.037 KiB headroom.
+// Split P2 (auto-width mode + gesture drawer) adds the mode state machine,
+// the drawer drag math, and the auto-dot button, measuring 449.728 KiB gzip;
+// step the gate to 449.8 KiB with 0.072 KiB headroom.
+// Split P3 (mirror hover highlight + pane parallax) adds the shared hovered
+// index wiring and the parallax attach, measuring 450.018 KiB gzip; step the
+// gate to 450.1 KiB with 0.082 KiB headroom.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 450.1 : 450.1;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -234,6 +243,12 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // adds 0.4 KiB raw; step the gate to 2417.6 KiB with 2417.537 KiB measured.
 // AskCard collapse + WorkspacePanel copy-name add 2.3 KiB raw; step the gate
 // to 2420.0 KiB with 2419.861 KiB measured.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_420.0 : 2_420.0;
+// Split divider upgrade adds 0.9 KiB raw (splitDivider.ts + badge wiring);
+// step the gate to 2420.8 KiB with the measured 2420.773 KiB path.
+// Split P2 adds 2.4 KiB raw (mode machine, drawer drag, auto dot, locale
+// keys); step the gate to 2423.3 KiB with the measured 2423.221 KiB path.
+// Split P3 adds 1.2 KiB raw (mirror highlight props + parallax attach);
+// step the gate to 2424.5 KiB with the measured 2424.452 KiB path.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_424.5 : 2_424.5;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

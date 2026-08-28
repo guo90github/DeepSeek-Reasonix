@@ -20,13 +20,19 @@ function ProcessTurnCard({
   turn,
   open,
   onToggle,
+  mirrorActive,
+  onPointerEnter,
+  onPointerLeave,
 }: {
   turn: ProcessPaneTurn;
   open: boolean;
   onToggle: () => void;
+  mirrorActive: boolean;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
 }) {
   return (
-    <article className={["process-pane__turn", open ? "process-pane__turn--open" : "process-pane__turn--collapsed"].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key}>
+    <article className={["process-pane__turn", open ? "process-pane__turn--open" : "process-pane__turn--collapsed", mirrorActive ? "process-pane__turn--mirror" : ""].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
       <header className="process-pane__turn-head" role="button" tabIndex={0} aria-expanded={open} onClick={onToggle} onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -95,11 +101,15 @@ export function ProcessPane({
   listRef,
   onUserInteract,
   scrollerRef,
+  hoveredIndex,
+  onHoverIndex,
 }: {
   turns: readonly ProcessPaneTurn[];
   listRef?: Ref<VirtuosoHandle>;
   onUserInteract?: () => void;
   scrollerRef?: (node: HTMLElement | Window | null) => void;
+  hoveredIndex?: number | null;
+  onHoverIndex?: (index: number | null) => void;
 }) {
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(new Map());
   const toggle = useCallback((key: string) => {
@@ -115,8 +125,11 @@ export function ProcessPane({
       turn={turn}
       open={overrides.get(turn.key) ?? (turn.isActive || index === turns.length - 1)}
       onToggle={() => toggle(turn.key)}
+      mirrorActive={hoveredIndex === index}
+      onPointerEnter={() => onHoverIndex?.(index)}
+      onPointerLeave={() => onHoverIndex?.(null)}
     />
-  ), [overrides, toggle, turns.length]);
+  ), [hoveredIndex, onHoverIndex, overrides, toggle, turns.length]);
 
   // Tail-follow replaces Virtuoso's followOutput: stream chunks and the
   // reasoning fold (an internal row state change, not a data change) re-arm a

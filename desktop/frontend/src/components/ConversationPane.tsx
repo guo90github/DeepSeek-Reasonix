@@ -21,16 +21,26 @@ function ConversationTurnCard({
   running,
   open,
   onToggle,
+  mirrorActive,
+  onPointerEnter,
+  onPointerLeave,
 }: {
   turn: ConversationPaneTurn;
   running: boolean;
   open: boolean;
   onToggle: () => void;
+  mirrorActive: boolean;
+  onPointerEnter?: () => void;
+  onPointerLeave?: () => void;
 }) {
   const t = useT();
   const question = turn.user?.text ?? "";
   return (
-    <article className={["conversation-pane__turn", open ? "conversation-pane__turn--open" : "conversation-pane__turn--collapsed"].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key}>
+    <article className={[
+      "conversation-pane__turn",
+      open ? "conversation-pane__turn--open" : "conversation-pane__turn--collapsed",
+      mirrorActive ? "conversation-pane__turn--mirror" : "",
+    ].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
       <header className="conversation-pane__turn-head" role="button" tabIndex={0} aria-expanded={open} onClick={onToggle} onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -92,6 +102,8 @@ export function ConversationPane({
   listRef,
   onUserInteract,
   scrollerRef,
+  hoveredIndex,
+  onHoverIndex,
 }: {
   turns: readonly ConversationPaneTurn[];
   running: boolean;
@@ -104,6 +116,8 @@ export function ConversationPane({
   listRef?: Ref<VirtuosoHandle>;
   onUserInteract?: () => void;
   scrollerRef?: (node: HTMLElement | Window | null) => void;
+  hoveredIndex?: number | null;
+  onHoverIndex?: (index: number | null) => void;
 }) {
   const t = useT();
   // User overrides win; unoverridden turns follow the role default (newest
@@ -143,8 +157,11 @@ export function ConversationPane({
       running={running}
       open={overrides.get(turn.key) ?? (turn.isActive || index === turns.length - 1)}
       onToggle={() => toggle(turn.key)}
+      mirrorActive={hoveredIndex === index}
+      onPointerEnter={() => onHoverIndex?.(index)}
+      onPointerLeave={() => onHoverIndex?.(null)}
     />
-  ), [overrides, running, toggle, turns.length]);
+  ), [hoveredIndex, onHoverIndex, overrides, running, toggle, turns.length]);
 
   const listComponents = useMemo(() => ({
     Header: () => olderHeader,

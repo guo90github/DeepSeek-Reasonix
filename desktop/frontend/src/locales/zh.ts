@@ -242,6 +242,7 @@ export const zh: Record<DictKey, string> = {
   "split.awaitingAnswer": "正在等待回答…",
   "split.resizeProcessPane": "调整过程栏宽度",
   "split.toggleProcessPane": "过程栏",
+  "split.autoProcessPane": "过程栏自动宽度",
 
   // 话题栏
   "topicBar.renameSession": "重命名会话",
