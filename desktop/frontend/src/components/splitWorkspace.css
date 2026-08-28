@@ -74,7 +74,7 @@
 
 .conversation-pane,
 .process-pane {
-  --pane-inline-pad: 20px;
+  --pane-inline-pad: 16px;
 }
 
 .conversation-pane__turn,
@@ -84,8 +84,8 @@
 }
 
 .conversation-pane__turn {
-  margin-top: 10px;
-  margin-bottom: 10px;
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .process-pane__turn {
@@ -172,26 +172,14 @@
 }
 
 /* Decision surfaces (approval/ask/clear-context shelves) render inside the
-   footer, which the split grid pins to the narrow conversation column. Let
-   them escape as a full-width overlay anchored to the chat-pane bottom. */
+   footer, which the split grid pins to the narrow conversation column. They
+   stay in-flow there: the footer row grows to fit the shelf, so the
+   conversation column and the full-height process pane keep a common bottom
+   edge — no full-width overlay, no height drift. The shelf card's own
+   max-height caps tall cards and scrolls internally. */
 .app--split .chat-pane .footer.footer--decision {
   overflow: visible;
   max-height: none;
-}
-
-.app--split .chat-pane .footer.footer--decision .prompt-shelf {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 12px;
-  margin-bottom: 0;
-  max-width: none;
-  z-index: var(--z-floating-menu);
-}
-
-.app--split .chat-pane .footer.footer--decision .prompt-shelf__card {
-  background: var(--bg-elev);
-  border-color: var(--border);
 }
 
 /* ── narrow viewport: the process pane becomes an overlay drawer ─────────── */

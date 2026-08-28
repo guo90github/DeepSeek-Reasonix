@@ -8,6 +8,16 @@ branch.
 
 ### Changed
 
+- **Ask decision surface (desktop):** The `ask` tool renders its full option
+  shelf directly in the composer footer (single step, no trigger bar). In the
+  split layout the shelf stays in-flow inside the conversation column, so the
+  conversation column and the full-height process pane keep a common bottom
+  edge and the shelf never overlays the process pane. `Escape` stops the task.
+
+- **Split layout balance (desktop):** The process pane now defaults to a 50/50
+  split with the conversation column (was 60%) and both panes use tighter
+  16px turn-card padding (was 20px), reducing dead horizontal space.
+
 - **Fact-driven execution:** Ordinary requests always enter the executor.
   There is no automatic simple / light / full task mode and no per-turn
   `TaskPolicy` classification. The planner runs only for an explicit Plan,

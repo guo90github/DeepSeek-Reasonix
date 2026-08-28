@@ -20,7 +20,7 @@ import type { ControllerLiveStore, Item, LiveStream } from "../lib/useController
 export const SPLIT_PROCESS_WIDTH_STORAGE_KEY = "reasonix-split-process-width";
 export const SPLIT_PROCESS_WIDTH_MIN = 0.4;
 export const SPLIT_PROCESS_WIDTH_MAX = 0.6;
-export const SPLIT_PROCESS_WIDTH_DEFAULT = 0.6;
+export const SPLIT_PROCESS_WIDTH_DEFAULT = 0.5;
 const SPLIT_NARROW_QUERY = "(max-width: 1100px)";
 
 function loadSplitProcessWidth(): number {

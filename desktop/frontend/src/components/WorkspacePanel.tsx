@@ -71,6 +71,7 @@ import type {
 } from "../lib/types";
 import { workspaceGitStatusLabel } from "../lib/workspaceChanges";
 import { formatWorkspaceReference, WORKSPACE_REF_DRAG_TYPE } from "../lib/workspaceDrag";
+import { writeClipboardText } from "../lib/clipboard";
 import { formatSelectionReference, languageFor } from "../lib/selectedTextContext";
 import { cleanGitDiff } from "../lib/diff";
 import { CodeViewer } from "./CodeViewer";
@@ -1462,6 +1463,9 @@ export function WorkspacePanel({
     } else {
       selectFile(row.path);
     }
+    // Copy rides every explicit row click (file or folder); selection-state
+    // changes (memory restore, preview-tab switch) never reach this handler.
+    void writeClipboardText(basename(row.path));
   };
 
   const isMarkdown = selectedPath?.toLowerCase().endsWith(".md") ?? false;

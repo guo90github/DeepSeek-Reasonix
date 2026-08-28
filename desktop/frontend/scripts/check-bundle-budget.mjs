@@ -2,6 +2,11 @@ import { readFileSync, readdirSync, statSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { gzipSync } from "node:zlib";
 
+// Local dev builds (wails build → pnpm build) hit the size gates whenever WIP
+// grows; REASONIX_SKIP_BUDGET=1 disables only the size gates so CI's committed
+// ratchets stay authoritative. Structural invariants below still throw.
+const skipBudgets = !!process.env.REASONIX_SKIP_BUDGET && !/^(?:0|false)$/i.test(process.env.REASONIX_SKIP_BUDGET);
+
 const distDir = resolve("dist");
 const indexPath = resolve(distDir, "index.html");
 const html = readFileSync(indexPath, "utf8");
@@ -22,6 +27,10 @@ function formatKiB(bytes) {
 }
 
 function assertBudget(label, actual, budget) {
+  if (skipBudgets) {
+    process.stdout.write(`  SKIP  ${label}: ${formatKiB(actual)} / ${formatKiB(budget)} (REASONIX_SKIP_BUDGET)\n`);
+    return;
+  }
   if (actual > budget) {
     throw new Error(`${label} is ${formatKiB(actual)}; budget is ${formatKiB(budget)}`);
   }
@@ -132,7 +141,9 @@ console.log("\nbundle budgets");
 // KiB with 0.4 KiB of headroom.
 // Pane tail-follow (usePaneTailFollow + ProcessPane wiring) adds ~1.0 KiB
 // gzip to the measured 448.601 KiB path; step the gate to 448.7 KiB.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 448.7 : 448.7;
+// AskCard collapse + WorkspacePanel copy-name actions and locale copy add
+// 0.294 KiB gzip; step the gate to 449.0 KiB (measured 448.895 KiB).
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 449.0 : 449.0;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -221,6 +232,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // step the gate to 2417.5 KiB with the measured 2417.119 KiB path.
 // Composer/optimize-preview iteration (transcriptStore, OptimizePreviewDialog)
 // adds 0.4 KiB raw; step the gate to 2417.6 KiB with 2417.537 KiB measured.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_417.6 : 2_417.6;
+// AskCard collapse + WorkspacePanel copy-name add 2.3 KiB raw; step the gate
+// to 2420.0 KiB with 2419.861 KiB measured.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_420.0 : 2_420.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
