@@ -164,6 +164,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		fmt.Fprintf(&b, "turn_done = %v   # notify when a turn finishes\n", c.Notifications.TurnDone)
 		fmt.Fprintf(&b, "approval_request = %v   # notify when a tool approval is waiting\n", c.Notifications.ApprovalRequest)
 		fmt.Fprintf(&b, "ask_request = %v   # notify when a question is waiting\n", c.Notifications.AskRequest)
+		fmt.Fprintf(&b, "audit_below = %v   # notify when a tab's reasoning audit drops below audit_threshold\n", c.Notifications.AuditBelow)
 		b.WriteString("\n")
 	}
 
@@ -262,6 +263,14 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		fmt.Fprintf(&b, "prompt_optimize_model = %q   # standalone model for the composer's prompt-optimization utility\n", c.Agent.PromptOptimizeModel)
 	} else {
 		b.WriteString("# prompt_optimize_model = \"qwen-cn/qwen3.7-plus\"   # optional: composer prompt-optimization model\n")
+	}
+	if c.Agent.AuditModel != "" {
+		fmt.Fprintf(&b, "audit_model = %q   # standalone model behind the reasoning-quality analyser\n", c.Agent.AuditModel)
+	}
+	fmt.Fprintf(&b, "audit_enabled = %v   # audit each turn's reasoning with AuditModel\n", c.Agent.AuditEnabled)
+	fmt.Fprintf(&b, "audit_threshold = %g   # score below this surfaces the tab for attention\n", c.Agent.AuditThreshold)
+	if c.Agent.AuditEffort != "" {
+		fmt.Fprintf(&b, "audit_effort = %q   # reasoning depth for the audit model (off|low|medium|high)\n", c.Agent.AuditEffort)
 	}
 	if c.Agent.SubagentModel != "" {
 		fmt.Fprintf(&b, "subagent_model = %q   # default model for runAs=subagent skills\n", c.Agent.SubagentModel)

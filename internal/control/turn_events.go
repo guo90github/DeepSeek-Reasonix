@@ -269,6 +269,9 @@ func (s *turnEventDurableSink) RecordWorkspaceMutation(a event.WorkspaceMutation
 func (s *turnEventDurableSink) RecordRunBudget(a event.RunBudgetSample) {
 	event.RecordRunBudget(s.inner(), a)
 }
+func (s *turnEventDurableSink) RecordReasoningAudit(t event.ReasoningAuditTotals) {
+	event.RecordReasoningAudit(s.inner(), t)
+}
 
 func terminalTurnStatus(e event.Event) event.TurnStatus {
 	if e.Cancelled || errors.Is(e.Err, context.Canceled) {

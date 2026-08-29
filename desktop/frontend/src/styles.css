@@ -24361,6 +24361,288 @@ body > .mermaid-diagram--fullscreen {
   background: var(--mode-plan-bg);
 }
 
+.tabbar__audit-badge {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--danger, #e5484d);
+  margin-inline: 4px;
+}
+
+/* 审计：按钮 + 分阶段卡片 */
+.audit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.audit-btn::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex: none;
+}
+.audit-btn:hover {
+  background: var(--panel);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.audit-card {
+  display: block;
+  margin: 4px 0 2px 22px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  font-size: 11px;
+}
+.audit-card--loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+}
+.audit-card--error {
+  color: var(--danger, #e5484d);
+}
+.audit-card__spinner {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  animation: audit-spin 0.7s linear infinite;
+}
+@keyframes audit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.audit-stage__head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 2px 0;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.audit-stage__head:hover {
+  color: var(--fg);
+}
+.audit-stage__chevron {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  flex: none;
+}
+.audit-stage__chevron--open {
+  transform: rotate(90deg);
+}
+.audit-stage__body {
+  margin: 2px 0 4px;
+  padding-top: 2px;
+  border-top: 1px dashed var(--border);
+}
+.audit-stage__label {
+  font-size: 10px;
+  color: var(--text-3);
+  margin: 4px 0 2px;
+}
+.audit-stage__pre {
+  margin: 0;
+  padding: 4px 6px;
+  border-radius: 5px;
+  background: var(--bg);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 10px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-2);
+}
+.audit-stage__hint {
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.audit__score {
+  font-weight: 700;
+  color: var(--success, #30a46c);
+}
+.audit__issues {
+  color: var(--text-2, #8a8f98);
+}
+.audit__meta {
+  color: var(--text-3, #6e7380);
+}
+.audit-card__verdict {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.audit-card__cursor {
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--accent);
+  animation: audit-blink 1s steps(2, start) infinite;
+}
+@keyframes audit-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* 审计模态弹窗 */
+.reasonix-audit-backdrop {
+  z-index: var(--z-overlay-backdrop);
+}
+.reasonix-audit-dialog {
+  max-width: 680px;
+  width: min(680px, 100%);
+  max-height: min(78vh, 720px);
+  display: flex;
+  flex-direction: column;
+  color: var(--fg);
+}
+.reasonix-audit-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.reasonix-audit-dialog__header .modal__title {
+  margin-bottom: 0;
+}
+.reasonix-audit-dialog__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+}
+.reasonix-audit-dialog__close:hover {
+  background: var(--panel);
+  color: var(--fg);
+}
+.reasonix-audit-dialog__body {
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.audit-result {
+  margin-bottom: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+.audit-result__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.audit-result__score {
+  font-size: 18px;
+}
+.audit-result__evidence {
+  margin: 6px 0 0;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.audit__score--warn {
+  color: var(--danger, #e5484d);
+}
+.audit-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: var(--success, #30a46c);
+  background: color-mix(in srgb, var(--success, #30a46c) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--success, #30a46c) 35%, transparent);
+}
+.audit-badge--warn {
+  color: var(--danger, #e5484d);
+  background: color-mix(in srgb, var(--danger, #e5484d) 12%, transparent);
+  border-color: color-mix(in srgb, var(--danger, #e5484d) 35%, transparent);
+}
+.audit-findings {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.audit-finding {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 11px;
+}
+.audit-finding__tag {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 4px;
+  color: var(--text-2);
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.audit-finding__tag--contradiction { color: var(--danger, #e5484d); border-color: color-mix(in srgb, var(--danger, #e5484d) 40%, var(--border)); }
+.audit-finding__tag--hallucination { color: var(--danger, #e5484d); border-color: color-mix(in srgb, var(--danger, #e5484d) 40%, var(--border)); }
+.audit-finding__tag--redundancy { color: var(--warning, #e8a33d); border-color: color-mix(in srgb, var(--warning, #e8a33d) 40%, var(--border)); }
+.audit-finding__tag--instruction_drift { color: var(--warning, #e8a33d); border-color: color-mix(in srgb, var(--warning, #e8a33d) 40%, var(--border)); }
+.audit-finding__quote {
+  color: var(--text-2);
+  font-style: italic;
+  word-break: break-word;
+}
+.audit-truncated {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--text-3);
+  margin-left: 2px;
+}
+
 .tabbar__spacer {
   flex: 1 1 auto;
   min-width: 12px;

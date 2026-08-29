@@ -89,6 +89,7 @@ type PaneApi = {
   reaim: () => void;
   gesture: () => void;
   grow: () => void;
+  setEnabled: (next: boolean) => void;
 };
 let api: PaneApi | null = null;
 const setApi = (next: PaneApi) => { api = next; };
@@ -97,16 +98,17 @@ function Harness({ enabled = true }: { enabled?: boolean }) {
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [version, setVersion] = useState(0);
+  const [isEnabled, setIsEnabled] = useState(enabled);
   const { onUserGesture, reaim } = usePaneTailFollow({
     virtuosoRef,
     scrollerRef,
     contentVersion: version,
-    enabled,
+    enabled: isEnabled,
   });
   useEffect(() => {
     virtuosoRef.current = virtuosoHandle;
     scrollerRef.current = scrollerElement;
-    setApi({ reaim, gesture: onUserGesture, grow: () => setVersion((current) => current + 1) });
+    setApi({ reaim, gesture: onUserGesture, grow: () => setVersion((current) => current + 1), setEnabled: setIsEnabled });
   }, [onUserGesture, reaim]);
   return null;
 }
@@ -185,6 +187,24 @@ scrollHeightValue = 1300;
 await act(() => api?.grow());
 await flushAllFrames();
 check(scrollWrites.length === 0, "hydration leaves the viewport to restoration");
+await unmount();
+
+// Scenario 5: the tail re-arms once the writer turns on — content that grew
+// while hydration parked the pane converges to the true bottom on the flip.
+scrollHeightValue = 1300;
+scrollTopValue = 300; // restoration parked the viewport mid-session
+await mount(false);
+await flushAllFrames();
+check(scrollWrites.length === 0, "disabled pane stays parked during hydration");
+scrollHeightValue = 1500;
+await act(() => api?.grow());
+await flushAllFrames();
+check(scrollWrites.length === 0, "growth during hydration never tugs");
+await act(() => api?.setEnabled(true));
+await flushAllFrames();
+check(scrollWrites.length === 1, "enabling the writer re-aims once");
+check(scrollWrites[0] === 1400, "re-aim lands on the true bottom (1500 - 100)");
+check(scrollTopValue === 1400, "the scroller ends at the bottom after hydration");
 await unmount();
 
 console.log(`\n${passed} passed, ${failed} failed`);

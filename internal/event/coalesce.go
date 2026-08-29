@@ -247,3 +247,6 @@ func (c *coalescer) RecordWorkspaceMutation(m WorkspaceMutation) {
 func (c *coalescer) RecordRunBudget(sample RunBudgetSample) {
 	c.enqueueCapability(func() { RecordRunBudget(c.inner, sample) })
 }
+func (c *coalescer) RecordReasoningAudit(t ReasoningAuditTotals) {
+	c.enqueueCapability(func() { RecordReasoningAudit(c.inner, t) })
+}

@@ -130,6 +130,54 @@ func (c *Config) SetPromptOptimizeModel(name string) error {
 	return nil
 }
 
+// SetAuditModel sets the standalone model behind the reasoning-quality audit.
+// It deliberately has no "auto" resolution: the value must be explicit so the
+// audit never touches the session model or its provider-visible prefix.
+func (c *Config) SetAuditModel(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		c.Agent.AuditModel = ""
+		return nil
+	}
+	entry, ok := c.ResolveModel(name)
+	if !ok {
+		return fmt.Errorf("set audit model: no such model %q (configured: %s)", name, c.providerNames())
+	}
+	if !entry.Configured() {
+		return fmt.Errorf("set audit model: provider %q has no key", entry.Name)
+	}
+	c.Agent.AuditModel = entry.Name + "/" + entry.Model
+	return nil
+}
+
+// SetAuditEnabled toggles whether reasoning auditing is available.
+func (c *Config) SetAuditEnabled(on bool) error {
+	c.Agent.AuditEnabled = on
+	return nil
+}
+
+// SetAuditThreshold sets the quality score (0..1) below which an audit result
+// is flagged for attention.
+func (c *Config) SetAuditThreshold(threshold float64) error {
+	if threshold < 0 || threshold > 1 {
+		return fmt.Errorf("set audit threshold: %g out of range [0,1]", threshold)
+	}
+	c.Agent.AuditThreshold = threshold
+	return nil
+}
+
+// SetAuditEffort sets the reasoning depth the audit model uses when scoring
+// (off|low|medium|high); empty means auto/provider default.
+func (c *Config) SetAuditEffort(effort string) error {
+	switch strings.ToLower(strings.TrimSpace(effort)) {
+	case "", "off", "disabled", "none", "low", "medium", "high":
+		c.Agent.AuditEffort = strings.ToLower(strings.TrimSpace(effort))
+		return nil
+	default:
+		return fmt.Errorf("set audit effort: %q must be off|low|medium|high", effort)
+	}
+}
+
 // SetAutoPlan is retained for source compatibility with older desktop clients.
 // Automatic plan mode is retired: "off" is an idempotent compatibility write,
 // while every attempt to enable it is rejected explicitly.

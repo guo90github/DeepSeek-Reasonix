@@ -317,6 +317,10 @@ type SettingsView struct {
 	PromptOptimizeModel          string               `json:"promptOptimizeModel"`
 	SubagentModel                string               `json:"subagentModel"`
 	SubagentEffort               string               `json:"subagentEffort"`
+	AuditModel                   string               `json:"auditModel"`
+	AuditEnabled                 bool                 `json:"auditEnabled"`
+	AuditThreshold               float64              `json:"auditThreshold"`
+	AuditEffort                  string               `json:"auditEffort"`
 	AutoPlan                     string               `json:"autoPlan"`
 	Providers                    []ProviderView       `json:"providers"`
 	OfficialProviders            []ProviderView       `json:"officialProviders"`
@@ -1017,6 +1021,10 @@ func (a *App) Settings() SettingsView {
 		PromptOptimizeModel: cfg.Agent.PromptOptimizeModel,
 		SubagentModel:       cfg.Agent.SubagentModel,
 		SubagentEffort:      cfg.Agent.SubagentEffort,
+		AuditModel:          cfg.Agent.AuditModel,
+		AuditEnabled:        cfg.Agent.AuditEnabled,
+		AuditThreshold:      cfg.Agent.AuditThreshold,
+		AuditEffort:         cfg.Agent.AuditEffort,
 		AutoPlan:            "off", // deprecated JSON compatibility for older frontends
 		Providers:           []ProviderView{},
 		OfficialProviders:   []ProviderView{},

@@ -2141,6 +2141,10 @@ export interface SettingsView {
   promptOptimizeModel: string; // "" = off; explicit provider/model ref only (no "auto")
   subagentModel: string;
   subagentEffort: string;
+  auditModel: string;
+  auditEnabled: boolean;
+  auditThreshold: number;
+  auditEffort: string;
   autoPlan: string;
   providers: ProviderView[];
   officialProviders: ProviderView[];

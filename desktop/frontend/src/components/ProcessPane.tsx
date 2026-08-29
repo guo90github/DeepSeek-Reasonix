@@ -4,13 +4,15 @@
 // PhaseCard / NoticeCard / CompactionCard so rendering matches the single
 // column's process folds.
 
-import { useCallback, useRef, useState, type Ref } from "react";
+import { lazy, Suspense, useCallback, useRef, useState, type Ref } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { ProcessPaneTurn } from "../lib/transcriptPanes";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { InlineAssistantReasoning } from "./InlineAssistantReasoning";
 import { ToolCard } from "./ToolCard";
 import { PhaseCard, NoticeCard, CompactionCard } from "./TranscriptCards";
+
+const AuditInlineCard = lazy(() => import("./AuditInlineCard").then((module) => ({ default: module.AuditInlineCard })));
 
 export function TurnBadge({ turn }: { turn: number }) {
   return <span className="turn-badge" aria-hidden="true">{turn + 1}</span>;
@@ -51,6 +53,11 @@ function ProcessTurnCard({
                   return (
                     <div className="turn-collapse__body" key={item.id}>
                       <InlineAssistantReasoning item={item} />
+                      {item.reasoning && (
+                        <Suspense fallback={null}>
+                          <AuditInlineCard reasoning={item.reasoning} />
+                        </Suspense>
+                      )}
                     </div>
                   );
                 }

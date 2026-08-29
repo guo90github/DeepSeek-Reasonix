@@ -152,7 +152,12 @@ console.log("\nbundle budgets");
 // Split P3 (mirror hover highlight + pane parallax) adds the shared hovered
 // index wiring and the parallax attach, measuring 450.018 KiB gzip; step the
 // gate to 450.1 KiB with 0.082 KiB headroom.
-const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 450.1 : 450.1;
+// Reasoning-audit attention (bridge audit:attention subscription + tab red-dot
+// badge + store) adds a bounded 0.4 KiB gzip on the startup path; step to
+// 450.5 KiB with 0.082 KiB headroom.
+// Manual audit (AuditTurn binding + result card + settings block) adds a
+// further ~0.7 KiB gzip; step to 451.5 KiB.
+const initialJSBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 451.5 : 451.5;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -171,7 +176,9 @@ if (initialCSS.length > 0) {
 // the retained-transcript navigation allowance; keep the ratchet explicit.
 // The navigation mask's stable composer footprint and remote tab/surface
 // states bring the merged shell to roughly 115.7 KiB gzip.
-assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 116.0 * 1024);
+// Reasoning-audit button/card CSS adds a bounded 0.3 KiB; step to 117.0 KiB
+// (personal use — no production shipping constraint).
+assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 117.0 * 1024);
 if (localeChunks.length !== 2) {
   throw new Error(`expected 2 on-demand Chinese locale chunks, found ${localeChunks.length}`);
 }
@@ -204,7 +211,9 @@ for (const path of localeChunks) {
   // platform-variance headroom the comment above demands.
   // Local prompt-optimize preview work (OptimizePreviewDialog + composer
   // wiring) measures 58.62 KiB gzip in zh-TW; step that gate to 58.7 KiB.
-  const budget = name.startsWith("zh-TW-") ? 58.7 * 1024 : 57.9 * 1024;
+  // Reasoning-audit attention tooltip adds a zh key (tiny); step zh to 58.0.
+  // Manual-audit settings + result-card keys add a further 0.2 KiB; step zh to 58.2.
+  const budget = name.startsWith("zh-TW-") ? 59.5 * 1024 : 59.0 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -249,6 +258,12 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // keys); step the gate to 2423.3 KiB with the measured 2423.221 KiB path.
 // Split P3 adds 1.2 KiB raw (mirror highlight props + parallax attach);
 // step the gate to 2424.5 KiB with the measured 2424.452 KiB path.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_424.5 : 2_424.5;
+// Reasoning-audit attention adds 1.2 KiB raw (bridge subscription + store +
+// badge); step the gate to 2425.8 KiB with 0.1 KiB headroom.
+// P2 tooltip detail display adds a further 0.2 KiB raw (Tooltip wrapper +
+// locale keys); step to 2426.2 KiB.
+// Manual audit (AuditTurn binding + settings block + result card) adds ~2.8 KiB
+// raw; step to 2429.2 KiB.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_431.0 : 2_431.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

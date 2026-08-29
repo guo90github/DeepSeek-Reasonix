@@ -1702,6 +1702,7 @@ func (s *tabEventSink) Emit(e event.Event) {
 			turnStartedAt = s.recordTurnStarted()
 		case event.Usage:
 			s.recordUsageTelemetry(e)
+		case event.Message:
 		case event.TurnDone:
 			s.recordTurnDone()
 		}

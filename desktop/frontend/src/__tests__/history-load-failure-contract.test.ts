@@ -22,6 +22,12 @@ assert.match(
   "footer resize is routed through the coalesced tail-follow path without depending on item appends",
 );
 assert.match(controller, /shouldPreferResidentHistory\(resetSurface, options\.preserveCachedHistory\)/, "retry hydrates fetch instead of serving the resident snapshot");
+assert.match(controller, /scheduleHistoryRetryRef\.current\(tabId, reason, \{/, "history failure schedules an auto-retry");
+assert.match(controller, /const HISTORY_RETRY_MAX = 3;/, "auto-retry is bounded");
+assert.match(controller, /activeTabIdRef\.current !== tabId\) \{ historyRetryState\.current\.delete\(tabId\); return; \}/, "auto-retry fires only while the tab is the visible one");
+assert.match(controller, /!statesRef\.current\.get\(tabId\)\?\.hydrateError\) \{ historyRetryState\.current\.delete\(tabId\); return; \}/, "auto-retry stops once the failure clears");
+assert.match(controller, /historyRetryState\.current\.delete\(tabId\);\n      dispatchTo\(tabId, \{ type: "hydrate_done" \}\)/, "successful hydration clears the retry counter");
+assert.match(controller, /for \(const retry of historyRetryState\.current\.values\(\)\)/, "cleanup clears pending retry timers");
 assert.match(
   controller,
   /loadSessionDataForTab\(tabId, false, "startup", \{ preserveCachedHistory: true \}\)/,

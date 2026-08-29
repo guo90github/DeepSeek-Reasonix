@@ -99,15 +99,9 @@ func (c *Controller) optimizePrompt(ctx context.Context, text string, onChunk fu
 	modelRef := c.promptOptimizeModel
 	resolver := c.promptOptimizeProviderResolver
 	c.mu.Unlock()
-	if modelRef == "" {
-		return "", fmt.Errorf("提示词优化模型未配置，请在设置中选择")
-	}
-	if resolver == nil {
-		return "", fmt.Errorf("会话尚未就绪，无法优化提示词")
-	}
-	p, err := resolver(modelRef)
+	p, err := c.resolveStandaloneModel("提示词优化", modelRef, resolver)
 	if err != nil {
-		return "", fmt.Errorf("提示词优化失败：%w", err)
+		return "", err
 	}
 	userContent := text
 	var snapshot []provider.Message

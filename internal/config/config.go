@@ -318,6 +318,9 @@ type NotificationsConfig struct {
 	TurnDone        bool `toml:"turn_done"`
 	ApprovalRequest bool `toml:"approval_request"`
 	AskRequest      bool `toml:"ask_request"`
+	// AuditBelow sends a system notification when a tab's reasoning audit score
+	// falls below the configured audit_threshold.
+	AuditBelow bool `toml:"audit_below"`
 }
 
 // EnvironmentEnabled reports whether startup environment probing should feed the
@@ -1299,7 +1302,18 @@ type AgentConfig struct {
 	// PromptOptimizeModel is the standalone model behind the composer's
 	// prompt-optimization utility; empty means off, never "auto" (the utility
 	// must not run on the session model).
-	PromptOptimizeModel string  `toml:"prompt_optimize_model"`
+	PromptOptimizeModel string `toml:"prompt_optimize_model"`
+	// AuditModel is the standalone model behind the reasoning-quality analyser;
+	// empty means off. Like PromptOptimizeModel it must never run on the session
+	// model, and it is an independent provider instance via AuditProviderResolver.
+	AuditModel string `toml:"audit_model"`
+	// AuditEnabled gates per-turn reasoning auditing. AuditThreshold is the
+	// score (0..1) below which a tab surface is surfaced for attention.
+	AuditEnabled   bool    `toml:"audit_enabled"`
+	AuditThreshold float64 `toml:"audit_threshold"`
+	// AuditEffort is the reasoning-depth level the audit model itself uses when
+	// scoring (off/low/medium/high/provider-default). Empty = auto/provider default.
+	AuditEffort         string  `toml:"audit_effort"`
 	GuardianModel       string  `toml:"guardian_model"`
 	GuardianTemperature float64 `toml:"guardian_temperature"`
 	// RecoveryModel optionally names a dedicated model for the independent

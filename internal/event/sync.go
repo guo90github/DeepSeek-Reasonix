@@ -121,3 +121,8 @@ func (s *syncSink) RecordRunBudget(sample RunBudgetSample) {
 	defer s.mu.Unlock()
 	RecordRunBudget(s.inner, sample)
 }
+func (s *syncSink) RecordReasoningAudit(t ReasoningAuditTotals) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	RecordReasoningAudit(s.inner, t)
+}

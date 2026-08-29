@@ -164,3 +164,9 @@ func (s *inboxEventSink) RecordRunBudget(sample event.RunBudgetSample) {
 	}
 	event.RecordRunBudget(s.inner, sample)
 }
+func (s *inboxEventSink) RecordReasoningAudit(t event.ReasoningAuditTotals) {
+	if s == nil {
+		return
+	}
+	event.RecordReasoningAudit(s.inner, t)
+}

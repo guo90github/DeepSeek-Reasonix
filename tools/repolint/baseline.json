@@ -2,10 +2,10 @@
   "limits": {
     "banner": 15,
     "commented-code": 0,
-    "complexity": 2000,
-    "essay": 1959,
-    "file-size": 108536,
-    "function-size": 8615,
+    "complexity": 2008,
+    "essay": 1961,
+    "file-size": 108908,
+    "function-size": 8655,
     "layering": 1,
     "marker": 0,
     "narrative": 64,
@@ -25,7 +25,7 @@
     "desktop/app.go": {
       "complexity": 57,
       "essay": 64,
-      "file-size": 11092,
+      "file-size": 11097,
       "function-size": 343,
       "struct-state": 15
     },
@@ -111,7 +111,7 @@
       "file-size": 1088
     },
     "desktop/frontend/src/components/Message.tsx": {
-      "file-size": 43
+      "file-size": 45
     },
     "desktop/frontend/src/components/ProjectTree.tsx": {
       "file-size": 1444
@@ -120,7 +120,7 @@
       "file-size": 141
     },
     "desktop/frontend/src/components/SettingsPanel.tsx": {
-      "file-size": 7283
+      "file-size": 7341
     },
     "desktop/frontend/src/components/StatusBar.tsx": {
       "file-size": 43
@@ -138,13 +138,13 @@
       "file-size": 276
     },
     "desktop/frontend/src/components/WorkspacePanel.tsx": {
-      "file-size": 1346
+      "file-size": 1350
     },
     "desktop/frontend/src/custom/features/heartbeat/HeartbeatPanel.tsx": {
       "file-size": 180
     },
     "desktop/frontend/src/lib/bridge.ts": {
-      "file-size": 4936
+      "file-size": 5000
     },
     "desktop/frontend/src/lib/crash.ts": {
       "file-size": 225
@@ -153,10 +153,10 @@
       "file-size": 264
     },
     "desktop/frontend/src/lib/types.ts": {
-      "file-size": 1498
+      "file-size": 1502
     },
     "desktop/frontend/src/lib/useController.ts": {
-      "file-size": 4168
+      "file-size": 4220
     },
     "desktop/heartbeat.go": {
       "essay": 7
@@ -165,7 +165,7 @@
       "banner": 2,
       "complexity": 8,
       "essay": 34,
-      "file-size": 1025,
+      "file-size": 1055,
       "function-size": 20
     },
     "desktop/history_slice_test.go": {
@@ -244,7 +244,7 @@
     "desktop/settings_app.go": {
       "complexity": 29,
       "essay": 6,
-      "file-size": 2962
+      "file-size": 2970
     },
     "desktop/settings_app_test.go": {
       "test-file-size": 1856
@@ -263,8 +263,8 @@
     },
     "desktop/tabs.go": {
       "complexity": 39,
-      "essay": 68,
-      "file-size": 7803,
+      "essay": 70,
+      "file-size": 7816,
       "function-size": 364,
       "struct-state": 23
     },
@@ -555,10 +555,10 @@
       "test-file-size": 1001
     },
     "internal/boot/boot.go": {
-      "complexity": 267,
+      "complexity": 273,
       "essay": 81,
-      "file-size": 2086,
-      "function-size": 1734,
+      "file-size": 2109,
+      "function-size": 1757,
       "narrative": 3
     },
     "internal/boot/boot_test.go": {
@@ -809,7 +809,7 @@
     },
     "internal/config/config.go": {
       "essay": 24,
-      "file-size": 1553,
+      "file-size": 1567,
       "narrative": 2
     },
     "internal/config/credentials.go": {
@@ -820,7 +820,7 @@
     },
     "internal/config/edit.go": {
       "essay": 5,
-      "file-size": 1706
+      "file-size": 1754
     },
     "internal/config/edit_test.go": {
       "test-file-size": 2427
@@ -859,10 +859,10 @@
       "test-file-size": 174
     },
     "internal/config/render.go": {
-      "complexity": 244,
+      "complexity": 246,
       "essay": 2,
-      "file-size": 1007,
-      "function-size": 958
+      "file-size": 1016,
+      "function-size": 967
     },
     "internal/config/render_test.go": {
       "test-file-size": 759
@@ -874,8 +874,8 @@
     "internal/control/controller.go": {
       "complexity": 11,
       "essay": 94,
-      "file-size": 5500,
-      "function-size": 82,
+      "file-size": 5538,
+      "function-size": 90,
       "narrative": 4,
       "struct-state": 18
     },

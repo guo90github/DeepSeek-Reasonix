@@ -396,6 +396,7 @@ type historyWindowController interface {
 // messages, converting only the returned window.
 func (a *App) HistorySliceForTab(tabID string, req HistorySliceRequest) HistorySlice {
 	req = normalizeHistorySliceRequest(req)
+	a.waitForTabBuildReady(tabID)
 	a.mu.RLock()
 	tab := a.tabByIDLocked(tabID)
 	var ctrl control.SessionAPI
@@ -423,6 +424,35 @@ func (a *App) HistorySliceForTab(tabID string, req HistorySliceRequest) HistoryS
 		sessionDir = controllerSessionDir(ctrl)
 	}
 	return a.liveHistorySlice(ctrl, sessionDir, sessionPath, req)
+}
+
+// historyBuildWaitTimeout caps how long a history read waits for a tab's
+// background controller build after restart before falling back to the cold
+// or error path. Overridden by tests.
+var historyBuildWaitTimeout = 2 * time.Second
+
+// waitForTabBuildReady blocks (bounded) until the tab's in-flight controller
+// build terminates. A restored tab builds its controller in the background, so
+// the first open after restart can race it and hit the not-yet-ready path
+// (ctrl == nil with the session path still unbound). Waiting lets the build
+// settle — binding the session path or exposing the live controller — before
+// the read runs. Returns immediately when no build is in flight.
+func (a *App) waitForTabBuildReady(tabID string) {
+	a.mu.RLock()
+	tab := a.tabByIDLocked(tabID)
+	if tab == nil || tab.Ready {
+		a.mu.RUnlock()
+		return
+	}
+	done := tab.buildDone
+	a.mu.RUnlock()
+	if done == nil {
+		return
+	}
+	select {
+	case <-done:
+	case <-time.After(historyBuildWaitTimeout):
+	}
 }
 
 // liveHistorySlice pages a tab with a running controller. The display index

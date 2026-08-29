@@ -544,6 +544,9 @@ func (s *metricsSink) RecordWorkspaceMutation(m event.WorkspaceMutation) {
 func (s *metricsSink) RecordRunBudget(sample event.RunBudgetSample) {
 	event.RecordRunBudget(s.inner, sample)
 }
+func (s *metricsSink) RecordReasoningAudit(t event.ReasoningAuditTotals) {
+	event.RecordReasoningAudit(s.inner, t)
+}
 
 // MergeCapabilityAuditCounters copies capability counters into RunMetrics.
 func (m *RunMetrics) MergeCapabilityAuditCounters(

@@ -578,6 +578,15 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   PickThemeBackground(): Promise<string>;
   SetDesktopLayoutStyle(style: string): Promise<void>;
   OptimizePrompt(text: string): Promise<string>;
+  AuditTurn(reasoning: string): Promise<import("../../wailsjs/go/models").event.ReasoningAuditTotals>;
+  SetAuditModel(name: string): Promise<void>;
+  SetAuditEnabled(on: boolean): Promise<void>;
+  SetAuditThreshold(threshold: number): Promise<void>;
+  SetAuditEffort(effort: string): Promise<void>;
+  GetAuditModel(): Promise<string>;
+  GetAuditEnabled(): Promise<boolean>;
+  GetAuditThreshold(): Promise<number>;
+  GetAuditEffort(): Promise<string>;
   SetDesktopZoomFactor(factor: number): Promise<void>;
   GetDesktopZoomFactor(): Promise<number>;
   RestartApplication(): Promise<void>;
@@ -744,7 +753,7 @@ const WAILS_IPC_NULL_SEND_RE = /Cannot read properties of null \(reading 'send'\
 // runtime can inject window.go AFTER this module first evaluates, so snapshotting
 // once would pin the browser mock for the whole session (and show fake data — the
 // dev mock's model list leaking into the real app was exactly this bug).
-function realApp(): AppBindings | undefined {
+export function realApp(): AppBindings | undefined {
   return typeof window !== "undefined" ? window.go?.main?.App : undefined;
 }
 
@@ -1725,6 +1734,10 @@ function makeMockApp(): AppBindings {
     promptOptimizeModel: "",
     subagentModel: "",
     subagentEffort: "",
+    auditModel: "",
+    auditEnabled: false,
+    auditThreshold: 0.6,
+    auditEffort: "",
     autoPlan: "off",
     providers: [
       { name: "deepseek", builtIn: true, added: deepSeekUpgradeMock, kind: "openai", baseUrl: "https://api.deepseek.com", modelsUrl: "", models: ["deepseek-v4-flash"], visionModels: [], visionModelsConfigured: false, default: "deepseek-v4-flash", apiKeyEnv: "DEEPSEEK_API_KEY", headers: deepSeekUpgradeMock ? { "X-Route": "official-custom" } : undefined, keySet: true, balanceUrl: "https://api.deepseek.com/user/balance", contextWindow: 1_000_000, reasoningProtocol: "", thinking: "", supportedEfforts: [], defaultEffort: "", recommendedUpgradeAvailable: deepSeekUpgradeMock },
@@ -2516,6 +2529,25 @@ function makeMockApp(): AppBindings {
   return {
     ...makeMockSessionCatalogBindings(cloneProjectTree),
     ...makeMockBlankProjectBindings(),
+    async AuditTurn(_reasoning: string) {
+      throw new Error("AuditTurn unavailable in mock");
+    },
+    async SetAuditModel() {},
+    async SetAuditEnabled() {},
+    async SetAuditThreshold() {},
+    async SetAuditEffort() {},
+    async GetAuditModel() {
+      return "";
+    },
+    async GetAuditEnabled() {
+      return false;
+    },
+    async GetAuditThreshold() {
+      return 0.6;
+    },
+    async GetAuditEffort() {
+      return "";
+    },
     async MinimiseMainWindow() {
       console.info("mock MinimiseMainWindow");
     },

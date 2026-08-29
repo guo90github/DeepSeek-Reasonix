@@ -22,6 +22,7 @@ import { InvocationBadge } from "./InvocationBadge";
 import { CodeViewer } from "./CodeViewer";
 import { formatSelectionLabels, languageFor, parseSelectedTextContext, stripSelectionLabels } from "../lib/selectedTextContext";
 import { AssistantReasoningPanel } from "./AssistantReasoningPanel";
+const AuditInlineCard = lazy(() => import("./AuditInlineCard").then((module) => ({ default: module.AuditInlineCard })));
 
 const SearchSourcesPanel = lazy(() => import("./SearchSourcesPanel").then((module) => ({ default: module.SearchSourcesPanel }))); type AssistantItem = Extract<Item, { kind: "assistant" }>;
 export type TurnActionMenu = "summary" | "rewind";
@@ -823,6 +824,11 @@ export const AssistantMessage = memo(function AssistantMessage({
           defaultExpanded={defaultExpanded}
           expandWhileStreaming={expandWhileStreaming}
         />
+      )}
+      {item.reasoning && (
+        <Suspense fallback={null}>
+          <AuditInlineCard reasoning={item.reasoning} />
+        </Suspense>
       )}
       {(hasText || hasFootnotes) && (
         <div className="msg__body" data-transcript-selectable="message">

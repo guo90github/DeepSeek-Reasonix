@@ -258,6 +258,19 @@ type ModelSwitchQueueState = {
   fallbackBalance?: BalanceInfo;
 };
 const HISTORY_PAGE_TURNS = 60;
+// Auto-retry for a failed first hydration after restart: the backend tab
+// controller builds in the background, so the first open can race it. Retry a
+// few times with backoff while the tab is still the visible one and still in
+// the hydrate_error state; switching tabs already re-fetches and resets.
+const HISTORY_RETRY_MAX = 3;
+const HISTORY_RETRY_BASE_DELAY_MS = 800;
+type HistoryRetryOptions = {
+  sessionPath?: string;
+  sessionRevision?: number;
+  sessionDigest?: string;
+  sessionGeneration?: number;
+  cancelHydrateGeneration?: number;
+};
 
 export type TurnPhaseName = "working" | "checking" | "verifying" | "reviewing" | string;
 export type Item =
@@ -2460,6 +2473,12 @@ export function useController() {
   const composerProfileLifecycleByTabRef = useRef(new Map<string, number>());
   const cancelReconcileTimers = useRef(new Map<string, number>());
   const stalePromptReconcileTimers = useRef(new Map<string, number>());
+  // Tracks per-tab history retry state: attempts so consecutive failures are
+  // capped, and the pending timer so a newer failure reschedules cleanly.
+  const historyRetryState = useRef(new Map<string, { attempts: number; timer: number }>());
+  // Indirection so loadSessionDataForTab (defined before the retry helper) can
+  // schedule a bounded retry without a use-before-declaration cycle.
+  const scheduleHistoryRetryRef = useRef<(tabId: string, reason: HydrateReason, opts: HistoryRetryOptions) => void>(() => {});
   // Indirection so dispatchRuntimeStatusForTab (defined above reconcileTabRuntime)
   // can schedule an authoritative refetch after it rejects a stale snapshot.
   const scheduleStalePromptReconcileRef = useRef<(tabId: string) => void>(() => {});
@@ -2869,7 +2888,11 @@ export function useController() {
         dispatchTo(tabId, { type: "hydrate_error", reason, error: errText });
         // Hydration failure is not turn completion; keep any raced Ask/approval blocked.
         dispatchTo(tabId, { type: "local_notice", level: "warn", text: errText, preserveRuntime: true });
-        addBreadcrumb("tab.hydrate", `history failed ${tabId} ms=${Date.now() - historyStartedAt}`); return;
+        addBreadcrumb("tab.hydrate", `history failed ${tabId} ms=${Date.now() - historyStartedAt}`);
+        scheduleHistoryRetryRef.current(tabId, reason, {
+          sessionPath, sessionRevision, sessionDigest, sessionGeneration, cancelHydrateGeneration,
+        });
+        return;
       }
       const applyProj = projection && {
         items: projection.items, revision: projection.revisionKnown ? projection.revision : undefined, digest: projection.digest || undefined,
@@ -2907,6 +2930,7 @@ export function useController() {
       }
 
       if (!stillCurrent()) return;
+      historyRetryState.current.delete(tabId);
       dispatchTo(tabId, { type: "hydrate_done" });
       addBreadcrumb("tab.hydrate", `done ${reason} ${tabId} ms=${Date.now() - hydrateStartedAt}`);
 
@@ -3010,6 +3034,30 @@ export function useController() {
       }
     }
   }, [bumpSessionLoadSeq, cancelHydrateCurrent, dispatchTo, loadMetaForTab, refreshBalanceForTab, sessionLoadCurrent]);
+
+  // Bounded, backoff auto-retry for a failed history hydration. Covers the
+  // first-open-after-restart race where the backend tab controller is still
+  // building: retry while the tab stays visible and stuck in hydrate_error,
+  // and stop once the tab moves on (success clears it, a switch re-fetches).
+  const scheduleHistoryRetry = useCallback((tabId: string, reason: HydrateReason, opts: HistoryRetryOptions) => {
+    if (reason !== "startup" && reason !== "switch-tab" && reason !== "open-topic") return;
+    const prev = historyRetryState.current.get(tabId);
+    const attempts = (prev?.attempts ?? 0) + 1;
+    if (attempts > HISTORY_RETRY_MAX) {
+      historyRetryState.current.delete(tabId);
+      return;
+    }
+    if (prev?.timer) window.clearTimeout(prev.timer);
+    const timer = window.setTimeout(() => {
+      // Keep the counter so consecutive failures accumulate toward the cap
+      // instead of restarting at attempt 1 and retrying forever.
+      if (activeTabIdRef.current !== tabId) { historyRetryState.current.delete(tabId); return; } // a switch already re-fetches
+      if (!statesRef.current.get(tabId)?.hydrateError) { historyRetryState.current.delete(tabId); return; } // moved past the failure
+      void loadSessionDataForTab(tabId, false, "startup", { ...opts, preserveCachedHistory: false });
+    }, HISTORY_RETRY_BASE_DELAY_MS * 2 ** (attempts - 1));
+    historyRetryState.current.set(tabId, { attempts, timer });
+  }, [loadSessionDataForTab]);
+  scheduleHistoryRetryRef.current = scheduleHistoryRetry;
 
   const resetTurnEventProjection = useCallback(async (tabId: string, replay: TurnEventReplayView): Promise<boolean> => {
     const state = statesRef.current.get(tabId);
@@ -3582,6 +3630,10 @@ export function useController() {
         window.clearTimeout(timer);
       }
       stalePromptReconcileTimers.current.clear();
+      for (const retry of historyRetryState.current.values()) {
+        window.clearTimeout(retry.timer);
+      }
+      historyRetryState.current.clear();
       off();
       offReady();
       offRebuilt();

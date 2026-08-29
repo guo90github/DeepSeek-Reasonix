@@ -29,6 +29,7 @@ export function usePaneTailFollow({
   const layoutTransientRef = useRef(false);
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
+  const wasEnabledRef = useRef(enabled);
 
   const settleRef = useRef<TranscriptTailSettle | null>(null);
   settleRef.current ??= createTranscriptTailSettle({
@@ -64,6 +65,16 @@ export function usePaneTailFollow({
   useEffect(() => {
     reaim();
   }, [contentVersion, reaim]);
+
+  // Re-arm when the writer turns on (e.g. hydration/transition ends on the
+  // left pane): the pane is otherwise left parked wherever restoration put it,
+  // with no data change left to re-aim it. Enabled→false is already handled —
+  // reaim's own guard keeps the loop inert while disabled.
+  useEffect(() => {
+    const turnedOn = !wasEnabledRef.current && enabled;
+    wasEnabledRef.current = enabled;
+    if (turnedOn) reaim();
+  }, [enabled, reaim]);
 
   useEffect(() => () => {
     generationRef.current += 1;

@@ -1740,6 +1740,13 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		}
 		return resolveProvider(effectiveResolver, cfg, proxySpec, provider.Selection{Ref: modelRefFromEntry(pe)})
 	}
+	auditProviderResolver := func(ref string) (provider.Provider, error) {
+		pe, ok := resolveOptionalEntry(effectiveResolver, cfg, strings.TrimSpace(ref))
+		if !ok || pe == nil || strings.TrimSpace(pe.Model) == "" {
+			return nil, fmt.Errorf("unknown audit model %q", ref)
+		}
+		return resolveProvider(effectiveResolver, cfg, proxySpec, provider.Selection{Ref: modelRefFromEntry(pe)})
+	}
 	visionModelSelector := func(currentRef, _ string) (string, bool) {
 		current, ok := resolveOptionalEntry(effectiveResolver, cfg, strings.TrimSpace(currentRef))
 		if !ok || current == nil {
@@ -1785,6 +1792,22 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		VisionModelSelector:            visionModelSelector,
 		PromptOptimizeModel:            cfg.Agent.PromptOptimizeModel,
 		PromptOptimizeProviderResolver: promptOptimizeProviderResolver,
+		AuditModel:                     cfg.Agent.AuditModel,
+		AuditProviderResolver:          auditProviderResolver,
+		AuditRateCardResolver: func() (billing.RateCard, bool) {
+			ref := strings.TrimSpace(cfg.Agent.AuditModel)
+			if ref == "" {
+				return billing.RateCard{}, false
+			}
+			entry, ok := resolveOptionalEntry(effectiveResolver, cfg, ref)
+			if !ok || entry == nil {
+				return billing.RateCard{}, false
+			}
+			return entry.RateCardForModel(entry.Model), true
+		},
+		AuditEnabled:                   cfg.Agent.AuditEnabled,
+		AuditThreshold:                 cfg.Agent.AuditThreshold,
+		AuditEffort:                    cfg.Agent.AuditEffort,
 		SystemPrompt:                   sysPrompt,
 		SessionDir:                     sessionDir,
 		Host:                           pluginHost,

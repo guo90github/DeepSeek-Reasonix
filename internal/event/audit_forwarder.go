@@ -18,6 +18,7 @@ type AuditForwarder struct{ Inner Sink }
 type OptionalSinkCapabilities interface {
 	DelegationAuditSink
 	ReadinessAuditSink
+	ReasoningAuditSink
 	AnchorSafetyAuditSink
 	ContractShadowAuditSink
 	CompletionReportAuditSink
@@ -64,6 +65,10 @@ func (f AuditForwarder) RecordOutcomeProgress(s evidence.OutcomeSample) {
 
 func (f AuditForwarder) RecordProtocolRecovery(a ProtocolRecoveryAudit) {
 	RecordProtocolRecovery(f.Inner, a)
+}
+
+func (f AuditForwarder) RecordReasoningAudit(t ReasoningAuditTotals) {
+	RecordReasoningAudit(f.Inner, t)
 }
 
 func (f AuditForwarder) RecordDelegationAudit(a evidence.DelegationAudit) {

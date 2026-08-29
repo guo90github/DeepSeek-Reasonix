@@ -338,6 +338,9 @@ func (r *Recorder) RecordWorkspaceMutation(m event.WorkspaceMutation) {
 func (r *Recorder) RecordRunBudget(sample event.RunBudgetSample) {
 	event.RecordRunBudget(r.inner, sample)
 }
+func (r *Recorder) RecordReasoningAudit(t event.ReasoningAuditTotals) {
+	event.RecordReasoningAudit(r.inner, t)
+}
 
 // Close flushes and closes the file, returning the first error seen. Events
 // arriving after Close (late background jobs) are forwarded but not recorded.

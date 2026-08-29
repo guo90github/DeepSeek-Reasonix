@@ -4241,6 +4241,7 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
   const subagentRef = toRef(s.subagentModel, s);
   const visionRef = s.visionModel === "auto" ? "auto" : toRef(s.visionModel, s);
   const optimizeRef = toRef(s.promptOptimizeModel, s);
+  const auditRef = toRef(s.auditModel, s);
   const plannerSelectRef = plannerRef === defaultRef ? "" : plannerRef;
   const [defaultProvider] = defaultRef.split("/");
   const defaultProviderView = s.providers.find((p) => p.name === defaultProvider);
@@ -4673,6 +4674,63 @@ function ModelsSection({ s, busy, apply, backgroundApply, initialFocus }: Models
               </div>
             </SettingsField>
             {compactRatioOverrideHint && <div className="provider-fetch-banner provider-fetch-banner--warn">{compactRatioOverrideHint}</div>}
+
+            <SettingsField label={t("settings.audit")} hint={t("settings.auditHint")}>
+              <label className="settings-checkbox">
+                <input
+                  type="checkbox"
+                  checked={s.auditEnabled}
+                  disabled={busy}
+                  onChange={(e) => void apply(() => app.SetAuditEnabled(e.target.checked))}
+                />
+                {t("settings.auditEnabled")}
+              </label>
+            </SettingsField>
+
+            <SettingsField label={t("settings.auditModel")} hint={t("settings.auditModelHint")}>
+              <ModelPicker
+                s={s}
+                refs={refs}
+                value={auditRef}
+                disabled={busy || !s.auditEnabled}
+                ariaLabel={t("settings.auditModel")}
+                emptyOptionLabel={t("common.none")}
+                onPick={(ref) => void apply(() => app.SetAuditModel(ref))}
+              />
+            </SettingsField>
+
+            <SettingsField label={t("settings.auditThreshold")} hint={t("settings.auditThresholdHint")}>
+              <input
+                className="mem-input"
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                value={s.auditThreshold}
+                disabled={busy || !s.auditEnabled}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (!Number.isFinite(n)) return;
+                  void apply(() => app.SetAuditThreshold(n));
+                }}
+              />
+            </SettingsField>
+
+            <SettingsField label={t("settings.auditEffort")} hint={t("settings.auditEffortHint")}>
+              <select
+                className="mem-select set-grow"
+                value={s.auditEffort || ""}
+                disabled={busy || !s.auditEnabled}
+                onChange={(e) => void apply(() => app.SetAuditEffort(e.target.value))}
+              >
+                <option value="">{t("settings.auditEffortDefault")}</option>
+                {["off", "low", "medium", "high"].map((level) => (
+                  <option key={level} value={level}>
+                    {level}
+                  </option>
+                ))}
+              </select>
+            </SettingsField>
           </SettingsSection>
         </>
       ) : subtab === "access" ? (
