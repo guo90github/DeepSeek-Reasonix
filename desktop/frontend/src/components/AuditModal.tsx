@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { app } from "../lib/bridge";
 import { onAuditChunk, onAuditDone, onAuditRequest, type AuditChunkEvent, type AuditRequestPayload } from "../lib/auditStream";
@@ -7,27 +7,97 @@ import type { event } from "../../wailsjs/go/models";
 
 type AuditStatus = "loading" | "streaming" | "done" | "error";
 
-function findingLabel(t: ReturnType<typeof useT>, type: string): string {
-  switch (type) {
-    case "contradiction":
-      return t("audit.typeContradiction");
-    case "hallucination":
-      return t("audit.typeHallucination");
-    case "redundancy":
-      return t("audit.typeRedundancy");
-    case "instruction_drift":
-      return t("audit.typeDrift");
-    default:
-      return type;
-  }
+const FINDING_KEYS = {
+  contradiction: "audit.typeContradiction",
+  hallucination: "audit.typeHallucination",
+  redundancy: "audit.typeRedundancy",
+  instruction_drift: "audit.typeDrift",
+} as const;
+
+// AuditSection is a reusable collapsed block (header + chevron + optional body).
+function AuditSection({
+  title,
+  open,
+  onToggle,
+  extra,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  extra?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <section className="audit-section">
+      <button type="button" className="audit-section__head" onClick={onToggle} aria-expanded={open}>
+        <span className={`audit-section__chevron${open ? " is-open" : ""}`} aria-hidden="true" />
+        <span className="audit-section__title">{title}</span>
+        {extra}
+      </button>
+      {open && <div className="audit-section__body">{children}</div>}
+    </section>
+  );
 }
 
-// AuditModal shows one audit run in a centered modal. It leads with the audit
-// deliverable — the verdict + its rationale (explanation) — then the audited
-// input as context, and finally the technical trace (request params + the live
-// model output) collapsed by default so raw mechanics do not dominate the
-// result. It owns the stream lifecycle: subscribes on mount, cleans up on
-// unmount (Escape / backdrop / close button).
+// AuditMeta renders the evaluator cost line (tokens / cost / elapsed).
+function AuditMeta({ totals, t }: { totals: event.ReasoningAuditTotals; t: ReturnType<typeof useT> }) {
+  const parts: string[] = [];
+  if (typeof totals.evalTokens === "number" && totals.evalTokens > 0) {
+    parts.push(t("audit.tokens", { n: String(totals.evalTokens) }));
+  }
+  if (typeof totals.evalCost === "number" && totals.evalCost > 0) {
+    parts.push(t("audit.cost", { c: totals.evalCost.toFixed(4) }));
+  }
+  if (totals.elapsedMs > 0) parts.push(`${(totals.elapsedMs / 1000).toFixed(1)}s`);
+  if (parts.length === 0) return null;
+  return <span className="audit__meta">{parts.join(" · ")}</span>;
+}
+
+// AuditVerdict is the audit deliverable: score + bar + pass/attention badge +
+// rationale (explanation) + per-issue findings.
+function AuditVerdict({ totals, threshold, t }: { totals: event.ReasoningAuditTotals; threshold: number; t: ReturnType<typeof useT> }) {
+  const low = totals.score < threshold;
+  return (
+    <div className="audit-result">
+      <div className="audit-result__row">
+        <span className={`audit-result__score${low ? " is-low" : ""}`} title={t("audit.scoreHint")}>
+          {totals.score.toFixed(2)}
+        </span>
+        <span className={`audit-badge${low ? " audit-badge--warn" : ""}`}>{low ? t("audit.attention") : t("audit.pass")}</span>
+        <span className="audit__issues">
+          {t("audit.contradiction", { n: String(totals.contradiction ?? 0) })} ·{" "}
+          {t("audit.hallucination", { n: String(totals.hallucination ?? 0) })} ·{" "}
+          {t("audit.redundancy", { n: String(totals.redundancy ?? 0) })} ·{" "}
+          {t("audit.drift", { n: String(totals.instructionDrift ?? 0) })}
+        </span>
+        <AuditMeta totals={totals} t={t} />
+      </div>
+      <div
+        className="audit-result__bar"
+        style={{ background: `linear-gradient(to right, var(--accent) ${totals.score * 100}%, var(--border) ${totals.score * 100}%)` }}
+        aria-hidden="true"
+      />
+      {totals.explanation && <p className="audit-result__evidence">{totals.explanation}</p>}
+      {Array.isArray(totals.findings) && totals.findings.length > 0 && (
+        <ul className="audit-findings">
+          {totals.findings.map((f, i) => (
+            <li key={i} className={`audit-finding is-${f.type}`}>
+              <span className="audit-finding__tag">{t(FINDING_KEYS[f.type as keyof typeof FINDING_KEYS] ?? "audit.typeDrift")}</span>
+              <span className="audit-finding__quote">“{f.quote}”</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// AuditModal shows one audit run in a centered modal. It owns the stream
+// lifecycle: subscribes on mount, cleans up on unmount (Escape / backdrop /
+// close button). The deliverable (verdict + evidence) leads, then the audited
+// input, then the technical trace (collapsed, live output) — so the run is
+// transparent without raw mechanics dominating.
 export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose: () => void }) {
   const t = useT();
   const [status, setStatus] = useState<AuditStatus>("loading");
@@ -124,12 +194,12 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
       }}
     >
       <div className="modal reasonix-audit-dialog" role="dialog" aria-modal="true" aria-label={t("audit.modalTitle")}>
-        <div className="reasonix-audit-dialog__header">
+        <header className="reasonix-audit-dialog__header">
           <span className="modal__title">{t("audit.modalTitle")}</span>
           <button ref={closeRef} type="button" className="reasonix-audit-dialog__close" onClick={onClose} aria-label={t("common.close")}>
             ✕
           </button>
-        </div>
+        </header>
 
         <div className="reasonix-audit-dialog__body">
           {status === "loading" && (
@@ -147,93 +217,39 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
 
           {(status === "streaming" || status === "done") && (
             <>
-              {/* ① 结论 + 依据（headline，done 后出现） */}
-              {totals && (
-                <div className="audit-result">
-                  <div className="audit-result__row">
-                    <span
-                      className={`audit__score audit-result__score${totals.score < threshold ? " audit__score--warn" : ""}`}
-                      title={t("audit.scoreHint")}
-                    >
-                      {totals.score.toFixed(2)}
-                    </span>
-                    {totals.score < threshold ? (
-                      <span className="audit-badge audit-badge--warn">{t("audit.attention")}</span>
-                    ) : (
-                      <span className="audit-badge">{t("audit.pass")}</span>
-                    )}
-                    <span className="audit__issues">
-                      {t("audit.contradiction", { n: String(totals.contradiction ?? 0) })} ·{" "}
-                      {t("audit.hallucination", { n: String(totals.hallucination ?? 0) })} ·{" "}
-                      {t("audit.redundancy", { n: String(totals.redundancy ?? 0) })} ·{" "}
-                      {t("audit.drift", { n: String(totals.instructionDrift ?? 0) })}
-                    </span>
-                    {typeof totals.evalTokens === "number" && totals.evalTokens > 0 && (
-                      <span className="audit__meta">
-                        {t("audit.tokens", { n: String(totals.evalTokens) })}
-                        {typeof totals.evalCost === "number" && totals.evalCost > 0
-                          ? ` · ${t("audit.cost", { c: totals.evalCost.toFixed(4) })}` : ""}
-                        {totals.elapsedMs > 0 ? ` · ${(totals.elapsedMs / 1000).toFixed(1)}s` : ""}
-                      </span>
-                    )}
-                  </div>
-                  {totals.explanation && <p className="audit-result__evidence">{totals.explanation}</p>}
-                  {Array.isArray(totals.findings) && totals.findings.length > 0 && (
-                    <ul className="audit-findings">
-                      {totals.findings.map((f, i) => (
-                        <li key={i} className="audit-finding">
-                          <span className={`audit-finding__tag audit-finding__tag--${f.type}`}>{findingLabel(t, f.type)}</span>
-                          <span className="audit-finding__quote">“{f.quote}”</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
+              {totals && <AuditVerdict totals={totals} threshold={threshold} t={t} />}
 
-              {/* ② 被审计的输入 */}
               {request && (
-                <>
-                  <button type="button" className="audit-stage__head" onClick={() => setShowInput((v) => !v)} aria-expanded={showInput}>
-                    <span className={`audit-stage__chevron${showInput ? " audit-stage__chevron--open" : ""}`} aria-hidden="true" />
-                    {t("audit.input")}
-                    {request.truncated && <span className="audit-truncated">{t("audit.truncated")}</span>}
-                  </button>
-                  {showInput && (
-                    <div className="audit-stage__body">
-                      <pre className="audit-stage__pre audit-stage__pre--input">{request.input}</pre>
-                    </div>
-                  )}
-                </>
+                <AuditSection
+                  title={t("audit.input")}
+                  open={showInput}
+                  onToggle={() => setShowInput((v) => !v)}
+                  extra={request.truncated ? <span className="audit-truncated">{t("audit.truncated")}</span> : null}
+                >
+                  <pre className="audit-stage__pre">{request.input}</pre>
+                </AuditSection>
               )}
 
-              {/* ③ 技术详情（流式归入；流式中自动展开） */}
-              <button type="button" className="audit-stage__head" onClick={() => setShowTech((v) => !v)} aria-expanded={showTech}>
-                <span className={`audit-stage__chevron${showTech ? " audit-stage__chevron--open" : ""}`} aria-hidden="true" />
-                {t("audit.technical")}
-              </button>
-              {showTech && (
-                <div className="audit-stage__body">
-                  {request && (
-                    <>
-                      <div className="audit-stage__label">{t("audit.requestPrompt")}</div>
-                      <pre className="audit-stage__pre">{request.systemPrompt}</pre>
-                    </>
-                  )}
-                  {hasThink && (
-                    <>
-                      <div className="audit-stage__label">{t("audit.processReasoning")}</div>
-                      <pre className="audit-stage__pre">{think}</pre>
-                    </>
-                  )}
-                  <div className="audit-stage__label">{t("audit.processOutput")}</div>
-                  <pre className="audit-stage__pre audit-stage__pre--output">
-                    {text}
-                    {streaming && <span className="audit-card__cursor" aria-hidden="true" />}
-                  </pre>
-                  {!text && streaming && <span className="audit-stage__hint">{t("audit.streamingHint")}</span>}
-                </div>
-              )}
+              <AuditSection title={t("audit.technical")} open={showTech} onToggle={() => setShowTech((v) => !v)}>
+                {request && (
+                  <>
+                    <div className="audit-stage__label">{t("audit.requestPrompt")}</div>
+                    <pre className="audit-stage__pre">{request.systemPrompt}</pre>
+                  </>
+                )}
+                {hasThink && (
+                  <>
+                    <div className="audit-stage__label">{t("audit.processReasoning")}</div>
+                    <pre className="audit-stage__pre">{think}</pre>
+                  </>
+                )}
+                <div className="audit-stage__label">{t("audit.processOutput")}</div>
+                <pre className="audit-stage__pre audit-stage__pre--output">
+                  {text}
+                  {streaming && <span className="audit-card__cursor" aria-hidden="true" />}
+                </pre>
+                {!text && streaming && <span className="audit-stage__hint">{t("audit.streamingHint")}</span>}
+              </AuditSection>
             </>
           )}
         </div>
