@@ -37,6 +37,45 @@ export function sameTodoList(a: Todo[] | null | undefined, b: Todo[] | null | un
   });
 }
 
+// TodoGroup mirrors the kernel's serialTodoSegments: a level-0 item owns the
+// level-1 run immediately after it; any other item (including a stray level-1
+// with no phase above it) is its own single-step group.
+export interface TodoGroup {
+  phase?: Todo;
+  children: Todo[];
+}
+
+export function groupTodos(todos: Todo[]): TodoGroup[] {
+  const groups: TodoGroup[] = [];
+  let i = 0;
+  while (i < todos.length) {
+    const todo = todos[i];
+    if ((todo.level ?? 0) === 0) {
+      const children: Todo[] = [];
+      let j = i + 1;
+      while (j < todos.length && (todos[j].level ?? 0) === 1) {
+        children.push(todos[j]);
+        j++;
+      }
+      groups.push({ phase: todo, children });
+      i = j;
+    } else {
+      groups.push({ children: [todo] });
+      i++;
+    }
+  }
+  return groups;
+}
+
+// phaseSummary reports the phase's completed sub-step count, or null when the
+// group is a plain row / lone phase — no chip is rendered then.
+export function phaseSummary(group: TodoGroup): { done: number; total: number } | null {
+  if (!group.phase || group.children.length === 0) return null;
+  const total = group.children.length;
+  const done = group.children.filter((child) => todoStatus(child.status) === "completed").length;
+  return { done, total };
+}
+
 export function todoDismissalKey(todos: Todo[]): string {
   if (todos.length === 0) return "";
   return JSON.stringify(todos.map((todo) => ({

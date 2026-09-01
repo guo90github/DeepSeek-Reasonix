@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useT } from "../lib/i18n";
 import type { Todo } from "../lib/tools";
-import { shouldOpenTodoPanelByDefault } from "../lib/todoVisibility";
+import { groupTodos, phaseSummary, shouldOpenTodoPanelByDefault } from "../lib/todoVisibility";
 import { PromptBadge, PromptHeaderAction, PromptShelf } from "./PromptShelf";
 
 const STORAGE_KEY = "todoPanel:openStates";
@@ -62,6 +62,10 @@ export function TodoPanel({
   const summary = current?.activeForm || current?.content || todos[todos.length - 1]?.content || "";
   const [open, setOpen] = useState(() => loadOpenState(stateKey, shouldOpenTodoPanelByDefault()));
   const wasAllDoneRef = useRef(allDone);
+  // Phase rows expand by default; collapse state is per-batch (keyed by group
+  // index) and resets on remount, unlike the shelf's persisted open state.
+  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
+  const groups = useMemo(() => groupTodos(todos), [todos]);
 
   useEffect(() => {
     if (allDone && !wasAllDoneRef.current) {
@@ -103,11 +107,74 @@ export function TodoPanel({
     >
       {open && (
         <ul className="todobar__list">
-          {todos.map((todo, index) => {
+          {groups.map((group, gi) => {
+            if (group.phase && group.children.length > 0) {
+              const status = normalizeTodoStatus(group.phase.status);
+              const summary = phaseSummary(group);
+              const subOpen = !collapsed[gi];
+              return (
+                <li
+                  key={gi}
+                  ref={status === "in_progress" ? currentRef : undefined}
+                  className={`todobar__item todobar__item--phase todobar__item--${status}`}
+                >
+                  <span className="todobar__phase-head">
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={subOpen}
+                      className={`todobar__chevron${subOpen ? "" : " todobar__chevron--closed"}`}
+                      onClick={() => setCollapsed((value) => ({ ...value, [gi]: !value[gi] }))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          setCollapsed((value) => ({ ...value, [gi]: !value[gi] }));
+                        }
+                      }}
+                    >
+                      ▸
+                    </span>
+                    <span className={`todobar__status todobar__status--${status}`}>
+                      {t(todoStatusLabelKey(status))}
+                    </span>
+                    {summary && (
+                      <span className="todobar__chip">
+                        {summary.done}/{summary.total}
+                      </span>
+                    )}
+                    <span className="todobar__text">
+                      {status === "in_progress" && group.phase.activeForm ? group.phase.activeForm : group.phase.content}
+                    </span>
+                  </span>
+                  {subOpen && (
+                    <ul className="todobar__sublist">
+                      {group.children.map((child, ci) => {
+                        const childStatus = normalizeTodoStatus(child.status);
+                        return (
+                          <li
+                            key={ci}
+                            ref={childStatus === "in_progress" ? currentRef : undefined}
+                            className={`todobar__item todobar__item--sub todobar__item--${childStatus}`}
+                          >
+                            <span className={`todobar__status todobar__status--${childStatus}`}>
+                              {t(todoStatusLabelKey(childStatus))}
+                            </span>
+                            <span className="todobar__text">
+                              {childStatus === "in_progress" && child.activeForm ? child.activeForm : child.content}
+                            </span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </li>
+              );
+            }
+            const todo = group.phase ?? group.children[0];
             const status = normalizeTodoStatus(todo.status);
             return (
               <li
-                key={index}
+                key={gi}
                 ref={status === "in_progress" ? currentRef : undefined}
                 className={`todobar__item todobar__item--${status}${todo.level ? " todobar__item--sub" : ""}`}
               >

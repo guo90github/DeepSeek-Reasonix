@@ -18,6 +18,8 @@ const transpiled = ts.transpileModule(source, {
 const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`;
 const {
   dismissedTodoKeyForScope,
+  groupTodos,
+  phaseSummary,
   resolveTodoPanelTodos,
   sameStringList,
   sameTodoList,
@@ -204,6 +206,75 @@ assert.equal(
   shouldOpenTodoPanelByDefault(),
   false,
   "todo batches collapse by default regardless of completion",
+);
+
+// Phase grouping mirrors the kernel's serialTodoSegments rule.
+assert.deepEqual(
+  groupTodos([
+    { content: "Phase A", status: "pending", level: 0 },
+    { content: "A1", status: "in_progress", level: 1 },
+    { content: "A2", status: "pending", level: 1 },
+    { content: "Plain step", status: "pending" },
+  ]),
+  [
+    {
+      phase: { content: "Phase A", status: "pending", level: 0 },
+      children: [
+        { content: "A1", status: "in_progress", level: 1 },
+        { content: "A2", status: "pending", level: 1 },
+      ],
+    },
+    { phase: { content: "Plain step", status: "pending" }, children: [] },
+  ],
+  "a level-0 item owns the level-1 run immediately after it",
+);
+assert.deepEqual(
+  groupTodos([
+    { content: "P1", status: "pending", level: 0 },
+    { content: "P1a", status: "pending", level: 1 },
+    { content: "P2", status: "in_progress", level: 0 },
+  ]),
+  [
+    {
+      phase: { content: "P1", status: "pending", level: 0 },
+      children: [{ content: "P1a", status: "pending", level: 1 }],
+    },
+    { phase: { content: "P2", status: "in_progress", level: 0 }, children: [] },
+  ],
+  "consecutive phases each own their own run; a lone phase keeps empty children",
+);
+assert.deepEqual(
+  groupTodos([
+    { content: "Stray", status: "pending", level: 1 },
+    { content: "P", status: "pending", level: 0 },
+  ]),
+  [
+    { children: [{ content: "Stray", status: "pending", level: 1 }] },
+    { phase: { content: "P", status: "pending", level: 0 }, children: [] },
+  ],
+  "a level-1 with no phase above it stays its own single-step group",
+);
+assert.deepEqual(
+  phaseSummary({
+    phase: { content: "Phase A", status: "pending", level: 0 },
+    children: [
+      { content: "A1", status: "completed", level: 1 },
+      { content: "A2", status: "in_progress", level: 1 },
+      { content: "A3", status: "pending", level: 1 },
+    ],
+  }),
+  { done: 1, total: 3 },
+  "the phase chip counts completed sub-steps over the total",
+);
+assert.equal(
+  phaseSummary({ children: [{ content: "Plain step", status: "pending" }] }),
+  null,
+  "plain rows render no phase chip",
+);
+assert.equal(
+  phaseSummary({ phase: { content: "P2", status: "in_progress", level: 0 }, children: [] }),
+  null,
+  "a lone phase with no sub-steps renders no chip",
 );
 
 const iterations = 200_000;

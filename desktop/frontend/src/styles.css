@@ -21735,6 +21735,56 @@ body > .mermaid-diagram--fullscreen {
 }
 .todobar__item--sub {
   padding-left: 18px;
+  border-left: 2px solid var(--border);
+  margin-left: 8px;
+}
+.todobar__item--phase {
+  display: block;
+}
+.todobar__phase-head {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  align-items: flex-start;
+  gap: 10px;
+}
+.todobar__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 18px;
+  cursor: pointer;
+  color: var(--fg-dim);
+  opacity: 0;
+  transform: rotate(90deg);
+  transition: transform 120ms var(--ease-out), opacity 120ms var(--ease-out);
+}
+.todobar__item--phase:hover .todobar__chevron,
+.todobar__chevron:focus-visible,
+.todobar__chevron--closed {
+  opacity: 1;
+}
+.todobar__chevron--closed {
+  transform: rotate(0deg);
+}
+.todobar__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--fg-dim);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.todobar__sublist {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
 }
 
 .composer-guidance-shelf {
