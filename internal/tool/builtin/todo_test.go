@@ -20,6 +20,15 @@ func TestTodoWriteAcceptsLevels(t *testing.T) {
 	}
 }
 
+func TestTodoWriteDescriptionInvitesSplitting(t *testing.T) {
+	desc := (todoWrite{}).Description()
+	for _, want := range []string{"split it into a phase", "fresh step_id", "only case where the current in_progress item may return to pending"} {
+		if !strings.Contains(desc, want) {
+			t.Fatalf("todo_write description should invite mid-execution splitting, missing %q in %q", want, desc)
+		}
+	}
+}
+
 func TestTodoWriteRejectsBadLevel(t *testing.T) {
 	args := json.RawMessage(`{"todos":[{"content":"x","status":"pending","level":2}]}`)
 	_, err := (todoWrite{}).Execute(context.Background(), args)
