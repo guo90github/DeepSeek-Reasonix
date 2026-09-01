@@ -1094,7 +1094,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			WithProfileConfigResolvers(profileConfigModel, profileConfigEffort).
 			WithBashSandboxEnforced(bashSandboxEnforced).
 			WithCapabilityRuntime(capRuntime).
-			WithWriteRoots(writeRootSet)
+			WithWriteRoots(writeRootSet).WithTreeObserver(taskmonitor.NewTaskTreeRecorderOrNil(opts.TaskStore, root))
 	}
 	addTaskTool := func() string {
 		if opts.Ablation.Off(ablation.Subagent) {

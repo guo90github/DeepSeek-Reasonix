@@ -90,12 +90,9 @@ const (
 )
 
 func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (result string, err error) {
-	// Group lifecycle: the group card's terminal is an explicit event from
-	// the tool itself (running once children start, exactly one terminal at
-	// the end) so frontends never infer group completion from the children
-	// they happen to have observed — children dispatch asynchronously, and a
-	// fast first child can finish before later children even appear. Every
-	// exit path (including validation failures) emits a terminal.
+	// The group card's terminal is an explicit event (running once children
+	// start, exactly one terminal at the end) so frontends never infer group
+	// completion; every exit path (including validation failures) emits one.
 	parentID, sink, _, ok := CallContext(ctx)
 	if !ok || sink == nil {
 		parentID = "parallel_tasks"
@@ -106,6 +103,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 	var statuses []parallelTaskStatus
 	defer func() {
 		merger.directStatus(parentID, parallelGroupTerminalPhase(ctx, err, statuses))
+		finishTreeGroup(ctx, parentID, treeGroupFinishState(parallelGroupTerminalPhase(ctx, err, statuses)))
 	}()
 	ctx = withSubagentProgressMerger(ctx, merger)
 
@@ -135,6 +133,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 
 	// The group starts running once children begin dispatching.
 	merger.directStatus(parentID, subagentPhaseRunning)
+	ctx, _ = startTreeGroup(ctx, p.taskTool.treeObserver, ParentSession(ctx), parentID, fmt.Sprintf("parallel_tasks(%d)", len(params.Tasks)))
 
 	type subResult struct {
 		index  int
@@ -180,7 +179,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 
 		wg.Go(func() {
 			modelRef, effortRef := p.taskTool.effectiveProfile(t.Model, t.Effort)
-			itemCtx := withCallContext(ctx, subID, subSinkFor(subID, sink), nil, PlanModeFromContext(ctx))
+			itemCtx := withParallelChildSlot(withCallContext(ctx, subID, subSinkFor(subID, sink), nil, PlanModeFromContext(ctx)), idx)
 			// Route through TaskTool's unified runner so persisted parent sessions
 			// retain one independently readable transcript per child. Headless runs
 			// remain ephemeral and still receive fair bounded previews.
@@ -229,8 +228,9 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 			statuses[i] = parallelTaskSkipped
 			taskErrs[i] = err
 		}
+		// Tasks never dispatched are skipped children in the tree.
+		recordSkippedParallelChildren(ctx, parentID, params.Tasks, statuses)
 	}
-
 	completed := 0
 	for i := range params.Tasks {
 		startTask(i)

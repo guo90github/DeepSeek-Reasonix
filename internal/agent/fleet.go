@@ -257,8 +257,7 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 			defer publishBackgroundEvidence(jobCtx, backgroundEvidence, f.taskTool.workspaceRoot)
 			// The job shares the Execute-level merger so the group lifecycle
 			// events and the child previews ride the same pacing budget.
-			jobCtx = withSubagentProgressMerger(jobCtx, merger)
-			return f.runFleet(jobCtx, groupSink, specs, plan, parentID)
+			return f.runFleet(withTaskTreeSuppress(withSubagentProgressMerger(jobCtx, merger)), groupSink, specs, plan, parentID)
 		})
 		// runFleet (inside the job) owns the terminal and merger close from
 		// here on. Foreground runFleet hands off only the terminal; Execute
@@ -269,7 +268,7 @@ func (f *FleetTool) Execute(ctx context.Context, args json.RawMessage) (result s
 	}
 
 	lifecycleHandoff = true
-	return f.runFleet(ctx, groupSink, specs, plan, groupParentID)
+	return f.runFleet(withTaskTreeObserver(ctx, f.taskTool.treeObserver), groupSink, specs, plan, groupParentID)
 }
 
 func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []ProfileExecSpec, plan fleetPlan, groupParentID string) (result string, err error) {
@@ -288,6 +287,15 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 		}
 	}
 	groupParentID = parentID
+	// Group row: created here for foreground runs (background never stamps
+	// an observer into the job ctx, so the jobs recorder row is the node).
+	observer := taskTreeObserverFromContext(ctx)
+	groupID := ""
+	if slot, ok := taskTreeSlotFromContext(ctx); ok {
+		groupID = slot.groupID
+	} else if observer != nil {
+		ctx, groupID = startTreeGroup(ctx, observer, ParentSession(ctx), groupParentID, fmt.Sprintf("fleet(%d)", len(specs)))
+	}
 	// The Execute-level merger (or a fallback for direct callers) paces the
 	// group; runFleet owns the lifecycle once it starts: running up front
 	// and exactly one terminal after every child settles.
@@ -304,7 +312,9 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 	merger.directStatus(groupParentID, subagentPhaseRunning)
 	var results []fleetItemResult
 	defer func() {
-		merger.directStatus(groupParentID, fleetGroupTerminalPhase(ctx, err, results))
+		phase := fleetGroupTerminalPhase(ctx, err, results)
+		merger.directStatus(groupParentID, phase)
+		finishTreeGroup(ctx, groupParentID, treeGroupFinishState(phase))
 	}()
 
 	n := len(specs)
@@ -337,6 +347,9 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 			// Each fleet item runs as its own task-shaped execution so
 			// transcripts, evidence, and scheduler claims stay independent.
 			itemCtx := withCallContext(ctx, subID, subSinkFor(subID, sink), nil, false)
+			if observer != nil && groupID != "" {
+				itemCtx = withTaskTreeSlot(itemCtx, taskTreeSlot{groupID: groupID, position: idx + 1, dependsOn: fleetDependsOnFor(ctx, observer, parentID, plan, idx)})
+			}
 			out, err := f.taskTool.RunProfileSpec(itemCtx, spec)
 			answer, ref := splitSubagentRunResult(out)
 			res := fleetItemResult{index: idx, profile: spec.Worker.Profile, output: answer, ref: ref, err: err}
@@ -362,6 +375,9 @@ func (f *FleetTool) runFleet(ctx context.Context, sink event.Sink, specs []Profi
 	}
 
 	cancelled := driveFleet(ctx, plan, results, doneCh, wg.Wait, startOne)
+	// Dependency-cut items never ran: persist them as skipped children so the
+	// tree shows the whole plan, not just the executed branches.
+	recordSkippedFleetChildren(ctx, observer, groupID, parentID, specs, plan, results)
 	for _, r := range results {
 		if r.status == fleetItemCancelled || r.status == fleetItemSkipped {
 			cancelled = true

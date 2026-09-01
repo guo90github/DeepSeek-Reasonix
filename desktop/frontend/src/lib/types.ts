@@ -2248,15 +2248,7 @@ export interface UpdateProgress {
 
 // Task Monitor panel types (internal/taskmonitor).
 
-export type TaskState =
-  | "queued"
-  | "running"
-  | "waiting"
-  | "succeeded"
-  | "failed"
-  | "cancelled"
-  | "stale"
-  | string; // forward-compat
+export type TaskState = "queued" | "running" | "waiting" | "succeeded" | "failed" | "cancelled" | "stale" | "skipped" | string; // forward-compat
 
 export type RuntimeState = "unknown" | "alive" | "exited" | string;
 
@@ -2272,6 +2264,14 @@ export interface TaskSnapshot {
   updated_at: string; // ISO 8601
   error_code?: string;
   error_summary?: string;
+  // schema v2 (docs/TASK_TREE_DESIGN.md §5.1)
+  parent_id?: string;
+  position?: number;
+  depends_on?: string[];
+  title?: string;
+  agg_done?: number;
+  agg_total?: number;
+  agg_failed?: number;
 }
 
 export type { TaskActionRequest, TaskCatalogItem, TaskCatalogStatus, TaskEventPage, TaskEventPageRequest, TaskPage, TaskPageRequest } from "./taskCatalogTypes";

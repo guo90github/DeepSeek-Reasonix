@@ -597,6 +597,8 @@ type subagentProgressTracker struct {
 	started    time.Time
 	ownsMerger bool
 	done       bool
+	// treeRec records the run's task-tree row on finish (nil = off).
+	treeRec *treeRecording
 }
 
 // newSubagentProgressTracker creates (or joins) the group merger and returns a
@@ -604,7 +606,7 @@ type subagentProgressTracker struct {
 // already flow through; the tracker's own preview events are emitted through
 // the merger's sink — the same sink the child's dispatch card flowed through —
 // so preview IDs always match the card IDs the frontend sees.
-func newSubagentProgressTracker(ctx context.Context, wrapSink event.Sink) *subagentProgressTracker {
+func newSubagentProgressTracker(ctx context.Context, wrapSink event.Sink, treeRec *treeRecording) *subagentProgressTracker {
 	parentID, parent, _, ok := CallContext(ctx)
 	merger := subagentProgressMergerFromContext(ctx)
 	owns := false
@@ -625,6 +627,7 @@ func newSubagentProgressTracker(ctx context.Context, wrapSink event.Sink) *subag
 		sink:       wrapSink,
 		started:    merger.clock.Now(),
 		ownsMerger: owns,
+		treeRec:    treeRec,
 	}
 }
 
@@ -735,6 +738,7 @@ func (t *subagentProgressTracker) finish(ctxErr, runErr error) {
 	if t.ownsMerger {
 		t.merger.Close()
 	}
+	t.treeRec.finish(ctxErr, runErr)
 }
 
 // subagentProgressMergerKey carries the group merger in the child's context so

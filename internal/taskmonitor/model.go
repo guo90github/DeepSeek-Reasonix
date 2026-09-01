@@ -32,6 +32,7 @@ const (
 	TaskStateFailed    TaskState = "failed"
 	TaskStateCancelled TaskState = "cancelled"
 	TaskStateStale     TaskState = "stale"
+	TaskStateSkipped   TaskState = "skipped"
 
 	RuntimeStateUnknown RuntimeState = "unknown"
 	RuntimeStateAlive   RuntimeState = "alive"
@@ -95,6 +96,7 @@ var ValidTaskStates = map[TaskState]bool{
 	TaskStateFailed:    true,
 	TaskStateCancelled: true,
 	TaskStateStale:     true,
+	TaskStateSkipped:   true,
 }
 
 // IsKnown reports whether s is one of the well-known states.
@@ -103,7 +105,7 @@ func (s TaskState) IsKnown() bool { return ValidTaskStates[s] }
 // Terminal reports whether s is a terminal state.
 func (s TaskState) Terminal() bool {
 	switch s {
-	case TaskStateSucceeded, TaskStateFailed, TaskStateCancelled, TaskStateStale:
+	case TaskStateSucceeded, TaskStateFailed, TaskStateCancelled, TaskStateStale, TaskStateSkipped:
 		return true
 	default:
 		return false
@@ -177,6 +179,16 @@ type TaskSnapshot struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 	ErrorCode      string    `json:"error_code,omitempty"`
 	ErrorSummary   string    `json:"error_summary,omitempty"`
+	// Tree fields (schema v2, docs/TASK_TREE_DESIGN.md §5.1): the parent edge,
+	// sibling order, dependency ids, and the parent's persisted subtree
+	// aggregate. Empty ParentID means root; Position orders siblings.
+	ParentID  string   `json:"parent_id,omitempty"`
+	Position  int      `json:"position,omitempty"`
+	DependsOn []string `json:"depends_on,omitempty"`
+	Title     string   `json:"title,omitempty"`
+	AggDone   int      `json:"agg_done,omitempty"`
+	AggTotal  int      `json:"agg_total,omitempty"`
+	AggFailed int      `json:"agg_failed,omitempty"`
 }
 
 // Validate returns a non-nil error if required fields are missing or
@@ -226,6 +238,20 @@ func (ts TaskSnapshot) Validate() error {
 	if len(ts.ErrorSummary) > maxErrorSummaryLen {
 		return fmt.Errorf("TaskSnapshot.ErrorSummary exceeds max length %d",
 			maxErrorSummaryLen)
+	}
+	if len(ts.ParentID) > maxFieldLen {
+		return fmt.Errorf("TaskSnapshot.ParentID exceeds max length %d", maxFieldLen)
+	}
+	if len(ts.Title) > maxFieldLen {
+		return fmt.Errorf("TaskSnapshot.Title exceeds max length %d", maxFieldLen)
+	}
+	for _, dep := range ts.DependsOn {
+		if len(dep) > maxFieldLen {
+			return fmt.Errorf("TaskSnapshot.DependsOn entry exceeds max length %d", maxFieldLen)
+		}
+	}
+	if ts.Position < 0 {
+		return fmt.Errorf("TaskSnapshot.Position must not be negative, got %d", ts.Position)
 	}
 	return nil
 }

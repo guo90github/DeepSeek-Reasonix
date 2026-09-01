@@ -26,6 +26,7 @@ import (
 	"reasonix/internal/runtimepolicy"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/sessiontemp"
+	"reasonix/internal/taskmonitor"
 	"reasonix/internal/tool"
 	"reasonix/internal/workspacelease"
 )
@@ -285,6 +286,7 @@ type TaskTool struct {
 	bashSandboxEnforced func() bool
 	// mutationObserver is shared with spawned sub-agents for checkpoint capture.
 	mutationObserver *checkpoint.MutationObserver
+	treeObserver     taskmonitor.TaskTreeObserver
 	// recoveryGate is the shared Auto Guard boundary for
 	// this session (root + sub-agents). nil disables recovery in children.
 	recoveryGate RecoveryGate
@@ -696,11 +698,9 @@ func (t *TaskTool) buildTaskSpec(ctx context.Context, prompt, description, profi
 	)
 
 	if !readOnly {
-		// Every writer carries a claim. Omitting write_paths conservatively claims
-		// the whole workspace, including foreground task calls, so they cannot
-		// bypass an already-running background/fleet writer claim. Direct legacy
-		// TaskTool constructions without a workspace/scheduler keep their old
-		// no-claim behavior; production boot always configures both.
+		// Every writer carries a claim. Omitting write_paths conservatively
+		// claims the whole workspace, so concurrent writers cannot bypass a
+		// running claim; legacy no-scheduler constructions keep no-claim.
 		requireClaim := t.scheduler != nil || strings.TrimSpace(t.workspaceRoot) != "" || background || len(writePaths) > 0
 		claims, err := t.resolveWriterClaims(writePaths, requireClaim)
 		if err != nil {
@@ -738,7 +738,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 	// terminal status (completed/cancelled/failed). The background job owns
 	// finish after handoff; every other exit finishes here, including
 	// validation errors and panics.
-	trk := newSubagentProgressTracker(ctx, subSink(ctx))
+	trk := newSubagentProgressTracker(ctx, subSink(ctx), beginTreeRecording(ctx, t, spec))
 	backgroundHandoff := false
 	defer func() {
 		if backgroundHandoff {

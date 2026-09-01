@@ -39621,6 +39621,12 @@ body > .mermaid-diagram--fullscreen {
 .taskmonitor__state--error { color:#ef4444; }
 .taskmonitor__task { border-bottom:1px solid var(--border,#2a2a2a); }
 .taskmonitor__task-head { display:flex; align-items:center; }
+.taskmonitor__subtree-toggle { display:inline-flex; align-items:center; justify-content:center; width:22px; height:28px; padding:0; flex:none; border:0; background:none; color:var(--muted,#888); cursor:pointer; }
+.taskmonitor__subtree-toggle:hover,.taskmonitor__subtree-toggle:focus-visible { color:inherit; outline:none; }
+.taskmonitor__subtree-toggle--empty { visibility:hidden; cursor:default; }
+.taskmonitor__agg { flex:none; margin-left:auto; font-size:10px; font-variant-numeric:tabular-nums; padding:1px 6px; border-radius:8px; background:var(--bg-elev-2,#222); color:var(--muted,#aaa); }
+.taskmonitor__agg--failed { color:#ef4444; background:rgba(239,68,68,.12); }
+.taskmonitor__children { margin-left:10px; padding-left:10px; border-left:1px solid var(--border,#2a2a2a); }
 .taskmonitor__expand { display:flex; align-items:center; gap:6px; width:100%; min-height:32px; padding:6px 12px; background:none; border:0; color:inherit; cursor:pointer; font-size:12px; }
 .taskmonitor__expand:hover,.taskmonitor__expand:focus-visible { background:var(--bg-elev-2); outline:none; }
 .taskmonitor__dot { font-size:10px; width:14px; text-align:center; }

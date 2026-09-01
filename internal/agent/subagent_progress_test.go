@@ -139,7 +139,7 @@ func newTestTracker(t *testing.T, clock progressClock, sink event.Sink, childID 
 	merger := newSubagentProgressMerger(clock, sink, "group-1")
 	t.Cleanup(merger.Close)
 	ctx := withSubagentProgressMerger(withCallContext(context.Background(), childID, sink, nil, false), merger)
-	return newSubagentProgressTracker(ctx, subSink(ctx))
+	return newSubagentProgressTracker(ctx, subSink(ctx), nil)
 }
 
 func progressName(e event.Event) string   { return e.Tool.Name }
@@ -234,7 +234,7 @@ func TestSubagentProgressWrapConvertsAndForwards(t *testing.T) {
 	t.Cleanup(merger.Close)
 	parent := &recordSink{}
 	ctx := withSubagentProgressMerger(withCallContext(context.Background(), "task-1", parent, nil, false), merger)
-	trk := newSubagentProgressTracker(ctx, subSink(ctx))
+	trk := newSubagentProgressTracker(ctx, subSink(ctx), nil)
 	trk.running()
 	wrap := trk.wrap()
 

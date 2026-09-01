@@ -145,7 +145,7 @@ func (r *TaskRecorder) RecordStart(id, kind, label string) {
 	}
 	r.rememberMonitorID(id, monitorID)
 	snap := TaskSnapshot{
-		SchemaVersion:     1,
+		SchemaVersion:     2,
 		TaskID:            monitorID,
 		JobID:             id,
 		SessionID:         sessionID,

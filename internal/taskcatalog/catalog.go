@@ -156,10 +156,23 @@ CREATE INDEX idx_task_events_page ON task_events(project_key,task_id,sequence);
 `
 
 func migrations() []projectiondb.Migration {
-	return []projectiondb.Migration{{Version: 1, Apply: func(ctx context.Context, tx *sql.Tx) error {
-		_, err := tx.ExecContext(ctx, schema)
-		return err
-	}}}
+	return []projectiondb.Migration{
+		{Version: 1, Apply: func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, schema)
+			return err
+		}},
+		// Task tree (docs/TASK_TREE_DESIGN.md §5.3): parent edge + persisted
+		// subtree aggregates; the v1 label column is populated from Title.
+		{Version: 2, Apply: func(ctx context.Context, tx *sql.Tx) error {
+			_, err := tx.ExecContext(ctx, `
+ALTER TABLE task_snapshots ADD COLUMN parent_id TEXT NOT NULL DEFAULT '';
+ALTER TABLE task_snapshots ADD COLUMN agg_done INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE task_snapshots ADD COLUMN agg_total INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE task_snapshots ADD COLUMN agg_failed INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX IF NOT EXISTS idx_task_parent ON task_snapshots(project_key,parent_id);`)
+			return err
+		}},
+	}
 }
 
 func Open(ctx context.Context, path string) (*Catalog, error) {
@@ -424,12 +437,14 @@ func (c *Catalog) upsertSnapshot(ctx context.Context, project Project, task task
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO task_snapshots(project_key,task_id,session_id,job_id,state,runtime_state,runtime_lease_until,version,
-        created_at,updated_at,error_code,snapshot_fingerprint,snapshot_json,health,missing_since,seen_generation) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'ok',0,?)
+        created_at,updated_at,error_code,snapshot_fingerprint,snapshot_json,health,missing_since,seen_generation,parent_id,agg_done,agg_total,agg_failed,label) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'ok',0,?,?,?,?,?,?)
         ON CONFLICT(project_key,task_id) DO UPDATE SET session_id=excluded.session_id,job_id=excluded.job_id,state=excluded.state,
         runtime_state=excluded.runtime_state,runtime_lease_until=excluded.runtime_lease_until,version=excluded.version,created_at=excluded.created_at,
         updated_at=excluded.updated_at,error_code=excluded.error_code,snapshot_fingerprint=excluded.snapshot_fingerprint,snapshot_json=excluded.snapshot_json,
-        health='ok',missing_since=0,seen_generation=excluded.seen_generation`, project.Key, task.TaskID, task.SessionID, task.JobID, task.State,
-		task.RuntimeState, lease, task.Version, task.CreatedAt.UnixMilli(), task.UpdatedAt.UnixMilli(), task.ErrorCode, hex.EncodeToString(hash[:]), b, generation)
+        health='ok',missing_since=0,seen_generation=excluded.seen_generation,parent_id=excluded.parent_id,agg_done=excluded.agg_done,
+        agg_total=excluded.agg_total,agg_failed=excluded.agg_failed,label=excluded.label`, project.Key, task.TaskID, task.SessionID, task.JobID, task.State,
+		task.RuntimeState, lease, task.Version, task.CreatedAt.UnixMilli(), task.UpdatedAt.UnixMilli(), task.ErrorCode, hex.EncodeToString(hash[:]), b, generation,
+		task.ParentID, task.AggDone, task.AggTotal, task.AggFailed, task.Title)
 	if err != nil {
 		_ = tx.Rollback()
 		return err
