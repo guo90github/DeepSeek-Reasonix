@@ -1,17 +1,37 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent as ReactKeyboardEvent, PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import { app } from "../lib/bridge";
 import { onAuditChunk, onAuditDone, onAuditRequest, type AuditChunkEvent, type AuditRequestPayload } from "../lib/auditStream";
 import { useT } from "../lib/i18n";
+import { loadLayoutSize, saveLayoutSize } from "../lib/layoutPreferences";
+import { createRafResizeUpdater } from "../lib/resizeDrag";
 import type { event } from "../../wailsjs/go/models";
 
 type AuditStatus = "loading" | "streaming" | "done" | "error";
 
+const AUDIT_DIALOG_MIN_W = 440;
+const AUDIT_DIALOG_MAX_W = 1080;
+const AUDIT_DIALOG_MIN_H = 360;
+const AUDIT_DIALOG_MAX_H = 900;
+const AUDIT_DIALOG_MAX_RATIO = 0.9;
+
+function clampAuditSize(width: number, height: number, viewportW = 1440, viewportH = 900): { width: number; height: number } {
+  const maxW = Math.max(AUDIT_DIALOG_MIN_W, Math.min(AUDIT_DIALOG_MAX_W, Math.floor(viewportW * AUDIT_DIALOG_MAX_RATIO)));
+  const maxH = Math.max(AUDIT_DIALOG_MIN_H, Math.min(AUDIT_DIALOG_MAX_H, Math.floor(viewportH * AUDIT_DIALOG_MAX_RATIO)));
+  return {
+    width: Math.min(maxW, Math.max(AUDIT_DIALOG_MIN_W, Math.round(width))),
+    height: Math.min(maxH, Math.max(AUDIT_DIALOG_MIN_H, Math.round(height))),
+  };
+}
+
 const FINDING_KEYS = {
   contradiction: "audit.typeContradiction",
-  hallucination: "audit.typeHallucination",
+  factual_error: "audit.typeFactualError",
+  invalid_inference: "audit.typeInvalidInference",
   redundancy: "audit.typeRedundancy",
   instruction_drift: "audit.typeDrift",
+  omission: "audit.typeOmission",
 } as const;
 
 // AuditSection is a reusable collapsed block (header + chevron + optional body).
@@ -67,9 +87,11 @@ function AuditVerdict({ totals, threshold, t }: { totals: event.ReasoningAuditTo
         <span className={`audit-badge${low ? " audit-badge--warn" : ""}`}>{low ? t("audit.attention") : t("audit.pass")}</span>
         <span className="audit__issues">
           {t("audit.contradiction", { n: String(totals.contradiction ?? 0) })} ·{" "}
-          {t("audit.hallucination", { n: String(totals.hallucination ?? 0) })} ·{" "}
+          {t("audit.factualError", { n: String(totals.factualError ?? 0) })} ·{" "}
+          {t("audit.invalidInference", { n: String(totals.invalidInference ?? 0) })} ·{" "}
           {t("audit.redundancy", { n: String(totals.redundancy ?? 0) })} ·{" "}
-          {t("audit.drift", { n: String(totals.instructionDrift ?? 0) })}
+          {t("audit.drift", { n: String(totals.instructionDrift ?? 0) })} ·{" "}
+          {t("audit.omission", { n: String(totals.omission ?? 0) })}
         </span>
         <AuditMeta totals={totals} t={t} />
       </div>
@@ -109,6 +131,19 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
   const [showInput, setShowInput] = useState(false);
   const [showTech, setShowTech] = useState(false);
   const [threshold, setThreshold] = useState(0.6);
+  const [dialogSize, setDialogSize] = useState(() => {
+    const width = loadLayoutSize("auditDialogWidth", 680, (v) => clampAuditSize(v, 0).width);
+    const height = loadLayoutSize("auditDialogHeight", 560, (v) => clampAuditSize(0, v).height);
+    return { width, height };
+  });
+  const [resizing, setResizing] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const resizeRef = useRef<HTMLButtonElement>(null);
+
+  const dialogStyle = useMemo(
+    () => ({ "--audit-dialog-w": `${dialogSize.width}px`, "--audit-dialog-h": `${dialogSize.height}px` }) as CSSProperties,
+    [dialogSize],
+  );
 
   const closeRef = useRef<HTMLButtonElement>(null);
   const streaming = status === "streaming";
@@ -185,6 +220,69 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
 
   const hasThink = think.trim().length > 0;
 
+  // startResize drags the dialog's bottom-right corner to resize width+height.
+  // Two RAF updaters (one per dimension) keep the live resize cheap; the final
+  // size is clamped and persisted on release.
+  const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    event.preventDefault();
+    setResizing(true);
+    let next = { ...dialogSize };
+    const liveW = createRafResizeUpdater({ target: dialog, separator: resizeRef.current, cssVar: "--audit-dialog-w" });
+    const liveH = createRafResizeUpdater({ target: dialog, separator: resizeRef.current, cssVar: "--audit-dialog-h" });
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const onMove = (moveEvent: PointerEvent) => {
+      next = clampAuditSize(
+        dialogSize.width + (moveEvent.clientX - startX),
+        dialogSize.height + (moveEvent.clientY - startY),
+        window.innerWidth,
+        window.innerHeight,
+      );
+      liveW.schedule(next.width);
+      liveH.schedule(next.height);
+    };
+    const onDone = () => {
+      liveW.flush();
+      liveH.flush();
+      setDialogSize(next);
+      saveLayoutSize("auditDialogWidth", next.width);
+      saveLayoutSize("auditDialogHeight", next.height);
+      setResizing(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onDone);
+      window.removeEventListener("pointercancel", onDone);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+    document.body.style.cursor = "nwse-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onDone);
+    window.addEventListener("pointercancel", onDone);
+  };
+
+  const onResizeKey = (e: ReactKeyboardEvent<HTMLButtonElement>) => {
+    const step = e.shiftKey ? 40 : 12;
+    const grow = e.key === "ArrowRight" || e.key === "ArrowDown";
+    if (e.key === "ArrowRight" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const delta = grow ? step : -step;
+      const next = clampAuditSize(dialogSize.width + delta, dialogSize.height + delta, window.innerWidth, window.innerHeight);
+      setDialogSize(next);
+      saveLayoutSize("auditDialogWidth", next.width);
+      saveLayoutSize("auditDialogHeight", next.height);
+    } else if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      const next = e.key === "Home" ? { width: AUDIT_DIALOG_MIN_W, height: AUDIT_DIALOG_MIN_H } : clampAuditSize(AUDIT_DIALOG_MAX_W, AUDIT_DIALOG_MAX_H);
+      setDialogSize(next);
+      saveLayoutSize("auditDialogWidth", next.width);
+      saveLayoutSize("auditDialogHeight", next.height);
+    }
+  };
+
   return createPortal(
     <div
       className="modal-backdrop reasonix-audit-backdrop"
@@ -193,7 +291,14 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal reasonix-audit-dialog" role="dialog" aria-modal="true" aria-label={t("audit.modalTitle")}>
+      <div
+        ref={dialogRef}
+        className={`modal reasonix-audit-dialog${resizing ? " is-resizing" : ""}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label={t("audit.modalTitle")}
+        style={dialogStyle}
+      >
         <header className="reasonix-audit-dialog__header">
           <span className="modal__title">{t("audit.modalTitle")}</span>
           <button ref={closeRef} type="button" className="reasonix-audit-dialog__close" onClick={onClose} aria-label={t("common.close")}>
@@ -253,6 +358,27 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
             </>
           )}
         </div>
+        <button
+          ref={resizeRef}
+          type="button"
+          className="reasonix-audit-dialog__resize"
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label={t("audit.resize")}
+          aria-valuemin={AUDIT_DIALOG_MIN_W}
+          aria-valuemax={AUDIT_DIALOG_MAX_W}
+          aria-valuenow={dialogSize.width}
+          onPointerDown={startResize}
+          onKeyDown={onResizeKey}
+          onDoubleClick={() => {
+            const next = { width: 680, height: 560 };
+            setDialogSize(next);
+            saveLayoutSize("auditDialogWidth", next.width);
+            saveLayoutSize("auditDialogHeight", next.height);
+          }}
+        >
+          <span aria-hidden="true" />
+        </button>
       </div>
     </div>,
     document.body,

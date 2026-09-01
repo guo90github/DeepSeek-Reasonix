@@ -3,9 +3,9 @@
     "banner": 15,
     "commented-code": 0,
     "complexity": 2008,
-    "essay": 1961,
-    "file-size": 108908,
-    "function-size": 8655,
+    "essay": 1959,
+    "file-size": 108863,
+    "function-size": 8656,
     "layering": 1,
     "marker": 0,
     "narrative": 64,
@@ -25,7 +25,7 @@
     "desktop/app.go": {
       "complexity": 57,
       "essay": 64,
-      "file-size": 11097,
+      "file-size": 11092,
       "function-size": 343,
       "struct-state": 15
     },
@@ -111,7 +111,7 @@
       "file-size": 1088
     },
     "desktop/frontend/src/components/Message.tsx": {
-      "file-size": 45
+      "file-size": 49
     },
     "desktop/frontend/src/components/ProjectTree.tsx": {
       "file-size": 1444
@@ -144,7 +144,7 @@
       "file-size": 180
     },
     "desktop/frontend/src/lib/bridge.ts": {
-      "file-size": 5000
+      "file-size": 4968
     },
     "desktop/frontend/src/lib/crash.ts": {
       "file-size": 225
@@ -263,8 +263,8 @@
     },
     "desktop/tabs.go": {
       "complexity": 39,
-      "essay": 70,
-      "file-size": 7816,
+      "essay": 68,
+      "file-size": 7804,
       "function-size": 364,
       "struct-state": 23
     },
@@ -866,6 +866,9 @@
     },
     "internal/config/render_test.go": {
       "test-file-size": 759
+    },
+    "internal/control/analyze_reasoning.go": {
+      "function-size": 1
     },
     "internal/control/approval.go": {
       "essay": 5,

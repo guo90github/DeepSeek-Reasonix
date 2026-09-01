@@ -8,7 +8,9 @@ export type LayoutSizeKey =
   | "workspaceTreeWidth"
   | "composerHeight"
   | "drawerWidth"
-  | "settingsDrawerWidth";
+  | "settingsDrawerWidth"
+  | "auditDialogWidth"
+  | "auditDialogHeight";
 
 type LayoutPreferences = {
   sizes?: Partial<Record<LayoutSizeKey, number>>;
@@ -27,6 +29,8 @@ const LEGACY_SIZE_KEYS: Record<LayoutSizeKey, string[]> = {
   composerHeight: ["reasonix.composerHeight"],
   drawerWidth: ["reasonix.drawer.width"],
   settingsDrawerWidth: ["reasonix.settingsDrawer.width"],
+  auditDialogWidth: [],
+  auditDialogHeight: [],
 };
 
 type ClampSize = (value: number) => number;

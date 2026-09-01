@@ -25,18 +25,10 @@ const (
 )
 
 // reasoningAuditSystemPrompt instructs the standalone evaluator to score a
-// thinking chain against four failure classes and return a compact JSON
-// verdict. The evaluator is deterministic (temperature 0) and never thinks.
-const reasoningAuditSystemPrompt = `你是一名称职的思考链质量审阅者。对给定的模型思考过程，按以下四类计分并输出 JSON：
-1. contradiction：思考过程中互相矛盾或前后抵消的中间结论个数
-2. hallucination：缺乏依据或与已知事实冲突的断言个数
-3. redundancy：重复复述、来回兜圈造成的冗余片段个数
-4. instruction_drift：偏离用户指令或目标的做法个数
-5. explanation：用 1-2 句说明评分依据，指出最主要的问题或优点，使用用户使用的语言
-6. findings：可选数组，列出被指出的具体问题，每项 {"type":"contradiction|hallucination|redundancy|instruction_drift","quote":"被审计链中对应原句"}，每类最多 2 条；无则省略
-输出严格为单个 JSON 对象，不要任何解释或代码块：
-{"score":0.0,"contradiction":0,"hallucination":0,"redundancy":0,"instruction_drift":0,"explanation":"评分依据","findings":[]}
-score 是 0..1 的综合质量分，0 为最差，1 为最优。若思考链很短或很干净，对应项为 0，score 接近 1。`
+// thinking chain against six failure classes and return a structured JSON
+// verdict (see audit_system_prompt.md, which is the verbatim system prompt).
+// The evaluator is deterministic (temperature 0) and never thinks.
+var reasoningAuditSystemPrompt = auditSystemPromptContent
 
 // AnalyzeReasoning scores one turn's reasoning chain with the dedicated audit
 // model (AuditModel), which is deliberately independent of the session model.
@@ -135,9 +127,12 @@ func (c *Controller) AuditStream(
 	var verdict struct {
 		Score            float64              `json:"score"`
 		Contradiction    int                  `json:"contradiction"`
-		Hallucination    int                  `json:"hallucination"`
+		FactualError     int                  `json:"factual_error"`
+		InvalidInference int                  `json:"invalid_inference"`
 		Redundancy       int                  `json:"redundancy"`
 		InstructionDrift int                  `json:"instruction_drift"`
+		Omission         int                  `json:"omission"`
+		Hallucination    int                  `json:"hallucination"` // legacy four-class output
 		Explanation      string               `json:"explanation"`
 		Findings         []event.AuditFinding `json:"findings"`
 	}
@@ -147,14 +142,18 @@ func (c *Controller) AuditStream(
 	if verdict.Score < 0 || verdict.Score > 1 {
 		return zero, fmt.Errorf("reasoning audit: verdict score %g out of range", verdict.Score)
 	}
-	issues := verdict.Contradiction + verdict.Hallucination + verdict.Redundancy + verdict.InstructionDrift
+	issues := verdict.Contradiction + verdict.FactualError + verdict.InvalidInference +
+		verdict.Redundancy + verdict.InstructionDrift + verdict.Omission
 	totals := event.ReasoningAuditTotals{
 		Audited:          true,
 		ElapsedMs:        elapsed,
 		Contradiction:    verdict.Contradiction,
-		Hallucination:    verdict.Hallucination,
+		FactualError:     verdict.FactualError,
+		InvalidInference: verdict.InvalidInference,
 		Redundancy:       verdict.Redundancy,
 		InstructionDrift: verdict.InstructionDrift,
+		Omission:         verdict.Omission,
+		Hallucination:    verdict.Hallucination,
 		Issues:           issues,
 		Score:            verdict.Score,
 		Explanation:      verdict.Explanation,

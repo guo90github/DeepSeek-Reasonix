@@ -62,17 +62,18 @@ func auditTestController(t *testing.T, stub *reasoningAuditTestProvider) *Contro
 }
 
 func TestAnalyzeReasoningRunsOnDedicatedModel(t *testing.T) {
-	stub := &reasoningAuditTestProvider{verdict: `{"score":0.4,"contradiction":1,"hallucination":2,"redundancy":3,"instruction_drift":0}`}
+	stub := &reasoningAuditTestProvider{verdict: `{"score":0.4,"contradiction":1,"factual_error":2,"invalid_inference":1,"redundancy":3,"instruction_drift":0,"omission":1}`}
 	c := auditTestController(t, stub)
 	got, err := c.AnalyzeReasoning(context.Background(), "先假设 A，再否定 A，然后又重复假设")
 	if err != nil {
 		t.Fatalf("AnalyzeReasoning: %v", err)
 	}
-	if got.Score != 0.4 || got.Contradiction != 1 || got.Hallucination != 2 || got.Redundancy != 3 || got.InstructionDrift != 0 {
-		t.Fatalf("totals = %+v, want score 0.4 / 1 / 2 / 3 / 0", got)
+	if got.Score != 0.4 || got.Contradiction != 1 || got.FactualError != 2 || got.InvalidInference != 1 ||
+		got.Redundancy != 3 || got.InstructionDrift != 0 || got.Omission != 1 {
+		t.Fatalf("totals = %+v, want score 0.4 / 1 / 2 / 1 / 3 / 0 / 1", got)
 	}
-	if got.Issues != 6 {
-		t.Fatalf("issues = %d, want 6", got.Issues)
+	if got.Issues != 8 {
+		t.Fatalf("issues = %d, want 8", got.Issues)
 	}
 	if !got.Audited {
 		t.Fatal("audited = false, want true")

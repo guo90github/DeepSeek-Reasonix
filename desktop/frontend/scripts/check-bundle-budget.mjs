@@ -178,7 +178,8 @@ if (initialCSS.length > 0) {
 // states bring the merged shell to roughly 115.7 KiB gzip.
 // Reasoning-audit button/card CSS adds a bounded 0.3 KiB; step to 117.0 KiB
 // (personal use — no production shipping constraint).
-assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 117.0 * 1024);
+// Audit dialog resize handle + six-class display add ~0.3 KiB; step to 117.4 KiB.
+assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 117.4 * 1024);
 if (localeChunks.length !== 2) {
   throw new Error(`expected 2 on-demand Chinese locale chunks, found ${localeChunks.length}`);
 }
@@ -264,6 +265,7 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // locale keys); step to 2426.2 KiB.
 // Manual audit (AuditTurn binding + settings block + result card) adds ~2.8 KiB
 // raw; step to 2429.2 KiB.
-const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_433.0 : 2_433.0;
+// Audit dialog resize + six-class verdict add ~0.8 KiB; step to 2434.0 KiB.
+const rawInitialBudgetKiB = process.env.REASONIX_CHANNEL === "test" ? 2_434.0 : 2_434.0;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);

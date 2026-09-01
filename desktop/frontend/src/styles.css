@@ -24523,13 +24523,46 @@ body > .mermaid-diagram--fullscreen {
   z-index: var(--z-overlay-backdrop);
 }
 .reasonix-audit-dialog {
-  max-width: 680px;
-  width: min(680px, 100%);
+  position: relative;
+  width: var(--audit-dialog-w, min(680px, 100%));
+  max-width: min(680px, 100%);
+  height: var(--audit-dialog-h, min(560px, 78vh));
   max-height: min(78vh, 720px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
   color: var(--fg);
   animation: audit-in 0.18s ease-out;
+}
+.reasonix-audit-dialog.is-resizing {
+  user-select: none;
+  cursor: nwse-resize;
+}
+.reasonix-audit-dialog__resize {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+.reasonix-audit-dialog__resize span {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-2, #8a8f98);
+  border-bottom: 2px solid var(--text-2, #8a8f98);
+  border-bottom-right-radius: 2px;
+}
+.reasonix-audit-dialog__resize:hover span,
+.reasonix-audit-dialog__resize:focus-visible span {
+  border-color: var(--accent);
 }
 @keyframes audit-in {
   from {
