@@ -34,11 +34,11 @@ func (*ReviewReportTool) Schema() json.RawMessage {
 			"kind":{"type":"string","description":"review | security"},
 			"verdict":{"type":"string","description":"pass | warn | block"},
 			"reviewed_paths":{"type":"array","items":{"type":"string"},"description":"Production paths covered by this review"},
-			"findings":{"type":"array","items":{"type":"object","properties":{
-				"severity":{"type":"string"},
-				"summary":{"type":"string"},
-				"path":{"type":"string"},
-				"line":{"type":"integer"}
+			"findings":{"type":"array","description":"Detailed findings from the review","items":{"type":"object","properties":{
+				"severity":{"type":"string","description":"block | critical | error forces a block, warn | warning | medium is warn-level, info (default) is informational"},
+				"summary":{"type":"string","description":"What the finding is — required"},
+				"path":{"type":"string","description":"Optional file path the finding refers to"},
+				"line":{"type":"integer","description":"Optional 1-based line number in path"}
 			},"required":["severity","summary"]}}
 		},
 		"required":["kind","verdict","reviewed_paths"]

@@ -40,10 +40,10 @@ func (*sessionToolResultTool) Schema() json.RawMessage {
 	return json.RawMessage(`{
 		"type":"object",
 		"properties":{
-			"tool_call_id":{"type":"string"},
-			"result_ref":{"type":"string"},
-			"offset":{"type":"integer","minimum":0},
-			"limit":{"type":"integer","minimum":1,"maximum":24576}
+			"tool_call_id":{"type":"string","description":"The tool call id whose truncated result to page, as shown in the truncation marker (call_id=...)."},
+			"result_ref":{"type":"string","description":"Optional stable ref (tr-...) to disambiguate when the truncated marker carried one (result_ref=...)."},
+			"offset":{"type":"integer","minimum":0,"description":"UTF-8 byte offset to start reading from, on a character boundary. Omit for the beginning; use next_offset from the previous page."},
+			"limit":{"type":"integer","minimum":1,"maximum":24576,"description":"Maximum UTF-8 bytes to return. Defaults to 12288 and is capped at 24576."}
 		},
 		"required":["tool_call_id"]
 	}`)
