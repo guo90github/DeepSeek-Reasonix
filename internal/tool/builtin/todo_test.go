@@ -549,3 +549,96 @@ func TestTodoWriteRejectsUnauthorizedCompletedHistoryRewrite(t *testing.T) {
 		t.Fatalf("unauthorized drop of completed history should be rejected: %v", err)
 	}
 }
+
+func TestTodoWriteAllowsSplittingCurrentItemIntoPhaseAndChild(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{
+		ToolName: "todo_write",
+		Success:  true,
+		Todos:    []evidence.TodoItem{{Content: "Add the parser", Status: "in_progress"}},
+	})
+	ctx := evidence.WithLedger(context.Background(), ledger)
+
+	args := json.RawMessage(`{"todos":[
+		{"content":"Add the parser","status":"pending","level":0},
+		{"content":"write the tokenizer","status":"in_progress","level":1}]}`)
+	if _, err := (todoWrite{}).Execute(ctx, args); err != nil {
+		t.Fatalf("splitting the current item into a phase and an in_progress sub-step should be accepted: %v", err)
+	}
+}
+
+func TestTodoWriteAllowsSplittingCurrentIntoPhaseWithPendingSiblingChild(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{
+		ToolName: "todo_write",
+		Success:  true,
+		Todos:    []evidence.TodoItem{{Content: "Add the parser", Status: "in_progress"}},
+	})
+	ctx := evidence.WithLedger(context.Background(), ledger)
+
+	args := json.RawMessage(`{"todos":[
+		{"content":"Add the parser","status":"pending","level":0},
+		{"content":"write the tokenizer","status":"in_progress","level":1},
+		{"content":"wire the parser","status":"pending","level":1}]}`)
+	if _, err := (todoWrite{}).Execute(ctx, args); err != nil {
+		t.Fatalf("splitting into a phase with a pending sibling child should be accepted: %v", err)
+	}
+}
+
+func TestTodoWriteRejectsRevertingCurrentWithNonCurrentChildren(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{
+		ToolName: "todo_write",
+		Success:  true,
+		Todos:    []evidence.TodoItem{{Content: "Add the parser", Status: "in_progress"}},
+	})
+	ctx := evidence.WithLedger(context.Background(), ledger)
+
+	args := json.RawMessage(`{"todos":[
+		{"content":"Add the parser","status":"pending","level":0},
+		{"content":"write the tokenizer","status":"completed","level":1},
+		{"content":"wire the parser","status":"in_progress","level":1}]}`)
+	if _, err := (todoWrite{}).Execute(ctx, args); err == nil || !strings.Contains(err.Error(), "cannot move back to pending") {
+		t.Fatalf("a pending phase whose first sub-step is not current should be rejected: %v", err)
+	}
+}
+
+func TestTodoWriteRejectsRemovingStepIDWhileUnfinishedWork(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{
+		ToolName: "todo_write",
+		Success:  true,
+		Todos: []evidence.TodoItem{
+			{Content: "Inspect environment", Status: "pending", StepID: "step_01"},
+			{Content: "Write code", Status: "in_progress", StepID: "step_02"},
+		},
+	})
+	ctx := evidence.WithLedger(context.Background(), ledger)
+
+	args := json.RawMessage(`{"todos":[
+		{"content":"Write code","status":"in_progress","step_id":"step_02"}]}`)
+	if _, err := (todoWrite{}).Execute(ctx, args); err == nil || !strings.Contains(err.Error(), "removed its step_id") {
+		t.Fatalf("removing a pending step_id item while work is unfinished should be rejected: %v", err)
+	}
+}
+
+func TestTodoWriteAllowsRemovingStepIDWhenAllCompleted(t *testing.T) {
+	ledger := evidence.NewLedger()
+	ledger.Record(evidence.Receipt{
+		ToolName: "todo_write",
+		Success:  true,
+		Todos: []evidence.TodoItem{
+			{Content: "Inspect environment", Status: "completed", StepID: "step_01"},
+			{Content: "Write code", Status: "completed", StepID: "step_02"},
+		},
+	})
+	ctx := evidence.WithLedger(context.Background(), ledger)
+
+	// Removing the trailing completed item keeps the completed prefix intact,
+	// so cleanup after everything is done stays allowed.
+	args := json.RawMessage(`{"todos":[
+		{"content":"Inspect environment","status":"completed","step_id":"step_01"}]}`)
+	if _, err := (todoWrite{}).Execute(ctx, args); err != nil {
+		t.Fatalf("cleanup after everything completed should be allowed to drop the trailing step_id item: %v", err)
+	}
+}

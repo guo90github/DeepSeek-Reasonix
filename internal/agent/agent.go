@@ -2259,67 +2259,6 @@ func completedMCPConnect(reg *tool.Registry, name string) (string, bool) {
 	return "", false
 }
 
-// recoveryPlanTransition detects structural rewrites of an active canonical
-// task list. Initial plans and progress-only status updates stay on the fast
-// path; changing step identity, order, or hierarchy while work remains is a
-// semantic transition for the independent Auto reviewer.
-func (a *Agent) recoveryPlanTransition(toolName string, args json.RawMessage) (bool, string, string, string) {
-	if a == nil || toolName != "todo_write" || a.planMode.Load() {
-		return false, "", "", ""
-	}
-	before := a.CanonicalTodoState()
-	if len(before) == 0 || len(evidence.IncompleteTodos(before)) == 0 {
-		return false, "", "", ""
-	}
-	after := evidence.ReceiptFromToolCall("todo_write", args, true, true).Todos
-	if evidence.ValidateSerialTodos(after) != nil {
-		return false, "", "", ""
-	}
-	if len(after) == 0 {
-		return true, planReviewText(before), planReviewText(after), planTransitionDiff(before, after)
-	}
-	if !evidence.PreservesCompletedTodoPositions(before, after) {
-		// Let todo_write report malformed or invalid state directly; an invalid
-		// task list is not a meaningful plan proposal for the reviewer.
-		return false, "", "", ""
-	}
-	if samePlanStructure(before, after) {
-		return false, "", "", ""
-	}
-	return true, planReviewText(before), planReviewText(after), planTransitionDiff(before, after)
-}
-
-func samePlanStructure(a, b []evidence.TodoItem) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i].Level != b[i].Level || normalizePlanStep(a[i].Content) != normalizePlanStep(b[i].Content) {
-			return false
-		}
-	}
-	return true
-}
-
-func normalizePlanStep(s string) string {
-	return strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
-}
-
-func planReviewText(todos []evidence.TodoItem) string {
-	var b strings.Builder
-	for i, todo := range todos {
-		indent := ""
-		if todo.Level == 1 {
-			indent = "  "
-		}
-		fmt.Fprintf(&b, "%s%d. %s [%s]", indent, i+1, normalizePlanStep(todo.Content), canonicalTodoStatus(todo.Status))
-		if i+1 < len(todos) {
-			b.WriteByte('\n')
-		}
-	}
-	return b.String()
-}
-
 func recoveryTaskScopeID(deliveryScopeID string, runSeq uint64) string {
 	if scope := strings.TrimSpace(deliveryScopeID); scope != "" {
 		return "goal:" + scope

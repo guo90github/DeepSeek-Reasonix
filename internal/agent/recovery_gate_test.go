@@ -64,6 +64,41 @@ func TestRecoveryPlanTransitionIgnoresCompletedPriorPlan(t *testing.T) {
 	}
 }
 
+func TestRecoveryPlanTransitionAllowsPureSplitOfCurrentItem(t *testing.T) {
+	a := &Agent{}
+	a.setTodoState([]evidence.TodoItem{{Content: "Implement parser", Status: "in_progress"}})
+	split := json.RawMessage(`{"todos":[
+		{"content":"Implement parser","status":"pending","level":0},
+		{"content":"write the lexer","status":"in_progress","level":1}]}`)
+	if changed, _, _, _ := a.recoveryPlanTransition("todo_write", split); changed {
+		t.Fatal("splitting the current item into a phase and sub-step must not invoke the plan reviewer")
+	}
+}
+
+func TestRecoveryPlanTransitionReviewsSplitWithExtraChanges(t *testing.T) {
+	a := &Agent{}
+	a.setTodoState([]evidence.TodoItem{
+		{Content: "Implement parser", Status: "in_progress"},
+		{Content: "Run tests", Status: "pending"},
+	})
+	for _, args := range []string{
+		`{"todos":[
+			{"content":"Implement parser revamped","status":"pending","level":0},
+			{"content":"write the lexer","status":"in_progress","level":1},
+			{"content":"Run tests","status":"pending"}]}`,
+		`{"todos":[
+			{"content":"Implement parser","status":"pending","level":0},
+			{"content":"write the lexer","status":"in_progress","level":1},
+			{"content":"Run tests","status":"pending"},
+			{"content":"Ship the build","status":"pending"}]}`,
+	} {
+		changed, _, _, _ := a.recoveryPlanTransition("todo_write", json.RawMessage(args))
+		if !changed {
+			t.Fatalf("a split combined with extra changes must stay a plan transition: %s", args)
+		}
+	}
+}
+
 func (g *recordingRecoveryGate) ObserveResult(_ context.Context, observation RecoveryObservation) string {
 	g.observation = observation
 	return g.guidance

@@ -128,15 +128,16 @@ func verifyUniqueStepIDs(todos []todoItem) error {
 }
 
 // verifyStepIDsPreserved rejects a rewrite that keeps a step but drops the id it
-// arrived with. Without this the model can silently return the list to
-// title-and-position identity, which is exactly what a replan invalidates.
+// arrived with, or removes a step entirely while unfinished work remains —
+// either silently returns the list to title-and-position identity, which is
+// exactly what a replan invalidates.
 func verifyStepIDsPreserved(ctx context.Context, todos []todoItem) error {
 	previous := todoBaseline(ctx)
 	if len(previous) == 0 {
 		return nil
 	}
 	next := toEvidenceTodos(todos)
-	for _, todo := range previous {
+	for i, todo := range previous {
 		if todo.StepID == "" {
 			continue
 		}
@@ -144,7 +145,15 @@ func verifyStepIDsPreserved(ctx context.Context, todos []todoItem) error {
 			continue
 		}
 		match, found := evidence.MatchTodoIdentity(todo, next)
-		if !found || match.StepID != "" {
+		if !found {
+			// A removed completed item is the completed-history guard's job;
+			// here only an unfinished item's removal loses a step identity.
+			if strings.TrimSpace(todo.Status) == "completed" || len(evidence.IncompleteTodos(previous)) == 0 {
+				continue
+			}
+			return fmt.Errorf("todo %d %q removed its step_id %q while the plan has unfinished work; re-send it with step_id %q or get host approval to replace the plan", i+1, todo.Content, todo.StepID, todo.StepID)
+		}
+		if match.StepID != "" {
 			continue
 		}
 		return fmt.Errorf("todo %d %q dropped its step_id %q; re-send it with step_id %q so its completion stays attached across retitles and reordering", match.Index, match.Content, todo.StepID, todo.StepID)
@@ -170,10 +179,26 @@ func verifyTodoCurrentContinuity(ctx context.Context, todos []todoItem) error {
 			return fmt.Errorf("current todo %d %q cannot be removed or replaced while it is in_progress; mark it completed or get host approval to replace the plan", i+1, todo.Content)
 		}
 		if match.Status == "pending" || match.Status == "" {
+			if isPurePhaseSplit(match, next) {
+				continue
+			}
 			return fmt.Errorf("current todo %d %q cannot move back to pending; keep it in_progress, mark it completed, or get host approval to replace the plan", i+1, todo.Content)
 		}
 	}
 	return nil
+}
+
+// isPurePhaseSplit reports whether the previous current item kept its identity
+// as a level-0 phase header whose first sub-step is the new current item — the
+// one shape in which an in_progress item may return to pending. Serial
+// validation has already rejected every other arrangement of pending work
+// before the current segment, so this only needs to pin down the split shape.
+func isPurePhaseSplit(match evidence.TodoStepMatch, next []evidence.TodoItem) bool {
+	pos := match.Index - 1
+	if pos < 0 || pos >= len(next) || next[pos].Level != 0 {
+		return false
+	}
+	return pos+1 < len(next) && next[pos+1].Level == 1 && strings.TrimSpace(next[pos+1].Status) == "in_progress"
 }
 
 func verifyCompletedTodoPositions(ctx context.Context, todos []todoItem) error {
