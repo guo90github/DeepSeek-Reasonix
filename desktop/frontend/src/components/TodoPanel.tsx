@@ -124,10 +124,14 @@ export function TodoPanel({
                       tabIndex={0}
                       aria-expanded={subOpen}
                       className={`todobar__chevron${subOpen ? "" : " todobar__chevron--closed"}`}
-                      onClick={() => setCollapsed((value) => ({ ...value, [gi]: !value[gi] }))}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCollapsed((value) => ({ ...value, [gi]: !value[gi] }));
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" || e.key === " ") {
                           e.preventDefault();
+                          e.stopPropagation();
                           setCollapsed((value) => ({ ...value, [gi]: !value[gi] }));
                         }
                       }}
