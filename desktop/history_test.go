@@ -1900,3 +1900,62 @@ func writeHistoryTestSession(t *testing.T, path, prompt string) {
 		t.Fatalf("Save %s: %v", path, err)
 	}
 }
+
+func TestPreviewEventToolResultReturnsFullArchivedToolRecord(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session-events.jsonl")
+	records := []previewEventRecord{
+		{Kind: "model.final", ToolCalls: []previewToolCall{{ID: "call_1", Name: "bash", Arguments: `{"command":"pwd"}`}}},
+		{Kind: "tool.result", CallID: "call_1", Output: "/work\n"},
+		{Kind: "model.final", ToolCalls: []previewToolCall{{ID: "call_2", Name: "grep", Arguments: `{"pattern":"sync.Pool"}`}}},
+		{Kind: "tool.result", CallID: "call_2", Output: "sync/pool.go:42\n"},
+	}
+	var sb strings.Builder
+	for _, rec := range records {
+		data, err := json.Marshal(rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sb.Write(data)
+		sb.WriteByte('\n')
+	}
+	if err := os.WriteFile(path, []byte(sb.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, ok := previewEventToolResult(path, "call_2")
+	if !ok {
+		t.Fatal("previewEventToolResult returned ok=false for present tool call")
+	}
+	if got.Args != `{"pattern":"sync.Pool"}` {
+		t.Errorf("args = %q, want grep args", got.Args)
+	}
+	if got.Output != "sync/pool.go:42\n" {
+		t.Errorf("output = %q, want grep output", got.Output)
+	}
+}
+
+func TestPreviewEventToolResultMissingToolReturnsNotOK(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session-events.jsonl")
+	records := []previewEventRecord{
+		{Kind: "model.final", ToolCalls: []previewToolCall{{ID: "call_1", Name: "bash", Arguments: `{"command":"pwd"}`}}},
+		{Kind: "tool.result", CallID: "call_1", Output: "/work\n"},
+	}
+	var sb strings.Builder
+	for _, rec := range records {
+		data, err := json.Marshal(rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		sb.Write(data)
+		sb.WriteByte('\n')
+	}
+	if err := os.WriteFile(path, []byte(sb.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, ok := previewEventToolResult(path, "missing"); ok {
+		t.Fatal("previewEventToolResult returned ok=true for absent tool call")
+	}
+}

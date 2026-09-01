@@ -1,7 +1,7 @@
 import { lazy, Suspense, type CSSProperties, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Virtuoso, type ListItem } from "react-virtuoso";
 import type { ControllerLiveStore, HistoryLoadTrigger, HistoryMutation, Item, LiveStream } from "../lib/useController";
-import type { CheckpointMeta, WireCompletionSummary } from "../lib/types";
+import type { CheckpointMeta, WireCompletionSummary, WireShellExecution } from "../lib/types";
 import type { InvocationMetadataMap } from "../lib/invocationDisplay";
 import { useT } from "../lib/i18n";
 import { InvocationMetadataContext, TurnActions, UserMessage } from "./Message";
@@ -96,6 +96,7 @@ export function Transcript({
   live: liveProp,
   liveStore,
   tabId,
+  loadToolResult,
   geometrySessionKey,
   footerHeight = 0,
   onPrompt,
@@ -133,6 +134,7 @@ export function Transcript({
   live?: LiveStream;
   liveStore?: ControllerLiveStore;
   tabId?: string;
+  loadToolResult?: (toolID: string) => Promise<{ args: string; output?: string; execution?: WireShellExecution } | null>;
   geometrySessionKey?: string;
   footerHeight?: number;
   onPrompt: (text: string) => void;
@@ -682,19 +684,19 @@ export function Transcript({
       case "tool":
         return (
           <div className="turn-collapse__body">
-            <ToolCard item={row.item} subcalls={subcallsByParent.get(row.item.id)} tabId={tabId} />
+            <ToolCard item={row.item} subcalls={subcallsByParent.get(row.item.id)} tabId={tabId} loadToolResult={loadToolResult} />
           </div>
         );
       case "tool-batch":
         return (
           <div className="turn-collapse__body">
-            <ReadOnlyBatch items={row.items} subcalls={subcallsByParent} tabId={tabId} />
+            <ReadOnlyBatch items={row.items} subcalls={subcallsByParent} tabId={tabId} loadToolResult={loadToolResult} />
           </div>
         );
       case "tool-group":
         return (
           <div className="turn-collapse__body">
-            <ToolGroup kind={row.groupKind} items={row.items} subcalls={subcallsByParent} tabId={tabId} />
+            <ToolGroup kind={row.groupKind} items={row.items} subcalls={subcallsByParent} tabId={tabId} loadToolResult={loadToolResult} />
           </div>
         );
       case "phase":
@@ -786,6 +788,7 @@ export function Transcript({
     subcallsByParent,
     t,
     tabId,
+    loadToolResult,
     turnStartAt,
   ]);
   const renderVirtuosoRow = useCallback(

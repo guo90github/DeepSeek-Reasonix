@@ -490,6 +490,7 @@ export function SplitWorkspace({
             scrollerRef={setProcScroller}
             hoveredIndex={hoveredIndex}
             onHoverIndex={setHoveredIndex}
+            tabId={tabId}
           />
         </div>
         {isNarrow && !processOpen && (

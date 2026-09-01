@@ -25,6 +25,7 @@ function ProcessTurnCard({
   mirrorActive,
   onPointerEnter,
   onPointerLeave,
+  tabId,
 }: {
   turn: ProcessPaneTurn;
   open: boolean;
@@ -32,6 +33,7 @@ function ProcessTurnCard({
   mirrorActive: boolean;
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
+  tabId?: string;
 }) {
   return (
     <article className={["process-pane__turn", open ? "process-pane__turn--open" : "process-pane__turn--collapsed", mirrorActive ? "process-pane__turn--mirror" : ""].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
@@ -64,7 +66,7 @@ function ProcessTurnCard({
                 if (item.kind === "tool") {
                   return (
                     <div className="turn-collapse__body" key={item.id}>
-                      <ToolCard item={item} subcalls={undefined} tabId={undefined} />
+                      <ToolCard item={item} subcalls={undefined} tabId={tabId} />
                     </div>
                   );
                 }
@@ -110,6 +112,7 @@ export function ProcessPane({
   scrollerRef,
   hoveredIndex,
   onHoverIndex,
+  tabId,
 }: {
   turns: readonly ProcessPaneTurn[];
   listRef?: Ref<VirtuosoHandle>;
@@ -117,6 +120,7 @@ export function ProcessPane({
   scrollerRef?: (node: HTMLElement | Window | null) => void;
   hoveredIndex?: number | null;
   onHoverIndex?: (index: number | null) => void;
+  tabId?: string;
 }) {
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(new Map());
   const toggle = useCallback((key: string) => {
@@ -135,8 +139,9 @@ export function ProcessPane({
       mirrorActive={hoveredIndex === index}
       onPointerEnter={() => onHoverIndex?.(index)}
       onPointerLeave={() => onHoverIndex?.(null)}
+      tabId={tabId}
     />
-  ), [hoveredIndex, onHoverIndex, overrides, toggle, turns.length]);
+  ), [hoveredIndex, onHoverIndex, overrides, tabId, toggle, turns.length]);
 
   // Tail-follow replaces Virtuoso's followOutput: stream chunks and the
   // reasoning fold (an internal row state change, not a data change) re-arm a

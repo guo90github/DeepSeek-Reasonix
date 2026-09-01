@@ -178,7 +178,7 @@ function splitPreview(text: string, n: number): { preview: string; total: number
 // ToolCard renders one tool call. `subcalls` are sub-agent calls nested under a
 // `task` card (their ParentID points at this call); they render inline, live, so
 // the sub-agent's work is visible as it happens.
-export const ToolCard = memo(function ToolCard({ item, subcalls, tabId, displayName }: { item: ToolItem; subcalls?: ToolItem[]; tabId?: string; displayName?: string }) {
+export const ToolCard = memo(function ToolCard({ item, subcalls, tabId, displayName, loadToolResult }: { item: ToolItem; subcalls?: ToolItem[]; tabId?: string; displayName?: string; loadToolResult?: (toolID: string) => Promise<{ args: string; output?: string; execution?: ToolItem["execution"] } | null> }) {
   const t = useT();
   const beginUserResize = useTranscriptUserResizeIntent();
   const nested = subcalls ?? [];
@@ -293,7 +293,7 @@ export const ToolCard = memo(function ToolCard({ item, subcalls, tabId, displayN
   // edit diffs are the point of the card, so they're shown inline; everything
   // else folds its args/output away by default.  Open while running so the
   // user sees progress; closed by default once settled.
-  const hasArchivedOnDemandBody = Boolean(item.dataArchived && tabId);
+  const hasArchivedOnDemandBody = Boolean(item.dataArchived && (tabId || loadToolResult));
   const hasArgsOrOutput = !previewDiff && diffs.length === 0 && (isWebSearch
     ? Boolean(effectiveArgs || searchVisibleCount || searchHiddenCount)
     : Boolean(effectiveArgs || displayOutput || hasArchivedOnDemandBody));
@@ -307,13 +307,16 @@ export const ToolCard = memo(function ToolCard({ item, subcalls, tabId, displayN
   const errorSummary = errorText ? summarizeToolError(errorText, t("tool.errorReceiptMismatch")) : "";
   const hasErrorDetails = errorText ? errorNeedsDetails(errorText, errorSummary) : false;
   useEffect(() => {
-    if (!open || !item.dataArchived || fullData || !tabId) return;
+    if (!open || !item.dataArchived || fullData || (!tabId && !loadToolResult)) return;
     let cancelled = false;
-    void app.ToolResultForTab(tabId, item.id).then((d) => {
+    const fetch = loadToolResult
+      ? loadToolResult(item.id)
+      : app.ToolResultForTab(tabId!, item.id);
+    void fetch.then((d) => {
       if (!cancelled && d) setFullData(d);
     }).catch(() => {});
     return () => { cancelled = true; };
-  }, [open, item.id, item.dataArchived, fullData, tabId]);
+  }, [open, item.id, item.dataArchived, fullData, tabId, loadToolResult]);
 
   // Register this shell card's toggle with the global ShellExpand context so
   // Ctrl/Cmd+B can expand/collapse the most recent shell output. openRef keeps the
@@ -472,7 +475,7 @@ export const ToolCard = memo(function ToolCard({ item, subcalls, tabId, displayN
               const roBatch: typeof nested = [];
               const flush = () => {
                 if (roBatch.length === 0) return;
-                out.push(<ReadOnlyBatch key={`rob-${roBatch[0].id}`} items={[...roBatch]} subcalls={new Map()} tabId={tabId} />);
+                out.push(<ReadOnlyBatch key={`rob-${roBatch[0].id}`} items={[...roBatch]} subcalls={new Map()} tabId={tabId} loadToolResult={loadToolResult} />);
                 roBatch.length = 0;
               };
               for (const c of nested) {
@@ -481,7 +484,7 @@ export const ToolCard = memo(function ToolCard({ item, subcalls, tabId, displayN
                   continue;
                 }
                 flush();
-                out.push(<ToolCard key={c.id} item={c} tabId={tabId} />);
+                out.push(<ToolCard key={c.id} item={c} tabId={tabId} loadToolResult={loadToolResult} />);
               }
               flush();
               return out;

@@ -25,6 +25,12 @@ func (c *Controller) ToolResult(toolID string) *ToolResultData {
 	return lookupToolResult(c.executor.Session().Snapshot(), toolID)
 }
 
+// LookupToolResult is lookupToolResult for callers that hold an off-controller
+// message list (e.g. a session loaded from disk for the history preview).
+func LookupToolResult(msgs []provider.Message, toolID string) *ToolResultData {
+	return lookupToolResult(msgs, toolID)
+}
+
 func lookupToolResult(msgs []provider.Message, toolID string) *ToolResultData {
 	if toolID == "" {
 		return nil

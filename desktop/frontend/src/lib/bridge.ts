@@ -385,6 +385,7 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   RevealWorkspaceWriterForTab(tabID: string): Promise<TabMeta>;
   CloseTabWithPolicy(tabID: string, policy: "keep_running" | "stop_and_close"): Promise<void>;
   ToolResultForTab(tabID: string, toolID: string): Promise<{ args: string; output: string; execution?: import("./types").WireShellExecution } | null>;
+  ToolResultForSession(sessionPath: string, toolID: string): Promise<{ args: string; output: string; execution?: import("./types").WireShellExecution } | null>;
   Meta(): Promise<Meta>;
   MetaForTab(tabID: string): Promise<Meta>; DismissTodoBatchForTab(tabID: string, batchKey: string): Promise<void>;
   Commands(): Promise<CommandInfo[]>;
@@ -3606,6 +3607,9 @@ function makeMockApp(): AppBindings {
           return this.CloseTab(tabID);
         },
         async ToolResultForTab() {
+          return null;
+        },
+        async ToolResultForSession() {
           return null;
         },
         async Meta() {

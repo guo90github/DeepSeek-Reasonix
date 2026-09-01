@@ -2450,6 +2450,78 @@ func (a *App) ToolResultForTab(tabID, toolID string) *control.ToolResultData {
 	return ctrl.ToolResult(toolID)
 }
 
+// ToolResultForSession returns the full arguments and output for one tool call
+// in a saved session that is not necessarily open as a tab (the history preview
+// pane renders archived tool cards from disk). Event-log sessions carry the
+// full tool records themselves; jsonl sessions go through the standard
+// LoadSession snapshot. Returns nil when the session or tool ID is not found.
+func (a *App) ToolResultForSession(sessionPath, toolID string) *control.ToolResultData {
+	_, resolved, err := a.sessionDirForPath(sessionPath)
+	if err != nil {
+		return nil
+	}
+	if out, ok := previewEventToolResult(resolved, toolID); ok {
+		return out
+	}
+	loaded, err := agent.LoadSession(resolved)
+	if err != nil {
+		return nil
+	}
+	return control.LookupToolResult(loaded.Snapshot(), toolID)
+}
+
+// previewEventToolResult scans an event-log session for the full record of one
+// tool call. The event log keeps complete output and arguments; archival only
+// happens when the records are folded into HistoryMessage. Returns ok=false
+// when the file is not an event log or the tool ID is absent.
+func previewEventToolResult(path, toolID string) (*control.ToolResultData, bool) {
+	if toolID == "" {
+		return nil, false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, false
+	}
+	defer f.Close()
+
+	dec := json.NewDecoder(f)
+	argsByID := map[string]string{}
+	for {
+		var rec previewEventRecord
+		if err := dec.Decode(&rec); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, false
+		}
+		eventName := strings.TrimSpace(rec.Kind)
+		if eventName == "" {
+			eventName = strings.TrimSpace(rec.Type)
+		}
+		if eventName == "" {
+			continue
+		}
+		switch eventName {
+		case "model.final":
+			for _, tc := range rec.ToolCalls {
+				if tc.ID != "" {
+					argsByID[tc.ID] = firstNonEmpty(tc.Arguments, tc.Function.Arguments)
+				}
+			}
+		case "tool.result":
+			callID := firstNonEmpty(rec.CallID, rec.ToolCallID)
+			if callID != toolID {
+				continue
+			}
+			return &control.ToolResultData{
+				Args:   argsByID[toolID],
+				Output: firstNonEmpty(rec.Output, rec.Content),
+			}, true
+		}
+	}
+	return nil, false
+}
+
 // Rewind restores the session to the start of turn. scope is "code",
 // "conversation", or "both" (anything else is treated as "both"). The frontend
 // re-reads History after this resolves.

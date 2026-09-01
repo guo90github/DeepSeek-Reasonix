@@ -114,11 +114,13 @@ export const ToolGroup = memo(function ToolGroup({
   items,
   subcalls,
   tabId,
+  loadToolResult,
 }: {
   kind: ToolGroupKind;
   items: ToolItem[];
   subcalls: ReadonlyMap<string, ToolItem[]>;
   tabId?: string;
+  loadToolResult?: (toolID: string) => Promise<{ args: string; output?: string; execution?: ToolItem["execution"] } | null>;
 }) {
   const t = useT();
   const beginUserResize = useTranscriptUserResizeIntent();
@@ -142,7 +144,7 @@ export const ToolGroup = memo(function ToolGroup({
       </button>
       <div ref={bodyRef} className="tool-group__body">
         {items.map((item) => (
-          <ToolCard key={item.id} item={item} subcalls={subcalls.get(item.id)} tabId={tabId} displayName={toolDisplayName(item.name)} />
+          <ToolCard key={item.id} item={item} subcalls={subcalls.get(item.id)} tabId={tabId} displayName={toolDisplayName(item.name)} loadToolResult={loadToolResult} />
         ))}
       </div>
     </div>
