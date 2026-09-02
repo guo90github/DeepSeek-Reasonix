@@ -180,7 +180,14 @@ export function useTranscriptSurfaceCommit(input: {
       const bottomReady = Boolean(element && element.scrollHeight - element.scrollTop - element.clientHeight <= TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX);
       const decision = advanceSurfacePaintCommit(progress, {
         rendered, placementReady, geometryReady: bottomReady,
-        geometryKey: element ? transcriptSurfaceGeometryKey(element) : undefined,
+        // Pinned to the newest turn the viewport is what the user sees; older
+        // pages prepending above only grow scrollHeight, so measure the stable
+        // viewport instead of waiting out the whole history backfill.
+        geometryKey: element
+          ? (bottomReady
+            ? `bottom:${Math.round(element.clientHeight)}`
+            : transcriptSurfaceGeometryKey(element))
+          : undefined,
       });
       progress = decision.progress;
       if (decision.outcome) return finish(decision.outcome);

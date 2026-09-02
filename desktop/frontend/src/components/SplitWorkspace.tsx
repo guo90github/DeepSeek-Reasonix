@@ -215,7 +215,14 @@ export function SplitWorkspace({
         rendered,
         placementReady,
         geometryReady: bottomReady,
-        geometryKey: conv && proc ? `${conv.scrollHeight}x${conv.clientHeight}|${proc.scrollHeight}` : undefined,
+        // Pinned to the newest turn the viewport is what the user sees; older
+        // pages prepending above only grow scrollHeight, so measure the stable
+        // viewport instead of waiting out the whole history backfill.
+        geometryKey: conv && proc
+          ? (bottomReady
+            ? `bottom:${Math.round(conv.clientHeight)}|${Math.round(proc.clientHeight)}`
+            : `${conv.scrollHeight}x${conv.clientHeight}|${proc.scrollHeight}`)
+          : undefined,
       });
       progress = decision.progress;
       if (decision.outcome) {

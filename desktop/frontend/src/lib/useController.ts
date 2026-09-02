@@ -1637,13 +1637,14 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
         return s;
       }
       if (!existingAssistant && !s.live) {
-        // No settle target and no live stream: the message is stale (missed
-        // turn_started, replay/duplicate) — drop it without touching the
-        // current turn. With a live stream still open it is that stream's own
-        // settle (the pre-bubble was retracted or turn_started missed):
-        // recreate the item so the answer lands and the panes never freeze
-        // in "waiting".
-        return s;
+        // No bubble in the current turn's region and no live stream. Drop only
+        // when the transcript already holds an assistant answer (delayed
+        // replay/duplicate of a settled older turn): appending would corrupt
+        // the newer turn. With no assistant item at all the message is the
+        // turn's first content whose turn_started/deltas were missed while the
+        // tab was restoring — recreate the bubble so the answer lands instead
+        // of freezing the transcript in loading.
+        if (s.items.some((it) => it.kind === "assistant")) return s;
       }
       const now = Date.now();
       const settled = endTurnModelActivity(s, now, true);
@@ -3150,6 +3151,9 @@ export function useController() {
   const loadOlderHistory = useCallback(async (tabId?: string, targetTurn?: number, trigger: HistoryLoadTrigger = "retry"): Promise<boolean> => {
     const targetTabId = tabId || activeTabIdRef.current;
     if (!targetTabId) return false;
+    // The first-open backfill can race the controller build; waiting keeps the
+    // fetch from landing pre-ready and coming back superseded.
+    await waitForTabReadyRef.current(targetTabId);
     const state = statesRef.current.get(targetTabId);
     if (!state?.historyHasOlder || state.historyOlderLoading || state.running) return false;
     const sessionPath = state.meta?.sessionPath ?? "";
@@ -3178,16 +3182,18 @@ export function useController() {
       // A replace-level hydrate while the page was in flight clears
       // historyOlderLoading; a metadata or canonical-identity change also
       // makes the page belong to a different transcript generation.
-      const identityMismatch =
+      const snapshotStale =
         (current.meta?.sessionPath ?? "") !== sessionPath ||
-        !fingerprintMatches(sessionRevision, currentRevision) || !digestMatches(sessionDigest, currentDigest) ||
-        (result !== undefined && (!fingerprintMatches(sessionRevision, result.revisionKnown ? result.revision : undefined) ||
-          !digestMatches(sessionDigest, result.digest)));
-      if (!current.historyOlderLoading || identityMismatch) {
-        if (identityMismatch && !historyOlderAutoRetried.current.get(targetTabId)) {
-          // First-open restore can bump the session identity while the page
-          // is in flight; re-request once against the settled identity before
-          // surfacing the manual retry.
+        !fingerprintMatches(sessionRevision, currentRevision) || !digestMatches(sessionDigest, currentDigest);
+      const resultStale =
+        result !== undefined &&
+        (!fingerprintMatches(sessionRevision, result.revisionKnown ? result.revision : undefined) ||
+          !digestMatches(sessionDigest, result.digest));
+      if (!current.historyOlderLoading || snapshotStale || resultStale) {
+        // Re-request once only when the request snapshot itself predates the
+        // settled identity (first-open restore race); a result-only mismatch
+        // is a genuinely stale page and gets the explicit retry surface.
+        if (snapshotStale && !historyOlderAutoRetried.current.get(targetTabId)) {
           historyOlderAutoRetried.current.set(targetTabId, true);
           setTimeout(() => { void loadOlderHistory(targetTabId, targetTurn, "retry"); }, 0);
           return false;
@@ -3196,8 +3202,12 @@ export function useController() {
         return false;
       }
       if (!result) {
-        // Superseded (generation moved) or nothing older left.
-        dispatchTo(targetTabId, { type: "history_older_error", error: "history page unavailable" });
+        // Superseded (a rewrite or restore moved the store generation while
+        // this request was in flight) or nothing older exists. Neither is a
+        // user-facing failure: release the loading surface without an error
+        // banner — the newer page's own backfill drives the next request, and
+        // genuine fetch failures surface through the catch below.
+        dispatchTo(targetTabId, { type: "history_older_error" });
         return false;
       }
       if (result.kind === "reload") {
