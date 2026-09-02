@@ -1652,7 +1652,9 @@ export function ProjectTree({
                 {hiddenCount > 0 ? t("projectTree.showMoreTopics", { n: hiddenCount }) : t("projectTree.showFewerTopics")}
               </button>
             )}
-            {backendPage?.nextCursor && (
+            {/* The classic 5-topic window hides whatever pagination appends, so
+                the pager is only useful in windowless modes (search, time filter, workbench). */}
+            {!classicTruncationActive && backendPage?.nextCursor && (
               <button
                 type="button"
                 className="project-tree__topic-window-toggle"

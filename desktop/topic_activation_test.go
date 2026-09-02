@@ -158,6 +158,11 @@ func TestStartTopicActivationRapidSwitchOutOfOrderBuilds(t *testing.T) {
 	app.ctx = context.Background()
 	app.readyHook = func() {}
 	installNoopRuntimeEvents(app)
+	// This test holds three controller builds in flight simultaneously (A, B,
+	// C) behind the start gate; raise the build-concurrency limit to match.
+	originalBuildSlots := tabBuildSlots
+	tabBuildSlots = make(chan struct{}, 3)
+	t.Cleanup(func() { tabBuildSlots = originalBuildSlots })
 	events := newActivationEventRecorder(app)
 	gate := newTabBuildGate(app)
 	t.Cleanup(func() {

@@ -74,10 +74,11 @@ func TestHistorySliceReportsErrorInsteadOfEmptySuccess(t *testing.T) {
 	}
 }
 
-// TestHistorySliceWaitsForInFlightBuild guards the fix for the first-open-
-// after-restart race: HistorySliceForTab must block on the tab's background
-// controller build instead of returning the not-yet-ready error, then serve
-// the cold path once the build settles.
+// TestHistorySliceWaitsForInFlightBuild guards the first-open-after-restart
+// race for cursor paging: HistorySliceForTab with a cursor must block on the
+// tab's background controller build instead of returning the not-yet-ready
+// error, then serve once the build settles. A first-page request over an
+// already-known session file skips this wait (it is served cold immediately).
 func TestHistorySliceWaitsForInFlightBuild(t *testing.T) {
 	isolateDesktopUserDirs(t)
 	root := t.TempDir()
@@ -85,8 +86,8 @@ func TestHistorySliceWaitsForInFlightBuild(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	messages := make([]provider.Message, 0, 8)
-	for i := range 4 {
+	messages := make([]provider.Message, 0, 40)
+	for i := range 20 {
 		messages = append(messages,
 			provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("wait user %d", i)},
 			provider.Message{Role: provider.RoleAssistant, Content: fmt.Sprintf("wait assistant %d", i)},
@@ -110,11 +111,24 @@ func TestHistorySliceWaitsForInFlightBuild(t *testing.T) {
 	app.activeTabID = tab.ID
 	app.mu.Unlock()
 
+	// The first page over the known session file is served cold without
+	// waiting for the in-flight build.
+	first := app.HistorySliceForTab(tab.ID, HistorySliceRequest{Turns: 12})
+	if first.Error != "" || len(first.Entries) == 0 {
+		t.Fatalf("first page before build: error=%q entries=%d", first.Error, len(first.Entries))
+	}
+	if first.NextCursor == "" {
+		t.Fatal("first page has no cursor to page with")
+	}
+
+	// A cursor request must wait for the in-flight build.
 	done := make(chan HistorySlice, 1)
-	go func() { done <- app.HistorySliceForTab(tab.ID, HistorySliceRequest{Turns: 12}) }()
+	go func() {
+		done <- app.HistorySliceForTab(tab.ID, HistorySliceRequest{Turns: 12, Cursor: first.NextCursor})
+	}()
 	select {
 	case <-done:
-		t.Fatal("HistorySliceForTab returned before the in-flight build completed")
+		t.Fatal("HistorySliceForTab with a cursor returned before the in-flight build completed")
 	case <-time.After(50 * time.Millisecond):
 	}
 	close(buildDone)

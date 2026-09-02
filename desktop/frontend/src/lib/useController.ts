@@ -2479,6 +2479,9 @@ export function useController() {
   // Indirection so loadSessionDataForTab (defined before the retry helper) can
   // schedule a bounded retry without a use-before-declaration cycle.
   const scheduleHistoryRetryRef = useRef<(tabId: string, reason: HydrateReason, opts: HistoryRetryOptions) => void>(() => {});
+  // Indirection so the startup hydrate and its retries can wait for the tab
+  // controller build before fetching (waitForTabReady is defined later).
+  const waitForTabReadyRef = useRef<(tabId: string) => Promise<void>>(async () => {});
   // Indirection so dispatchRuntimeStatusForTab (defined above reconcileTabRuntime)
   // can schedule an authoritative refetch after it rejects a stale snapshot.
   const scheduleStalePromptReconcileRef = useRef<(tabId: string) => void>(() => {});
@@ -2846,6 +2849,18 @@ export function useController() {
       ensureTranscriptSubscription(tabId);
       dispatchTo(tabId, { type: "hydrate_start", reason, placeholderItems: resolveHydratePlaceholders(options.placeholderItems) });
       if (resetSurface && !deferResetUntilHistory && stillCurrent()) dispatchTo(tabId, { type: "reset" });
+      // No session file is bound yet (new tab, first launch): the controller
+      // build resolves it. Waiting (bounded) avoids the pre-ready failure
+      // "session path unavailable before controller ready"; the ready event's
+      // re-sync then hydrates with the bound path.
+      if (reason === "startup" && !sessionPath.trim()) {
+        await waitForTabReadyRef.current(tabId);
+        if (!stillCurrent()) return;
+        // Build still in flight after the bounded wait: release the loading
+        // surface; the ready event's re-sync hydrates once the path binds.
+        dispatchTo(tabId, { type: "hydrate_done" });
+        return;
+      }
       const requiresVisibleTab = reason === "startup" || reason === "switch-tab" || reason === "open-topic";
       const stillVisible = () => !requiresVisibleTab || activeTabIdRef.current === tabId;
       const foregroundTurnActive = (): boolean => {
@@ -3053,7 +3068,15 @@ export function useController() {
       // instead of restarting at attempt 1 and retrying forever.
       if (activeTabIdRef.current !== tabId) { historyRetryState.current.delete(tabId); return; } // a switch already re-fetches
       if (!statesRef.current.get(tabId)?.hydrateError) { historyRetryState.current.delete(tabId); return; } // moved past the failure
-      void loadSessionDataForTab(tabId, false, "startup", { ...opts, preserveCachedHistory: false });
+      void (async () => {
+        // The first-open failure usually means the tab controller was still
+        // building; wait for readiness so the retry lands on a real backend
+        // instead of repeating the identical pre-ready failure to the cap.
+        await waitForTabReadyRef.current(tabId);
+        if (activeTabIdRef.current !== tabId) { historyRetryState.current.delete(tabId); return; }
+        if (!statesRef.current.get(tabId)?.hydrateError) { historyRetryState.current.delete(tabId); return; }
+        void loadSessionDataForTab(tabId, false, "startup", { ...opts, preserveCachedHistory: false });
+      })();
     }, HISTORY_RETRY_BASE_DELAY_MS * 2 ** (attempts - 1));
     historyRetryState.current.set(tabId, { attempts, timer });
   }, [loadSessionDataForTab]);
@@ -3272,6 +3295,7 @@ export function useController() {
       await new Promise((resolve) => window.setTimeout(resolve, 100));
     }
   }, []);
+  waitForTabReadyRef.current = waitForTabReady;
 
   const syncActiveTabFromBackend = useCallback(async (reset = false, guard = false, options: SyncActiveTabOptions = {}): Promise<string | undefined> => {
     const snapshotAt = promptEventClock();
@@ -4253,9 +4277,16 @@ export function useController() {
   const listTrashedSessions = useCallback(async (): Promise<SessionMeta[]> => asArray<SessionMeta>(await app.ListTrashedSessions().catch(() => [])), []);
   const retrySessionHistory = useCallback(async (tabId?: string) => {
     const id = tabId || activeTabIdRef.current; if (!id) return;
+    // A failed hydrate at startup usually means the tab controller was still
+    // building; waiting for readiness makes the retry a fresh fetch instead
+    // of repeating the identical pre-ready failure. Manual retry also resets
+    // the auto-retry counter so it starts from a clean slate.
+    await waitForTabReady(id);
+    if (activeTabIdRef.current !== id) return;
+    historyRetryState.current.delete(id);
     const m = statesRef.current.get(id)?.meta;
     await loadSessionDataForTab(id, false, "startup", { sessionPath: m?.sessionPath, sessionRevision: m?.sessionRevision, sessionDigest: m?.sessionDigest, preserveCachedHistory: false });
-  }, [loadSessionDataForTab]);
+  }, [loadSessionDataForTab, waitForTabReady]);
   const reconcileSessionNavigationForTab = useCallback(async (
     tabId: string,
     navigationSeq: number,

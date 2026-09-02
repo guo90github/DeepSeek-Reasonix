@@ -1169,3 +1169,95 @@ func TestHistorySliceConcurrentReadsDuringSave(t *testing.T) {
 	pages := collectHistorySlicePages(t, app, "test", HistorySliceRequest{Turns: 5, Entries: 40})
 	assertPagesMatchReference(t, pages, referenceHistoryRows(t, dir, path))
 }
+
+// TestHistorySliceFirstPageSkipsInFlightBuild pins the cold first-page path:
+// with the tab's controller build held in flight via tabBuildStartHook, a
+// Cursor=="" request over an already-bound session file returns promptly via
+// the cold index read, while a cursor request still waits for the build.
+func TestHistorySliceFirstPageSkipsInFlightBuild(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	root := t.TempDir()
+	dir := desktopSessionDir(root)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	msgs := make([]provider.Message, 0, 20)
+	for i := range 10 {
+		msgs = append(msgs, historySliceUser(i, fmt.Sprintf("q%d", i)), historySliceAssistant(i, fmt.Sprintf("a%d", i)))
+	}
+	_, path := saveHistorySliceSession(t, dir, "skip-build.jsonl", msgs)
+
+	app := NewApp()
+	app.ctx = context.Background()
+	installNoopRuntimeEvents(app)
+	gate := newTabBuildGate(app)
+	t.Cleanup(func() {
+		gate.releaseAll()
+		app.shutdown(context.Background())
+	})
+
+	tab := &WorkspaceTab{
+		ID:            "skip-build",
+		Scope:         "project",
+		WorkspaceRoot: root,
+		SessionPath:   path,
+		Ready:         false,
+		Ctrl:          nil,
+		disabledMCP:   map[string]ServerView{},
+	}
+	app.mu.Lock()
+	app.tabs = map[string]*WorkspaceTab{tab.ID: tab}
+	app.tabOrder = []string{tab.ID}
+	app.activeTabID = tab.ID
+	app.mu.Unlock()
+
+	go app.startTabControllerBuild(tab)
+	gate.waitEntered(t, tab.ID) // the build is now held in flight
+	app.mu.RLock()
+	buildDone := tab.buildDone
+	app.mu.RUnlock()
+	if buildDone == nil {
+		t.Fatal("build done channel missing while the build is held")
+	}
+
+	// First page over the known session file: served cold, no build wait.
+	firstStarted := time.Now()
+	first := app.HistorySliceForTab(tab.ID, HistorySliceRequest{Turns: 6})
+	if elapsed := time.Since(firstStarted); elapsed >= 500*time.Millisecond {
+		t.Fatalf("first-page slice took %v, want <500ms while the build is held", elapsed)
+	}
+	if first.Error != "" {
+		t.Fatalf("first-page slice error = %q", first.Error)
+	}
+	if first.Source != "index" {
+		t.Fatalf("first-page source = %q, want index", first.Source)
+	}
+	if len(first.Entries) == 0 {
+		t.Fatal("first-page slice returned no entries")
+	}
+	if first.NextCursor == "" {
+		t.Fatal("first-page slice has no next cursor")
+	}
+
+	// A cursor request still waits for the held build.
+	cursorDone := make(chan HistorySlice, 1)
+	go func() {
+		cursorDone <- app.HistorySliceForTab(tab.ID, HistorySliceRequest{Turns: 6, Cursor: first.NextCursor})
+	}()
+	select {
+	case <-cursorDone:
+		t.Fatal("cursor request returned before the build was released")
+	case <-time.After(200 * time.Millisecond):
+	}
+	gate.release(tab.ID)
+	select {
+	case <-cursorDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("cursor request did not resume after the build was released")
+	}
+	select {
+	case <-buildDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("controller build did not terminate after release")
+	}
+}

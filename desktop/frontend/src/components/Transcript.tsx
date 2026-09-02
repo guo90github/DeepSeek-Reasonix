@@ -951,8 +951,15 @@ export function Transcript({
         >
           {hydrating ? (
             <div className="transcript__loading" role="status" aria-live="polite">
-              <Loader2 className="transcript__loading-icon" aria-hidden="true" />
-              <span>{t("common.loading")}</span>
+              <div className="transcript__skeleton" aria-hidden="true">
+                <span className="transcript__skeleton-row transcript__skeleton-row--user transcript__skeleton-row--narrow" />
+                <span className="transcript__skeleton-row transcript__skeleton-row--assistant transcript__skeleton-row--wide" />
+                <span className="transcript__skeleton-row transcript__skeleton-row--assistant" />
+                <span className="transcript__skeleton-row transcript__skeleton-row--user" />
+                <span className="transcript__skeleton-row transcript__skeleton-row--assistant transcript__skeleton-row--wide" />
+                <span className="transcript__skeleton-row transcript__skeleton-row--assistant transcript__skeleton-row--narrow" />
+              </div>
+              <span className="transcript__loading-text"><Loader2 className="transcript__loading-icon" aria-hidden="true" />{t("common.loading")}</span>
             </div>
           ) : <Welcome onPrompt={onPrompt} variant={welcomeVariant} />}
         </div>

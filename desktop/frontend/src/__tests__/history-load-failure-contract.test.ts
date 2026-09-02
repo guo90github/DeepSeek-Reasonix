@@ -16,6 +16,9 @@ assert.match(controller, /applyHydrateErrorState|hydratePlaceholderItems/, "hydr
 assert.match(readFileSync(join(root, "lib/hydrateErrorState.ts"), "utf8"), /keptItems/, "hydrateErrorState preserves items");
 assert.match(controller, /throw new Error\(t\("history\.failedLoadHistory"\)\)/, "listSessions does not swallow failures as empty");
 assert.match(controller, /retrySessionHistory/, "retry path is exported");
+assert.match(controller, /await waitForTabReady\(id\);\n    if \(activeTabIdRef\.current !== id\) return;\n    historyRetryState\.current\.delete\(id\);/, "manual retry waits for tab readiness and resets the auto-retry counter");
+assert.match(controller, /await waitForTabReadyRef\.current\(tabId\);/, "auto-retry waits for tab readiness before re-fetching");
+assert.match(controller, /reason === "startup" && !sessionPath\.trim\(\)/, "unbound startup hydrate waits for readiness instead of failing pre-ready");
 assert.match(
   transcript,
   /if \(hydrating \|\| !virtuosoReadyRef\.current \|\| !stick\.current\) return;\n    followGrowingTail\(\);\n  \}, \[footerHeight, followGrowingTail, hydrating, stick\]\);/,

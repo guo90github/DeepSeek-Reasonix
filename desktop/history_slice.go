@@ -396,7 +396,11 @@ type historyWindowController interface {
 // messages, converting only the returned window.
 func (a *App) HistorySliceForTab(tabID string, req HistorySliceRequest) HistorySlice {
 	req = normalizeHistorySliceRequest(req)
-	a.waitForTabBuildReady(tabID)
+	// First page over a known session file is served cold: the display index
+	// is independent of the build; cursor paging and unbound paths still wait.
+	if req.Cursor != "" || !a.tabSessionPathBound(tabID) {
+		a.waitForTabBuildReady(tabID)
+	}
 	a.mu.RLock()
 	tab := a.tabByIDLocked(tabID)
 	var ctrl control.SessionAPI
@@ -453,6 +457,15 @@ func (a *App) waitForTabBuildReady(tabID string) {
 	case <-done:
 	case <-time.After(historyBuildWaitTimeout):
 	}
+}
+
+// tabSessionPathBound reports a known session path, so first-page reads skip
+// the controller-build wait.
+func (a *App) tabSessionPathBound(tabID string) bool {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	tab := a.tabByIDLocked(tabID)
+	return tab != nil && strings.TrimSpace(tab.currentSessionPath()) != ""
 }
 
 // liveHistorySlice pages a tab with a running controller. The display index

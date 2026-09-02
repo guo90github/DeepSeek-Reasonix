@@ -3680,6 +3680,11 @@ func (a *App) closeTabRuntimeAdmissionHeld(tab *WorkspaceTab) {
 	a.mu.Unlock()
 }
 
+// tabBuildSlots caps concurrent controller builds: restoring N tabs must not
+// launch N full LoadSession+boot parses at once. Tests shrink the channel to
+// force serialization.
+var tabBuildSlots = make(chan struct{}, 2)
+
 // buildTabController assembles a controller for a tab in the background, the
 // same way buildController works for the single-controller App. On success it
 // wires the controller and flips Ready; on failure it stores StartupErr.
@@ -3807,6 +3812,22 @@ func (a *App) closeTabBuildDone(tab *WorkspaceTab, buildGeneration uint64) {
 	a.mu.Unlock()
 }
 
+// acquireTabBuildSlot reserves one of the concurrent build slots. The sync
+// path (a.ctx == nil) must not block the caller on a full semaphore, so it
+// only takes a slot that is free.
+func (a *App) acquireTabBuildSlot() bool {
+	if a.ctx != nil {
+		tabBuildSlots <- struct{}{}
+		return true
+	}
+	select {
+	case tabBuildSlots <- struct{}{}:
+		return true
+	default:
+		return false
+	}
+}
+
 func (a *App) buildTabControllerWithContext(tab *WorkspaceTab, loadedSession loadedTabSession, buildCtx context.Context, buildGeneration uint64, buildCancel context.CancelFunc) {
 	a.buildTabControllerWithContextCore(tab, loadedSession, buildCtx, buildGeneration, buildCancel)
 }
@@ -3816,9 +3837,19 @@ func (a *App) buildTabControllerWithContext(tab *WorkspaceTab, loadedSession loa
 // lifecycle barrier.
 func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession loadedTabSession, buildCtx context.Context, buildGeneration uint64, buildCancel context.CancelFunc) {
 	defer a.recoverToPending("buildTabController")
+	// Hold a concurrency slot for the whole build (released by the defer
+	// below). Runs inside the build goroutine so the UI thread never blocks.
+	// Synchronous builds (a.ctx == nil, tests) only take a free slot so they
+	// cannot deadlock the single-goroutine caller.
+	slot := a.acquireTabBuildSlot()
 	keepBuildContext := false
 	defer func() {
 		a.clearTabBuildCancel(tab, buildGeneration, buildCancel, keepBuildContext)
+	}()
+	defer func() {
+		if slot {
+			<-tabBuildSlots
+		}
 	}()
 	defer a.closeTabBuildDone(tab, buildGeneration)
 	if hook := a.tabBuildStartHook; hook != nil && tab != nil {

@@ -58,6 +58,7 @@ function firstTextNode(root: Node): Text | null {
   try {
     await harness.render([], { hydrating: true });
     ok(harness.container.querySelector(".transcript__loading")?.textContent?.trim() === "Loading…", "hydrating empty transcript shows the localized loading surface");
+    ok(harness.container.querySelectorAll(".transcript__skeleton-row").length >= 4, "hydrating empty transcript renders skeleton placeholder rows");
     ok(harness.container.querySelector(".welcome") === null, "hydration never flashes the welcome surface");
     ok(harness.scrollElement().getAttribute("aria-busy") === "true", "loading transcript exposes busy state to assistive technology");
   } finally {

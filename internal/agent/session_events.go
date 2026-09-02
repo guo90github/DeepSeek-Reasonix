@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"time"
 
 	"reasonix/internal/fileutil"
@@ -567,11 +569,33 @@ func loadSessionMessagesWithLimits(sessionPath string, limits sessionReplayLimit
 		return nil, true, false, fmt.Errorf("session event log for %s uses schema %d; this build supports up to %d", sessionPath, probe.schemaVersion, sessionEventSchemaVersion)
 	}
 	if probe.native && probe.size > 0 {
-		replay, replayErr := replaySessionEventLogWithLimits(store.SessionEventLog(sessionPath), limits, hasher)
+		// An intact sidecar index (LogSize == file size, digest non-empty)
+		// already records the transcript digest, so a clean replay can seed
+		// the hasher and skip the per-message re-serialize+hash that dominates
+		// long-session load. Decode and replay-limits stay untouched.
+		var indexSeed *eventLogIndexSeed
+		if hasher != nil {
+			indexSeed = readEventLogIndexSeed(sessionPath, probe.size)
+		}
+		replayHasher := hasher
+		if indexSeed != nil {
+			replayHasher = nil
+		}
+		replay, replayErr := replaySessionEventLogWithLimits(store.SessionEventLog(sessionPath), limits, replayHasher)
 		if replayErr != nil {
 			return nil, true, false, replayErr
 		}
 		if replay.records > 0 {
+			if indexSeed != nil {
+				// The seed is only trustworthy when the replay was clean and
+				// consumed exactly the bytes/messages the index describes;
+				// otherwise fall back to hashing the decoded transcript.
+				if replay.damaged || replay.size != indexSeed.logSize || len(replay.msgs) != indexSeed.messageCount {
+					hasher.addAll(replay.msgs)
+				} else {
+					hasher.seedDigest(indexSeed.digest)
+				}
+			}
 			return replay.msgs, true, replay.damaged, nil
 		}
 		// Defensive: the probe saw a native head but nothing replayed; fall
@@ -828,6 +852,62 @@ func readSessionEventIndex(sessionPath string) (*sessionEventIndex, error) {
 	}
 	return &idx, nil
 }
+
+// eventLogIndexSeed is the event-log sidecar's claim that the log holds the
+// transcript whose digest it records. It is only usable when the index is
+// schema-valid, its LogSize equals the log's current size, and the digest is
+// non-empty.
+type eventLogIndexSeed struct {
+	digest       [sha256.Size]byte
+	logSize      int64
+	messageCount int
+}
+
+// readEventLogIndexSeed returns the sidecar digest when the index is intact
+// for logSize, else nil so callers fall back to full hashing.
+func readEventLogIndexSeed(sessionPath string, logSize int64) *eventLogIndexSeed {
+	idx, err := readSessionEventIndex(sessionPath)
+	if err != nil || idx == nil || idx.LogSize != logSize || idx.ContentDigest == "" {
+		return nil
+	}
+	raw, err := hex.DecodeString(idx.ContentDigest)
+	if err != nil || len(raw) != sha256.Size {
+		return nil
+	}
+	var seed eventLogIndexSeed
+	copy(seed.digest[:], raw)
+	seed.logSize = idx.LogSize
+	seed.messageCount = idx.MessageCount
+	return &seed
+}
+
+// fixedSumHasher is a hash.Hash that reports a precomputed digest, letting
+// seedDigest swap the hasher's accumulator for the event-index digest.
+type fixedSumHasher struct {
+	sum [sha256.Size]byte
+}
+
+func (fixedSumHasher) Write(p []byte) (int, error) { return len(p), nil }
+func (h fixedSumHasher) Sum(b []byte) []byte       { return append(b, h.sum[:]...) }
+func (fixedSumHasher) Reset()                      {}
+func (fixedSumHasher) Size() int                   { return sha256.Size }
+func (fixedSumHasher) BlockSize() int              { return sha256.BlockSize }
+
+// seedDigest replaces accumulated hashing with a digest the save path already
+// computed for this transcript (the event-log sidecar). sum() then reports
+// that digest; a nil receiver stays disabled.
+func (s *sessionTranscriptHasher) seedDigest(digest [sha256.Size]byte) {
+	if s == nil {
+		return
+	}
+	s.h = fixedSumHasher{sum: digest}
+	s.err = nil
+	sessionEventDigestSeeds.Add(1)
+}
+
+// sessionEventDigestSeeds counts index-shortcut seeds for tests: zero after a
+// full-hash load, positive when the seed path was taken.
+var sessionEventDigestSeeds atomic.Int64
 
 func writeSessionEventIndex(path string, msgs []provider.Message, digest [sha256.Size]byte, revision int64) error {
 	indexPath := store.SessionEventIndex(path)
