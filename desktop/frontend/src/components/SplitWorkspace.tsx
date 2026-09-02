@@ -420,6 +420,7 @@ export function SplitWorkspace({
       <LiveStreamContext.Provider value={liveStream}>
         <ConversationPane
           turns={conversationTurns}
+          tabId={tabId}
           running={running}
           footerHeight={footerHeight}
           hasOlderHistory={hasOlderHistory}

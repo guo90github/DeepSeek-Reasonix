@@ -8,6 +8,7 @@ import { lazy, Suspense, useCallback, useRef, useState, type Ref } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { ProcessPaneTurn } from "../lib/transcriptPanes";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
+import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { InlineAssistantReasoning } from "./InlineAssistantReasoning";
 import { ToolCard } from "./ToolCard";
 import { PhaseCard, NoticeCard, CompactionCard } from "./TranscriptCards";
@@ -130,6 +131,9 @@ export function ProcessPane({
       return next;
     });
   }, []);
+  // Older history pages prepend turns at the top; keep their absolute index
+  // anchored so Virtuoso does not shift already-mounted rows out of sync.
+  const firstItemIndex = useTranscriptVirtuosoFirstItemIndex(turns, tabId ?? "");
 
   const itemContent = useCallback((index: number, turn: ProcessPaneTurn) => (
     <ProcessTurnCard
@@ -169,6 +173,7 @@ export function ProcessPane({
       data={turns}
       computeItemKey={(_index, turn) => turn.key}
       itemContent={itemContent}
+      firstItemIndex={firstItemIndex}
       increaseViewportBy={{ top: 320, bottom: 320 }}
       totalListHeightChanged={reaim}
       onWheelCapture={onUserGestureCapture}

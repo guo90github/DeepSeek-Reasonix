@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from "rea
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import { useT } from "../lib/i18n";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
+import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { isSteerNoticeText } from "../lib/useController";
 import type { ConversationPaneTurn } from "../lib/transcriptPanes";
 import { UserMessage } from "./Message";
@@ -92,6 +93,7 @@ function ConversationTurnCard({
 
 export function ConversationPane({
   turns,
+  tabId,
   running,
   footerHeight,
   hasOlderHistory,
@@ -106,6 +108,7 @@ export function ConversationPane({
   onHoverIndex,
 }: {
   turns: readonly ConversationPaneTurn[];
+  tabId?: string;
   running: boolean;
   footerHeight: number;
   hasOlderHistory?: boolean;
@@ -120,6 +123,10 @@ export function ConversationPane({
   onHoverIndex?: (index: number | null) => void;
 }) {
   const t = useT();
+  // Older history pages prepend turns at the top; keep their absolute index
+  // anchored so Virtuoso does not shift already-mounted rows out of sync
+  // (blank/empty cards until a remount).
+  const firstItemIndex = useTranscriptVirtuosoFirstItemIndex(turns, tabId ?? "");
   // User overrides win; unoverridden turns follow the role default (newest
   // expanded, history collapsed).
   const [overrides, setOverrides] = useState<ReadonlyMap<string, boolean>>(new Map());
@@ -196,6 +203,7 @@ export function ConversationPane({
       computeItemKey={(_index, turn) => turn.key}
       itemContent={itemContent}
       components={listComponents}
+      firstItemIndex={firstItemIndex}
       increaseViewportBy={{ top: 320, bottom: 320 }}
       totalListHeightChanged={reaim}
       onWheelCapture={onUserGestureCapture}

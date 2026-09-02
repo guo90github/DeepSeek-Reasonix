@@ -1,5 +1,4 @@
 import { useState } from "react";
-import type { TranscriptRow } from "./transcriptRows";
 
 export const TRANSCRIPT_VIRTUOSO_INDEX_BASE = 1_000_000;
 
@@ -9,13 +8,15 @@ export type TranscriptVirtuosoIndexState = {
   firstItemIndex: number;
 };
 
+type KeyedRow = { key: string };
+
 function sameKeys(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((key, index) => key === right[index]);
 }
 
 export function reconcileTranscriptVirtuosoIndex(
   previous: TranscriptVirtuosoIndexState,
-  rows: readonly TranscriptRow[],
+  rows: readonly KeyedRow[],
   resetKey: string,
 ): TranscriptVirtuosoIndexState {
   const keys = rows.map((row) => String(row.key));
@@ -49,7 +50,7 @@ export function reconcileTranscriptVirtuosoIndex(
   };
 }
 
-export function useTranscriptVirtuosoFirstItemIndex(rows: readonly TranscriptRow[], resetKey: string): number {
+export function useTranscriptVirtuosoFirstItemIndex(rows: readonly KeyedRow[], resetKey: string): number {
   const [state, setState] = useState<TranscriptVirtuosoIndexState>(() => ({
     resetKey,
     keys: rows.map((row) => String(row.key)),
