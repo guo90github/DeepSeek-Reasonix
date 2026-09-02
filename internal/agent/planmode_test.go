@@ -580,3 +580,18 @@ func TestCallContextMirrorsPlanModeOntoLeafKey(t *testing.T) {
 		t.Fatal("host-initiated wrapper lost the leaf plan-mode flag")
 	}
 }
+
+func TestWriterDispatchToolsAreNeverPlanSafe(t *testing.T) {
+	if (&TaskTool{}).PlanModeSafe() {
+		t.Fatal("task must not be plan-safe: a writer sub-agent needs an explicit approval gate in plan mode")
+	}
+	if (&FleetTool{}).PlanModeSafe() {
+		t.Fatal("fleet must not be plan-safe: it dispatches writers")
+	}
+	if !(&ReadOnlyTaskTool{}).PlanModeSafe() {
+		t.Fatal("read_only_task must stay plan-safe")
+	}
+	if !(&ParallelTasksTool{}).PlanModeSafe() {
+		t.Fatal("parallel_tasks must stay plan-safe")
+	}
+}

@@ -35,6 +35,17 @@ function catalogTaskOf(node: TaskNode): CatalogTask {
 
 const POLL_INTERVAL_MS = 5000;
 
+// useDebouncedValue settles fast-changing values (N10): the returned value only
+// updates after the input has been quiet for delayMs.
+export function useDebouncedValue(value: string, delayMs: number): string {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(value), delayMs);
+    return () => clearTimeout(timer);
+  }, [value, delayMs]);
+  return debounced;
+}
+
 export function TaskMonitorPanel({
 	tabID,
   onClose,
@@ -46,7 +57,7 @@ export function TaskMonitorPanel({
 }: {
   tabID: string;
   onClose?: () => void;
-  onOpenSession?: (tabID: string, taskID: string) => Promise<boolean> | boolean;
+  onOpenSession?: (tabID: string, sessionID: string) => Promise<boolean> | boolean;
   initialOpen?: boolean;
   initialScope?: "session" | "project" | "all";
   popover?: boolean;
@@ -56,8 +67,12 @@ export function TaskMonitorPanel({
   const [tasks, setTasks] = useState<CatalogTask[]>([]);
 	const [scope, setScope] = useState<"session" | "project" | "all">(initialScope);
 	const [query, setQuery] = useState("");
+	// Debounced query (N10): keystrokes settle 150ms before a Wails call.
+	const debouncedQuery = useDebouncedValue(query, 150);
 	const [nextCursor, setNextCursor] = useState("");
 	const [indexProgress, setIndexProgress] = useState<{ indexed: number; total: number; partial: boolean }>({ indexed: 0, total: 0, partial: true });
+	const [warnings, setWarnings] = useState<string[]>([]);
+	const [staleNotice, setStaleNotice] = useState<string | null>(null);
 	const requestSeq = useRef(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,25 +128,44 @@ export function TaskMonitorPanel({
 			if (!hasTaskCatalogBinding()) {
 				const legacy = await app.ListTasksForTab(tabID);
 				if (seq !== requestSeq.current) return;
-				const filtered = legacy.filter((task) => !query.trim() || [task.task_id, task.session_id, task.error_code, task.error_summary].some((value) => (value || "").toLowerCase().includes(query.trim().toLowerCase())));
+				const filtered = legacy.filter((task) => !debouncedQuery.trim() || [task.task_id, task.session_id, task.error_code].some((value) => (value || "").toLowerCase().includes(debouncedQuery.trim().toLowerCase())));
 				setTasks(filtered.map((task) => ({ ...task, __projectKey: "", __projectLabel: "", __catalogKey: taskNodeKey("", task.task_id) })));
 				setNextCursor("");
 				setIndexProgress({ indexed: filtered.length, total: filtered.length, partial: false });
+				setWarnings([]);
+				setStaleNotice(null);
 				return;
 			}
-			const page = await app.ListTaskPage({ scope, tabId: tabID, projectKey: "", states: [], query, cursor, limit: 50 });
+			const page = await app.ListTaskPage({ scope, tabId: tabID, projectKey: "", states: [], query: debouncedQuery, cursor, limit: 50 });
 			if (seq !== requestSeq.current) return;
 			const decorated = (page.items ?? []).map((item) => ({ ...item.task, __projectKey: item.projectKey, __projectLabel: item.projectLabel, __catalogKey: `${item.projectKey}:${item.task.task_id}` }));
-			setTasks((current) => cursor ? [...current, ...decorated.filter((item) => !current.some((existing) => existing.__catalogKey === item.__catalogKey))] : decorated);
+			// Incremental merge (N8): polls with an empty cursor keep the
+			// accumulated "load more" pages instead of replacing the list; fresh
+			// frames win per __catalogKey.
+			setTasks((current) => {
+				const merged = new Map(current.map((item) => [item.__catalogKey, item] as const));
+				for (const item of decorated) merged.set(item.__catalogKey, item);
+				return [...merged.values()];
+			});
+			// StaleCursor (N9): the revision moved under a cursor page. Drop the
+			// cursor, surface a notice, and refetch the first page once.
+			if (page.staleCursor) {
+				setNextCursor("");
+				setStaleNotice(t("summary.staleReload"));
+				void fetchTasks("");
+				return;
+			}
 			setNextCursor(page.nextCursor || "");
+			if (staleNotice) setStaleNotice(null);
 			setIndexProgress({ indexed: page.status.indexed, total: page.status.total, partial: page.partial });
+			setWarnings(page.status.warnings ?? []);
     } catch (e) {
 			if (seq !== requestSeq.current) return;
       setError(String(e));
     } finally {
       setLoading(false);
     }
-  }, [query, scope, tabID]);
+  }, [debouncedQuery, scope, tabID]);
 
   // Fetch events for a single task, using afterSequence for incremental load.
 	const fetchEvents = useCallback(async (node: TaskNode) => {
@@ -239,29 +273,44 @@ export function TaskMonitorPanel({
     setActionError(null);
     setActionMessage(null);
     try {
-			if (action === "open" && onOpenSession && scope === "session") {
-        const opened = await onOpenSession(tabID, task.task_id);
-        if (opened) onClose?.();
-        return;
-      }
 			const request = { projectKey: task.__projectKey, taskId: task.task_id, expectedVersion: task.version, reason: "desktop request", idempotencyKey: `desktop-${action}-${task.task_id}-${task.version}` };
+			if (action === "open") {
+				// Single backend contract (N13): resolve the session through the
+				// keyed binding for every scope, then let the host navigate.
+				const result = hasTaskCatalogBinding()
+					? await app.OpenTaskSessionByKey({ projectKey: task.__projectKey, taskId: task.task_id })
+					: await app.OpenTaskSessionForTab(tabID, task.task_id);
+				if (result.error) {
+					setActionError(`${result.error.code}: ${result.error.message}`);
+					return;
+				}
+				const sessionID = result.session_id?.trim();
+				if (!sessionID) throw new Error("Task session is unavailable");
+				if (onOpenSession) {
+					const opened = await onOpenSession(tabID, sessionID);
+					if (opened) onClose?.();
+				} else {
+					setActionMessage(`Session: ${sessionID}`);
+				}
+				return;
+			}
 			const result = hasTaskCatalogBinding()
 				? action === "stop"
 					? await app.StopTaskByKey(request)
-					: action === "requeue"
-						? await app.RequeueTaskByKey(request)
-						: await app.OpenTaskSessionByKey({ projectKey: task.__projectKey, taskId: task.task_id })
+					: await app.RequeueTaskByKey(request)
 				: action === "stop"
 					? await app.StopTaskForTab(tabID, task.task_id, task.version, request.reason, request.idempotencyKey)
-					: action === "requeue"
-						? await app.RequeueTaskForTab(tabID, task.task_id, task.version, request.idempotencyKey)
-						: await app.OpenTaskSessionForTab(tabID, task.task_id);
+					: await app.RequeueTaskForTab(tabID, task.task_id, task.version, request.idempotencyKey);
       if (result.error) {
-        setActionError(`${result.error.code}: ${result.error.message}`);
-      } else if (action === "open") {
-        const sessionID = result.session_id?.trim();
-        if (!sessionID) throw new Error("Task session is unavailable");
-        setActionMessage(`Session: ${sessionID}`);
+        if (result.error.code === "task_version_conflict") {
+          // B5: another process (CLI/Desktop) wrote this task. Surface a
+          // readable notice and pull the latest snapshot instead of failing
+          // silently with a stale expectedVersion.
+          setActionMessage(t("summary.versionConflict"));
+          await fetchTasks("");
+        } else {
+          setActionError(`${result.error.code}: ${result.error.message}`);
+        }
       } else {
         setActionMessage(result.idempotent ? "Already applied" : "Task updated");
 				await fetchTasks("");
@@ -285,7 +334,9 @@ export function TaskMonitorPanel({
           {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
         </button>
         <span className="taskmonitor__title">{summaryMode ? t("summary.session") : t("summary.tasks")}</span>
-        <span className="taskmonitor__count">{tasks.length}</span>
+        <span className="taskmonitor__count" title={indexProgress.total > 0 ? `${indexProgress.indexed}/${indexProgress.total} indexed` : undefined}>
+          {indexProgress.total > tasks.length ? `${tasks.length}/${indexProgress.total}` : tasks.length}
+        </span>
         <button
           className="taskmonitor__refresh"
 			onClick={() => {
@@ -322,6 +373,14 @@ export function TaskMonitorPanel({
 				</div>
 			)}
 			{indexProgress.partial && <div className="taskmonitor__indexing">Indexing tasks ({indexProgress.indexed}/{indexProgress.total})</div>}
+			{staleNotice && <div className="taskmonitor__state taskmonitor__state--error">{staleNotice}</div>}
+			{warnings.length > 0 && (
+				<div className="taskmonitor__state taskmonitor__state--warning">
+					{warnings.map((warning, i) => (
+						<span key={i}>{warning}</span>
+					))}
+				</div>
+			)}
           {summaryMode && <div className="taskmonitor__category-title">{t("summary.tasks")}</div>}
           {actionError && <div className="taskmonitor__state taskmonitor__state--error">{actionError}</div>}
           {actionMessage && <div className="taskmonitor__state">{actionMessage}</div>}

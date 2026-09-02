@@ -1,6 +1,7 @@
 package taskmonitor
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -487,7 +488,8 @@ func (s *FileStore) AppendAuditEvent(ctx context.Context, projectDir string, ev 
 	defer f.Close()
 	_ = f.Chmod(0o600)
 
-	// Read current events to compute next sequence (safe under lock)
+	// Read current events to compute the next sequence and decide rotation
+	// (safe under lock).
 	if _, err := f.Seek(0, 0); err != nil {
 		return err
 	}
@@ -495,27 +497,34 @@ func (s *FileStore) AppendAuditEvent(ctx context.Context, projectDir string, ev 
 	if err != nil {
 		return err
 	}
-	max := 0
-	for line := range strings.SplitSeq(string(raw), "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		var existing TaskEvent
-		if err := json.Unmarshal([]byte(line), &existing); err != nil {
-			continue
-		}
-		if existing.Sequence > max {
-			max = existing.Sequence
+	existing, max := parseEventLines(raw)
+	// A crash can leave a partial trailing line; truncate it so the append
+	// never concatenates onto garbage.
+	trim := len(raw)
+	if n := len(raw); n > 0 && raw[n-1] != '\n' {
+		if last := bytes.LastIndexByte(raw, '\n'); last >= 0 {
+			trim = last + 1
+		} else {
+			trim = 0
 		}
 	}
 	ev.Sequence = max + 1
 	if err := ev.Validate(); err != nil {
 		return fmt.Errorf("append audit event: %w", err)
 	}
+	// Long event logs are collapsed so disk usage stays bounded and the
+	// sequence scan above stays cheap.
+	if len(existing) >= maxEventsBeforeRotate {
+		return s.rotateEvents(f, existing, ev, max)
+	}
 	data, err := json.Marshal(ev)
 	if err != nil {
 		return err
+	}
+	if trim < len(raw) {
+		if err := f.Truncate(int64(trim)); err != nil {
+			return err
+		}
 	}
 	// Append at end of locked file
 	if _, err := f.Seek(0, 2); err != nil {
@@ -523,6 +532,9 @@ func (s *FileStore) AppendAuditEvent(ctx context.Context, projectDir string, ev 
 	}
 	if _, err := f.WriteString(string(data) + "\n"); err != nil {
 		return err
+	}
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("append audit event: sync: %w", err)
 	}
 	committed = true
 	return nil

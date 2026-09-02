@@ -665,3 +665,63 @@ func mustUpsertControl(t *testing.T, s *InMemoryStore, proj string, snap TaskSna
 		t.Fatal(err)
 	}
 }
+
+func TestControlService_RequeueCapAndBackoff(t *testing.T) {
+	origNow := timeNow
+	defer func() { timeNow = origNow }()
+	now := time.Now()
+	timeNow = func() time.Time { return now }
+
+	s := NewInMemoryStore()
+	cs := NewControlService(s)
+	ctx := context.Background()
+	mustUpsertControl(t, s, "/p", TaskSnapshot{
+		SchemaVersion: 1, TaskID: "failed", SessionID: "s1",
+		State: TaskStateFailed, Version: 3,
+		CreatedAt: now.Add(-time.Hour), UpdatedAt: now.Add(-time.Hour),
+	})
+
+	// 1st requeue: accepted and recorded.
+	res, err := cs.RequeueTask(ctx, "/p", "failed", 3, "")
+	if err != nil || !res.Accepted {
+		t.Fatalf("first requeue must be accepted: %+v, %v", res, err)
+	}
+	snap, _ := s.GetTask(ctx, "/p", "failed")
+	if snap.RequeueCount != 1 {
+		t.Fatalf("RequeueCount = %d, want 1", snap.RequeueCount)
+	}
+
+	refail := func() uint64 {
+		cur, _ := s.GetTask(ctx, "/p", "failed")
+		cur.State = TaskStateFailed
+		cur.Version++
+		if err := s.SaveTask(ctx, "/p", *cur); err != nil {
+			t.Fatal(err)
+		}
+		return cur.Version
+	}
+
+	// Immediate retry: inside the 30s backoff window.
+	res, err = cs.RequeueTask(ctx, "/p", "failed", refail(), "")
+	if err != nil || res.Error == nil || res.Error.Code != ErrTaskRequeueBackoff {
+		t.Fatalf("requeue inside backoff must be rejected: %+v, %v", res, err)
+	}
+
+	// After 30s the second requeue is accepted.
+	now = now.Add(31 * time.Second)
+	res, err = cs.RequeueTask(ctx, "/p", "failed", refail(), "")
+	if err != nil || !res.Accepted {
+		t.Fatalf("second requeue after backoff must be accepted: %+v, %v", res, err)
+	}
+	snap, _ = s.GetTask(ctx, "/p", "failed")
+	if snap.RequeueCount != 2 {
+		t.Fatalf("RequeueCount = %d, want 2", snap.RequeueCount)
+	}
+
+	// Third requeue hits the hard limit regardless of backoff.
+	now = now.Add(time.Hour)
+	res, err = cs.RequeueTask(ctx, "/p", "failed", refail(), "")
+	if err != nil || res.Error == nil || res.Error.Code != ErrTaskRequeueLimit {
+		t.Fatalf("third requeue must hit the limit: %+v, %v", res, err)
+	}
+}

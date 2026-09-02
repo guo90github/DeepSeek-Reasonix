@@ -396,3 +396,48 @@ func TestFileStore_SaveTask_CorruptSnapshotRejected(t *testing.T) {
 		t.Fatalf("expected corrupt-snapshot rejection, got %v", err)
 	}
 }
+
+func TestFileStore_RejectsTaskIDTraversalVariants(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFileStore(".reasonix/tasks")
+	ctx := context.Background()
+	cases := []string{
+		"../escape", `..\escape`, "a/../../escape", `a\..\..\escape`,
+		"/abs/escape", `\abs\escape`, "a/b", `a\b`, ".", "..", "..", "a/..",
+	}
+	for _, id := range cases {
+		if _, err := store.GetTask(ctx, dir, id); err == nil {
+			t.Fatalf("GetTask(%q) must be rejected", id)
+		}
+		if _, err := store.ListEvents(ctx, dir, id, 0); err == nil {
+			t.Fatalf("ListEvents(%q) must be rejected", id)
+		}
+		snap := TaskSnapshot{SchemaVersion: 1, TaskID: id, SessionID: "s", Version: 1, State: TaskStateRunning, CreatedAt: time.Now(), UpdatedAt: time.Now()}
+		if err := store.SaveTask(ctx, dir, snap); err == nil {
+			t.Fatalf("SaveTask(%q) must be rejected", id)
+		}
+	}
+}
+
+func TestFileStore_RejectsSymlinkChainInsideTaskDir(t *testing.T) {
+	project := t.TempDir()
+	outside := t.TempDir()
+	root := filepath.Join(project, ".reasonix", "tasks")
+	taskDir := filepath.Join(root, "t1")
+	if err := os.MkdirAll(filepath.Join(taskDir, "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Two-level chain: nested dir is a symlink pointing outside, with a real
+	// child beneath it that would resolve through the link.
+	if err := os.Symlink(outside, filepath.Join(taskDir, "nested")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	store := NewFileStore(".reasonix/tasks")
+	// The chain guard must reject reads/writes reaching through it.
+	if _, err := store.GetTask(context.Background(), project, "t1"); err == nil {
+		t.Fatal("GetTask must reject a task dir whose nested path is a symlink")
+	}
+	if _, err := store.ListEvents(context.Background(), project, "t1", 0); err == nil {
+		t.Fatal("ListEvents must reject a task dir whose nested path is a symlink")
+	}
+}

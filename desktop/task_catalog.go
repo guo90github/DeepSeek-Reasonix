@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -144,18 +145,27 @@ func (a *App) ListTaskPage(req TaskPageRequest) TaskPage {
 		out.Status.LastError = err.Error()
 		return out
 	}
+	// A project that is not (yet) indexed must not fail the whole page: skip
+	// it and name it in status.warnings so the panel keeps showing the rest.
+	valid := keys[:0]
 	for _, key := range keys {
-		if _, ok, lookupErr := catalog.Project(a.bootContext(), key); lookupErr != nil || !ok {
-			out.Status.LastError = "unknown project key"
-			return out
+		if _, ok, lookupErr := catalog.Project(a.bootContext(), key); lookupErr == nil && ok {
+			valid = append(valid, key)
+			continue
 		}
+		out.Status.Warnings = append(out.Status.Warnings, fmt.Sprintf("project %q is not indexed yet; its tasks are hidden", key))
 	}
-	page, err := catalog.ListPage(a.bootContext(), taskcatalog.PageRequest{ProjectKeys: keys, SessionID: sessionID,
+	if len(valid) == 0 {
+		out.Status.LastError = "no indexed project"
+		return out
+	}
+	page, err := catalog.ListPage(a.bootContext(), taskcatalog.PageRequest{ProjectKeys: valid, SessionID: sessionID,
 		States: req.States, Query: req.Query, Cursor: req.Cursor, Limit: req.Limit})
 	if err != nil {
 		out.Status.LastError = err.Error()
 		return out
 	}
+	page.Status.Warnings = append(page.Status.Warnings, out.Status.Warnings...)
 	a.overlayTaskCatalogRuntime(page.Items)
 	return TaskPage{Items: page.Items, NextCursor: page.NextCursor, Revision: page.Revision,
 		Partial: page.Partial, StaleCursor: page.StaleCursor, Status: page.Status}
@@ -296,4 +306,20 @@ func (a *App) RebuildTaskCatalog() error {
 		items = append(items, taskcatalog.Project{Root: project.Root, Label: projectDisplayName(project)})
 	}
 	return taskcatalog.RebuildSharedCatalog(a.bootContext(), items)
+}
+
+// PruneTasks archives terminal tasks beyond maxRetained for the project bound
+// to projectKey (0 = taskmonitor default). In-memory stores have nothing to
+// prune and report an empty result.
+func (a *App) PruneTasks(projectKey string, maxRetained int) (taskmonitor.PruneResult, error) {
+	project, ok := a.resolveTaskProject(projectKey)
+	if !ok {
+		return taskmonitor.PruneResult{}, fmt.Errorf("unknown project key")
+	}
+	if p, ok := a.taskStore().(interface {
+		PruneTasks(context.Context, string, int) (taskmonitor.PruneResult, error)
+	}); ok {
+		return p.PruneTasks(a.bootContext(), project.Root, maxRetained)
+	}
+	return taskmonitor.PruneResult{}, nil
 }

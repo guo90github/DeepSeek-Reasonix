@@ -40,6 +40,9 @@ type Status struct {
 	Pending   int64             `json:"pending"`
 	Failed    int64             `json:"failed"`
 	LastError string            `json:"lastError,omitempty"`
+	// Warnings carries non-fatal per-project problems (N6): a page still
+	// returns results while a missing project key is skipped and named here.
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 type Project struct {
@@ -548,7 +551,10 @@ func (c *Catalog) ListPage(ctx context.Context, req PageRequest) (Page, error) {
 		out.StaleCursor = true
 		return out, nil
 	}
-	where := []string{`s.health='ok'`, `s.missing_since=0`}
+	// Tombstone rows (health='missing', N5) are surfaced during their grace
+	// window so a task whose file vanished shows as removed instead of
+	// disappearing silently; corrupt rows stay hidden.
+	where := []string{`s.health IN ('ok','missing')`}
 	args := []any{}
 	if len(req.ProjectKeys) > 0 {
 		parts := make([]string, len(req.ProjectKeys))
@@ -580,7 +586,7 @@ func (c *Catalog) ListPage(ctx context.Context, req PageRequest) (Page, error) {
 		args = append(args, cur.Updated, cur.Updated, cur.Project, cur.Updated, cur.Project, cur.Task)
 	}
 	args = append(args, limit+1)
-	rows, err := c.db.QueryContext(ctx, `SELECT s.project_key,p.project_label,s.snapshot_json FROM task_snapshots s JOIN task_projects p ON p.project_key=s.project_key
+	rows, err := c.db.QueryContext(ctx, `SELECT s.project_key,p.project_label,s.health,s.snapshot_json FROM task_snapshots s JOIN task_projects p ON p.project_key=s.project_key
         WHERE `+strings.Join(where, ` AND `)+` ORDER BY s.updated_at DESC,s.project_key,s.task_id LIMIT ?`, args...)
 	if err != nil {
 		return out, err
@@ -588,14 +594,18 @@ func (c *Catalog) ListPage(ctx context.Context, req PageRequest) (Page, error) {
 	defer rows.Close()
 	for rows.Next() {
 		var item Item
+		var health string
 		var raw []byte
-		if err := rows.Scan(&item.ProjectKey, &item.ProjectLabel, &raw); err != nil {
+		if err := rows.Scan(&item.ProjectKey, &item.ProjectLabel, &health, &raw); err != nil {
 			return out, err
 		}
 		if json.Unmarshal(raw, &item.Task) != nil {
 			continue
 		}
 		item.Task.ReconcileRuntime(time.Now())
+		if health == "missing" {
+			item.Task.State = taskmonitor.TaskStateRemoved
+		}
 		out.Items = append(out.Items, item)
 	}
 	if len(out.Items) > limit {

@@ -295,6 +295,9 @@ type TaskTool struct {
 	// sub-agent gets its own use_capability frontend so ledger state stays
 	// isolated while connections reuse the parent Host.
 	capabilityRuntime *MCPCapabilityRuntime
+	// parallelMaxStepsBudget caps the summed child step budgets of one
+	// parallel_tasks call; <=0 selects DefaultParallelMaxStepsBudget.
+	parallelMaxStepsBudget int
 }
 
 // TaskToolOptions holds the construction parameters for a TaskTool.
@@ -468,6 +471,15 @@ func (t *TaskTool) WithCapabilityRuntime(rt *MCPCapabilityRuntime) *TaskTool {
 	return t
 }
 
+// WithParallelMaxStepsBudget sets the aggregate step cap enforced by
+// parallel_tasks per call (<=0 selects DefaultParallelMaxStepsBudget).
+func (t *TaskTool) WithParallelMaxStepsBudget(n int) *TaskTool {
+	if t != nil {
+		t.parallelMaxStepsBudget = n
+	}
+	return t
+}
+
 func (t *TaskTool) Name() string { return "task" }
 
 func (t *TaskTool) Description() string {
@@ -497,6 +509,12 @@ func (t *TaskTool) Schema() json.RawMessage {
 // writers. Conservative classification keeps the parallel-dispatch path from
 // running two sub-agents at once and letting their writes race.
 func (t *TaskTool) ReadOnly() bool { return false }
+
+// PlanModeSafe is false (C1): a writer sub-agent must never be classified as
+// plan-safe by omission. Declaring the unsafe tri-state routes the call to the
+// plan-mode approval/block policy instead of leaving it "unknown", so planning
+// cannot start a whole-workspace writer without an explicit gate.
+func (t *TaskTool) PlanModeSafe() bool { return false }
 
 // ResolveProfile extracts model/effort from task args (and optional profile
 // overrides) for dispatch-line display. Runtime execution re-resolves with the
@@ -906,6 +924,7 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 			jobCtx = WithSubagentClaimID(jobCtx, claimID)
 			trk.running()
 			answer, err := runSession(jobCtx, trk.wrap(), writerRegistered)
+			t.reportBackgroundUsage(jm, jobs.JobIDFromContext(jobCtx), trk)
 			if err != nil {
 				return FormatSubagentRunResult("", run, true), errors.Join(err, t.transcripts.SaveFailed(run))
 			}
@@ -948,6 +967,18 @@ func (t *TaskTool) RunProfileSpec(ctx context.Context, spec ProfileExecSpec) (re
 		return FormatSubagentRunResult(answer, run, false), nil
 	}
 	return GuardSubagentHostDecisionText(answer), nil
+}
+
+// reportBackgroundUsage forwards the completed sub-agent's observed usage to
+// the job manager so the task recorder can persist a cost event. The quote is
+// computed with the parent's display context; without pricing it degrades to
+// an unavailable quote. Best-effort, like all task monitoring.
+func (t *TaskTool) reportBackgroundUsage(jm *jobs.Manager, jobID string, trk *subagentProgressTracker) {
+	usage, steps := trk.usageSnapshot()
+	if usage.Usage == nil || t.quoteContext == nil {
+		return
+	}
+	jm.RecordTaskUsage(jobID, event.EnsureCostQuote(usage, t.quoteContext), steps)
 }
 
 func (t *TaskTool) acquireSlot(ctx context.Context, req AcquireRequest) (func(), int64, error) {

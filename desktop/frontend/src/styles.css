@@ -39737,6 +39737,11 @@ body > .mermaid-diagram--fullscreen {
 .taskmonitor__confirm .taskmonitor__confirm-stop:hover:not(:disabled),.taskmonitor__confirm .taskmonitor__confirm-stop:focus-visible { border-color:var(--danger,#ef4444); outline-color:color-mix(in srgb,var(--danger,#ef4444) 42%,transparent); }
 .taskmonitor__error { color:#ef4444; margin-top:6px; }
 .taskmonitor__message { color:#4ade80; margin-top:6px; }
+.taskmonitor__err-summary { display:block; width:100%; padding:0; border:0; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.taskmonitor__err-summary:hover { color:var(--accent); }
+.taskmonitor__err-summary--expanded { display:block; -webkit-line-clamp:unset; overflow:visible; }
+.taskmonitor__long-running { color:var(--danger,#ef4444); font-weight:700; cursor:default; }
+.taskmonitor__confirm-duration { opacity:.75; }
 
 /* Integrated terminal */
 :root {
@@ -40064,3 +40069,4 @@ body > .mermaid-diagram--fullscreen {
 .remote-surface__ask-question { display: flex; flex-direction: column; gap: 6px; }
 .remote-surface__ask-prompt { font-size: var(--text-sm); font-weight: 600; }
 .remote-surface__ask-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.taskmonitor__state--warning { color:#eab308; display:flex; flex-direction:column; gap:2px; }

@@ -33,6 +33,10 @@ const (
 	TaskStateCancelled TaskState = "cancelled"
 	TaskStateStale     TaskState = "stale"
 	TaskStateSkipped   TaskState = "skipped"
+	// TaskStateRemoved marks a projection tombstone (N5): the task file
+	// disappeared and the catalog only surfaces the row during its missing
+	// grace window. Never persisted by the recorder — observer-side only.
+	TaskStateRemoved TaskState = "removed"
 
 	RuntimeStateUnknown RuntimeState = "unknown"
 	RuntimeStateAlive   RuntimeState = "alive"
@@ -97,6 +101,7 @@ var ValidTaskStates = map[TaskState]bool{
 	TaskStateCancelled: true,
 	TaskStateStale:     true,
 	TaskStateSkipped:   true,
+	TaskStateRemoved:   true,
 }
 
 // IsKnown reports whether s is one of the well-known states.
@@ -105,7 +110,7 @@ func (s TaskState) IsKnown() bool { return ValidTaskStates[s] }
 // Terminal reports whether s is a terminal state.
 func (s TaskState) Terminal() bool {
 	switch s {
-	case TaskStateSucceeded, TaskStateFailed, TaskStateCancelled, TaskStateStale, TaskStateSkipped:
+	case TaskStateSucceeded, TaskStateFailed, TaskStateCancelled, TaskStateStale, TaskStateSkipped, TaskStateRemoved:
 		return true
 	default:
 		return false
@@ -189,6 +194,16 @@ type TaskSnapshot struct {
 	AggDone   int      `json:"agg_done,omitempty"`
 	AggTotal  int      `json:"agg_total,omitempty"`
 	AggFailed int      `json:"agg_failed,omitempty"`
+	// RequeueCount/LastRequeueAt (P1.3/A3): cumulative automated requeues and
+	// the last one's timestamp; the control service caps and backoffs on them.
+	RequeueCount  int       `json:"requeue_count,omitempty"`
+	LastRequeueAt time.Time `json:"last_requeue_at,omitempty"`
+	// Cost display (P1.2/A2): observed sub-agent spend. CostStatus is "" or
+	// "unavailable"; CostTotal is a preformatted display string.
+	StepsUsed      int    `json:"steps_used,omitempty"`
+	StepsEstimated int    `json:"steps_estimated,omitempty"`
+	CostTotal      string `json:"cost_total,omitempty"`
+	CostStatus     string `json:"cost_status,omitempty"`
 }
 
 // Validate returns a non-nil error if required fields are missing or
@@ -253,6 +268,12 @@ func (ts TaskSnapshot) Validate() error {
 	if ts.Position < 0 {
 		return fmt.Errorf("TaskSnapshot.Position must not be negative, got %d", ts.Position)
 	}
+	if ts.RequeueCount < 0 {
+		return fmt.Errorf("TaskSnapshot.RequeueCount must not be negative, got %d", ts.RequeueCount)
+	}
+	if ts.StepsUsed < 0 {
+		return fmt.Errorf("TaskSnapshot.StepsUsed must not be negative, got %d", ts.StepsUsed)
+	}
 	return nil
 }
 
@@ -267,6 +288,9 @@ type TaskEvent struct {
 	RuntimeState RuntimeState `json:"runtime_state,omitempty"`
 	ErrorCode    string       `json:"error_code,omitempty"`
 	ErrorSummary string       `json:"error_summary,omitempty"`
+	// Detail carries machine-readable context for non-state events (e.g. the
+	// collapsed-count of an events_rotated summary).
+	Detail string `json:"detail,omitempty"`
 }
 
 // Validate returns a non-nil error on required-field violations.
@@ -303,6 +327,10 @@ func (te TaskEvent) Validate() error {
 	}
 	if len(te.ErrorSummary) > maxErrorSummaryLen {
 		return fmt.Errorf("TaskEvent.ErrorSummary exceeds max length %d",
+			maxErrorSummaryLen)
+	}
+	if len(te.Detail) > maxErrorSummaryLen {
+		return fmt.Errorf("TaskEvent.Detail exceeds max length %d",
 			maxErrorSummaryLen)
 	}
 	return nil

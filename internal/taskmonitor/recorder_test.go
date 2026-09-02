@@ -353,3 +353,33 @@ func TestTaskRecorder_SameJobIDAcrossSessionsUsesDistinctMonitorIDs(t *testing.T
 		t.Fatalf("session-b task = %+v", second)
 	}
 }
+
+func TestTaskRecorder_SessionlessJobIDIsStableAcrossRecorders(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFileStore(".reasonix/tasks")
+	// Two recorders attached to the same jobs.Manager (CLI + Desktop observing
+	// the same sessionless job) must converge on one monitor row (N4).
+	r1 := NewTaskRecorder(store, dir, func() string { return "" })
+	r2 := NewTaskRecorder(store, dir, func() string { return "" })
+	ctx := context.Background()
+
+	r1.RecordStart("task-1", "bash", "")
+	// The second recorder observes the same job and resolves the same id; its
+	// RecordStart CAS-conflicts and is swallowed, so no duplicate row appears.
+	r2.RecordStart("task-1", "bash", "")
+	r1.RecordDone("task-1", jobs.Done, nil)
+
+	tasks, err := store.ListTasks(ctx, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 {
+		t.Fatalf("two recorders for one sessionless job must produce one row, got %d", len(tasks))
+	}
+	if tasks[0].TaskID != sessionlessMonitorTaskID("task-1") {
+		t.Fatalf("monitor id = %q, want the stable derived id", tasks[0].TaskID)
+	}
+	if tasks[0].State != TaskStateSucceeded {
+		t.Fatalf("terminal state = %q, want succeeded", tasks[0].State)
+	}
+}

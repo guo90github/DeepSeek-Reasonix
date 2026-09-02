@@ -50,7 +50,8 @@ func (p *ParallelTasksTool) Schema() json.RawMessage {
         "tools":{"type":"array","items":{"type":"string"},"description":"Optional tool whitelist for the sub-agent."},
         "max_steps":{"type":"integer","description":"Optional max tool-call rounds. Defaults to half the parent agent's step budget (minimum 5), same as task.","minimum":1},
         "model":{"type":"string","description":"Optional model override."},
-        "effort":{"type":"string","description":"Optional reasoning effort override."}
+        "effort":{"type":"string","description":"Optional reasoning effort override."},
+        "depends_on":{"type":"array","items":{"type":"integer","minimum":0},"description":"Optional 0-based indices of sibling tasks this task depends on. Recorded as dependency edges in the task tree; execution stays parallel, so use task ordering semantics only for documentation. Omit for fully independent tasks."}
       },
       "required":["prompt"]
     }
@@ -71,6 +72,7 @@ type parallelTaskItem struct {
 	MaxSteps    int      `json:"max_steps"`
 	Model       string   `json:"model"`
 	Effort      string   `json:"effort"`
+	DependsOn   []int    `json:"depends_on"`
 }
 
 type parallelTaskStatus string
@@ -80,6 +82,11 @@ type parallelTaskStatus string
 // children run simultaneously, but without an input cap a single model call
 // could still reserve unbounded memory and queue unbounded API work (#6933).
 const parallelTasksMaxTasks = 64
+
+// DefaultParallelMaxStepsBudget caps the summed child step budgets of one
+// parallel_tasks call (A1): 64 children at the default half-parent budget
+// would otherwise mean at least 320 model calls with no spend guard.
+const DefaultParallelMaxStepsBudget = 200
 
 const (
 	parallelTaskPending   parallelTaskStatus = "pending"
@@ -107,33 +114,14 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 	}()
 	ctx = withSubagentProgressMerger(ctx, merger)
 
-	var params struct {
-		Tasks []parallelTaskItem `json:"tasks"`
-	}
-	dec := json.NewDecoder(bytes.NewReader(args))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&params); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
-	}
-	if len(params.Tasks) == 0 {
-		return "", fmt.Errorf("at least one task is required")
-	}
-	if len(params.Tasks) == 1 {
-		return "", fmt.Errorf("parallel_tasks with a single task is equivalent to task; use task instead")
-	}
-	if len(params.Tasks) > parallelTasksMaxTasks {
-		return "", fmt.Errorf("parallel_tasks accepts at most %d tasks; got %d", parallelTasksMaxTasks, len(params.Tasks))
-	}
-	if err := validateParallelTaskItems(params.Tasks); err != nil {
+	items, err := p.parseAndValidate(args)
+	if err != nil {
 		return "", err
-	}
-	if p.taskTool == nil {
-		return "", fmt.Errorf("parallel_tasks is not configured")
 	}
 
 	// The group starts running once children begin dispatching.
 	merger.directStatus(parentID, subagentPhaseRunning)
-	ctx, _ = startTreeGroup(ctx, p.taskTool.treeObserver, ParentSession(ctx), parentID, fmt.Sprintf("parallel_tasks(%d)", len(params.Tasks)))
+	ctx, _ = startTreeGroup(ctx, p.taskTool.treeObserver, ParentSession(ctx), parentID, fmt.Sprintf("parallel_tasks(%d)", len(items)))
 
 	type subResult struct {
 		index  int
@@ -142,7 +130,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		err    error
 	}
 
-	n := len(params.Tasks)
+	n := len(items)
 
 	running := make([]bool, n)
 	done := make([]bool, n)
@@ -150,7 +138,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 	refs := make([]string, n)
 	taskErrs := make([]error, n)
 	statuses = make([]parallelTaskStatus, n)
-	for i := range params.Tasks {
+	for i := range items {
 		statuses[i] = parallelTaskPending
 	}
 
@@ -164,7 +152,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 		return fmt.Sprintf("task-%d", idx+1)
 	}
 	startTask := func(idx int) {
-		t := params.Tasks[idx]
+		t := items[idx]
 		running[idx] = true
 		label := makeLabel(t, idx)
 		subID := fmt.Sprintf("%s/sub-%d", parentID, idx+1)
@@ -179,7 +167,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 
 		wg.Go(func() {
 			modelRef, effortRef := p.taskTool.effectiveProfile(t.Model, t.Effort)
-			itemCtx := withParallelChildSlot(withCallContext(ctx, subID, subSinkFor(subID, sink), nil, PlanModeFromContext(ctx)), idx)
+			itemCtx := withParallelChildSlot(withCallContext(ctx, subID, subSinkFor(subID, sink), nil, PlanModeFromContext(ctx)), idx, parallelDependsOnFor(ctx, parentID, items, idx))
 			// Route through TaskTool's unified runner so persisted parent sessions
 			// retain one independently readable transcript per child. Headless runs
 			// remain ephemeral and still receive fair bounded previews.
@@ -215,7 +203,7 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 
 	markCancelled := func(err error) {
-		for i := range params.Tasks {
+		for i := range items {
 			if done[i] {
 				continue
 			}
@@ -229,10 +217,10 @@ func (p *ParallelTasksTool) Execute(ctx context.Context, args json.RawMessage) (
 			taskErrs[i] = err
 		}
 		// Tasks never dispatched are skipped children in the tree.
-		recordSkippedParallelChildren(ctx, parentID, params.Tasks, statuses)
+		recordSkippedParallelChildren(ctx, parentID, items, statuses)
 	}
 	completed := 0
-	for i := range params.Tasks {
+	for i := range items {
 		startTask(i)
 	}
 	processResult := func(r subResult) {
@@ -367,6 +355,87 @@ func validateParallelTaskItems(tasks []parallelTaskItem) error {
 		if strings.TrimSpace(t.Prompt) == "" {
 			return fmt.Errorf("task %d: prompt is required", i+1)
 		}
+		for _, dep := range t.DependsOn {
+			if dep < 0 || dep >= len(tasks) || dep == i {
+				return fmt.Errorf("task %d: depends_on index %d is out of range or self-referential", i+1, dep)
+			}
+		}
+	}
+	return nil
+}
+
+// parallelDependsOnFor resolves the declared dependency sibling monitor ids for
+// a parallel child (C2). Dependencies are named by their parentID/sub-N
+// siblings. Returns nil when nothing is declared.
+func parallelDependsOnFor(ctx context.Context, parentID string, tasks []parallelTaskItem, idx int) []string {
+	obs := taskTreeObserverFromContext(ctx)
+	if obs == nil || len(tasks[idx].DependsOn) == 0 {
+		return nil
+	}
+	sessionID := ParentSession(ctx)
+	out := make([]string, 0, len(tasks[idx].DependsOn))
+	for _, dep := range tasks[idx].DependsOn {
+		out = append(out, obs.TreeTaskID(sessionID, fmt.Sprintf("%s/sub-%d", parentID, dep+1)))
+	}
+	return out
+}
+
+// parseAndValidate decodes and checks a parallel_tasks request before any
+// child is dispatched: unknown fields, task count bounds, item validity, tool
+// configuration, and the aggregate step budget. All rejection happens before
+// runtime lookup so the group terminal stays accurate.
+func (p *ParallelTasksTool) parseAndValidate(args json.RawMessage) ([]parallelTaskItem, error) {
+	var params struct {
+		Tasks []parallelTaskItem `json:"tasks"`
+	}
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&params); err != nil {
+		return nil, fmt.Errorf("invalid args: %w", err)
+	}
+	if len(params.Tasks) == 0 {
+		return nil, fmt.Errorf("at least one task is required")
+	}
+	if len(params.Tasks) == 1 {
+		return nil, fmt.Errorf("parallel_tasks with a single task is equivalent to task; use task instead")
+	}
+	if len(params.Tasks) > parallelTasksMaxTasks {
+		return nil, fmt.Errorf("parallel_tasks accepts at most %d tasks; got %d", parallelTasksMaxTasks, len(params.Tasks))
+	}
+	if err := validateParallelTaskItems(params.Tasks); err != nil {
+		return nil, err
+	}
+	if p.taskTool == nil {
+		return nil, fmt.Errorf("parallel_tasks is not configured")
+	}
+	if err := p.checkStepBudget(params.Tasks); err != nil {
+		return nil, err
+	}
+	return params.Tasks, nil
+}
+
+// checkStepBudget rejects a parallel_tasks request whose summed child step
+// budgets exceed the per-call cap before any child starts. Children without an
+// explicit max_steps inherit the parent's half-budget (childMaxSteps); under an
+// unbounded parent they stay unbounded, which is itself over the cap.
+func (p *ParallelTasksTool) checkStepBudget(tasks []parallelTaskItem) error {
+	budget := p.taskTool.parallelMaxStepsBudget
+	if budget <= 0 {
+		budget = DefaultParallelMaxStepsBudget
+	}
+	total := 0
+	for i := range tasks {
+		steps := tasks[i].MaxSteps
+		if steps <= 0 {
+			steps = p.taskTool.childMaxSteps(0)
+			if steps <= 0 {
+				steps = budget + 1 // unbounded child: no finite aggregate
+			}
+		}
+		total += steps
+	}
+	if total > budget {
+		return fmt.Errorf("parallel_tasks total step budget %d exceeds the per-call limit of %d; split the batch into smaller parallel_tasks calls", total, budget)
 	}
 	return nil
 }

@@ -90,14 +90,15 @@ func finishTreeGroup(ctx context.Context, callID string, state taskmonitor.TaskS
 	obs.FinishGroup(ParentSession(ctx), callID, state)
 }
 
-// withParallelChildSlot overrides the base slot with the child's position.
-func withParallelChildSlot(ctx context.Context, idx int) context.Context {
+// withParallelChildSlot overrides the base slot with the child's position and
+// declared dependency edges (C2). dependsOn is nil for independent tasks.
+func withParallelChildSlot(ctx context.Context, idx int, dependsOn []string) context.Context {
 	obs := taskTreeObserverFromContext(ctx)
 	slot, ok := taskTreeSlotFromContext(ctx)
 	if obs == nil || !ok || slot.groupID == "" {
 		return ctx
 	}
-	return withTaskTreeSlot(ctx, taskTreeSlot{groupID: slot.groupID, position: idx + 1})
+	return withTaskTreeSlot(ctx, taskTreeSlot{groupID: slot.groupID, position: idx + 1, dependsOn: dependsOn})
 }
 
 // treeRecording tracks one sub-agent run's row; begin creates it (nil when

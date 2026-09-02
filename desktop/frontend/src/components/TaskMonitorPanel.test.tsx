@@ -1,5 +1,6 @@
 // Run: tsx src/components/TaskMonitorPanel.test.tsx
 
+import React from "react";
 import { JSDOM } from "jsdom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -63,6 +64,13 @@ globalThis.Event = dom.window.Event;
 globalThis.MouseEvent = dom.window.MouseEvent;
 globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
 globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
+// Node ≥21 exposes a native navigator whose language follows the OS locale,
+// which makes i18n-dependent assertions machine-dependent. Pin English here so
+// the suite is deterministic on zh-CN developers' machines too.
+Object.defineProperty(globalThis, "navigator", {
+  configurable: true,
+  value: { language: "en-US", userAgent: "test" },
+});
 
 let listTasksImpl: () => Promise<Task[]> = async () => [];
 let listEventsImpl: () => Promise<Event[]> = async () => [];
@@ -120,7 +128,7 @@ const mockApp = {
 };
 (window as unknown as { go: { main: { App: typeof mockApp } } }).go = { main: { App: mockApp } };
 
-const { TaskMonitorPanel } = await import("./TaskMonitorPanel");
+const { TaskMonitorPanel, useDebouncedValue } = await import("./TaskMonitorPanel");
 
 let activeRoot: Root | null = null;
 let activeHost: HTMLElement | null = null;
@@ -355,14 +363,15 @@ await check("calls the close callback", async () => {
 await check("opens the task session through the navigation callback", async () => {
   listTasksImpl = async () => [snap()];
   let openedTarget: string[] = [];
-  await renderPanel(undefined, async (tabID, taskID) => {
-    openedTarget = [tabID, taskID];
+  await renderPanel(undefined, async (tabID, sessionID) => {
+    openedTarget = [tabID, sessionID];
     return true;
   });
   await openPanel();
   await click(buttonByLabel("Task task-000 — Running"));
   await click(buttonByText("Open session"));
-  return JSON.stringify(openedTarget) === JSON.stringify(["tab-a", "task-0001"]);
+  // N13: the host callback receives the backend-resolved session id.
+  return JSON.stringify(openedTarget) === JSON.stringify(["tab-a", "sess-1"]);
 });
 
 await check("does not close the panel for a stale open completion", async () => {
@@ -441,6 +450,191 @@ await check("does not present requeue age as elapsed runtime", async () => {
   await renderPanel();
   await openPanel();
   return document.querySelector(".taskmonitor__time")?.textContent === "—";
+});
+
+// --- P2.1/P2.2: catalog mode — incremental poll merge + stale cursor ---
+
+function catalogPage(items: number[], nextCursor: string, extra: Record<string, unknown> = {}) {
+  return {
+    items: items.map((n) => ({ projectKey: "p", projectLabel: "P", task: { ...snap({ task_id: `t${n}`, __catalogKey: undefined }) } })),
+    nextCursor,
+    revision: 1,
+    partial: false,
+    staleCursor: false,
+    status: { state: "ready", mode: "disk", revision: 1, indexed: 5, total: 5, pending: 0, failed: 0 },
+    ...extra,
+  };
+}
+
+let listTaskPageImpl: (req: Record<string, unknown>) => Promise<Record<string, unknown>> = async () => catalogPage([], "");
+
+async function enableCatalogMode() {
+  (mockApp as unknown as Record<string, unknown>).ListTaskPage = async (req: Record<string, unknown>) => listTaskPageImpl(req);
+}
+function disableCatalogMode() {
+  delete (mockApp as unknown as Record<string, unknown>).ListTaskPage;
+}
+
+function taskRows() {
+  return document.querySelectorAll(".taskmonitor__task").length;
+}
+
+await check("polling merges pages instead of dropping loaded ones", async () => {
+  const calls: string[] = [];
+  listTaskPageImpl = async (req) => {
+    const cursor = String(req.cursor ?? "");
+    calls.push(cursor);
+    if (cursor === "") return catalogPage([1, 2, 3], "cur-2");
+    return catalogPage([4, 5], ""); // "load more" page
+  };
+  await enableCatalogMode();
+  try {
+    await renderPanel();
+    await openPanel();
+    if (taskRows() !== 3) return false;
+
+    await click(buttonByLabel("Refresh")); // poll with empty cursor
+    if (taskRows() !== 3) return false;
+
+    await click(buttonByText("Load more")); // append page 2
+    if (taskRows() !== 5) return false;
+
+    await click(buttonByLabel("Refresh")); // poll again: must not drop page 2
+    return taskRows() === 5 && calls.includes("cur-2");
+  } finally {
+    await cleanup();
+    disableCatalogMode();
+  }
+});
+
+await check("stale cursor clears pagination, notices, and refetches", async () => {
+  let staleSent = false;
+  const emptyCursorCalls: string[] = [];
+  listTaskPageImpl = async (req) => {
+    const cursor = String(req.cursor ?? "");
+    if (cursor === "") emptyCursorCalls.push(cursor);
+    if (cursor !== "" && !staleSent) {
+      staleSent = true;
+      return catalogPage([], "", { nextCursor: "cur-2", staleCursor: true, revision: 3 });
+    }
+    return catalogPage([1, 2], "cur-2");
+  };
+  await enableCatalogMode();
+  try {
+    await renderPanel();
+    await openPanel();
+    await click(buttonByText("Load more"));
+    // The stale response must surface the reload notice and refetch the home
+    // page; pagination then resumes on the fresh revision.
+    const noticed = document.body.textContent?.includes("reload") ?? false;
+    await flush();
+    return noticed && staleSent && emptyCursorCalls.length >= 2;
+  } finally {
+    await cleanup();
+    disableCatalogMode();
+  }
+});
+
+async function testQueryDebounce() {
+  // The UI-level typing simulation is unreliable under React 19's controlled
+  // inputs, so the debounce contract is pinned through useDebouncedValue
+  // directly with a tiny harness.
+  function DebounceHarness() {
+    const [value, setValue] = React.useState("");
+    const debounced = useDebouncedValue(value, 150);
+    return (
+      <span>
+        <button type="button" onClick={() => setValue("a")}>to-a</button>
+        <button type="button" onClick={() => setValue("ab")}>to-ab</button>
+        <button type="button" onClick={() => setValue("abc")}>to-abc</button>
+        <span data-debounced={debounced}>{debounced}</span>
+      </span>
+    );
+  }
+  activeHost = document.createElement("div");
+  document.body.appendChild(activeHost);
+  activeRoot = createRoot(activeHost);
+  await act(async () => {
+    activeRoot?.render(<DebounceHarness />);
+    await flush();
+  });
+  const fire = async (label: string) => {
+    await act(async () => {
+      const btn = Array.from(document.querySelectorAll("button")).find((b) => b.textContent === label);
+      btn?.click();
+    });
+  };
+  const debouncedNow = () => document.querySelector("[data-debounced]")?.textContent ?? "";
+  await fire("to-a");
+  await fire("to-ab");
+  await fire("to-abc");
+  const beforeSettle = debouncedNow();
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await flush();
+  });
+  const afterSettle = debouncedNow();
+  return beforeSettle === "" && afterSettle === "abc";
+}
+
+await check("query input debounces catalog fetches", testQueryDebounce);
+
+await check("count shows loaded/total when the catalog has more", async () => {
+  listTaskPageImpl = async () => catalogPage([1, 2, 3], "cur-2", { status: { state: "ready", mode: "disk", revision: 1, indexed: 500, total: 500, pending: 0, failed: 0 } });
+  await enableCatalogMode();
+  try {
+    await renderPanel();
+    await openPanel();
+    return document.querySelector(".taskmonitor__count")?.textContent === "3/500";
+  } finally {
+    await cleanup();
+    disableCatalogMode();
+  }
+});
+
+await check("page warnings render without failing the list", async () => {
+  listTaskPageImpl = async () => catalogPage([1], "", { status: { state: "ready", mode: "disk", revision: 1, indexed: 1, total: 1, pending: 0, failed: 0, warnings: ["project \"p\" is not indexed yet; its tasks are hidden"] } });
+  await enableCatalogMode();
+  try {
+    await renderPanel();
+    await openPanel();
+    const text = document.body.textContent ?? "";
+    return text.includes("not indexed yet") && document.querySelectorAll(".taskmonitor__task").length === 1;
+  } finally {
+    await cleanup();
+    disableCatalogMode();
+  }
+});
+
+await check("version conflict refreshes the list with a readable notice", async () => {
+  let listCalls = 0;
+  listTasksImpl = async () => {
+    listCalls += 1;
+    return [snap({ task_id: "conflicted", state: "failed", runtime_state: "exited" })];
+  };
+  const conflictRequeue = (mockApp as unknown as Record<string, unknown>).RequeueTaskForTab;
+  (mockApp as unknown as Record<string, unknown>).RequeueTaskForTab = async () => ({
+    schema_version: 1,
+    command: "requeue",
+    task_id: "x",
+    accepted: false,
+    idempotent: false,
+    error: { code: "task_version_conflict", message: "version mismatch" },
+  });
+  try {
+    await renderPanel();
+    await openPanel();
+    const before = listCalls;
+    const row = await buttonByLabel("Task conflict — Failed");
+    await click(row);
+    await click(buttonByText("Requeue"));
+    const text = document.body.textContent ?? "";
+    const noticed = text.includes("changed elsewhere") || text.includes("別處更新") || text.includes("别处更新");
+    return noticed && listCalls > before;
+  } finally {
+    (mockApp as unknown as Record<string, unknown>).RequeueTaskForTab = conflictRequeue;
+    await cleanup();
+  }
 });
 
 dom.window.close();

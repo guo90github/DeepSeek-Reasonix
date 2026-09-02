@@ -68,7 +68,38 @@ const (
 	ErrTaskIdempotencyConflict = "task_idempotency_conflict"
 	ErrTaskAuditFailed         = "task_audit_failed"
 	ErrTaskRuntimeUnavailable  = "task_runtime_unavailable"
+	ErrTaskRequeueLimit        = "task_requeue_limit"
+	ErrTaskRequeueBackoff      = "task_requeue_backoff"
 )
+
+// maxTaskRequeues caps automated requeues per task; beyond it only a fresh
+// task may run (A3). requeueBackoff widens the wait between retries.
+const maxTaskRequeues = 2
+
+func requeueBackoff(requeues int) time.Duration {
+	if requeues >= 2 {
+		return 5 * time.Minute
+	}
+	return 30 * time.Second
+}
+
+// requeueGateResult applies the requeue cap and backoff to a snapshot,
+// returning a rejection result when the requeue must not proceed (A3/P1.3).
+func requeueGateResult(cmd, taskID string, snap TaskSnapshot) (ControlResult, bool) {
+	base := ControlResult{SchemaVersion: 1, Command: cmd, TaskID: taskID, SessionID: snap.SessionID,
+		State: snap.State, RuntimeState: snap.RuntimeState, Version: snap.Version}
+	if snap.RequeueCount >= maxTaskRequeues {
+		base.Error = &CtrlError{Code: ErrTaskRequeueLimit, Message: fmt.Sprintf("task has been requeued %d times (limit %d); start a new task instead", snap.RequeueCount, maxTaskRequeues)}
+		return base, true
+	}
+	if !snap.LastRequeueAt.IsZero() {
+		if remaining := requeueBackoff(snap.RequeueCount) - timeNow().Sub(snap.LastRequeueAt); remaining > 0 {
+			base.Error = &CtrlError{Code: ErrTaskRequeueBackoff, Message: fmt.Sprintf("requeue cooling down for %s", remaining.Round(time.Second))}
+			return base, true
+		}
+	}
+	return ControlResult{}, false
+}
 
 // ControlService provides atomic control operations on tasks.
 type ControlService struct {
@@ -223,6 +254,12 @@ func (cs *ControlService) controlOp(ctx context.Context, projectDir, taskID stri
 			Error: &CtrlError{Code: ErrTaskNotRequeueable, Message: "task is not failed or stale"},
 		}, nil
 	}
+	if requeue && requeueable {
+		if result, reject := requeueGateResult(cmd, taskID, *snap); reject {
+			releaseClaim()
+			return result, nil
+		}
+	}
 	if requeueable && snap.RuntimeState.Effective() == RuntimeStateAlive {
 		releaseClaim()
 		return ControlResult{
@@ -285,6 +322,8 @@ func (cs *ControlService) controlOp(ctx context.Context, projectDir, taskID stri
 		if requeueable {
 			next.RuntimeLeaseUntil = time.Time{}
 			next.RuntimeOwnerID = ""
+			next.RequeueCount++
+			next.LastRequeueAt = next.UpdatedAt
 		}
 		if runtimeControl && next.RuntimeState.Effective() == RuntimeStateAlive && next.RuntimeLeaseUntil.IsZero() {
 			// A successful kill request is only an admission signal: the runtime

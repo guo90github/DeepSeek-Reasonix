@@ -95,3 +95,52 @@ func TestPageCursorIsRevisionBound(t *testing.T) {
 		t.Fatalf("stale=%#v err=%v", stale, err)
 	}
 }
+
+func TestListPageSurfacesTombstoneAsRemoved(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	projectRoot := t.TempDir()
+	catalog, err := Open(ctx, filepath.Join(t.TempDir(), "tasks.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = catalog.Close(context.Background()) })
+	project, err := catalog.RegisterProject(ctx, projectRoot, "Demo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := catalog.ObservedStore()
+	now := time.Now()
+	if err := store.SaveTask(ctx, projectRoot, snapshot("task-1", "session-1", 1, now)); err != nil {
+		t.Fatal(err)
+	}
+	flushCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	if err := catalog.Flush(flushCtx); err != nil {
+		t.Fatal(err)
+	}
+
+	// Healthy row: page returns it with its stored state.
+	page, err := catalog.ListPage(ctx, PageRequest{ProjectKeys: []string{project.Key}, Limit: 50})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Task.State != taskmonitor.TaskStateRunning {
+		t.Fatalf("healthy page=%#v err=%v", page, err)
+	}
+
+	// Tombstone the row (as reconcile does when the task file disappears).
+	if _, err := catalog.db.ExecContext(ctx, `UPDATE task_snapshots SET health='missing', missing_since=? WHERE project_key=? AND task_id=?`,
+		now.UnixMilli(), project.Key, "task-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// During the grace window the page must surface the row as removed.
+	page, err = catalog.ListPage(ctx, PageRequest{ProjectKeys: []string{project.Key}, Limit: 50})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("tombstone row must stay visible during its grace window, got %d items", len(page.Items))
+	}
+	if page.Items[0].Task.State != taskmonitor.TaskStateRemoved {
+		t.Fatalf("tombstone state = %q, want removed", page.Items[0].Task.State)
+	}
+}

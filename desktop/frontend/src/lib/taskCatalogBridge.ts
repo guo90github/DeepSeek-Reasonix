@@ -1,6 +1,6 @@
 import type { ControlResult } from "./types";
 import type {
-  TaskActionRequest, TaskCatalogStatus, TaskEventPage, TaskEventPageRequest, TaskPage, TaskPageRequest,
+  PruneResult, TaskActionRequest, TaskCatalogStatus, TaskEventPage, TaskEventPageRequest, TaskPage, TaskPageRequest,
 } from "./taskCatalogTypes";
 
 export interface TaskCatalogBindings {
@@ -12,6 +12,7 @@ export interface TaskCatalogBindings {
   OpenTaskSessionByKey(req: { projectKey: string; taskId: string }): Promise<ControlResult>;
   GetTaskCatalogStatus(): Promise<TaskCatalogStatus>;
   RebuildTaskCatalog(): Promise<void>;
+  PruneTasks(projectKey: string, maxRetained: number): Promise<PruneResult>;
 }
 
 export function makeMockTaskCatalogBindings(): TaskCatalogBindings {
@@ -23,5 +24,6 @@ export function makeMockTaskCatalogBindings(): TaskCatalogBindings {
     async RequeueTaskByKey() { return unavailable("requeue"); }, async OpenTaskSessionByKey() { return unavailable("open_session"); },
     async GetTaskCatalogStatus() { return { state: "ready", mode: "memory", revision: 1, indexed: 0, total: 0, pending: 0, failed: 0 }; },
     async RebuildTaskCatalog() {},
+    async PruneTasks() { return { archived: 0, total: 0 }; },
   };
 }

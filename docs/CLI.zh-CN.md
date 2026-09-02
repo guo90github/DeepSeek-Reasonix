@@ -238,6 +238,11 @@ reasonix task show <task-id> --json [--dir SESSION_DIR | --project-root PATH] [-
 reasonix task monitor list --json [--dir PROJECT_DIR]
 reasonix task monitor status <task-id> --json [--dir PROJECT_DIR]
 reasonix task monitor events <task-id> --json|--jsonl [--dir PROJECT_DIR] [--after N] [--follow]
+reasonix task monitor tmux <attach|status|open|detach> <task-id> [--dir PROJECT_DIR]   # CLI-only
+
+`task monitor tmux` 是仅 CLI 提供的终端复用器集成；桌面任务面板不实现 tmux——
+面板操作按钮与 CLI 共用同一项目任务存储。
+
 reasonix hook list --json [--project-root PATH] [--home-dir PATH]
 reasonix hook status --json [--project-root PATH] [--home-dir PATH]
 ```

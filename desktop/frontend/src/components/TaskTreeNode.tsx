@@ -4,7 +4,7 @@
 // detail/events/actions block when expanded. Rendering is display-only — the
 // engine (fleet driveFleet) owns scheduling.
 
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import {
   AlertCircle,
   ChevronDown,
@@ -24,7 +24,7 @@ type TaskTimerSnapshot = TaskSnapshot & { runtime_lease_until?: string };
 
 const STATE_CONFIG: Record<
   string,
-  { key: "queued" | "running" | "waiting" | "succeeded" | "failed" | "cancelled" | "stale" | "skipped"; color: string; dot: string }
+  { key: "queued" | "running" | "waiting" | "succeeded" | "failed" | "cancelled" | "stale" | "skipped" | "removed"; color: string; dot: string }
 > = {
   queued: { key: "queued", color: "#6b7280", dot: "⚪" },
   running: { key: "running", color: "#3b82f6", dot: "🔵" },
@@ -34,6 +34,7 @@ const STATE_CONFIG: Record<
   cancelled: { key: "cancelled", color: "#9ca3af", dot: "⏹️" },
   stale: { key: "stale", color: "#d4d4d8", dot: "⬜" },
   skipped: { key: "skipped", color: "#a1a1aa", dot: "➖" },
+  removed: { key: "removed", color: "#71717a", dot: "🗑️" },
 };
 
 export function stateConfig(state: string, t: ReturnType<typeof useT>) {
@@ -60,7 +61,7 @@ export function safeStateClass(state: string): string {
 }
 
 export function isTerminalState(state: string): boolean {
-  return state === "succeeded" || state === "failed" || state === "cancelled" || state === "stale" || state === "skipped";
+  return state === "succeeded" || state === "failed" || state === "cancelled" || state === "stale" || state === "skipped" || state === "removed";
 }
 
 export function isStoppableState(state: string): boolean {
@@ -91,6 +92,13 @@ export function elapsed(task: TaskTimerSnapshot, nowMs: number): string {
   return `${h}h`;
 }
 
+// taskLongRunning flags a live task past the warning threshold (P1.4/A4).
+export function taskLongRunning(task: TaskTimerSnapshot, nowMs: number, thresholdMs = 10 * 60 * 1000): boolean {
+  if (!task.created_at || task.runtime_state !== "alive" || isTerminalState(task.state)) return false;
+  const startMs = new Date(task.created_at).getTime();
+  return !isNaN(startMs) && nowMs - startMs >= thresholdMs;
+}
+
 export function shortID(id: string): string {
   return id.length > 8 ? id.slice(0, 8) : id;
 }
@@ -103,7 +111,7 @@ export function eventSummary(ev: TaskEvent, t: ReturnType<typeof useT>): string 
     case "error":
       return ev.error_summary || t("task.error");
     default:
-      return ev.event_type;
+      return ev.detail || ev.event_type;
   }
 }
 
@@ -141,9 +149,12 @@ export function TaskTreeNode(props: TaskTreeNodeProps) {
   const runtime = runtimeConfig(task.runtime_state, t);
   const rowOpen = props.expanded.has(key);
   const treeCollapsed = props.collapsed.has(key);
+  const [summaryExpanded, setSummaryExpanded] = useState(false);
   const hasChildren = node.children.length > 0;
   const agg = hasChildren ? aggregateState(node) : null;
   const terminal = isTerminalState(task.state);
+  const live = task.runtime_state === "alive" && !terminal;
+  const longRunning = taskLongRunning(task, props.nowMs);
   const evs = props.taskEvents.get(key) ?? [];
   const evLoading = props.eventsLoading.has(key);
   const evError = props.eventsError.get(key);
@@ -187,6 +198,11 @@ export function TaskTreeNode(props: TaskTreeNodeProps) {
           </span>
           {terminal && <XCircle size={12} className="taskmonitor__terminal" />}
           <span className="taskmonitor__time">{elapsed(task, props.nowMs)}</span>
+          {longRunning && (
+            <span className="taskmonitor__long-running" title={t("summary.longRunning", { time: elapsed(task, props.nowMs) })} aria-label={t("summary.longRunning", { time: elapsed(task, props.nowMs) })}>
+              ⚠
+            </span>
+          )}
           {rowOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         </button>
         {agg && (
@@ -221,7 +237,31 @@ export function TaskTreeNode(props: TaskTreeNodeProps) {
             {task.error_summary && (
               <>
                 <dt>{t("summary.detail")}</dt>
-                <dd className="taskmonitor__err-summary">{task.error_summary}</dd>
+                <dd>
+                  <button
+                    type="button"
+                    className={`taskmonitor__err-summary${summaryExpanded ? " taskmonitor__err-summary--expanded" : ""}`}
+                    onClick={() => setSummaryExpanded((v) => !v)}
+                    aria-expanded={summaryExpanded}
+                  >
+                    {task.error_summary}
+                  </button>
+                </dd>
+              </>
+            )}
+            {(task.steps_used ?? 0) > 0 && (
+              <>
+                <dt>{t("summary.stepsUsed")}</dt>
+                <dd>
+                  {task.steps_used}
+                  {task.steps_estimated ? ` / ~${task.steps_estimated}` : ""}
+                </dd>
+              </>
+            )}
+            {task.cost_total && task.cost_status !== "unavailable" && (
+              <>
+                <dt>{t("summary.cost")}</dt>
+                <dd>{task.cost_total}</dd>
               </>
             )}
           </dl>
@@ -280,7 +320,10 @@ export function TaskTreeNode(props: TaskTreeNodeProps) {
                 }
               }}
             >
-              <span className="taskmonitor__confirm-copy">{t("summary.confirmStop")}</span>
+              <span className="taskmonitor__confirm-copy">
+                {t("summary.confirmStop")}
+                {live && <span className="taskmonitor__confirm-duration"> — {elapsed(task, props.nowMs)}</span>}
+              </span>
               <div className="taskmonitor__confirm-actions">
                 <button
                   ref={props.confirmStopRef}

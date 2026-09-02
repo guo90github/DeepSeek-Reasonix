@@ -2272,6 +2272,12 @@ export interface TaskSnapshot {
   agg_done?: number;
   agg_total?: number;
   agg_failed?: number;
+  // schema v3 (cost/retention, P1.2/P1.3)
+  requeue_count?: number;
+  steps_used?: number;
+  steps_estimated?: number;
+  cost_total?: string;
+  cost_status?: string; // "" | "ok" | "unavailable"
 }
 
 export type { TaskActionRequest, TaskCatalogItem, TaskCatalogStatus, TaskEventPage, TaskEventPageRequest, TaskPage, TaskPageRequest } from "./taskCatalogTypes";
@@ -2299,4 +2305,5 @@ export interface TaskEvent {
   runtime_state?: RuntimeState;
   error_code?: string;
   error_summary?: string;
+  detail?: string;
 }

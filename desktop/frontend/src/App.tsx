@@ -112,7 +112,6 @@ import type { WorkspaceVerificationRevealRequest } from "./components/WorkspaceP
 import type { InvocationMetadataMap, StructuredInvocationSubmit } from "./lib/invocationDisplay";
 import type { RewindUndoState } from "./lib/rewindTypes";
 import { formatSelectionReference, type SelectedTextInsertRequest } from "./lib/selectedTextContext";
-import { resolveTaskMonitorSession } from "./lib/taskMonitorNavigation";
 import {
   composerProfileFromMeta,
   composerProfileFromTab,
@@ -3923,26 +3922,19 @@ export default function App() {
     return enqueueNavigation({ kind: "resume-session", session });
   }, [enqueueNavigation, singleSurfaceLayout, state.running]);
 
-  const openTaskMonitorSession = useCallback(async (tabID: string, taskID: string): Promise<boolean> => {
+  const openTaskMonitorSession = useCallback(async (tabID: string, sessionID: string): Promise<boolean> => {
     if (state.running && !singleSurfaceLayout) {
       throw new Error(t("history.failedOpenSession"));
     }
     // Claim the navigation epoch before the first Wails await. If the user
-    // switches tabs while the task/session lookup is pending, its completion is
+    // switches tabs while the session lookup is pending, its completion is
     // stale and must not enqueue a newer navigation request.
     const navigationIntentSeq = noteNavigationIntent();
     beginNavigationSurface(navigationIntentSeq);
     let session: SessionMeta | null;
     try {
-      session = await resolveTaskMonitorSession({
-        tabID,
-        taskID,
-        intentSeq: navigationIntentSeq,
-        isIntentCurrent: isNavigationIntentCurrent,
-        openTaskSessionForTab: (sourceTabID, sourceTaskID) => app.OpenTaskSessionForTab(sourceTabID, sourceTaskID),
-        listSessionsForTab: async (sourceTabID) => asArray(await app.ListSessionsForTab(sourceTabID)),
-        sessionIDFromPath: taskSessionIDFromPath,
-      });
+      const sessions = asArray(await app.ListSessionsForTab(tabID));
+      session = sessions.find((candidate) => taskSessionIDFromPath(candidate.path) === sessionID) ?? null;
     } catch (error) {
       settleNavigationSurface(navigationIntentSeq);
       throw error;

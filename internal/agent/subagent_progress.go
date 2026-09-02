@@ -599,6 +599,10 @@ type subagentProgressTracker struct {
 	done       bool
 	// treeRec records the run's task-tree row on finish (nil = off).
 	treeRec *treeRecording
+	// toolCalls counts dispatched tool rounds; lastUsage keeps the final usage
+	// event so the background path can persist a cost event after the run.
+	toolCalls int
+	lastUsage event.Event
 }
 
 // newSubagentProgressTracker creates (or joins) the group merger and returns a
@@ -701,18 +705,31 @@ func (t *subagentProgressTracker) wrap() event.Sink {
 			t.setPhaseLocked(subagentPhaseRetrying)
 		case event.ToolDispatch, event.ToolResult, event.ToolProgress:
 			t.setPhaseLocked(subagentPhaseTool)
+			if e.Kind == event.ToolDispatch {
+				t.toolCalls++
+			}
+		case event.Usage:
+			if e.UsageSource == "" {
+				e.UsageSource = event.UsageSourceSubagent
+			}
+			t.lastUsage = e
 		}
 		t.mu.Unlock()
 		switch e.Kind {
 		case event.ToolDispatch, event.ToolResult, event.ToolProgress:
 			t.sink.Emit(e)
 		case event.Usage:
-			if e.UsageSource == "" {
-				e.UsageSource = event.UsageSourceSubagent
-			}
 			t.sink.Emit(e)
 		}
 	})
+}
+
+// usageSnapshot returns the last usage event observed and the tool-call count,
+// for cost persistence after the run completes.
+func (t *subagentProgressTracker) usageSnapshot() (event.Event, int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.lastUsage, t.toolCalls
 }
 
 // finish flushes pending previews, emits the single terminal status, and — if

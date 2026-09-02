@@ -75,6 +75,10 @@ func (*FleetTool) Schema() json.RawMessage {
 
 func (*FleetTool) ReadOnly() bool { return false }
 
+// PlanModeSafe is false (C1): fleet dispatches writers too, so like task it
+// must route through the plan-mode approval/block policy, never "unknown".
+func (*FleetTool) PlanModeSafe() bool { return false }
+
 type fleetTaskItem struct {
 	Prompt      string   `json:"prompt"`
 	ID          string   `json:"id"`

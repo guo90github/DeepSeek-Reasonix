@@ -27,6 +27,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"reasonix/internal/billing"
 	"reasonix/internal/event"
 	"reasonix/internal/evidence"
 	"reasonix/internal/nilutil"
@@ -242,6 +243,20 @@ func WithTaskRecorder(r TaskRecorder) Option {
 // construction. Controllers that assemble their job manager before the
 // recorder's dependencies (workspace root, session id) are known use this.
 func (m *Manager) SetTaskRecorder(r TaskRecorder) { m.taskRecorder = r }
+
+// RecordTaskUsage forwards a completed job's cost quote and step count to the
+// task recorder when it supports usage observation. Best-effort, like all
+// recording hooks; callers may invoke it without a recorder attached.
+func (m *Manager) RecordTaskUsage(id string, quote *billing.CostQuote, steps int) {
+	if quote == nil || nilutil.IsNil(m.taskRecorder) {
+		return
+	}
+	if u, ok := m.taskRecorder.(interface {
+		RecordUsage(string, *billing.CostQuote, int)
+	}); ok {
+		u.RecordUsage(id, quote, steps)
+	}
+}
 
 // TeardownGrace reports the manager's configured close/destroy wait window.
 func (m *Manager) TeardownGrace() time.Duration { return m.teardownGrace }
@@ -1943,6 +1958,14 @@ func WithSession(ctx context.Context, parentSession string) context.Context {
 func SessionFromContext(ctx context.Context) string {
 	session, _ := ctx.Value(sessionCtxKey{}).(string)
 	return strings.TrimSpace(session)
+}
+
+// JobIDFromContext returns the id of the job whose context this is, or "".
+func JobIDFromContext(ctx context.Context) string {
+	if j, _ := ctx.Value(jobCtxKey{}).(*Job); j != nil {
+		return j.ID
+	}
+	return ""
 }
 
 // PublishEvidence attaches a background agent's host-observed receipts to its

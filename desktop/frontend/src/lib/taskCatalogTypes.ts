@@ -6,6 +6,7 @@ export interface TaskPageRequest {
 export interface TaskCatalogStatus {
   state: string; mode: "disk" | "memory" | string; path?: string; revision: number;
   indexed: number; total: number; pending: number; failed: number; lastError?: string;
+  warnings?: string[];
 }
 export interface TaskCatalogItem { projectKey: string; projectLabel: string; task: TaskSnapshot }
 // Task tree node (docs/TASK_TREE_DESIGN.md §4.1/§5.4 ②). projectKey is carried
@@ -16,3 +17,6 @@ export interface TaskPage { items: TaskCatalogItem[]; nextCursor: string; revisi
 export interface TaskEventPageRequest { projectKey: string; taskId: string; after: number; limit: number }
 export interface TaskEventPage { items: TaskEvent[]; nextSequence: number; partial: boolean }
 export interface TaskActionRequest { projectKey: string; taskId: string; expectedVersion: number; reason: string; idempotencyKey: string }
+// Result of PruneTasks: terminal tasks beyond maxRetained are archived
+// (moved to archivedDir) oldest-first; total = terminal tasks considered.
+export interface PruneResult { archived: number; archivedDir?: string; total: number }

@@ -28,10 +28,15 @@ func TestParallelTasksToolIsReadOnly(t *testing.T) {
 	}
 }
 
-func TestParallelTasksSchemaKeepsDependencyOrderingHidden(t *testing.T) {
+func TestParallelTasksSchemaExposesOptionalDependsOn(t *testing.T) {
 	schema := string((&ParallelTasksTool{}).Schema())
-	if strings.Contains(schema, "depends_on") {
-		t.Fatal("parallel_tasks schema should not expose depends_on by default; changing tool schema hurts prompt-cache stability")
+	// C2: depends_on is now an optional per-item field for task-tree edge
+	// recording; omitting it keeps tasks independent. Deliberate schema change.
+	if !strings.Contains(schema, "depends_on") {
+		t.Fatal("parallel_tasks schema must expose the optional depends_on field")
+	}
+	if !strings.Contains(schema, "Optional 0-based indices") {
+		t.Fatal("depends_on must be documented as optional")
 	}
 }
 
@@ -54,22 +59,21 @@ func TestParallelTasksValidatesAllTasksBeforeRuntimeLookup(t *testing.T) {
 	}
 }
 
-func TestParallelTasksRejectsHiddenDependencyFieldBeforeRuntimeLookup(t *testing.T) {
+func TestParallelTasksAcceptsValidDependsOnIndices(t *testing.T) {
+	// depends_on is no longer a hidden field: a valid sibling index passes
+	// item validation and only fails later at runtime wiring (C2).
 	tool := &ParallelTasksTool{}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{
 		"tasks": [
-			{"prompt": "first", "depends_on": [1]},
-			{"prompt": "second"}
+			{"prompt": "first"},
+			{"prompt": "second", "depends_on": [0]}
 		]
 	}`))
 	if err == nil {
-		t.Fatal("Execute returned nil error for a hidden dependency field")
+		t.Fatal("Execute returned nil for an unconfigured tool")
 	}
-	if !strings.Contains(err.Error(), "depends_on") {
-		t.Fatalf("Execute error = %v, want hidden dependency field rejection", err)
-	}
-	if strings.Contains(err.Error(), "background jobs are not available") {
-		t.Fatalf("Execute looked up background jobs before rejecting hidden dependencies: %v", err)
+	if !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("Execute error = %v, want the tool-configuration error after validation", err)
 	}
 }
 
@@ -537,5 +541,81 @@ func TestSubagentRecoveryTaskIDIsStableAndIsolated(t *testing.T) {
 	}
 	if got := subagentRecoveryTaskID(ctx, "ref-abc"); got != "subagent:ref-abc" {
 		t.Fatalf("transcript-scoped recovery task id = %q", got)
+	}
+}
+
+func makeParallelItems(n, maxSteps int) []parallelTaskItem {
+	items := make([]parallelTaskItem, n)
+	for i := range items {
+		items[i] = parallelTaskItem{Prompt: "task", MaxSteps: maxSteps}
+	}
+	return items
+}
+
+func TestParallelTasksCheckStepBudget(t *testing.T) {
+	p := &ParallelTasksTool{taskTool: &TaskTool{maxSteps: 50}}
+	if err := p.checkStepBudget(makeParallelItems(10, 0)); err == nil {
+		t.Fatal("10 default-budget children (25 each) under a 50-step parent must exceed the 200 cap")
+	}
+	if err := p.checkStepBudget(makeParallelItems(10, 10)); err != nil {
+		t.Fatalf("10 explicit 10-step children must pass: %v", err)
+	}
+	if err := p.checkStepBudget(makeParallelItems(4, 50)); err != nil {
+		t.Fatalf("4 explicit 50-step children exactly at the cap must pass: %v", err)
+	}
+
+	// An unbounded parent leaves default children unbounded, which is over the cap.
+	unbounded := &ParallelTasksTool{taskTool: &TaskTool{}}
+	if err := unbounded.checkStepBudget(makeParallelItems(2, 0)); err == nil {
+		t.Fatal("default children under an unbounded parent must exceed the cap")
+	}
+}
+
+func TestParallelTasksRejectsExcessiveTotalStepBudgetBeforeDispatch(t *testing.T) {
+	p := &ParallelTasksTool{taskTool: &TaskTool{maxSteps: 50}}
+	_, err := p.Execute(context.Background(), json.RawMessage(`{
+		"tasks": [
+			{"prompt": "a"},{"prompt": "b"},{"prompt": "c"},{"prompt": "d"},{"prompt": "e"},
+			{"prompt": "f"},{"prompt": "g"},{"prompt": "h"},{"prompt": "i"},{"prompt": "j"}
+		]
+	}`))
+	if err == nil {
+		t.Fatal("Execute must reject a 250-step request")
+	}
+	if !strings.Contains(err.Error(), "step budget") {
+		t.Fatalf("Execute error = %v, want a step-budget message", err)
+	}
+}
+
+func TestParallelTasksRejectsInvalidDependsOnIndices(t *testing.T) {
+	p := &ParallelTasksTool{}
+	tests := []struct {
+		args string
+		want string
+	}{
+		{`{"tasks":[{"prompt":"a","depends_on":[5]},{"prompt":"b"}]}`, "out of range"},
+		{`{"tasks":[{"prompt":"a","depends_on":[-1]},{"prompt":"b"}]}`, "out of range"},
+		{`{"tasks":[{"prompt":"a","depends_on":[0]},{"prompt":"b"}]}`, "self-referential"},
+	}
+	for _, tt := range tests {
+		_, err := p.Execute(context.Background(), json.RawMessage(tt.args))
+		if err == nil || !strings.Contains(err.Error(), tt.want) {
+			t.Fatalf("args %s: err = %v, want %q", tt.args, err, tt.want)
+		}
+	}
+}
+
+func TestParallelTasksDependsOnStaysIndependentByDefault(t *testing.T) {
+	// Without depends_on the item validation accepts the batch; only the
+	// missing tool configuration stops it (C2: independent by default).
+	tool := &ParallelTasksTool{}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{
+		"tasks": [{"prompt":"a"},{"prompt":"b"}]
+	}`))
+	if err == nil {
+		t.Fatal("Execute returned nil for an unconfigured tool")
+	}
+	if !strings.Contains(err.Error(), "not configured") {
+		t.Fatalf("independent tasks must pass validation (fail at config only): %v", err)
 	}
 }

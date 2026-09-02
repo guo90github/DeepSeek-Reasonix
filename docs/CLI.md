@@ -268,6 +268,12 @@ reasonix task show <task-id> --json [--dir SESSION_DIR | --project-root PATH] [-
 reasonix task monitor list --json [--dir PROJECT_DIR]
 reasonix task monitor status <task-id> --json [--dir PROJECT_DIR]
 reasonix task monitor events <task-id> --json|--jsonl [--dir PROJECT_DIR] [--after N] [--follow]
+reasonix task monitor tmux <attach|status|open|detach> <task-id> [--dir PROJECT_DIR]   # CLI-only
+
+`task monitor tmux` is a CLI-only integration with the system terminal multiplexer;
+the desktop Task Monitor panel does not implement tmux — task control there uses the
+panel buttons, which map to the same project store.
+
 reasonix hook list --json [--project-root PATH] [--home-dir PATH]
 reasonix hook status --json [--project-root PATH] [--home-dir PATH]
 ```

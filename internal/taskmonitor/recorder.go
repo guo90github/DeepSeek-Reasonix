@@ -7,10 +7,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"reasonix/internal/billing"
 	"reasonix/internal/jobs"
 )
 
@@ -70,14 +72,11 @@ func monitorTaskID(sessionID, jobID string) string {
 }
 
 func sessionlessMonitorTaskID(jobID string) string {
-	var nonce [8]byte
-	if _, err := crand.Read(nonce[:]); err != nil {
-		// crypto/rand failure is exceptional; retain a bounded, non-path-like
-		// identity rather than falling back to the colliding raw job ID.
-		h := sha256.Sum256(fmt.Appendf(nil, "%s:%d", jobID, timeNow().UnixNano()))
-		return hex.EncodeToString(h[:8]) + "--" + jobID
-	}
-	return hex.EncodeToString(nonce[:]) + "--" + jobID
+	// Stable per jobID (N4): concurrent recorder instances observing the same
+	// sessionless job converge on one monitor row; once a session binds, the
+	// session prefix in monitorTaskID disambiguates reused local job ids.
+	h := sha256.Sum256([]byte(jobID))
+	return hex.EncodeToString(h[:8]) + "--" + jobID
 }
 
 func (r *TaskRecorder) rememberMonitorID(jobID, monitorID string) {
@@ -206,14 +205,113 @@ func (r *TaskRecorder) RecordDone(id string, st jobs.Status, jobErr error) {
 			}
 			return
 		}
-		_ = r.store.AppendAuditEvent(ctx, r.projectDir, TaskEvent{
+		r.appendAuditWithRetry(ctx, TaskEvent{
 			Timestamp: now, EventType: "state_change",
 			TaskID: monitorID, SessionID: cur.SessionID, State: target,
 			RuntimeState: RuntimeStateExited,
 			ErrorCode:    cur.ErrorCode, ErrorSummary: cur.ErrorSummary,
 		})
+		r.prune(ctx)
 		return
 	}
+}
+
+// appendAuditWithRetry writes the audit event, retrying transient store
+// failures so a committed SaveTask is not left without its audit trail (B3).
+// Best-effort: persistent failure is swallowed like all monitoring.
+func (r *TaskRecorder) appendAuditWithRetry(ctx context.Context, ev TaskEvent) {
+	const maxAuditAttempts = 3
+	for range maxAuditAttempts {
+		if err := r.store.AppendAuditEvent(ctx, r.projectDir, ev); err == nil || ctx.Err() != nil {
+			return
+		}
+	}
+}
+
+// prune enforces the retention cap after a terminal completion. Best-effort
+// like all recording, and cheap for typical task counts: PruneTasks exits
+// early when the tree is under the cap.
+func (r *TaskRecorder) prune(ctx context.Context) {
+	if p, ok := r.store.(interface {
+		PruneTasks(context.Context, string, int) (PruneResult, error)
+	}); ok {
+		_, _ = p.PruneTasks(ctx, r.projectDir, DefaultMaxRetainedTasks)
+	}
+}
+
+// RecordUsage persists a completed job's cost quote as a cost event and
+// updates the snapshot's usage display fields (P1.2/A2). Best-effort; without
+// pricing the quote degrades to an unavailable status and the UI hides cost.
+func (r *TaskRecorder) RecordUsage(id string, quote *billing.CostQuote, steps int) {
+	ctx := context.Background()
+	monitorID, ok := r.lookupMonitorID(id)
+	if !ok {
+		return
+	}
+	cur, err := r.store.GetTask(ctx, r.projectDir, monitorID)
+	if err != nil || cur == nil {
+		return
+	}
+	now := timeNow()
+	costTotal, costStatus := formatCostQuote(quote)
+	_ = r.store.AppendAuditEvent(ctx, r.projectDir, TaskEvent{
+		Timestamp: now, EventType: "cost",
+		TaskID: monitorID, SessionID: cur.SessionID,
+		State:  cur.State,
+		Detail: costEventDetail(quote, steps),
+	})
+	apply := func(snap *TaskSnapshot) {
+		if steps > 0 {
+			snap.StepsUsed = steps
+		}
+		if costTotal != "" {
+			snap.CostTotal = costTotal
+		}
+		snap.CostStatus = costStatus
+		snap.Version++
+		snap.UpdatedAt = now
+	}
+	apply(cur)
+	for range 4 {
+		if err := r.store.SaveTask(ctx, r.projectDir, *cur); err == nil {
+			return
+		} else if !errors.Is(err, ErrStoreVersionConflict) {
+			return
+		}
+		latest, gerr := r.store.GetTask(ctx, r.projectDir, monitorID)
+		if gerr != nil || latest == nil {
+			return
+		}
+		cur = latest
+		apply(cur)
+	}
+}
+
+// formatCostQuote returns a display string and status for a quote; the string
+// is empty when cost is unavailable so callers degrade gracefully.
+func formatCostQuote(q *billing.CostQuote) (string, string) {
+	if q == nil || !q.CostComplete || q.Selected == nil {
+		return "", "unavailable"
+	}
+	return formatMoney(q.Selected), "ok"
+}
+
+func formatMoney(m *billing.Money) string {
+	if m == nil {
+		return ""
+	}
+	return strings.TrimSpace(m.Currency) + " " + m.Amount
+}
+
+func costEventDetail(q *billing.CostQuote, steps int) string {
+	cost, _ := formatCostQuote(q)
+	if cost == "" {
+		cost = "pricing unavailable"
+	}
+	if steps > 0 {
+		return fmt.Sprintf("%s over %d steps", cost, steps)
+	}
+	return cost
 }
 
 // terminalState maps a job status to the task state it reports. Unknown or
