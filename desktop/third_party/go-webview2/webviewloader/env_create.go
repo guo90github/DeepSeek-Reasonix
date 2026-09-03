@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"syscall"
 	"unsafe"
 
@@ -38,6 +40,14 @@ func CreateCoreWebView2Environment(environmentCompletedHandler ICoreWebView2Crea
 //
 // See https://docs.microsoft.com/en-us/microsoft-edge/webview2/reference/win32/webview2-idl?#createcorewebview2environmentwithoptions
 func CreateCoreWebView2EnvironmentWithOptions(environmentCompletedHandler ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, opts ...option) error {
+	if port := strings.TrimSpace(os.Getenv("REASONIX_WEBVIEW2_DEBUG_PORT")); validDebugPort(port) {
+		// This loader passes an explicit (possibly empty) arguments string to
+		// the MS WebView2 loader, which then ignores the WEBVIEW2_* env vars
+		// entirely. REASONIX_WEBVIEW2_DEBUG_PORT is the diagnostics-only
+		// escape hatch: append the switch to the real option channel instead
+		// of the env (default off — no env, no change in behavior).
+		opts = append(opts, WithAdditionalBrowserArguments("--remote-debugging-port="+port+" --remote-allow-origins=*"))
+	}
 	var params environmentOptions
 	for _, opt := range opts {
 		opt(&params)
@@ -173,4 +183,14 @@ func preventEnvAndRegistryOverrides() {
 	// in this case is implemented on our own. But nevertheless set them to empty to be consistent.
 	os.Setenv("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", "")
 	os.Setenv("WEBVIEW2_USER_DATA_FOLDER", "")
+}
+
+// validDebugPort reports whether v is a numeric TCP port in range, so a stray
+// value silently falls back to the default (no debug arguments).
+func validDebugPort(v string) bool {
+	if v == "" {
+		return false
+	}
+	port, err := strconv.Atoi(v)
+	return err == nil && port > 0 && port <= 65535
 }

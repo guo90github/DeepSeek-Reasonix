@@ -38,6 +38,9 @@ const ALLOWED_WRITERS = new Set([
 //   resets scroll when a virtual file is replaced by a non-virtual one.
 // - custom/features/heartbeat/HeartbeatPanel.tsx: the heartbeat list's custom
 //   scrollbar thumb drag, mapped to its own scroller.
+// - components/OptimizePreviewDialog.tsx: the optimize dialog's own streaming
+//   preview scroller — tail-follows the draft it streams, guarded by its own
+//   onScroll user-read check.
 const ALLOWED_RAW_SCROLLTOP = new Set([
   "lib/transcriptScrollWriter.ts",
   "lib/nestedScrollHandoff.ts",
@@ -46,6 +49,7 @@ const ALLOWED_RAW_SCROLLTOP = new Set([
   "components/WorkspacePanel.tsx",
   "components/editors/LineNumberCode.tsx",
   "custom/features/heartbeat/HeartbeatPanel.tsx",
+  "components/OptimizePreviewDialog.tsx",
 ]);
 // Matches imperative scroll calls on the transcript Virtuoso handle, whether
 // reached through `virtuosoRef.current` directly or a local `handle` alias.
