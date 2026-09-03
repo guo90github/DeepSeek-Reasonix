@@ -10,11 +10,8 @@ import { TodoPanel } from "../components/TodoPanel";
 import { LocaleProvider } from "../lib/i18n";
 
 const todoCss = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
-assert.match(
-  todoCss,
-  /\.todo-exit\s*\{[^}]*animation:\s*shelf-in 240ms 900ms ease reverse both;/s,
-  "the completion animation holds for 900ms before its 240ms fade",
-);
+assert.match(todoCss, /\.prompt-shelf\s*\{/, "the shelf keeps its composer-top layout rule");
+assert.doesNotMatch(todoCss, /\.todo-exit\s*\{/, "the completion auto-exit animation is gone");
 
 const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", {
   pretendToBeVisual: true,
@@ -70,17 +67,27 @@ const root = createRoot(host);
 let dismissCount = 0;
 const onDismiss = () => { dismissCount += 1; };
 
+const completed = [
+  { content: "Inspect", status: "completed" },
+  { content: "Verify", status: "completed" },
+  { content: "Ship", status: "completed" },
+];
+const runningTodos = [
+  { content: "Inspect", status: "completed" },
+  { content: "Verify", status: "in_progress" },
+  { content: "Ship", status: "pending" },
+];
+
+// Persistence contract: the panel stays mounted above the composer once shown
+// — completion, remounts and idle typing never hide it; only the all-done
+// Close action (App-level dismissal) may remove it.
 await act(async () => {
   root.render(
     <LocaleProvider>
       <TodoPanel
         key="restored"
         stateKey="session:restored\0batch"
-        todos={[
-          { content: "Inspect", status: "completed" },
-          { content: "Verify", status: "completed" },
-          { content: "Ship", status: "completed" },
-        ]}
+        todos={completed}
         running={false}
         pendingPrompt={false}
         onDismiss={onDismiss}
@@ -88,8 +95,8 @@ await act(async () => {
     </LocaleProvider>,
   );
 });
-assert.equal(host.querySelector(".prompt-shelf"), null, "a restored completed batch does not reattach above the composer");
-assert.equal(timers.length, 0, "a restored completed batch does not schedule a stale fade");
+assert.ok(host.querySelector(".prompt-shelf"), "a restored completed batch stays visible until the user closes it");
+assert.equal(timers.length, 0, "a restored completed batch schedules no auto-exit timer");
 
 await act(async () => {
   root.render(
@@ -97,11 +104,7 @@ await act(async () => {
       <TodoPanel
         key="live"
         stateKey="session:test\0batch"
-        todos={[
-          { content: "Inspect", status: "completed" },
-          { content: "Verify", status: "in_progress" },
-          { content: "Ship", status: "pending" },
-        ]}
+        todos={runningTodos}
         running
         pendingPrompt={false}
         onDismiss={onDismiss}
@@ -110,6 +113,7 @@ await act(async () => {
   );
 });
 assert.ok(host.querySelector(".prompt-shelf"), "an incomplete batch renders above the composer");
+assert.equal(timers.length, 0, "an incomplete batch schedules no timers");
 
 await act(async () => {
   root.render(
@@ -117,11 +121,7 @@ await act(async () => {
       <TodoPanel
         key="live"
         stateKey="session:test\0batch"
-        todos={[
-          { content: "Inspect", status: "completed" },
-          { content: "Verify", status: "completed" },
-          { content: "Ship", status: "completed" },
-        ]}
+        todos={completed}
         running={false}
         pendingPrompt={false}
         onDismiss={onDismiss}
@@ -129,19 +129,13 @@ await act(async () => {
     </LocaleProvider>,
   );
 });
-assert.equal(host.textContent?.includes("3/3"), true, "the final completed count remains visible during the hold");
-assert.ok(host.querySelector(".todo-exit"), "the completed shelf owns the delayed fade animation");
+assert.equal(host.textContent?.includes("3/3"), true, "the final completed count remains visible");
+assert.ok(host.querySelector(".prompt-shelf"), "completion never unmounts the shelf");
+assert.equal(host.querySelector(".todo-exit"), null, "no auto-exit animation class is applied");
+assert.equal(timers.length, 0, "completion schedules no auto-exit timer");
 
-await act(async () => advanceTimersBy(899));
-assert.ok(host.querySelector(".prompt-shelf"), "completion does not exit before the 900ms hold");
-
-await act(async () => advanceTimersBy(1));
-assert.ok(host.querySelector(".prompt-shelf"), "fade starts before the completion exit");
-
-await act(async () => advanceTimersBy(239));
-assert.ok(host.querySelector(".prompt-shelf"), "completion exit waits for the 240ms fade");
-await act(async () => advanceTimersBy(1));
-assert.equal(host.querySelector(".prompt-shelf"), null, "the completed shelf exits after its 1.14s completion transition");
+await act(async () => advanceTimersBy(2000));
+assert.ok(host.querySelector(".prompt-shelf"), "the completed shelf persists well past the old 1.14s auto-exit window");
 assert.equal(dismissCount, 0, "automatic completion does not persist a manual-dismissal record");
 
 await act(async () => root.unmount());

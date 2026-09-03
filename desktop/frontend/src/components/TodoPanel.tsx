@@ -6,8 +6,6 @@ import { PromptBadge, PromptHeaderAction, PromptShelf } from "./PromptShelf";
 
 const STORAGE_KEY = "todoPanel:openStates";
 const MAX_STORED_OPEN_STATES = 80;
-const COMPLETION_HOLD_MS = 900;
-const COMPLETION_FADE_MS = 240;
 
 function loadOpenStates(): Record<string, boolean> {
   try {
@@ -45,7 +43,8 @@ function saveOpenState(stateKey: string, open: boolean): void {
 // latest todo_write call drives it, and it updates in place as the agent flips
 // items to in_progress / completed. Each new todo batch starts collapsed so the
 // header can show live progress and the current task without occupying extra
-// space. Manual expand/collapse is restored only for the same batch.
+// space; manual expand/collapse persists per batch. Completion never hides the
+// panel — the all-done Close action is the only way it leaves the composer.
 export function TodoPanel({
   stateKey,
   todos,
@@ -69,37 +68,20 @@ export function TodoPanel({
   const allDone = todos.length > 0 && done === todos.length;
   const summary = current?.activeForm || current?.content || todos[todos.length - 1]?.content || "";
   const [open, setOpen] = useState(() => loadOpenState(stateKey, shouldOpenTodoPanelByDefault()));
-  const [visible, setVisible] = useState(!allDone);
   // Phase rows expand by default; collapse state is per-batch (keyed by group
   // index) and resets on remount, unlike the shelf's persisted open state.
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
   const groups = useMemo(() => groupTodos(todos), [todos]);
 
   useEffect(() => {
-    if (!allDone) {
-      setVisible(true);
-      return;
-    }
-    if (!visible) return;
-
-    saveOpenState(stateKey, false);
-    setOpen(false);
-    const dismissTimer = window.setTimeout(() => setVisible(false), COMPLETION_HOLD_MS + COMPLETION_FADE_MS);
-    return () => {
-      window.clearTimeout(dismissTimer);
-    };
-  }, [allDone, stateKey, visible]);
-
-  useEffect(() => {
     if (!open) return;
     currentRef.current?.scrollIntoView({ block: "nearest" });
   }, [open, current?.content, current?.activeForm]);
 
-  if (todos.length === 0 || !visible) return null;
+  if (todos.length === 0) return null;
 
   return (
     <PromptShelf
-      className={allDone ? "todo-exit" : undefined}
       titleId="todo-shelf-title"
       title={t("todo.title")}
       badges={<PromptBadge>{done}/{todos.length}</PromptBadge>}
