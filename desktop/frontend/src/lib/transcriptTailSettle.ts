@@ -10,6 +10,11 @@ import type { TranscriptGeometryChangeSource } from "./transcriptGeometryRevisio
 
 const TAIL_STAGNANT_FRAME_LIMIT = 2;
 const TAIL_SETTLE_MAX_ATTEMPTS = 8;
+// After a settle exits, keep watching for Virtuoso's late size commits (row
+// measurement lands after the first pin): re-converge while the content keeps
+// growing under a pinned viewport, for at most this window.
+const TAIL_CONFIRM_WINDOW_MS = 1200;
+const TAIL_CONFIRM_STEP_MS = 250;
 // Ignore sub-row measurement jitter after the physical tail is already
 // pinned. Real content growth still re-arms the settle transaction.
 export const TRANSCRIPT_TAIL_REARM_MIN_HEIGHT_PX = 24;
@@ -18,6 +23,14 @@ export const TRANSCRIPT_TAIL_REARM_MIN_HEIGHT_PX = 24;
 const TAIL_CONFIRM_OFF_BOTTOM_FRAMES = 2;
 const JUMP_TAIL_TRANSACTION_MS = 240;
 const LAYOUT_TRANSIENT_IDLE_MS = 160;
+// Virtuoso re-runs its measurement pipeline after a physical pin write and
+// its computed list height wobbles a few px (observed ±8 at the pane bottom).
+// Without a quiet window the settle would echo that wobble at frame rate: a
+// write → remeasure → distance 8 > 4 → write loop. Skip re-aims inside the
+// window whose distance stays within the wobble band; real growth pushes past
+// the band and writes immediately regardless.
+const TAIL_ECHO_QUIET_MS = 150;
+const TAIL_ECHO_BAND_PX = 16;
 
 export function transcriptTailSettleBudgetExhausted(attempts: number): boolean {
   return attempts >= TAIL_SETTLE_MAX_ATTEMPTS;
@@ -84,6 +97,9 @@ export function createTranscriptTailSettle({
   let jumpTailTimer: number | null = null;
   let jumpTailFollowupTimer: number | null = null;
   let layoutTransientIdleTimer: number | null = null;
+  let tailConfirmTimer: number | null = null;
+  let tailConfirmElapsed = 0;
+  let lastPinWriteMs: number | null = null;
   let lastBottomHeight: number | null = null;
   let lastBottomViewport: number | null = null;
   let tailPinned = false;
@@ -146,6 +162,7 @@ export function createTranscriptTailSettle({
       offBottomFrames: diagnostic?.settle?.offBottomFrames,
       stagnantFrames: diagnostic?.settle?.stagnantFrames,
     })) return;
+    lastPinWriteMs = performance.now();
     lastPinAttempt = {
       element,
       top,
@@ -179,12 +196,16 @@ export function createTranscriptTailSettle({
     settleExhausted = false;
     pendingPin = null;
     fallbackState = 0;
+    lastPinWriteMs = null;
     if (jumpTailTimer !== null) window.clearTimeout(jumpTailTimer);
     jumpTailTimer = null;
     if (jumpTailFollowupTimer !== null) window.clearTimeout(jumpTailFollowupTimer);
     jumpTailFollowupTimer = null;
     if (layoutTransientIdleTimer !== null) window.clearTimeout(layoutTransientIdleTimer);
     layoutTransientIdleTimer = null;
+    if (tailConfirmTimer !== null) window.clearTimeout(tailConfirmTimer);
+    tailConfirmTimer = null;
+    tailConfirmElapsed = 0;
     layoutTransientRef.current = false;
   };
 
@@ -198,7 +219,7 @@ export function createTranscriptTailSettle({
       if (ineffectivePin && modeRef.current === "tail-follow" && fallbackState !== 3) {
         fallbackState = 3;
         ineffectivePin = false;
-        schedule(false, "layout-height-changed");
+        schedule(false, "tail-content-changed");
         return;
       }
       const element = scrollRef.current;
@@ -206,6 +227,32 @@ export function createTranscriptTailSettle({
       settleExhausted = false;
       if (element && transcriptTailIsStranded(modeRef.current, nativeTranscriptDistanceFromBottom(element), exhausted)) onStranded?.();
     }, LAYOUT_TRANSIENT_IDLE_MS);
+  };
+
+  // Virtuoso commits late row measurements after the first pin write. Watch a
+  // short window past settle and re-converge when the content keeps growing
+  // under a pinned viewport; stop as soon as it is stable at the bottom.
+  const armTailConfirm = () => {
+    if (tailConfirmTimer !== null) return;
+    tailConfirmElapsed = 0;
+    const tick = () => {
+      tailConfirmTimer = null;
+      const element = scrollRef.current;
+      if (!element || modeRef.current !== "tail-follow") return;
+      const distance = nativeTranscriptDistanceFromBottom(element);
+      const grew = lastBottomHeight !== null
+        && element.scrollHeight - lastBottomHeight >= TRANSCRIPT_TAIL_REARM_MIN_HEIGHT_PX;
+      if (distance > TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX && grew) {
+        schedule(false, "tail-content-changed");
+        return;
+      }
+      const settled = distance <= TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX && !grew;
+      tailConfirmElapsed += TAIL_CONFIRM_STEP_MS;
+      if (!settled && tailConfirmElapsed < TAIL_CONFIRM_WINDOW_MS) {
+        tailConfirmTimer = window.setTimeout(tick, TAIL_CONFIRM_STEP_MS);
+      }
+    };
+    tailConfirmTimer = window.setTimeout(tick, TAIL_CONFIRM_STEP_MS);
   };
 
   const noteLayoutTransient = (source?: TranscriptGeometryChangeSource) => {
@@ -243,6 +290,11 @@ export function createTranscriptTailSettle({
     if (layoutTransientIdleTimer !== null) {
       window.clearTimeout(layoutTransientIdleTimer);
       layoutTransientIdleTimer = null;
+    }
+    if (tailConfirmTimer !== null) {
+      window.clearTimeout(tailConfirmTimer);
+      tailConfirmTimer = null;
+      tailConfirmElapsed = 0;
     }
     if (jump) {
       if (jumpTailTimer !== null) window.clearTimeout(jumpTailTimer);
@@ -285,6 +337,32 @@ export function createTranscriptTailSettle({
     }
     if (jumpTailTimer !== null) return;
     if (tailSettleFrame !== null) return;
+    // Echo guard: a pin write makes Virtuoso re-measure, and its size tree
+    // wobbles a few px before settling. Re-aims inside the quiet window whose
+    // distance stays within that band are that echo, not growth — skipping
+    // them breaks the write→remeasure→write loop. Real growth pushes past the
+    // band (or arrives after the window) and writes normally.
+    if (lastPinWriteMs !== null
+      && performance.now() - lastPinWriteMs < TAIL_ECHO_QUIET_MS) {
+      const echoDistance = nativeTranscriptDistanceFromBottom(scrollElement);
+      if (echoDistance > TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX && echoDistance <= TAIL_ECHO_BAND_PX) {
+        armLayoutTransientIdle();
+        return;
+      }
+    }
+    // The failed-pin quarantine clears only on an ownership-epoch change, a
+    // mechanism the split panes never exercise (no arbiter cycles the epoch).
+    // Once its quiet retry is spent (fallbackState 3) a genuinely large native
+    // gap means content outgrew the dead pin: let the normal path retry once
+    // per growth signal. A still-stale size tree re-clamps the write and
+    // re-arms the quarantine, so this is bounded, not a write loop.
+    if (ineffectivePin && fallbackState === 3
+      && nativeTranscriptDistanceFromBottom(scrollElement) > TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX) {
+      // A recovery is a genuinely new geometry input: bump the revision so the
+      // retry does not collide with the quarantine-era write's acceptance key.
+      geometryRevisionRef.current += 1;
+      ineffectivePin = false;
+    }
     if (ineffectivePin) {
       if (nativeTranscriptDistanceFromBottom(scrollElement) <= TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX) {
         tailPinned = true;
@@ -370,6 +448,7 @@ export function createTranscriptTailSettle({
       if (distance <= TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX) {
         tailPinned = true;
         tailSettleProgress = null;
+        armTailConfirm();
         armLayoutTransientIdle();
         return;
       }
@@ -399,6 +478,7 @@ export function createTranscriptTailSettle({
       if (stagnantFrames < TAIL_STAGNANT_FRAME_LIMIT && !transcriptTailSettleBudgetExhausted(attempts)) tailSettleFrame = requestAnimationFrame(tick);
       else {
         settleExhausted = true;
+        armTailConfirm();
         armLayoutTransientIdle();
       }
     };
