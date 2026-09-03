@@ -126,3 +126,9 @@ func (s *syncSink) RecordReasoningAudit(t ReasoningAuditTotals) {
 	defer s.mu.Unlock()
 	RecordReasoningAudit(s.inner, t)
 }
+
+func (s *syncSink) RecordCompletionValidation(info CompletionValidationInfo) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	RecordCompletionValidation(s.inner, info)
+}

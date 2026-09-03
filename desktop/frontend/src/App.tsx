@@ -30,14 +30,16 @@ import { useToast } from "./lib/toast";
 import { useGoalActionHandler } from "./lib/goalAction";
 import { useWailsResizeFix } from "./lib/useWailsResizeFix";
 import { asArray } from "./lib/array";
-import { createBoundedRefreshCoordinator, sameTabMetaLists, seedActiveTabMetaList, shouldRefreshTabMetaForEvent, TAB_META_MAX_IN_FLIGHT } from "./lib/tabMetaRefresh";
+import { activeLeaseBlockedTab, createBoundedRefreshCoordinator, sameTabMetaLists, seedActiveTabMetaList, shouldRefreshTabMetaForEvent, TAB_META_MAX_IN_FLIGHT } from "./lib/tabMetaRefresh";
 import { clearLegacyLangPref, normalizeLangPref, readLegacyLangPref, t, useI18n, useT, type Translator } from "./lib/i18n";
 import { useActiveRemoteSession } from "./lib/useRemoteSession";
 import { useRemoteTabOpened } from "./lib/useRemoteTabOpened";
+import { publishNavigationIntent } from "./lib/useNavigationIntentFence";
 import { renameCurrentRemoteSession } from "./lib/remoteSessionActions";
-import { localizedNoticeText, useController, type HistoryLoadTrigger, type Item, type LiveStream } from "./lib/useController";
-import { app, onEvent, onProjectTreeChanged, onReady, onRemoteForwards, onRemoteServer, onRemoteStatus, onRuntimeRebuilt, onSessionRecovered, openExternal } from "./lib/bridge";
+import { localizedNoticeText, useController, type HistoryLoadTrigger, type Item } from "./lib/useController";
+import { app, onEvent, onProjectTreeChanged, onReady, onRemoteForwards, onRemoteServer, onRemoteStatus, onRuntimeRebuilt, openExternal } from "./lib/bridge";
 import { useConfigLoadWarnings } from "./lib/useConfigLoadWarnings";
+import { resolveTaskMonitorSession } from "./lib/taskMonitorNavigation";
 import { generativeMusic, isGenerativeMusicEnabled } from "./lib/generative-music";
 import { clearAttentionChimeKeys, playAttentionChime, playSuccessChime, shouldPlayAttentionChimeForEvent } from "./lib/sound";
 import { NoticeCard, Transcript } from "./components/Transcript";
@@ -49,9 +51,12 @@ import { ClearContextCard } from "./components/ClearContextCard";
 import { RuntimeDecisionCard } from "./components/RuntimeDecisionCard";
 import { decisionSurfaceMockFromInput, type DecisionSurfaceKind as MockDecisionSurfaceKind } from "./lib/decisionSurfaceMock";
 const UndoRewindBanner = lazy(() => import("./components/UndoRewindBanner").then((module) => ({ default: module.UndoRewindBanner })));
+const SessionTakeoverDialog = lazy(() => import("./components/SessionTakeoverDialog").then((module) => ({ default: module.SessionTakeoverDialog })));
 const ProjectTree = lazy(() => import("./components/ProjectTree").then((module) => ({ default: module.ProjectTree })));
 const RemoteSessionSurface = lazy(() => import("./components/RemoteSessionSurface").then((module) => ({ default: module.RemoteSessionSurface })));
 const ExtensionFormDialog = lazy(() => import("./components/ExtensionFormDialog").then((module) => ({ default: module.ExtensionFormDialog })));
+const MCPInteractionCard = lazy(() => import("./components/MCPInteractionCard").then((module) => ({ default: module.MCPInteractionCard })));
+const WorktreeMergeModal = lazy(() => import("./components/WorktreeMergeModal").then((module) => ({ default: module.WorktreeMergeModal })));
 /** Footer decision surface kinds. Runtime blockers are explicit recovery choices. */
 type DecisionSurfaceKind = MockDecisionSurfaceKind | "extension_form";
 import { StatusBar } from "./components/StatusBar";
@@ -72,6 +77,7 @@ import { WorktreeBadge } from "./components/WorktreeBadge";
 import { CopyButton } from "./components/CopyButton";
 import { ExternalOpener, shouldMountExternalOpener } from "./components/ExternalOpener";
 import { TopicbarMoreMenu } from "./components/TopicbarMoreMenu";
+import { RemoteReclaimBanner } from "./components/RemoteReclaimBanner";
 import { startTerminalEventBridge } from "./lib/terminalEvents";
 import { applyTerminalThemePreference } from "./lib/terminalTheme";
 import { formatTerminalOutputForComposer } from "./lib/terminalOutput";
@@ -85,6 +91,7 @@ import {
   scopedTodoDismissalKey,
   shouldShowTodoPanel,
   todoBatchKey,
+  todoContinueTarget,
   todoDismissalKey,
   todoPanelScope,
 } from "./lib/todoVisibility";
@@ -108,6 +115,9 @@ import {
   type WireCompletionSummary,
   type WorkspaceConflictView,
 } from "./lib/types";
+import { runWorktreeMergeLifecycle } from "./lib/worktreeMergeLifecycle";
+import { showWorktreeCleanupNotice } from "./lib/worktreeCleanupNotice";
+import { requestSessionVersions } from "./lib/sessionRecoveryVersionHostBridge";
 import type { WorkspaceVerificationRevealRequest } from "./components/WorkspacePanel";
 import type { InvocationMetadataMap, StructuredInvocationSubmit } from "./lib/invocationDisplay";
 import type { RewindUndoState } from "./lib/rewindTypes";
@@ -281,6 +291,7 @@ function NoticePreviewPanel() {
 const TranscriptSelectionMenu = lazy(() => import("./components/TranscriptSelectionMenu").then((module) => ({ default: module.TranscriptSelectionMenu })));
 const ContextPanel = lazy(() => import("./components/ContextPanel").then((module) => ({ default: module.ContextPanel })));
 const HistoryPanel = lazy(() => import("./components/HistoryPanel").then((module) => ({ default: module.HistoryPanel })));
+const SessionRecoveryVersionsHost = lazy(() => import("./components/SessionRecoveryVersionsHost").then((module) => ({ default: module.SessionRecoveryVersionsHost })));
 const HeartbeatView = lazy(() => import("./custom/features/heartbeat/HeartbeatPanel").then((module) => ({ default: module.HeartbeatView })));
 const SettingsPanel = lazy(() => import("./components/SettingsPanelEntry").then((module) => ({ default: module.SettingsPanel })));
 const RemotePanel = lazy(() => import("./components/RemotePanel").then((module) => ({ default: module.RemotePanel })));
@@ -296,7 +307,6 @@ const WorkspacePanel = lazy(async () => {
 
 const CHAT_MIN_WIDTH = 400;
 const WORKSPACE_RESIZER_WIDTH = 8;
-
 function stripLegacyGoalBudgetFlags(arg: string): string {
   const parts = arg.trim().split(/\s+/).filter(Boolean);
   while (parts.length > 0) {
@@ -306,7 +316,6 @@ function stripLegacyGoalBudgetFlags(arg: string): string {
   }
   return parts.join(" ");
 }
-
 function hasLegacyGoalBudgetFlag(arg: string): boolean {
   const first = arg.trim().split(/\s+/, 1)[0]?.toLowerCase();
   return first === "--research" || first === "--auto-research" || first === "--deep" || first === "--simple" || first === "--no-research";
@@ -957,81 +966,6 @@ function workspaceDisplayName(path?: string): string {
   return parts.length > 0 ? parts[parts.length - 1] : path;
 }
 
-function materializeLiveItems(items: Item[], live?: LiveStream): Item[] {
-  if (!live) return items;
-  return items.map((item) => {
-    if (item.kind !== "assistant" || item.id !== live.id) return item;
-    return { ...item, text: live.text, reasoning: live.reasoning, streaming: true };
-  });
-}
-
-function fence(label: string, value: string): string {
-  if (!value.trim()) return "";
-  const fenceToken = value.includes("```") ? "````" : "```";
-  return `${label}\n${fenceToken}\n${value.trim()}\n${fenceToken}`;
-}
-
-function sessionItemsToMarkdown(title: string, items: Item[], live?: LiveStream): string {
-  const lines: string[] = [`# ${title.trim() || "Reasonix session"}`, ""];
-  for (const item of materializeLiveItems(items, live)) {
-    switch (item.kind) {
-      case "user":
-        lines.push("## User", "", item.text.trim(), "");
-        break;
-      case "assistant":
-        lines.push("## Assistant");
-        if (item.reasoning.trim()) {
-          lines.push("", "### Reasoning", "", item.reasoning.trim());
-        }
-        if (item.text.trim()) {
-          lines.push("", item.text.trim());
-        }
-        lines.push("");
-        break;
-      case "tool":
-        lines.push(`### Tool: ${item.name}`);
-        if (item.args.trim()) lines.push("", fence("Args", item.args));
-        if (item.output?.trim()) lines.push("", fence("Output", item.output));
-        if (item.error?.trim()) lines.push("", fence("Error", item.error));
-        lines.push("");
-        break;
-      case "phase":
-        lines.push(`### Phase`, "", item.text.trim(), "");
-        break;
-      case "notice":
-        lines.push(`### ${item.level === "warn" ? "Warning" : "Notice"}`, "", item.text.trim(), "");
-        if (item.detail?.trim()) {
-          lines.push("Details:", "", item.detail.trim(), "");
-        }
-        break;
-      case "compaction":
-        lines.push("### Context Compaction", "");
-        if (item.pending) {
-          lines.push("Compaction pending.");
-        } else {
-          lines.push(`Messages: ${item.messages}`);
-          if (item.trigger) lines.push(`Trigger: ${item.trigger}`);
-          if (item.summary.trim()) lines.push("", item.summary.trim());
-        }
-        lines.push("");
-        break;
-    }
-  }
-  return lines.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
-}
-
-function sessionItemsToJson(title: string, items: Item[], live?: LiveStream): string {
-  return JSON.stringify(
-    {
-      title,
-      exportedAt: new Date().toISOString(),
-      items: materializeLiveItems(items, live),
-    },
-    null,
-    2,
-  );
-}
-
 function safeFilename(name: string): string {
   const cleaned = name.trim().replace(/[\\/:*?"<>|]+/g, "-").replace(/\s+/g, " ").slice(0, 80);
   return cleaned || "reasonix-session";
@@ -1067,6 +1001,7 @@ export default function App() {
     resolvePlanDecision,
     resolveRecovery,
     answerQuestion,
+    answerMCPInteraction,
     setControllerMode,
     dismissExtensionForm,
     drainExtensionNotifications,
@@ -1110,6 +1045,7 @@ export default function App() {
     openTopicSession,
     activateTopic,
     noteNavigationIntent,
+    registeredNavigationIntent,
     isNavigationIntentCurrent,
     reassertVisibleTabAfterStaleNavigation,
     syncActiveTab,
@@ -1192,6 +1128,8 @@ export default function App() {
   const setSidebarWidth = useLayoutStore((s) => s.setSidebarWidth);
   const [sidebarResizing, setSidebarResizing] = useState(false);
   const [tasksOpen, setTasksOpen] = useState<false | "session" | "all">(false);
+  const [takeoverDialogTab, setTakeoverDialogTab] = useState<string | null>(null);
+  const [reclaimBusyTab, setReclaimBusyTab] = useState<string | null>(null);
   const [liveSidebarWidth, setLiveSidebarWidth] = useState<number | null>(null);
   const [viewportWidth, setViewportWidth] = useState(() => (typeof window === "undefined" ? 1440 : window.innerWidth));
   const [viewportHeight, setViewportHeight] = useState(() => (typeof window === "undefined" ? 720 : window.innerHeight));
@@ -1232,6 +1170,11 @@ export default function App() {
     const unsubReady = onReady((readyTabId) => {
       recordFrontendDiagnostic("runtime", "runtime.ready", { ready: true, hasActiveTab: Boolean(readyTabId) });
       clearAttentionChimeKeys(attentionChimeEvents.current, readyTabId);
+      // A failed startup (lease blocked, no model) never emits agent events,
+      // so the tabMetas list would keep the stale "starting" runtime and the
+      // takeover banner/button would have nothing to render. Refresh the list
+      // on every ready signal — the coordinator bounds the fetch rate.
+      void refreshTabMetas();
       if (!readyTabId || readyTabId === workspaceScopeActiveTabRef.current) {
         setWorkspaceControllerEpoch((value) => value + 1);
       }
@@ -1246,6 +1189,9 @@ export default function App() {
         setWorkspaceControllerEpoch((value) => value + 1);
       }
     });
+    // The backend pushes authoritative per-tab meta after state changes that
+    // produce no agent events (e.g. a lease-blocked startup). Refresh the list
+    // so the takeover banner/button render even when the active tab differs.
     return () => {
       unsub();
       unsubReady();
@@ -1324,6 +1270,7 @@ export default function App() {
   const [backgroundRuntimes, setBackgroundRuntimes] = useState<BackgroundRuntimeView[]>([]);
   const [workspaceConflict, setWorkspaceConflict] = useState<WorkspaceConflictView | null>(null);
   const [pendingClose, setPendingClose] = useState<{ tabId: string; work: ActiveWorkView; stopping: boolean } | null>(null);
+  const [worktreeMergeTabId, setWorktreeMergeTabId] = useState<string | null>(null);
   const topicRenameSkipCommitRef = useRef(false);
   const prevDecisionSurfaceRef = useRef<DecisionSurfaceKind | null>(null);
   const decisionSurfaceRef = useRef<DecisionSurfaceKind | null>(null);
@@ -1654,6 +1601,10 @@ export default function App() {
     [activeTabId, tabMetas],
   );
   const { active: remoteSurfaceActive, session: remoteSession, ready: remoteComposerReady, onSend: remoteSend, onCancel: remoteCancel } = useActiveRemoteSession(activeTab, showToast);
+
+  // Remote tab became ready: refresh the tab list so the spectator banner
+  // (takenOver) renders. The agent:ready event only fires for local tabs;
+  // remote tabs publish readiness via remote-tab:<id>:state, which
   const visibleRuntimeState = remoteSurfaceActive ? remoteSession.transcript : state;
   const localWorkspaceDockBlocked = remoteSurfaceActive && (rightDockMode === "files" || rightDockMode === "changed");
   const surfaceWorkspacePanelRenderable = effectiveWorkspacePanelRenderable && !localWorkspaceDockBlocked;
@@ -1787,12 +1738,13 @@ export default function App() {
       return state.approval.tool === "exit_plan_mode" ? "plan_approval" : "tool_approval";
     }
     if (state.ask) return "ask";
+    if (state.mcpInteraction) return "mcp_interaction";
     if (state.extensionForm) return "extension_form";
     if (workspaceConflict) return "workspace_conflict";
     if (pendingClose) return "close_active";
     if (clearContextPending) return "clear_context";
     return null;
-  }, [clearContextPending, pendingClose, state.approval, state.ask, state.extensionForm, workspaceConflict]);
+  }, [clearContextPending, pendingClose, state.approval, state.ask, state.extensionForm, state.mcpInteraction, workspaceConflict]);
   const visibleDecisionSurface = decisionSurface;
   const composerSurfaceHidden = runtimeTransitioning || Boolean(decisionSurface);
   decisionSurfaceRef.current = decisionSurface;
@@ -2063,11 +2015,11 @@ export default function App() {
   // not advance the canonical panel state. Incomplete lists are always shown so
   // a stale local dismissal cannot hide work that still blocks final readiness;
   // every new list starts collapsed while its header keeps showing live progress
-  // and the current task; completed lists can then be dismissed. The dismissal
-  // key is still based on stable todo content/state so history reloads do not
-  // resurrect the same finished list under a different event id. The batch key
-  // ignores status so progress in the same list is not a new batch. Dismissal
-  // is scoped per session/topic/tab and also persisted on the session sidecar.
+  // and the current task. Live completion briefly shows 3/3 before retirement;
+  // restored completed lists stay in transcript only. The dismissal key is
+  // still based on stable todo content/state so history reloads do not
+  // resurrect the same finished list. The status-agnostic batch key prevents
+  // false new batches; dismissal remains session-scoped and sidecar-persisted.
   const todoEntry = useMemo(() => {
     for (let i = visibleRuntimeState.items.length - 1; i >= 0; i--) {
       const it = visibleRuntimeState.items[i];
@@ -2108,6 +2060,21 @@ export default function App() {
     });
     if (!remoteSurfaceActive && activeTabId && todoBatch) void app.DismissTodoBatchForTab(activeTabId, todoBatch).catch(() => undefined);
   }, [activeTabId, remoteSurfaceActive, scopedTodoKey, todoBatch]);
+  const handleTodoContinue = useCallback(() => {
+    const targetTabId = todoContinueTarget(activeTabId, activeTabIdRef.current, {
+      ready: remoteSurfaceActive ? remoteComposerReady : controllerReady,
+      readOnly: Boolean(activeTab?.readOnly),
+      running: visibleRuntimeState.running,
+      pendingPrompt: visibleRuntimeState.pendingPrompt,
+    });
+    if (!targetTabId) return;
+    const prompt = t("todo.continue");
+    if (remoteSurfaceActive) {
+      void remoteSend(prompt);
+      return;
+    }
+    void sendToTab(targetTabId, prompt);
+  }, [activeTab?.readOnly, activeTabId, controllerReady, remoteComposerReady, remoteSend, remoteSurfaceActive, sendToTab, t, visibleRuntimeState.pendingPrompt, visibleRuntimeState.running]);
 
   const sessionTitle = topicTitle(activeTab);
   const exportItems = remoteSurfaceActive ? remoteSession.transcript.items : state.items;
@@ -2121,11 +2088,11 @@ export default function App() {
     applyThemeScene(sessionHasContent ? "task" : "home");
   }, [sessionHasContent]);
   const getSessionMarkdown = useCallback(
-    () => sessionItemsToMarkdown(sessionTitle, exportItems, exportLive),
+    async () => (await import("./lib/sessionExportData")).sessionItemsToMarkdown(sessionTitle, exportItems, exportLive),
     [exportItems, exportLive, sessionTitle],
   );
   const getSessionJson = useCallback(
-    () => sessionItemsToJson(sessionTitle, exportItems, exportLive),
+    async () => (await import("./lib/sessionExportData")).sessionItemsToJson(sessionTitle, exportItems, exportLive),
     [exportItems, exportLive, sessionTitle],
   );
 
@@ -2147,21 +2114,21 @@ export default function App() {
         if (format === "json") {
           const path = await app.PickExportFile(`${base}.json`, "application/json");
           if (path) {
-            await app.SaveExportFile(path, getSessionJson(), false);
+            await app.SaveExportFile(path, await getSessionJson(), false);
             showToast(t("topicBar.exportSuccess", { count: 1 }), "info");
           }
         } else if (format === "pdf") {
           const path = await app.PickExportFile(`${base}.pdf`, "application/pdf");
           if (!path) return;
           const { blobToBase64, renderSessionPdfBlob } = await import("./lib/sessionExport");
-          const blob = await renderSessionPdfBlob(getSessionMarkdown(), sessionTitle);
+          const blob = await renderSessionPdfBlob(await getSessionMarkdown(), sessionTitle);
           await app.SaveExportFile(path, await blobToBase64(blob), true);
           showToast(t("topicBar.exportSuccess", { count: 1 }), "info");
         } else if (format === "image") {
           const path = await app.PickExportFile(`${base}.png`, "image/png");
           if (!path) return;
           const { renderSessionImageBase64Payloads } = await import("./lib/sessionExport");
-          const payloads = await renderSessionImageBase64Payloads(getSessionMarkdown());
+          const payloads = await renderSessionImageBase64Payloads(await getSessionMarkdown());
           await app.SaveExportImageFiles(path, payloads);
           showToast(
             payloads.length > 1
@@ -2172,7 +2139,7 @@ export default function App() {
         } else {
           const path = await app.PickExportFile(`${base}.md`, "text/markdown");
           if (path) {
-            await app.SaveExportFile(path, getSessionMarkdown(), false);
+            await app.SaveExportFile(path, await getSessionMarkdown(), false);
             showToast(t("topicBar.exportSuccess", { count: 1 }), "info");
           }
         }
@@ -3040,6 +3007,7 @@ export default function App() {
     const lastWorkspace = await app.RemoteLastWorkspace(host.id).catch(() => "");
     const workspace = resolveRemoteWorkspace(lastWorkspace, host.defaultWorkspace);
     if (!remoteWorkspaceLaunchGate.current.isCurrent(host.id, requestSeq)) return;
+    await publishNavigationIntent("remote-workspace");
     await app.OpenRemoteWorkspace(host.id, workspace);
   }, []);
 
@@ -3892,12 +3860,6 @@ export default function App() {
     enqueueNavigation({ kind: "blank", scope, workspaceRoot: scope === "project" ? workspaceRoot : "" }),
   [enqueueNavigation]);
 
-  useEffect(() => onSessionRecovered(() => {
-    recordFrontendDiagnostic("runtime", "session.recovered", { status: "ok" });
-    setProjectRevision((value) => value + 1);
-    void refreshTabMetas(undefined, { afterMutation: true });
-  }), [refreshTabMetas]);
-
   const handleNewTab = useCallback(async () => {
     closeTransientOverlays();
     setSidebarImDetailConnectionId("");
@@ -3922,19 +3884,35 @@ export default function App() {
     return enqueueNavigation({ kind: "resume-session", session });
   }, [enqueueNavigation, singleSurfaceLayout, state.running]);
 
-  const openTaskMonitorSession = useCallback(async (tabID: string, sessionID: string): Promise<boolean> => {
+  const onRecoveryCreated = useCallback(() => {
+    setProjectRevision((value) => value + 1);
+    void refreshTabMetas(undefined, { afterMutation: true });
+  }, [refreshTabMetas]);
+  const onRecoveryLineageChanged = useCallback(() => {
+    setProjectRevision((value) => value + 1);
+    void refreshHistoryView();
+  }, [refreshHistoryView]);
+
+  const openTaskMonitorSession = useCallback(async (tabID: string, taskID: string): Promise<boolean> => {
     if (state.running && !singleSurfaceLayout) {
       throw new Error(t("history.failedOpenSession"));
     }
     // Claim the navigation epoch before the first Wails await. If the user
-    // switches tabs while the session lookup is pending, its completion is
+    // switches tabs while the task/session lookup is pending, its completion is
     // stale and must not enqueue a newer navigation request.
     const navigationIntentSeq = noteNavigationIntent();
     beginNavigationSurface(navigationIntentSeq);
     let session: SessionMeta | null;
     try {
-      const sessions = asArray(await app.ListSessionsForTab(tabID));
-      session = sessions.find((candidate) => taskSessionIDFromPath(candidate.path) === sessionID) ?? null;
+      session = await resolveTaskMonitorSession({
+        tabID,
+        taskID,
+        intentSeq: navigationIntentSeq,
+        isIntentCurrent: isNavigationIntentCurrent,
+        openTaskSessionForTab: (sourceTabID, sourceTaskID) => app.OpenTaskSessionForTab(sourceTabID, sourceTaskID),
+        listSessionsForTab: async (sourceTabID) => asArray(await app.ListSessionsForTab(sourceTabID)),
+        sessionIDFromPath: taskSessionIDFromPath,
+      });
     } catch (error) {
       settleNavigationSurface(navigationIntentSeq);
       throw error;
@@ -4132,24 +4110,11 @@ export default function App() {
     },
     [state.running, deleteSession, refreshHistoryView],
   );
-  const onDeleteManySessions = useCallback(
-    async (paths: string[]) => {
+  const onRenameHistorySession = useCallback(
+    async (session: SessionMeta, title: string) => {
       if (state.running) return;
-      const uniquePaths = Array.from(new Set(paths));
-      for (const path of uniquePaths) {
-        // Best effort per path: one locked/missing file must not abandon the
-        // rest of the sweep. The guarded backend method revalidates actual
-        // branch and parent content before moving anything.
-        await app.DeleteRecoveryCopy(path).catch(() => undefined);
-      }
-      await refreshHistoryView();
-    },
-    [state.running, refreshHistoryView],
-  );
-  const onRenameSession = useCallback(
-    async (path: string, title: string) => {
-      if (state.running) return;
-      await renameSession(path, title);
+      if (session.topicId) await app.RenameTopic(session.topicId, title);
+      else await renameSession(session.path, title);
       const sessions = await listSessions();
       setHistView((cur) =>
         cur === null
@@ -4188,20 +4153,6 @@ export default function App() {
     },
     [purgeTrashedSession, listTrashedSessions],
   );
-  const onPurgeRecoveryCopies = useCallback(
-    async (paths: string[]) => {
-      const uniquePaths = Array.from(new Set(paths));
-      for (const path of uniquePaths) {
-        // Permanent copy cleanup must not trust the list result: the backend
-        // rechecks the trashed transcript and its live parent for every path.
-        await app.PurgeRecoveryCopy(path).catch(() => undefined);
-      }
-      const trashed = await listTrashedSessions();
-      setHistView((cur) => (cur === null ? null : { kind: "trash", sessions: trashed }));
-    },
-    [listTrashedSessions],
-  );
-
   // Workspace: open the folder chooser and switch projects. The hook resets the
   // transcript and refreshes meta on a pick. A cancel is a no-op.
   const switchFolder = useCallback(async (path?: string) => {
@@ -4747,6 +4698,16 @@ export default function App() {
               {topicbarSubtitleVisible && (
                 <div className="topicbar__subtitle" title={topicbarSubtitleTitle}>
                   {activeTab?.isolatedWorktree && <WorktreeBadge size={11} />}
+                  {activeTab?.isolatedWorktree && (
+                    <button
+                      type="button"
+                      className="topicbar__worktree-btn"
+                      onClick={() => setWorktreeMergeTabId(activeTab.id)}
+                      title={t("worktree.mergeButtonTooltip")}
+                    >
+                      <span>{t("worktree.mergeAction")}</span>
+                    </button>
+                  )}
                   {topicbarImSourcePlatform && (
                     <span className={`topicbar__source-chip topicbar__source-chip--${topicbarImSourcePlatform}`}>
                       {topicbarImSourceLabel}
@@ -4801,9 +4762,43 @@ export default function App() {
             </div>
           </header>
 
-          {state.meta?.startupErr && (
-            <div className="banner banner--error">{t("topbar.startupError", { msg: state.meta.startupErr })}</div>
-          )}
+          {activeTab?.takenOver ? (
+            <RemoteReclaimBanner
+              tabId={activeTab.id}
+              busyTabId={reclaimBusyTab}
+              onReclaim={(tabId) => {
+                if (reclaimBusyTab) return;
+                setReclaimBusyTab(tabId);
+                (activeTab.remote ? app.ReclaimRemoteTabSession(tabId) : app.TakeoverSession(tabId, "wait"))
+                  .catch((error) => console.warn("[takeover] reclaim failed", error))
+                  .finally(() => setReclaimBusyTab(null));
+              }}
+            />
+          ) : null}
+          {(() => {
+            const blocked = activeLeaseBlockedTab(tabMetas, activeTab?.id ?? activeTabId);
+            if (blocked) {
+              return (
+                <div className="banner banner--error">
+                  <span className="banner__msg">{t("topbar.startupError", { msg: blocked.runtime!.issue!.message })}</span>
+                  <span className="banner__spacer" />
+                  <button type="button" className="btn btn--small" onClick={() => setTakeoverDialogTab(blocked.id)}>
+                    {t("takeover.bannerButton")}
+                  </button>
+                </div>
+              );
+            }
+            return state.meta?.startupErr ? (
+              <div className="banner banner--error">
+                <span className="banner__msg">{t("topbar.startupError", { msg: state.meta.startupErr })}</span>
+              </div>
+            ) : null;
+          })()}
+          {takeoverDialogTab ? (
+            <Suspense fallback={null}>
+              <SessionTakeoverDialog tabId={takeoverDialogTab} onClose={() => setTakeoverDialogTab(null)} />
+            </Suspense>
+          ) : null}
           {configLoadWarnings.length > 0 && (
             <div className="banner banner--warning banner--actionable">
               <span className="banner__msg" title={configLoadWarnings.join("\n")}>
@@ -4961,6 +4956,9 @@ export default function App() {
                 key={scopedTodoBatch}
                 stateKey={scopedTodoBatch}
                 todos={todos}
+                running={visibleRuntimeState.running}
+                pendingPrompt={visibleRuntimeState.pendingPrompt}
+                onContinue={activeTabId && !activeTab?.readOnly && (remoteSurfaceActive ? remoteComposerReady : controllerReady) ? handleTodoContinue : undefined}
                 onDismiss={dismissTodos}
               />
             )}
@@ -5046,6 +5044,18 @@ export default function App() {
                   cancel();
                 }}
               />
+              )
+            : visibleDecisionSurface === "mcp_interaction"
+              ? state.mcpInteraction && (
+              <Suspense fallback={null}>
+                <MCPInteractionCard
+                  key={`${activeTabId ?? ""}:${state.mcpInteraction.id}`}
+                  interaction={state.mcpInteraction}
+                  busy={false}
+                  onAnswer={(id, action, content) => answerMCPInteraction(id, action, content)}
+                  onOpenLink={(url) => openExternal(url)}
+                />
+              </Suspense>
               )
             : visibleDecisionSurface === "extension_form"
               ? state.extensionForm && (
@@ -5155,7 +5165,7 @@ export default function App() {
               commandCatalog={remoteSurfaceActive ? remoteSession.commands : undefined}
               imageInputEnabled={!remoteSurfaceActive && state.meta?.imageInputEnabled !== false}
               imageUnderstandingEnabled={state.meta?.visionFallbackEnabled === true}
-              attachmentInputEnabled={!remoteSurfaceActive}
+              attachmentInputEnabled={!remoteSurfaceActive} pinnedFiles={state.meta?.pinnedFiles}
               tabId={activeTabId} turnId={remoteSurfaceActive ? undefined : state.activeTurnId}
               effort={remoteSurfaceActive ? remoteSession.effort : state.effort}
               onSend={remoteSurfaceActive ? remoteComposerSend : handleSend}
@@ -5292,6 +5302,7 @@ export default function App() {
                 <Suspense fallback={null}>
                   <ContextPanel
                     tabId={remoteSurfaceActive ? undefined : activeTabId}
+                    items={exportItems}
                     context={visibleRuntimeState.context}
                     usage={visibleRuntimeState.usage}
                     sessionTokens={visibleRuntimeState.sessionTokens}
@@ -5472,16 +5483,24 @@ export default function App() {
             onResume={onResumeSession}
             onPreview={previewSession}
             onDelete={onDeleteSession}
-            onRename={onRenameSession}
+            onRename={onRenameHistorySession}
             onRestore={onRestoreTrashedSession}
             onPurge={onPurgeTrashedSession}
             onPurgeAll={onPurgeAllTrashedSessions}
-            onPurgeRecoveryCopies={onPurgeRecoveryCopies}
-            onDeleteMany={onDeleteManySessions}
+            onInspectVersions={requestSessionVersions}
             onClose={closeHistory}
           />
         </Suspense>
       )}
+
+      <Suspense fallback={null}>
+        <SessionRecoveryVersionsHost
+          sessions={histView?.sessions}
+          onResumeSession={onResumeSession}
+          onRecoveryCreated={onRecoveryCreated}
+          onLineageChanged={onRecoveryLineageChanged}
+        />
+      </Suspense>
 
       {settingsTarget !== null && (
         <Suspense fallback={null}>
@@ -5560,6 +5579,45 @@ export default function App() {
           onAddToChat={addSelectedTextToComposer}
         />
       </Suspense>
+      {worktreeMergeTabId && (
+        <Suspense fallback={null}>
+          <WorktreeMergeModal
+            tabId={worktreeMergeTabId}
+            isOpen={Boolean(worktreeMergeTabId)}
+            onClose={() => setWorktreeMergeTabId(null)}
+            onMerged={async (res) => {
+              const tabToClose = worktreeMergeTabId;
+              if (!tabToClose || !res.sourceRoot || !res.worktreeRoot || !res.targetBranch || !res.mergedCommit || !res.worktreeBranch || !res.worktreeHead) {
+                throw new Error(res.error || t("worktree.mergeReceiptInvalid"));
+              }
+              const navigationIntentSeq = noteNavigationIntent();
+              try {
+                const navigationIntentToken = await registeredNavigationIntent(navigationIntentSeq);
+                if (!navigationIntentToken || !isNavigationIntentCurrent(navigationIntentSeq)) {
+                  showToast(t("worktree.navigationChangedPreserved"), "error", { durationMs: 9000 });
+                  return;
+                }
+                const lifecycle = await runWorktreeMergeLifecycle(res, tabToClose, navigationIntentToken, {
+                  ensureSource: (sourceRoot) => singleSurfaceLayout
+                    ? ensureBlankSurface("project", sourceRoot, navigationIntentSeq)
+                    : ensureBlankTab("project", sourceRoot, navigationIntentSeq),
+                  isNavigationCurrent: () => isNavigationIntentCurrent(navigationIntentSeq),
+                  seedSource: seedActiveTabMeta,
+                  listTabs: () => app.ListTabs(),
+                  closeWorktree: (request) => app.CloseMergedWorktreeTab(request),
+                  finalize: (request) => app.FinalizeWorktreeMerge(request),
+                  onNavigationPreserved: () => showToast(t("worktree.navigationChangedPreserved"), "error", { durationMs: 9000 }),
+                  onCloseBlocked: () => showToast(t("worktree.cleanupViewBlocked"), "error", { durationMs: 8000 }),
+                });
+                if (lifecycle.phase !== "finalized") return;
+                showWorktreeCleanupNotice(lifecycle.cleanup, t, showToast);
+              } catch (caught: unknown) {
+                showToast(`${t("worktree.mergeDoneCleanupFailed")} ${caught instanceof Error ? caught.message : String(caught)}`, "error", { durationMs: 9000 });
+              }
+            }}
+          />
+        </Suspense>
+      )}
       {windowsFramelessChrome && (
         <WindowsWindowControls
           maximised={mainWindowMaximised}

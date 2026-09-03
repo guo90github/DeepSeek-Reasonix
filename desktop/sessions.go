@@ -67,23 +67,6 @@ func desktopSessionDir(root string) string {
 	return config.SessionDir()
 }
 
-// loadSessionTitles reads the basename→title map (missing/corrupt → empty).
-func loadSessionTitles(dir string) map[string]string {
-	m := map[string]string{}
-	b, err := readFileWithTimeout(sessionTitlesPath(dir), topicFileReadTimeout)
-	if err != nil {
-		return m
-	}
-	_ = json.Unmarshal(b, &m)
-	// Older builds could persist titles polluted with internal wrappers
-	// (memory-compiler contracts, transient blocks) — clean at the read
-	// boundary; UserPreviewText is a no-op on clean titles (#5666).
-	for key, title := range m {
-		m[key] = agent.UserPreviewText(title)
-	}
-	return m
-}
-
 func loadSessionTitlesForUpdate(dir string) (map[string]string, error) {
 	return loadStringMapForUpdate(sessionTitlesPath(dir))
 }
@@ -177,7 +160,6 @@ func sessionTelemetryPath(sessionPath string) string {
 	}
 	return sessionPath + ".telemetry.json"
 }
-
 func sessionTrashArtifacts(sessionPath, key string) []sessionTrashArtifact {
 	stem := strings.TrimSuffix(key, ".jsonl")
 	return []sessionTrashArtifact{
@@ -190,6 +172,7 @@ func sessionTrashArtifacts(sessionPath, key string) []sessionTrashArtifact {
 		{src: store.SessionDisplayIndex(sessionPath), name: stem + ".display-index.json"},
 		{src: store.SessionConflictLog(sessionPath), name: stem + ".conflicts.jsonl"},
 		{src: store.SessionRecoveryState(sessionPath), name: stem + ".recovery.json"},
+		{src: store.SessionPinnedContext(sessionPath), name: stem + ".pinned-context.json"},
 		{src: sessionTelemetryPath(sessionPath), name: key + ".telemetry.json"},
 		{src: store.SessionCheckpointDir(sessionPath), name: stem + ".ckpt"},
 		{src: store.SessionJobsDir(sessionPath), name: stem + ".jobs"},
@@ -209,7 +192,9 @@ var errSessionBusyElsewhere = errors.New("session is in use by another Reasonix 
 // would let another process acquire the lease in between and then lose its
 // freshly locked lease file, breaking cross-process mutual exclusion.
 func acquireSessionRemovalGuard(sessionPath string) (*agent.SessionRemovalGuard, error) {
-	guard, err := agent.TryAcquireSessionRemovalGuard(sessionPath)
+	guard, err := withSessionLeaseContentionRetry(func() (*agent.SessionRemovalGuard, error) {
+		return agent.TryAcquireSessionRemovalGuard(sessionPath)
+	})
 	if err != nil {
 		if errors.Is(err, agent.ErrSessionLeaseHeld) {
 			return nil, errSessionBusyElsewhere

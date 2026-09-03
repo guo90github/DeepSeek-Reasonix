@@ -1,14 +1,25 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"reasonix/internal/agent"
 )
+
+// errRemoteTabStatusSuperseded marks the benign lost race where a /status
+// response lands after SSE-derived runtime state already advanced the tab
+// revision. Adoption was correctly skipped; callers (watchdog, close policy)
+// merely skip the snapshot instead of surfacing a crash.
+var errRemoteTabStatusSuperseded = errors.New("status was superseded by newer runtime state")
 
 type RemoteTabSnapshot struct {
 	History       json.RawMessage   `json:"history"`
@@ -19,6 +30,41 @@ type RemoteTabSnapshot struct {
 	Commands      json.RawMessage   `json:"commands,omitempty"`
 	Status        json.RawMessage   `json:"status,omitempty"`
 	PendingEvents []json.RawMessage `json:"pendingEvents,omitempty"`
+}
+
+// sanitizeRemoteHistory keeps older Serve builds from leaking provider-only
+// transient blocks into the desktop transcript.
+func sanitizeRemoteHistory(body []byte) []byte {
+	var rows []map[string]json.RawMessage
+	if json.Unmarshal(body, &rows) != nil {
+		return body
+	}
+	changed := false
+	for _, row := range rows {
+		var role, content string
+		if json.Unmarshal(row["role"], &role) != nil || role != "user" || json.Unmarshal(row["content"], &content) != nil {
+			continue
+		}
+		clean := agent.UserPreviewText(content)
+		if clean == content {
+			continue
+		}
+		encoded, err := json.Marshal(clean)
+		if err == nil {
+			row["content"] = encoded
+			changed = true
+		}
+	}
+	if !changed {
+		return body
+	}
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(false)
+	if encoder.Encode(rows) != nil {
+		return body
+	}
+	return bytes.TrimSpace(out.Bytes())
 }
 
 // RemoteTabSnapshot merges the serve's GET members in parallel. Only
@@ -36,6 +82,14 @@ func (a *App) RemoteTabSnapshot(tabID string) (RemoteTabSnapshot, error) {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	var historyErr error
+	// A spectator pinned to a taken-over session reads the mirrored file view
+	// for history and status; the other members stay on the foreground.
+	sessionQuery := ""
+	a.remoteTabMu.Lock()
+	if tab := a.remoteTabs[tabID]; tab != nil && tab.session.takenOver && strings.TrimSpace(tab.routing.currentPath) != "" {
+		sessionQuery = "?session=" + url.QueryEscape(tab.routing.currentPath)
+	}
+	a.remoteTabMu.Unlock()
 	for path, dst := range map[string]*json.RawMessage{
 		"/history":     &snap.History,
 		"/context":     &snap.Context,
@@ -48,6 +102,10 @@ func (a *App) RemoteTabSnapshot(tabID string) (RemoteTabSnapshot, error) {
 		wg.Add(1)
 		go func(path string, dst *json.RawMessage) {
 			defer wg.Done()
+			switch path {
+			case "/history", "/status":
+				path += sessionQuery
+			}
 			data, err := serveGet(ctx, client, serveURL(base, path))
 			mu.Lock()
 			defer mu.Unlock()
@@ -67,6 +125,7 @@ func (a *App) RemoteTabSnapshot(tabID string) (RemoteTabSnapshot, error) {
 	if len(snap.History) == 0 {
 		return RemoteTabSnapshot{}, fmt.Errorf("remote tab %q: empty history", tabID)
 	}
+	snap.History = sanitizeRemoteHistory(snap.History)
 	if len(snap.Status) > 0 && !a.recordRemoteTabSessionStatus(tabID, client, gen, statusSeq, snap.Status) {
 		// Do not hand a status member captured before a newer request/event to
 		// the frontend aggregate snapshot; it will fetch /status explicitly.
@@ -102,13 +161,27 @@ func (a *App) RemoteTabStatus(tabID string) (json.RawMessage, error) {
 	statusSeq := a.reserveRemoteTabStatusSequence(tabID, client, gen)
 	ctx, cancel := commandContext(a)
 	defer cancel()
-	status, err := serveGet(ctx, client, serveURL(base, "/status?runtime=1"))
+	status, err := serveGet(ctx, client, serveURL(base, a.remoteTabStatusURL(tabID)))
 	if err == nil {
 		if !a.recordRemoteTabSessionStatus(tabID, client, gen, statusSeq, status) {
-			return nil, fmt.Errorf("remote tab %q status was superseded by newer runtime state", tabID)
+			return nil, fmt.Errorf("remote tab %q %w", tabID, errRemoteTabStatusSuperseded)
 		}
 	}
 	return status, err
+}
+
+// remoteTabStatusURL selects the status endpoint for a tab. A spectator
+// pinned to a taken-over session asks for that session's mirrored view; the
+// serve's foreground belongs to whatever else it runs.
+func (a *App) remoteTabStatusURL(tabID string) string {
+	path := "/status?runtime=1"
+	a.remoteTabMu.Lock()
+	tab := a.remoteTabs[tabID]
+	if tab != nil && tab.session.takenOver && strings.TrimSpace(tab.routing.currentPath) != "" {
+		path += "&session=" + url.QueryEscape(tab.routing.currentPath)
+	}
+	a.remoteTabMu.Unlock()
+	return path
 }
 
 func (a *App) remoteTabClientGeneration(tabID string, client *http.Client) uint64 {
@@ -142,6 +215,9 @@ type remoteTabStatusPayload struct {
 	BackgroundJobs  *int   `json:"backgroundJobs"`
 	CancelRequested *bool  `json:"cancelRequested"`
 	Cancellable     *bool  `json:"cancellable"`
+	// TakenOver reports Serve's single-writer handoff state: a local runtime
+	// on the serve host owns the session and this tab is read-only.
+	TakenOver *bool `json:"takenOver"`
 }
 
 func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, gen, statusSeq uint64, status json.RawMessage) bool {
@@ -169,6 +245,12 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 		a.remoteTabMu.Unlock()
 		return false
 	}
+	// A spectator watches the session it explicitly selected; the foreground
+	// status of a different session must not re-route its tab.
+	if payload.SessionPath != "" && payload.SessionPath != tab.routing.currentPath && tab.session.takenOver {
+		a.remoteTabMu.Unlock()
+		return false
+	}
 	before := remoteTabMetaLocked(tab)
 	pathChanged := adoptRemoteTabSessionPathLocked(tab, payload.SessionPath)
 	if pathChanged {
@@ -181,14 +263,15 @@ func (a *App) recordRemoteTabSessionStatus(tabID string, client *http.Client, ge
 	if before.SessionPath != after.SessionPath || before.TopicID != after.TopicID ||
 		before.Running != after.Running || before.TurnStartedAt != after.TurnStartedAt ||
 		before.PendingPrompt != after.PendingPrompt || before.BackgroundJobs != after.BackgroundJobs ||
-		before.CancelRequested != after.CancelRequested || before.Cancellable != after.Cancellable {
+		before.CancelRequested != after.CancelRequested || before.Cancellable != after.Cancellable ||
+		before.TakenOver != after.TakenOver {
 		a.emitRemoteEvent("remote-tab:updated", after)
 	}
 	if readyBarrier {
 		a.emitRemoteEvent(fmt.Sprintf("remote-tab:%s:state", tabID), RemoteTabStateView{State: "ready"})
 	}
 	if pathChanged {
-		a.goSafe("remoteTabStatusTitle", func() { a.refreshRemoteTabTitle(tabID) })
+		a.goRemoteTabSafe("remoteTabStatusTitle", func() { a.refreshRemoteTabTitle(tabID) })
 	}
 	return true
 }
@@ -208,6 +291,9 @@ func applyRemoteTabStatusPayload(tab *remoteTab, payload remoteTabStatusPayload)
 			tab.routing.revision++
 			tab.routing.running[tab.routing.currentPath] = *payload.Running
 		}
+	}
+	if payload.TakenOver != nil {
+		tab.session.takenOver = *payload.TakenOver
 	}
 	if payload.PendingPrompt != nil {
 		tab.runtime.pendingPrompt = *payload.PendingPrompt

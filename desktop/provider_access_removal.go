@@ -627,6 +627,7 @@ func (a *App) removeBuiltInProviderAccessAndRetargetTabs(names []string) error {
 	if err != nil {
 		return err
 	}
+	a.revokeCredentialProxyRoutesByProvider(plan.targets)
 	return a.applyProviderRemovalRuntime(affected, fallbackRef, "provider access")
 }
 
@@ -670,5 +671,6 @@ func (a *App) deleteProvidersAndRetargetTabs(rawNames []string) error {
 	if err != nil {
 		return err
 	}
+	a.revokeCredentialProxyRoutesByProvider(plan.targets)
 	return a.applyProviderRemovalRuntime(affected, fallbackRef, "provider")
 }

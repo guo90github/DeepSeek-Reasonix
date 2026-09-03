@@ -32,7 +32,7 @@ func TestIsSyntheticUserMessageRepairWrappedInTransientBlocks(t *testing.T) {
 func TestIsSyntheticUserMessageHostNudges(t *testing.T) {
 	// Openings of every remaining user-role nudge the agent loop persists
 	// (finalization, run_loop, goal_run_boundary). Keep in sync with the
-	// injection sites named in SyntheticUserPrefixes.
+	// injection sites named in legacySyntheticUserPrefixes.
 	for _, input := range []string{
 		"The following tools are unavailable in the current workflow phase: bash, task. Do not call them again. Respond to the user's request with visible answer text now; call a different tool only if it is still needed to complete the request.",
 		"Auto recovery has reached its limit for this turn. Do not call any more tools. Summarize what was completed, what failed, and what the user should do next. The user can continue in the next message.",

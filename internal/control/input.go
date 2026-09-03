@@ -63,11 +63,19 @@ const (
 // sidecar recording exists (e.g. sessions created before the display-recording
 // feature, or synthetic user messages injected by the controller).
 func StripComposePrefixes(content string) string {
-	s := agent.StripTransientUserBlocks(content)
-	s = stripComposeMarker(s, PlanModeMarker)
-	s = stripComposeMarker(s, legacyPlanModeMarker)
-	s = strings.TrimSpace(s)
-	return s
+	// The plan marker is prepended after the transient blocks, so a block can
+	// become leading only after the marker strips: iterate to a fixpoint.
+	s := content
+	for range 4 {
+		next := agent.StripTransientUserBlocks(s)
+		next = stripComposeMarker(next, PlanModeMarker)
+		next = stripComposeMarker(next, legacyPlanModeMarker)
+		if next == s {
+			break
+		}
+		s = next
+	}
+	return strings.TrimSpace(s)
 }
 
 func stripComposeMarker(s, marker string) string {
@@ -126,7 +134,7 @@ func IsSyntheticUserMessage(content string) bool {
 	if trimmed := strings.TrimSpace(agent.StripTransientUserBlocks(content)); trimmed == planApprovedMessage {
 		return true
 	}
-	// The prefix list lives in internal/agent (agent.SyntheticUserPrefixes) so
+	// The prefix list lives in internal/agent (legacySyntheticUserPrefixes) so
 	// preview/title/turn-count derivations there share the exact same filter
 	// (#3653).
 	return agent.IsSyntheticUserText(content)

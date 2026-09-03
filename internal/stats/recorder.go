@@ -245,6 +245,10 @@ func (r *Recorder) RecordReasoningAudit(t event.ReasoningAuditTotals) {
 	event.RecordReasoningAudit(r.inner, t)
 }
 
+func (r *Recorder) RecordCompletionValidation(info event.CompletionValidationInfo) {
+	event.RecordCompletionValidation(r.inner, info)
+}
+
 func (r *Recorder) recordUsage(e event.Event) {
 	r.recordProviderUsage(e.ModelRef, e.Usage, e.CostQuote, e.UsageSource)
 }

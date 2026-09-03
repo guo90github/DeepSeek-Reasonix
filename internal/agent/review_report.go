@@ -39,7 +39,10 @@ func (*ReviewReportTool) Schema() json.RawMessage {
 				"summary":{"type":"string","description":"What the finding is — required"},
 				"path":{"type":"string","description":"Optional file path the finding refers to"},
 				"line":{"type":"integer","description":"Optional 1-based line number in path"}
-			},"required":["severity","summary"]}}
+			},"required":["severity","summary"]}},
+			"blocking_findings":{"type":"array","items":{"type":"object","properties":{"severity":{"type":"string"},"summary":{"type":"string"},"path":{"type":"string"},"line":{"type":"integer"}}}},
+			"non_blocking":{"type":"array","items":{"type":"object","properties":{"severity":{"type":"string"},"summary":{"type":"string"},"path":{"type":"string"},"line":{"type":"integer"}}}},
+			"required_changes":{"type":"array","items":{"type":"string"}}
 		},
 		"required":["kind","verdict","reviewed_paths"]
 	}`)

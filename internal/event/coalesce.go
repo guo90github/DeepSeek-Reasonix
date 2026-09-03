@@ -250,3 +250,7 @@ func (c *coalescer) RecordRunBudget(sample RunBudgetSample) {
 func (c *coalescer) RecordReasoningAudit(t ReasoningAuditTotals) {
 	c.enqueueCapability(func() { RecordReasoningAudit(c.inner, t) })
 }
+
+func (c *coalescer) RecordCompletionValidation(info CompletionValidationInfo) {
+	c.enqueueCapability(func() { RecordCompletionValidation(c.inner, info) })
+}

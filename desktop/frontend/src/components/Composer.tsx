@@ -14,7 +14,7 @@ import { useComposerCommandCatalog } from "../lib/useComposerCommandCatalog";
 import { guidanceIsInFlight, guidanceNeedsRetry, guidanceTextMatches, kickIdleGuidance, markGuidanceQueued } from "../lib/composerGuidance";
 import { canUsePromptHistory, composerEnterAction, composerEscapeAction, composerMenuKeyAction, insertComposerNewline, isFnKeyEvent, isImeKeyEvent, promptHistoryDirectionFromEvent } from "../lib/composerKeyboard";
 import { cacheGeneration, loadOlder } from "../lib/composerHistory";
-import { sessionTurnsLabel } from "../lib/sessionCatalogPresentation";
+import { sessionTurnsLabel } from "../lib/sessionTurnsPresentation";
 import { SPINNER_WORDS, useI18n, type Translator } from "../lib/i18n";
 import { detectShortcutPlatform, formatShortcutCombo, isReservedComposerHistoryShortcut, matchesShortcut, useShortcutComboLabel } from "../lib/keyboardShortcuts";
 import { fallbackCopyText } from "../lib/clipboard";
@@ -39,6 +39,7 @@ import { observeComposerMenuViewport } from "../lib/composerMenuViewport";
 import { resolveComposerContentSizing } from "../lib/composerSizing";
 import { useToast } from "../lib/toast";
 import { type CollaborationMode, type CommandInfo, type ComposerInsertRequest, type ContextInfo, type DirEntry, type EffortInfo, type GoalRuntime, type HistoryMessage, type Mode, type PromptHistoryEntry, type QualityFloor, type SessionMeta, type SessionReference, type SlashArgItem, type SlashArgsResult, type ToolApprovalMode, type BalanceInfo } from "../lib/types";
+import { ComposerPinnedFilesShelf } from "./ComposerPinnedFilesShelf";
 import {
   formatWorkspaceReference,
   parseWorkspaceReference,
@@ -111,11 +112,7 @@ const COMPOSER_AUTO_RESERVED_HEIGHT = 58;
 const PROMPT_HISTORY_PREFETCH_REMAINING = 3;
 const FILE_REF_SEARCH_CACHE_TTL_MS = 5000;
 const ComposerGuidanceShelf = lazy(() => import("./ComposerGuidanceShelf").then((module) => ({ default: module.ComposerGuidanceShelf })));
-
-type PastedBlock = {
-  label: string;
-  text: string;
-};
+type PastedBlock = { label: string; text: string };
 
 type FileRefSearchCacheEntry = {
   entries: DirEntry[];
@@ -612,6 +609,7 @@ export function Composer({
   cacheHitTokens,
   cacheMissTokens,
   balance,
+  pinnedFiles,
   onInvocationMetadataChange,
 }: {
   running: boolean;
@@ -717,6 +715,7 @@ export function Composer({
   cacheHitTokens?: number;
   cacheMissTokens?: number;
   balance?: BalanceInfo;
+  pinnedFiles?: import("../lib/pinnedContextBridge").PinnedFileInfo[];
 }) {
   const { t, locale } = useI18n();
   const { showToast } = useToast();
@@ -808,6 +807,7 @@ export function Composer({
   const [, setHistoryIndex] = useState(-1);
   const savedTextRef = useRef("");
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const measureTaRef = useRef<HTMLTextAreaElement>(null);
   const richInputRef = useRef<RichComposerInputHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const editHistoryByDraftRef = useRef<Record<string, ComposerEditHistory>>({});
@@ -2986,36 +2986,29 @@ export function Composer({
     // Creation empty hero starts single-line but must grow so multi-line drafts
     // stay readable before send (review: fixed 20px + overflow:hidden clipped).
     if (heroMode) {
-      const node = taRef.current;
-      if (!node) {
+      const measureNode = measureTaRef.current;
+      if (!measureNode) {
         setTextareaAutoHeight(20);
         setTextareaAutoOverflow(false);
         return;
       }
-      const previousHeight = node.style.height;
-      node.style.height = "auto";
-      const scrollHeight = node.scrollHeight || 20;
+      const scrollHeight = measureNode.scrollHeight || 20;
       const maxHeight = composerHeroInputMaxHeight();
       const nextHeight = Math.min(Math.max(scrollHeight, 20), maxHeight);
       const nextOverflow = scrollHeight > maxHeight + 1;
-      node.style.height = previousHeight;
       setTextareaAutoHeight((current) => (current === nextHeight ? current : nextHeight));
       setTextareaAutoOverflow((current) => (current === nextOverflow ? current : nextOverflow));
       return;
     }
     const richHeight = invocationsRef.current.length > 0 ? richInputRef.current?.scrollHeight() : 0;
-    const node = taRef.current;
-    if (!richHeight && !node) return;
-    const previousHeight = node?.style.height;
-    if (node) node.style.height = "auto";
-    const scrollHeight = richHeight || node?.scrollHeight || 0;
+    const scrollHeight = richHeight || measureTaRef.current?.scrollHeight || 0;
+    if (!scrollHeight) return;
     const sizing = resolveComposerContentSizing({
       contentHeight: scrollHeight,
       manualLogicalHeight: composerHeight,
       maxLogicalHeight: composerMaxHeight(),
       reservedHeight: COMPOSER_AUTO_RESERVED_HEIGHT,
     });
-    if (node && previousHeight !== undefined) node.style.height = previousHeight;
     setTextareaAutoHeight((current) => (current === sizing.inputHeight ? current : sizing.inputHeight));
     setTextareaAutoOverflow((current) => (current === sizing.overflow ? current : sizing.overflow));
   }, [composerHeight, heroMode, invocations.length]);
@@ -4384,6 +4377,7 @@ export function Composer({
           />
         </Suspense>
       )}
+      <ComposerPinnedFilesShelf tabId={tabId || ""} pinnedFiles={pinnedFiles} />
       {(attachments.length > 0 || workspaceRefs.length > 0 || sessionRefs.length > 0 || selectedTextRefs.length > 0) && (
         <div className="composer-context" aria-label={t("composer.contextItems")}>
           {sortComposerAttachments(attachments).map((a) => {
@@ -4614,45 +4608,51 @@ export function Composer({
                   }}
                 />
               ) : (
-                <textarea
-                  id="composer-input"
-                  ref={taRef}
-                  className="composer__input"
-                  aria-label={t("composer.placeholder")} spellCheck={false} autoCorrect="off" autoCapitalize="off"
-                  value={composingRef.current ? undefined : text}
-                  onInputCapture={(e) => {
-                    pendingNativeInputTypeRef.current = (e.nativeEvent as InputEvent).inputType;
-                  }}
-                  onChange={(e) => {
-                    const targetDraftKey = activeDraftKeyRef.current;
-                    const inputType = (e.nativeEvent as InputEvent).inputType
-                      || pendingNativeInputTypeRef.current;
-                    pendingNativeInputTypeRef.current = undefined;
-                    trackImeInputChange(e.nativeEvent as InputEvent, inputType, e.target.value);
-                    resetPromptHistoryNavigation();
-                    textRef.current = e.target.value;
-                    setText(e.target.value);
-                    const nextSelection = {
-                      start: e.target.selectionStart ?? e.target.value.length,
-                      end: e.target.selectionEnd ?? e.target.value.length,
-                    };
-                    lastSelectionRef.current = nextSelection;
-                    setPlainSelection(nextSelection);
-                    syncComposerNativeHistory(targetDraftKey, inputType);
-                    if (composerPrompt) setComposerPrompt(null);
-                  }}
-                  onSelect={rememberCaret}
-                  onClick={rememberCaret}
-                  onKeyUp={rememberCaret}
-                  onFocus={rememberCaret}
-                  onContextMenu={openInputMenu}
-                  onPaste={onPaste}
-                  onKeyDown={onKeyDown}
-                  style={textareaStyle}
-                  placeholder={composerPlaceholder}
-                  rows={1}
-                  disabled={disabled || readOnly}
-                />
+                <>
+                  <textarea
+                    id="composer-input"
+                    ref={taRef}
+                    className="composer__input"
+                    aria-label={t("composer.placeholder")} spellCheck={false} autoCorrect="off" autoCapitalize="off"
+                    value={composingRef.current ? undefined : text}
+                    onInputCapture={(e) => {
+                      pendingNativeInputTypeRef.current = (e.nativeEvent as InputEvent).inputType;
+                    }}
+                    onChange={(e) => {
+                      const targetDraftKey = activeDraftKeyRef.current;
+                      const inputType = (e.nativeEvent as InputEvent).inputType
+                        || pendingNativeInputTypeRef.current;
+                      pendingNativeInputTypeRef.current = undefined;
+                      trackImeInputChange(e.nativeEvent as InputEvent, inputType, e.target.value);
+                      resetPromptHistoryNavigation();
+                      textRef.current = e.target.value;
+                      setText(e.target.value);
+                      const nextSelection = {
+                        start: e.target.selectionStart ?? e.target.value.length,
+                        end: e.target.selectionEnd ?? e.target.value.length,
+                      };
+                      lastSelectionRef.current = nextSelection;
+                      setPlainSelection(nextSelection);
+                      syncComposerNativeHistory(targetDraftKey, inputType);
+                      if (composerPrompt) setComposerPrompt(null);
+                    }}
+                    onSelect={rememberCaret}
+                    onClick={rememberCaret}
+                    onKeyUp={rememberCaret}
+                    onFocus={rememberCaret}
+                    onContextMenu={openInputMenu}
+                    onPaste={onPaste}
+                    onKeyDown={onKeyDown}
+                    style={textareaStyle}
+                    placeholder={composerPlaceholder}
+                    rows={1}
+                    disabled={disabled || readOnly}
+                  />
+                  <textarea
+                    ref={measureTaRef} className="composer__input composer__input--measure"
+                    value={text} readOnly aria-hidden="true" tabIndex={-1}
+                  />
+                </>
               )}
             </div>
             {composerPrompt && (

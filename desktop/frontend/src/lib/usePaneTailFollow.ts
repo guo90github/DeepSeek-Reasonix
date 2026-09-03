@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
 import type { VirtuosoHandle } from "react-virtuoso";
 import { createTranscriptTailSettle, type TranscriptTailSettle } from "./transcriptTailSettle";
+import { createTranscriptScrollWriter } from "./transcriptScrollWriter";
 import type { TranscriptScrollMode } from "./transcriptScrollArbiter";
 import { nativeTranscriptDistanceFromBottom, TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX } from "./transcriptScrollGeometry";
 
@@ -26,6 +27,8 @@ export function usePaneTailFollow({
 }) {
   const modeRef = useRef<TranscriptScrollMode>("tail-follow");
   const generationRef = useRef(0);
+  const ownershipEpochRef = useRef(0);
+  const geometryRevisionRef = useRef(0);
   const layoutTransientRef = useRef(false);
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
@@ -33,10 +36,19 @@ export function usePaneTailFollow({
 
   const settleRef = useRef<TranscriptTailSettle | null>(null);
   settleRef.current ??= createTranscriptTailSettle({
-    virtuosoRef: virtuosoRef ?? { current: null },
+    writer: createTranscriptScrollWriter({
+      virtuosoRef: virtuosoRef ?? { current: null },
+      scrollRef: scrollerRef,
+      modeRef,
+      generationRef,
+      ownershipEpochRef,
+      geometryRevisionRef,
+    }),
     scrollRef: scrollerRef,
     modeRef,
     generationRef,
+    ownershipEpochRef,
+    geometryRevisionRef,
     layoutTransientRef,
   });
   const settle = settleRef.current;

@@ -35,7 +35,9 @@ import (
 	"reasonix/internal/extension/providerext"
 	fileencoding "reasonix/internal/fileutil/encoding"
 	"reasonix/internal/i18n"
+	"reasonix/internal/netclient"
 	"reasonix/internal/notify"
+	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
 	"reasonix/internal/provider/openai"
 	"reasonix/internal/serve"
@@ -260,11 +262,7 @@ func configureCLIThemeFromConfigForTTYOutput() {
 // The assembly (model resolution, tool registry, permission gate, two-model
 // Coordinator) lives in internal/boot, shared with the desktop frontend.
 // requireKey forces the executor's API key to be present (used by run); chat
-// passes false so the session UI is reachable before a key is set. sink receives
-// the agent's typed event stream — runAgent passes a TextSink that renders to
-// stdout, the TUI passes an event-channel sink so events become tea.Msgs.
-// workspaceRoot pins the project root explicitly (from --dir); empty falls back
-// to git-root detection.
+// passes false so the session UI is reachable before a key is set.
 func setupProfile(ctx context.Context, modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, workspaceRoot string) (*control.Controller, error) {
 	return setupProfileWithOverrides(ctx, modelName, maxStepsOverride, requireKey, sink, cliBuildOverrides{WorkspaceRoot: workspaceRoot})
 }
@@ -279,6 +277,9 @@ type cliBuildOverrides struct {
 	Stderr               io.Writer
 	OnSessionRecovered   func(control.SessionRecoveryInfo) error
 	Ablation             ablation.Set
+	// InteractiveHost marks human-in-the-loop entries (chat TUI); print mode
+	// and bots stay on core-v1.
+	InteractiveHost bool
 	// SessionTemp carries the previous Controller's private temporary directory
 	// manager across model/profile rebuilds so temporary files survive.
 	SessionTemp *sessiontemp.Manager
@@ -301,7 +302,7 @@ func setupProfileWithOverrides(ctx context.Context, modelName string, maxStepsOv
 }
 
 func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey bool, sink event.Sink, overrides cliBuildOverrides) boot.Options {
-	return boot.Options{
+	opts := boot.Options{
 		Model:                modelName,
 		MaxSteps:             maxStepsOverride,
 		MaxStepsKey:          "--max-steps",
@@ -320,6 +321,8 @@ func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey b
 		Ablation:             overrides.Ablation,
 		SessionTemp:          overrides.SessionTemp,
 	}
+	opts.MCPHostProfile = plugin.HostProfileForInteractive(overrides.InteractiveHost)
+	return opts
 }
 
 type cliPermissionMode struct {
@@ -501,6 +504,7 @@ func runAgent(args []string, version string) int {
 	cont := registerContinueFlag(fs)
 	resume := fs.String("resume", "", "resume by session file path, session ID, or machine session ID (takes precedence over --continue)")
 	copySession := fs.Bool("copy", false, "with --resume/--continue: duplicate the session and continue in the copy (escape hatch when the original is held by another Reasonix process)")
+	takeover := fs.Bool("takeover", false, "with --resume/--continue: when a resident serve on this machine holds the session, take it over instead of refusing")
 	effort := fs.String("effort", "", "session reasoning effort override")
 	permissionMode := fs.String("permission-mode", "ask", "permission mode: manual | ask | auto | acceptEdits | dontAsk | plan | bypassPermissions")
 	autoApprove := fs.BoolP("auto", "y", false, "explicitly auto-approve ordinary writer fallbacks (alias for --permission-mode auto)")
@@ -639,20 +643,36 @@ func runAgent(args []string, version string) int {
 	// silently double-writing. Released after the controller closes.
 	leases := control.NewSessionLeaseKeeper()
 	defer leases.Release()
+	takeoverManager := newCLITakeoverManager(nil, leases)
+	defer func() {
+		if err := takeoverManager.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		}
+	}()
 	var resumeSession *agent.Session
+	var takeoverBinding *cliTakeoverBinding
 	if resumePath != "" {
-		if err := leases.Rebind(resumePath); err != nil {
+		var err error
+		resumeSession, err = bindAndLoadCLIResume(leases, resumePath, loadResumableSession)
+		if errors.Is(err, agent.ErrSessionLeaseHeld) && *takeover {
+			takeoverBinding, err = cliTakeoverHeldSession(resumePath, err, leases, takeoverManager)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+				return 1
+			}
+			resumeSession, err = cliPrepareTakeoverCandidate(takeoverBinding, leases)
+			if err != nil {
+				_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
+				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+				return 1
+			}
+		}
+		if err != nil {
 			if errors.Is(err, agent.ErrSessionLeaseHeld) {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, sessionLeaseResumeRefusal(err))
 			} else {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 			}
-			return 1
-		}
-		var err error
-		resumeSession, err = loadResumableSession(resumePath)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 			return 1
 		}
 	}
@@ -663,9 +683,12 @@ func runAgent(args []string, version string) int {
 
 	chain, err := buildRunSink(format, *printOnly, *showThinking, *metricsPath, *trajectoryPath, cfg, reporter)
 	if err != nil {
+		_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 1
 	}
+	takeoverManager.SetInner(chain.sink)
+	chain.sink = takeoverManager
 	sink, resultOutput, metrics := chain.sink, chain.resultOutput, chain.metrics
 	if resumePath != "" {
 		*model = modelForResumePath(*model, resumePath, cfg)
@@ -696,6 +719,7 @@ func runAgent(args []string, version string) int {
 	}
 	ctrl, err := setupProfileWithOverrides(ctx, *model, *maxSteps, true, sink, overrides)
 	if err != nil {
+		_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
 		if resultOutput != nil && format != runOutputText {
 			if encodeErr := resultOutput.Finalize("", started, err); encodeErr != nil {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, encodeErr)
@@ -706,6 +730,7 @@ func runAgent(args []string, version string) int {
 		return 1
 	}
 	defer ctrl.Close()
+	takeoverManager.AttachController(ctrl)
 	SetTaskJobKiller(ctrlKillerAdapter{ctrl})
 	ctrl.ApplyHeadlessApprovalMode(permissions.approval)
 
@@ -714,6 +739,11 @@ func runAgent(args []string, version string) int {
 	// precedence over --continue.
 	// --continue: resume the most recent saved session.
 	if resumePath != "" {
+		if err := takeoverBinding.commitPrevious(takeoverManager); err != nil {
+			_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+			return 1
+		}
 		ctrl.Resume(resumeSession, resumePath)
 	}
 	if ctrl.SessionPath() == "" && ctrl.SessionDir() != "" {
@@ -722,8 +752,12 @@ func runAgent(args []string, version string) int {
 	// Fresh sessions take the lease too (defensive: the path is brand new); a
 	// resumed path is already held, making this a no-op.
 	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
+		_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
 		return 1
+	}
+	if takeoverBinding != nil {
+		takeoverManager.Activate(takeoverBinding)
 	}
 	reclaimCLIRecoveryBranches(ctrl.SessionDir())
 
@@ -747,16 +781,7 @@ func runAgent(args []string, version string) int {
 		if exec := ctrl.Executor(); exec != nil {
 			if audit := exec.CapabilityAudit(); audit != nil {
 				snap := audit.Snapshot()
-				final.MergeCapabilityAuditCounters(
-					snap.Routes, snap.RoutedCandidates, snap.RoutedRequire, snap.RoutedPrefer, snap.RoutedSuggest, snap.Declines,
-					snap.SemanticRoutes, snap.SemanticFallbacks,
-					snap.RequireMissing, snap.RequireRecovered, snap.PreferMissing, snap.PreferRecovered,
-					snap.SkillInvocations, snap.SkillFailures, snap.SkillUnavailable,
-					snap.MCPInspect, snap.MCPCall, snap.MCPCallFailures,
-					snap.ReviewBlocks, snap.SecurityReviewBlocks,
-					snap.RouterPromptTokens, snap.RouterCompletionTokens,
-					snap.RouterCost, snap.RouterLatencyMs,
-				)
+				final.MergeCapabilityAudit(&snap)
 			}
 		}
 		if err := writeMetrics(*metricsPath, final); err != nil {
@@ -1093,8 +1118,30 @@ func chatREPL(args []string, version string) int {
 	// and this chat from silently double-writing one transcript.
 	leases := control.NewSessionLeaseKeeper()
 	defer leases.Release()
+	takeoverManager := newCLITakeoverManager(nil, leases)
+	defer func() {
+		if err := takeoverManager.Close(); err != nil {
+			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		}
+	}()
+	var takeoverBinding *cliTakeoverBinding
+	var startupResumeSession *agent.Session
 	if resumePath != "" {
-		if err := leases.Rebind(resumePath); err != nil {
+		startupResumeSession, err = bindAndLoadCLIResume(leases, resumePath, loadResumableSession)
+		if errors.Is(err, agent.ErrSessionLeaseHeld) && cliSessionTakeoverCandidate(err) && promptSessionTakeover(err) {
+			takeoverBinding, err = cliTakeoverHeldSession(resumePath, err, leases, takeoverManager)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+				return 1
+			}
+			startupResumeSession, err = cliPrepareTakeoverCandidate(takeoverBinding, leases)
+			if err != nil {
+				_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
+				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+				return 1
+			}
+		}
+		if err != nil {
 			if errors.Is(err, agent.ErrSessionLeaseHeld) {
 				fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, sessionLeaseResumeRefusal(err))
 			} else {
@@ -1116,6 +1163,8 @@ func chatREPL(args []string, version string) int {
 	var sink event.Sink = &eventSink{ch: eventCh}
 	sink = withNotifications(sink, cfg)
 	sink = reporter.Wrap(sink)
+	takeoverManager.SetInner(sink)
+	sink = takeoverManager
 	var effortOverride *string
 	if strings.TrimSpace(*effort) != "" {
 		effortOverride = effort
@@ -1126,6 +1175,7 @@ func chatREPL(args []string, version string) int {
 		PermissionAllow:    allowedTools,
 		AdditionalDirs:     additionalDirs,
 		WorkspaceRoot:      workspaceRoot,
+		InteractiveHost:    true,
 		Stderr:             diagnostics.Writer(),
 		OnSessionRecovered: cliSessionRecoveredHandler(leases),
 	}
@@ -1137,11 +1187,13 @@ func chatREPL(args []string, version string) int {
 		// the wizard would overwrite the user's config (#2856).
 		fmt.Fprintln(os.Stderr, i18n.M.ReconfigureOnUnknownModel)
 		if rc := interactiveSetup(defaultConfigTarget(), defaultEnvTarget()); rc != 0 {
+			_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
 			return rc
 		}
 		ctrl, err = setupProfileWithOverrides(ctx, *model, *maxSteps, false, sink, overrides)
 	}
 	if err != nil {
+		_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 1
 	}
@@ -1151,17 +1203,18 @@ func chatREPL(args []string, version string) int {
 	// file so closing/reopening keeps appending to the same history; a fresh
 	// session lands in a new file stamped with the model name.
 	if resumePath != "" {
-		loaded, err := agent.LoadSession(resumePath)
-		if err != nil {
+		if err := takeoverBinding.commitPrevious(takeoverManager); err != nil {
+			_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 			return 1
 		}
-		ctrl.Resume(loaded, resumePath)
+		ctrl.Resume(startupResumeSession, resumePath)
 	}
 	ctrl.EnsureSessionPath()
 	// Fresh sessions take the lease too (defensive: the path is brand new); a
 	// resumed path is already held, making this a no-op.
 	if err := rebindCLIControllerAuthority(leases, ctrl); err != nil {
+		_ = cliReturnFailedTakeover(takeoverBinding, leases, takeoverManager)
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, control.SessionInUseMessage(err)+"; "+control.SessionLeaseCloseHint)
 		return 1
 	}
@@ -1212,6 +1265,11 @@ func chatREPL(args []string, version string) int {
 	m.updateWatchdogStatusProvider()
 	m.planMode = permissions.plan
 	m.leases = leases
+	m.takeover = takeoverManager
+	takeoverManager.AttachController(ctrl)
+	if takeoverBinding != nil {
+		takeoverManager.Activate(takeoverBinding)
+	}
 	if cfg != nil {
 		m.outputStyle = cfg.Agent.OutputStyle    // shown as the active entry in /output-style
 		m.statuslineCmd = cfg.Statusline.Command // custom status-line command, "" = built-in row
@@ -1276,6 +1334,7 @@ func chatREPL(args []string, version string) int {
 	// keep working; finalized transcript lines are emitted via tea.Println.
 	diagnostics.Milestone("terminal_takeover_begin")
 	p := tea.NewProgram(m)
+	takeoverManager.SetYieldCallback(func() { p.Send(tuiShutdownMsg{}) })
 	diagnostics.StartWatchdog(p)
 	// SSH drop (SIGHUP) or service stop (SIGTERM): persist the conversation
 	// before the terminal goes away, then unwind through the normal close path
@@ -1290,16 +1349,21 @@ func chatREPL(args []string, version string) int {
 	final, runErr := p.Run()
 	signal.Stop(hangup)
 	diagnostics.Milestone("terminal_released")
+	if err := takeoverManager.Close(); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
+		if runErr == nil {
+			runErr = err
+		}
+	}
 	// Close the active controller plus any retired ones from /model switches.
 	// Retired controllers were stashed rather than closed at switch time
 	// because Controller.Close() runs SessionEnd hooks and kills plugin
 	// subprocesses — operations that corrupt bubbletea's terminal raw mode
 	// when executed while the TUI is alive.
-	launchWeb := false
-	launchWebPath := ""
-	launchWebSessionID := ""
-	launchWebModelRef := ""
+	var launchWeb bool
+	var launchWebPath, launchWebSessionID, launchWebModelRef string
 	if fm, ok := final.(chatTUI); ok {
+		reportShutdownFailure(fm.shutdownErr)
 		launchWeb = fm.launchWebOnExit
 		for _, oc := range fm.oldControllers {
 			if c, ok := oc.(*control.Controller); ok {
@@ -1611,14 +1675,14 @@ func familyStaticModels(providers []config.ProviderEntry, idxs []int) []string {
 // later wizard step), network/auth error, or a vendor without /models — it
 // silently returns the preset's static model list so the wizard can always
 // present something. The fetch has a 10s timeout and is best-effort.
-func fetchOrFallback(probe *config.ProviderEntry, famName string) []string {
+func fetchOrFallback(probe *config.ProviderEntry, famName string, proxy netclient.ProxySpec) []string {
 	static := probe.ModelList()
 	if probe.BaseURL == "" {
 		return static
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	models, err := probe.FetchModels(ctx)
+	models, err := probe.FetchModelsWithProxy(ctx, proxy)
 	if err != nil || len(models) == 0 {
 		if len(static) > 0 {
 			fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.FetchModelsUsingPresetsFmt, famName)))
@@ -1640,7 +1704,7 @@ func fetchOrFallback(probe *config.ProviderEntry, famName string) []string {
 // wizard's idea of "what models exist" diverged from the chat client's actual
 // endpoint. Returning the empty slice (not an error) on full miss lets the
 // wizard fall through to a manual text input without an error message.
-func fetchModelListCompat(ctx context.Context, baseURL, apiKey string) ([]string, error) {
+func fetchModelListCompat(ctx context.Context, baseURL, apiKey string, proxy netclient.ProxySpec) ([]string, error) {
 	candidates, err := config.BuildModelFetchURLs(baseURL, "")
 	if err != nil {
 		return nil, err
@@ -1648,7 +1712,7 @@ func fetchModelListCompat(ctx context.Context, baseURL, apiKey string) ([]string
 	var lastErr error
 	var firstHardErr error
 	for _, u := range candidates {
-		models, err := openai.FetchModels(ctx, u, apiKey, nil)
+		models, err := openai.FetchModelsWithOptions(ctx, u, apiKey, openai.FetchModelsOptions{Proxy: proxy})
 		if err == nil {
 			return models, nil
 		}
@@ -1877,7 +1941,7 @@ func newProviderPromptResult(entries []config.ProviderEntry, key, value string) 
 }
 
 // promptCustomProvider handles the custom provider entry flow.
-func promptCustomProvider() (providerPromptResult, error) {
+func promptCustomProvider(proxy netclient.ProxySpec) (providerPromptResult, error) {
 	methodIdx, err := selectOne(i18n.M.CustomAddMethodLabel, []menuItem{
 		{name: i18n.M.CustomMethodManual},
 		{name: i18n.M.CustomMethodURL},
@@ -1888,7 +1952,7 @@ func promptCustomProvider() (providerPromptResult, error) {
 	if methodIdx == 0 {
 		return promptCustomProviderManual()
 	}
-	return promptCustomProviderFromURL()
+	return promptCustomProviderFromURL(proxy)
 }
 
 // promptCustomProviderManual handles manual model entry.
@@ -1934,7 +1998,7 @@ func promptCustomProviderManualWith(in *bufio.Scanner, baseURL, keyEnv, apiKey s
 // endpoint and shows a checkbox of the returned models. If the call fails
 // (network error, auth failure, or a vendor without /models) it falls
 // through to manual entry, reusing the URL and key the user already typed.
-func promptCustomProviderFromURL() (providerPromptResult, error) {
+func promptCustomProviderFromURL(proxy netclient.ProxySpec) (providerPromptResult, error) {
 	in := bufio.NewScanner(os.Stdin)
 	fmt.Println()
 
@@ -1949,7 +2013,7 @@ func promptCustomProviderFromURL() (providerPromptResult, error) {
 	fmt.Printf("  %s\n", dim(fmt.Sprintf(i18n.M.FetchingModelsFmt, "custom")))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	models, err := fetchModelListCompat(ctx, baseURL, apiKey)
+	models, err := fetchModelListCompat(ctx, baseURL, apiKey, proxy)
 	if err != nil || len(models) == 0 {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.FetchModelsFailedFmt, "custom", err)))
@@ -1981,7 +2045,7 @@ func promptCustomProviderFromURL() (providerPromptResult, error) {
 }
 
 // promptAnthropicProvider handles the Anthropic compatible provider entry flow.
-func promptAnthropicProvider() (providerPromptResult, error) {
+func promptAnthropicProvider(proxy netclient.ProxySpec) (providerPromptResult, error) {
 	methodIdx, err := selectOne(i18n.M.AnthropicAddMethodLabel, []menuItem{
 		{name: i18n.M.AnthropicMethodManual},
 		{name: i18n.M.AnthropicMethodURL},
@@ -1992,7 +2056,7 @@ func promptAnthropicProvider() (providerPromptResult, error) {
 	if methodIdx == 0 {
 		return promptAnthropicProviderManual()
 	}
-	return promptAnthropicProviderFromURL()
+	return promptAnthropicProviderFromURL(proxy)
 }
 
 // promptAnthropicProviderManual handles manual model entry.
@@ -2037,7 +2101,7 @@ func promptAnthropicProviderManualWith(in *bufio.Scanner, baseURL, keyEnv, apiKe
 // — Anthropic's own API has no public model list — so on any failure the
 // flow falls through to manual entry with the URL/key already filled in,
 // rather than aborting the wizard.
-func promptAnthropicProviderFromURL() (providerPromptResult, error) {
+func promptAnthropicProviderFromURL(proxy netclient.ProxySpec) (providerPromptResult, error) {
 	in := bufio.NewScanner(os.Stdin)
 	fmt.Println()
 
@@ -2051,7 +2115,7 @@ func promptAnthropicProviderFromURL() (providerPromptResult, error) {
 	fmt.Printf("  %s\n", dim(fmt.Sprintf(i18n.M.AnthropicFetchingModelsFmt, "anthropic")))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	models, err := fetchModelListCompat(ctx, baseURL, apiKey)
+	models, err := fetchModelListCompat(ctx, baseURL, apiKey, proxy)
 	if err != nil || len(models) == 0 {
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "  %s\n", dim(fmt.Sprintf(i18n.M.AnthropicFetchModelsFailedFmt, "anthropic", err)))

@@ -21,8 +21,13 @@ assert.match(controller, /await waitForTabReadyRef\.current\(tabId\);/, "auto-re
 assert.match(controller, /reason === "startup" && !sessionPath\.trim\(\)/, "unbound startup hydrate waits for readiness instead of failing pre-ready");
 assert.match(
   transcript,
-  /if \(hydrating \|\| !virtuosoReadyRef\.current \|\| !stick\.current\) return;\n    followGrowingTail\(\);\n  \}, \[footerHeight, followGrowingTail, hydrating, stick\]\);/,
-  "footer resize is routed through the coalesced tail-follow path without depending on item appends",
+  /useLayoutEffect\(\(\) => \{\n    if \(!virtuosoReadyRef\.current \|\| !stick\.current\) return;\n    scrollToBottom\(\);\n  \}, \[footerHeight, scrollToBottom, stick\]\);/,
+  "a tail-owned footer resize uses the immediate and bounded bottom transaction before paint without moving a manual reader",
+);
+assert.match(
+  transcript,
+  /if \(!hydrating \|\| scrollModeRef\.current === "tail-follow"\) followGrowingTail\("viewport-resize"\);/,
+  "a hydrating transcript still repairs a restored-draft viewport resize when it owns tail-follow without moving a manual reader",
 );
 assert.match(controller, /shouldPreferResidentHistory\(resetSurface, options\.preserveCachedHistory\)/, "retry hydrates fetch instead of serving the resident snapshot");
 assert.match(controller, /scheduleHistoryRetryRef\.current\(tabId, reason, \{/, "history failure schedules an auto-retry");

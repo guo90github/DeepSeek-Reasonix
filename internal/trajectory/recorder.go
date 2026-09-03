@@ -342,6 +342,10 @@ func (r *Recorder) RecordReasoningAudit(t event.ReasoningAuditTotals) {
 	event.RecordReasoningAudit(r.inner, t)
 }
 
+func (r *Recorder) RecordCompletionValidation(info event.CompletionValidationInfo) {
+	event.RecordCompletionValidation(r.inner, info)
+}
+
 // Close flushes and closes the file, returning the first error seen. Events
 // arriving after Close (late background jobs) are forwarded but not recorded.
 func (r *Recorder) Close() error {

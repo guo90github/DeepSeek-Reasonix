@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
+	"net/http/httptest"
 	"slices"
 	"strings"
 	"testing"
@@ -155,7 +156,7 @@ func TestNamedAttachPublishesResolvedRouteBeforeResume(t *testing.T) {
 	fs := newFakeServe(t, "s3cret", []serveSessionEntry{{Name: "target", Path: targetPath}})
 	fs.mu.Lock()
 	fs.eventFeed = feed
-	fs.resumeStarted = make(chan struct{}, 1)
+	fs.resumeStarted = make(chan string, 1)
 	fs.resumeRelease = make(chan struct{})
 	started, release := fs.resumeStarted, fs.resumeRelease
 	fs.mu.Unlock()
@@ -397,7 +398,7 @@ func TestProvisionalResumeRouteFencesStaleSessionListing(t *testing.T) {
 	fs.sessionsStarted = make(chan struct{}, 1)
 	fs.sessionsRelease = make(chan struct{})
 	sessionsStarted, sessionsRelease := fs.sessionsStarted, fs.sessionsRelease
-	fs.resumeStarted = make(chan struct{}, 1)
+	fs.resumeStarted = make(chan string, 1)
 	fs.resumeRelease = make(chan struct{})
 	resumeStarted, resumeRelease := fs.resumeStarted, fs.resumeRelease
 	fs.mu.Unlock()
@@ -644,6 +645,53 @@ func TestEnterRemoteSessionPathSkipsSessionCatalog(t *testing.T) {
 		if strings.HasPrefix(call, "GET /sessions") {
 			t.Fatalf("explicit path unnecessarily fetched the session catalog: %v", fs.recorded())
 		}
+	}
+}
+
+func TestEnterRemoteSessionPathReturnsSpectatorMountSynchronously(t *testing.T) {
+	const path = "/remote/sessions/taken-over.jsonl"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/resume" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("X-Reasonix-Session-Path", path)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	target, err := enterRemoteSessionTarget(context.Background(), srv.Client(), srv.URL, RemoteTabOpenOptions{SessionPath: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !target.TakenOver {
+		t.Fatalf("resume target = %+v, want synchronous spectator marker", target)
+	}
+	tab := &remoteTab{
+		id: "remote-1", gen: 3,
+		routing: remoteTabSessionRouting{currentPath: path, running: map[string]bool{}},
+	}
+	app := &App{remoteTabs: map[string]*remoteTab{tab.id: tab}}
+	if !app.commitRemoteTabAttachResponse(tab.id, tab, tab.gen, tab.routing.pathRevision, target, false) {
+		t.Fatal("spectator attach response was not committed")
+	}
+	if !tab.session.takenOver {
+		t.Fatal("spectator marker was not committed before ready publication")
+	}
+}
+
+func TestRemoteTabResumeCommitsSpectatorBeforeReady(t *testing.T) {
+	const path = "/remote/sessions/taken-over.jsonl"
+	client := &http.Client{}
+	tab := &remoteTab{
+		id: "remote-1", gen: 4, state: "ready", client: client,
+		routing: remoteTabSessionRouting{currentPath: path, running: map[string]bool{}},
+	}
+	app := &App{remoteTabs: map[string]*remoteTab{tab.id: tab}}
+	route := remoteTabProvisionalResume{targetPath: path, pathRevision: tab.routing.pathRevision}
+	meta, committed := app.commitRemoteTabResume(tab.id, tab, client, tab.gen, route, serveSessionEntry{Path: path, TakenOver: true}, "Taken over")
+	if !committed || !tab.session.takenOver || !meta.TakenOver || !meta.ReadOnly {
+		t.Fatalf("resume spectator commit = committed=%v tab=%v meta=%+v", committed, tab.session.takenOver, meta)
 	}
 }
 
