@@ -493,6 +493,7 @@ export function SplitWorkspace({
           )}
           <ProcessPane
             turns={processTurns}
+            running={running}
             listRef={processRef}
             onUserInteract={markUserInteracted}
             scrollerRef={setProcScroller}

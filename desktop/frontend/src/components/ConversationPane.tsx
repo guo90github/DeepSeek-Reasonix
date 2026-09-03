@@ -10,7 +10,7 @@ import { useT } from "../lib/i18n";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { isSteerNoticeText } from "../lib/useController";
-import type { ConversationPaneTurn } from "../lib/transcriptPanes";
+import { paneTurnDefaultOpen, type ConversationPaneTurn } from "../lib/transcriptPanes";
 import { UserMessage } from "./Message";
 import { LiveAssistantMessage } from "./TranscriptVirtuosoParts";
 import { NoticeCard, SteerCard } from "./TranscriptCards";
@@ -138,6 +138,21 @@ export function ConversationPane({
     });
   }, []);
 
+  // Newest turn is identified by stable key, not list index: Virtuoso hands
+  // itemContent firstItemIndex-offset absolute indices that never equal the
+  // data length, so an index comparison collapsed every settled turn.
+  const newestKey = useMemo(() => turns[turns.length - 1]?.key, [turns]);
+  // Single-open policy: manual overrides survive only until the current run
+  // settles, so a finished answer leaves exactly the newest turn expanded.
+  const wasRunningRef = useRef(running);
+  useEffect(() => {
+    const wasRunning = wasRunningRef.current;
+    wasRunningRef.current = running;
+    if (wasRunning && !running) {
+      setOverrides((current) => (current.size > 0 ? new Map() : current));
+    }
+  }, [running]);
+
   // Backfill the full session on mount so both panes start at the real first
   // turn instead of mid-conversation (the backend only pages the tail).
   useEffect(() => {
@@ -162,13 +177,13 @@ export function ConversationPane({
     <ConversationTurnCard
       turn={turn}
       running={running}
-      open={overrides.get(turn.key) ?? (turn.isActive || index === turns.length - 1)}
+      open={overrides.get(turn.key) ?? paneTurnDefaultOpen(turn.isActive, turn.key, newestKey)}
       onToggle={() => toggle(turn.key)}
       mirrorActive={hoveredIndex === index}
       onPointerEnter={() => onHoverIndex?.(index)}
       onPointerLeave={() => onHoverIndex?.(null)}
     />
-  ), [hoveredIndex, onHoverIndex, overrides, running, toggle, turns.length]);
+  ), [hoveredIndex, newestKey, onHoverIndex, overrides, running, toggle]);
 
   const listComponents = useMemo(() => ({
     Header: () => olderHeader,

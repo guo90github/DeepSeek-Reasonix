@@ -46,6 +46,13 @@ export function turnHasShownContent(model: TurnModel): boolean {
   return model.segments.some((segment) => segment.outsideItems.length > 0);
 }
 
+/** Role default for a split-pane turn card: newest stays open (running, then
+ * settled) so a finished answer stays readable; older turns collapse. Key, not
+ * Virtuoso index: itemContent indices are firstItemIndex-offset absolute. */
+export function paneTurnDefaultOpen(isActive: boolean, turnKey: string, newestKey: string | undefined): boolean {
+  return isActive || turnKey === newestKey;
+}
+
 // Mirror of transcriptRows.foldDisplayItems for the pane model: assistant
 // items reach the pane stripped to their reasoning (answer text renders in the
 // conversation pane), parented/plan-bookkeeping tools never surface. The live

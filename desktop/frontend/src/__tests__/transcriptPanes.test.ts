@@ -1,7 +1,7 @@
 // Run: tsx src/__tests__/transcriptPanes.test.ts
 
 import { buildTurnModels, NO_LIVE, type Item, type TranscriptLiveFlags } from "../lib/transcriptRows";
-import { conversationPaneTurns, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
+import { conversationPaneTurns, paneTurnDefaultOpen, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
 
 let passed = 0;
 let failed = 0;
@@ -114,6 +114,32 @@ const answerModels = buildTurnModels(streamingItems, answerLive, true, false);
 const answerProcess = processPaneTurns(answerModels, answerLive);
 eq(answerProcess[0].segments[0].items.length, 1, "reasoning copy survives while the answer streams");
 eq(conversationPaneTurns(answerModels)[0].answers.length, 1, "streaming answer lands in the conversation pane");
+
+// ── Turn-card default disclosure ─────────────────────────────────────────────
+// Regression: the panes must decide "newest stays open" by stable key. The old
+// code compared the Virtuoso itemContent index against turns.length - 1, but
+// itemContent receives firstItemIndex-offset absolute indices, so the compare
+// never matched and every settled turn (including the one that just finished
+// answering) collapsed the moment the run ended.
+console.log("pane turn default open");
+{
+  // `conversation` above is a settled 3-turn session (running=false): exactly
+  // the newest turn stays open once run-end clears manual overrides.
+  const newestKey = conversation[conversation.length - 1].key;
+  eq(paneTurnDefaultOpen(conversation[2].isActive, conversation[2].key, newestKey), true, "settled newest turn stays open after its answer ends");
+  eq(paneTurnDefaultOpen(conversation[1].isActive, conversation[1].key, newestKey), false, "older settled turn collapses");
+  eq(paneTurnDefaultOpen(conversation[0].isActive, conversation[0].key, newestKey), false, "earliest settled turn collapses");
+  const openTurns = conversation.filter((turn) => paneTurnDefaultOpen(turn.isActive, turn.key, newestKey));
+  eq(openTurns.length, 1, "single-open policy: exactly one turn open on a settled session");
+  eq(openTurns[0].key, newestKey, "the open turn is the newest one");
+  eq(paneTurnDefaultOpen(false, "missing", undefined), false, "no newest turn stays closed");
+
+  // A running session opens its active (last) turn even before it settles.
+  const runningModels = buildTurnModels([user("u1", "q1"), answer("a1", "r1"), user("u2", "q2"), answer("a2", "r2", "思考")], NO_LIVE, true, false);
+  const runningConv = conversationPaneTurns(runningModels);
+  eq(paneTurnDefaultOpen(runningConv[1].isActive, runningConv[1].key, runningConv[1].key), true, "active running turn stays open");
+  eq(paneTurnDefaultOpen(runningConv[0].isActive, runningConv[0].key, runningConv[1].key), false, "older turn stays collapsed while running");
+}
 
 if (failed > 0) {
   process.stdout.write(`\ntranscriptPanes: ${failed} FAILED, ${passed} passed\n`);

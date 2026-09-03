@@ -4,9 +4,9 @@
 // PhaseCard / NoticeCard / CompactionCard so rendering matches the single
 // column's process folds.
 
-import { lazy, Suspense, useCallback, useRef, useState, type Ref } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import type { ProcessPaneTurn } from "../lib/transcriptPanes";
+import { paneTurnDefaultOpen, type ProcessPaneTurn } from "../lib/transcriptPanes";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { InlineAssistantReasoning } from "./InlineAssistantReasoning";
@@ -108,6 +108,7 @@ function ProcessTurnCard({
 
 export function ProcessPane({
   turns,
+  running,
   listRef,
   onUserInteract,
   scrollerRef,
@@ -116,6 +117,7 @@ export function ProcessPane({
   tabId,
 }: {
   turns: readonly ProcessPaneTurn[];
+  running: boolean;
   listRef?: Ref<VirtuosoHandle>;
   onUserInteract?: () => void;
   scrollerRef?: (node: HTMLElement | Window | null) => void;
@@ -131,6 +133,20 @@ export function ProcessPane({
       return next;
     });
   }, []);
+  // Newest turn is identified by stable key, not list index: Virtuoso hands
+  // itemContent firstItemIndex-offset absolute indices that never equal the
+  // data length, so an index comparison collapsed every settled turn.
+  const newestKey = useMemo(() => turns[turns.length - 1]?.key, [turns]);
+  // Single-open policy: manual overrides survive only until the current run
+  // settles, so a finished answer leaves exactly the newest turn expanded.
+  const wasRunningRef = useRef(running);
+  useEffect(() => {
+    const wasRunning = wasRunningRef.current;
+    wasRunningRef.current = running;
+    if (wasRunning && !running) {
+      setOverrides((current) => (current.size > 0 ? new Map() : current));
+    }
+  }, [running]);
   // Older history pages prepend turns at the top; keep their absolute index
   // anchored so Virtuoso does not shift already-mounted rows out of sync.
   const firstItemIndex = useTranscriptVirtuosoFirstItemIndex(turns, tabId ?? "");
@@ -138,14 +154,14 @@ export function ProcessPane({
   const itemContent = useCallback((index: number, turn: ProcessPaneTurn) => (
     <ProcessTurnCard
       turn={turn}
-      open={overrides.get(turn.key) ?? (turn.isActive || index === turns.length - 1)}
+      open={overrides.get(turn.key) ?? paneTurnDefaultOpen(turn.isActive, turn.key, newestKey)}
       onToggle={() => toggle(turn.key)}
       mirrorActive={hoveredIndex === index}
       onPointerEnter={() => onHoverIndex?.(index)}
       onPointerLeave={() => onHoverIndex?.(null)}
       tabId={tabId}
     />
-  ), [hoveredIndex, onHoverIndex, overrides, tabId, toggle, turns.length]);
+  ), [hoveredIndex, newestKey, onHoverIndex, overrides, tabId, toggle]);
 
   // Tail-follow replaces Virtuoso's followOutput: stream chunks and the
   // reasoning fold (an internal row state change, not a data change) re-arm a
