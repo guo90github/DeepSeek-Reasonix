@@ -215,9 +215,12 @@ console.log("\nbundle budgets");
 // explicit budget rather than failing on a rounded 467.0 KiB display value.
 // The latest main-v2 session-runtime fence and exact prompt protocol measure
 // 468.2 KiB here; retain a 0.1 KiB ceiling for platform zlib rounding.
-const initialJSBudgetKiB = 468.3;
+// Merging main-v2 v1.36→v1.38.1 brings the full upstream shell onto dev-2:
+// measured 475.4 KiB gzip; keep the same one-decimal ceiling.
+const initialJSBudgetKiB = 475.5;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
-assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
+// Post v1.38.1 merge the largest initial chunk measures 282.4 KiB gzip.
+assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 282.5 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
 // ?url, and feature styles (heartbeat) live in lazy chunks loaded on demand.
 // An empty initial CSS list is the desired state, not a build error.
@@ -237,10 +240,10 @@ if (initialCSS.length > 0) {
 // Reasoning-audit button/card CSS adds a bounded 0.3 KiB; step to 117.0 KiB
 // (personal use — no production shipping constraint).
 // Audit dialog resize handle + six-class display add ~0.3 KiB; step to 117.4 KiB.
-// main-v2: the one-row model configuration list, responsive stacking, and the
-// shared harness decision surface measure 116.9 KiB gzip while reusing existing
-// layout primitives; retain a bounded 0.1 KiB headroom ratchet on top.
-assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 117.4 * 1024);
+// Post v1.38.1 merge the full upstream shell (model configuration list,
+// responsive stacking, harness decision surface) lands on dev-2 alongside the
+// audit surfaces: measured 119.6 KiB gzip; retain a 0.1 KiB ratchet.
+assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 119.7 * 1024);
 if (localeChunks.length !== 2) {
   throw new Error(`expected 2 on-demand Chinese locale chunks, found ${localeChunks.length}`);
 }
@@ -297,7 +300,9 @@ for (const path of localeChunks) {
   // 61.027/61.881 KiB; retain bounded cross-platform headroom.
   // Recovery retry copy reaches the rounded 61.1 KiB boundary on Node/zlib
   // toolchains; keep the next one-decimal ceiling for cross-platform CI.
-  const budget = name.startsWith("zh-TW-") ? 62.0 * 1024 : 61.2 * 1024;
+  // Post v1.38.1 merge the full upstream copy lands on dev-2: zh measures
+  // 62.1 KiB and zh-TW 63.0 KiB; keep one-decimal ceilings.
+  const budget = name.startsWith("zh-TW-") ? 63.1 * 1024 : 62.2 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -400,6 +405,8 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // The shared harness decision surface adds a bounded startup stylesheet
 // payload. The current base plus exact prompt identity and stale-card recovery
 // measure 2496.4 KiB locally; retain the smallest bounded ceiling.
-const rawInitialBudgetKiB = 2_496.5;
+// Post v1.38.1 merge the full upstream shell + dev audit surfaces measure
+// 2535.2 KiB raw locally; retain a 0.1 KiB build/toolchain ceiling.
+const rawInitialBudgetKiB = 2_535.3;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
