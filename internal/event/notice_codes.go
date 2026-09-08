@@ -28,6 +28,9 @@ const (
 	NoticeCodeSessionRecoveryAdoptedCovered                     = "session_recovery_adopted_covered"
 	NoticeCodeSessionRecoveryDepthCap                           = "session_recovery_depth_cap"
 	NoticeCodeSessionShutdownRecoveryForked                     = "session_shutdown_recovery_forked"
+	NoticeCodeSessionConcurrentWriter                           = "session_concurrent_writer"
+	NoticeCodeSessionHeadSwitched                               = "session_head_switched"
+	NoticeCodeSessionHeadSelected                               = "session_head_selected"
 	NoticeCodeCompletionUncertain                               = "completion_uncertain"
 	NoticeCodeIncompleteReadDetected                            = "incomplete_read_detected"
 	NoticeCodeReadContinuationRequired                          = "continuation_required"
@@ -42,4 +45,5 @@ const (
 	NoticeCodeSessionReclaimRequested                           = "session_reclaim_requested"
 	NoticeCodeSessionReclaimed                                  = "session_reclaimed"
 	NoticeCodeReasoningReplayRepair                             = "reasoning_replay_repair"
+	NoticeCodeTurnStalled                                       = "turn_stalled"
 )

@@ -3032,7 +3032,7 @@ func TestSetEffortForTabLeaseHeldKeepsOldControllerAlive(t *testing.T) {
 }
 
 func TestSetEffortForTabReanchorsDepthCapRecoveryBranch(t *testing.T) {
-	isolateDesktopUserDirs(t)
+	isolateDesktopUserDirsSchemaOne(t)
 	setDesktopTestCredential(t, "OLD_MODEL_KEY", "sk-test")
 
 	cfg := config.Default()
@@ -3694,7 +3694,7 @@ func TestRebuildSettingLockedRestoresSessionAuthorizations(t *testing.T) {
 }
 
 func TestSetModelForTabContinuesRecoveryPathAfterSnapshotConflict(t *testing.T) {
-	isolateDesktopUserDirs(t)
+	isolateDesktopUserDirsSchemaOne(t)
 	setDesktopTestCredential(t, "OLD_MODEL_KEY", "sk-test")
 	setDesktopTestCredential(t, "NEW_MODEL_KEY", "sk-test")
 
@@ -7580,7 +7580,7 @@ func (r *appendingDesktopRunner) Run(_ context.Context, input string) error {
 }
 
 func TestForkCreatesActiveTabWithoutSwitchingSourceController(t *testing.T) {
-	isolateDesktopUserDirs(t)
+	isolateDesktopUserDirsSchemaOne(t)
 
 	workspace := robustTempDir(t)
 	if err := os.WriteFile(filepath.Join(workspace, "reasonix.toml"), []byte(""), 0o644); err != nil {

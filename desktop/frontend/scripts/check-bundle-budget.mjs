@@ -243,7 +243,8 @@ if (initialCSS.length > 0) {
 // Post v1.38.1 merge the full upstream shell (model configuration list,
 // responsive stacking, harness decision surface) lands on dev-2 alongside the
 // audit surfaces: measured 119.6 KiB gzip; retain a 0.1 KiB ratchet.
-assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 119.7 * 1024);
+// Post v1.39 shell merge: upstream app-shell CSS + dev workflow extras measure 121.8 KiB gzip.
+assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 121.9 * 1024);
 if (localeChunks.length !== 2) {
   throw new Error(`expected 2 on-demand Chinese locale chunks, found ${localeChunks.length}`);
 }
@@ -302,7 +303,8 @@ for (const path of localeChunks) {
   // toolchains; keep the next one-decimal ceiling for cross-platform CI.
   // Post v1.38.1 merge the full upstream copy lands on dev-2: zh measures
   // 62.1 KiB and zh-TW 63.0 KiB; keep one-decimal ceilings.
-  const budget = name.startsWith("zh-TW-") ? 63.1 * 1024 : 62.2 * 1024;
+  // Post v1.39 merge the upstream locale copy grows both dialects (zh 63.0, zh-TW measured next).
+const budget = name.startsWith("zh-TW-") ? 64.0 * 1024 : 63.1 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 

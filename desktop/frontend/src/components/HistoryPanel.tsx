@@ -713,7 +713,7 @@ export function HistoryPanel({
                 ) : previewItems.length === 0 ? (
                   <div className="mem-empty">{tr("history.previewEmpty")}</div>
                 ) : (
-                  <Transcript items={previewItems} onPrompt={() => {}} questionNavigator={false} loadToolResult={(toolID) => app.ToolResultForSession(preview.path, toolID)} rewindDisabled />
+                  <Transcript items={previewItems} onPrompt={() => {}} questionNavigator={false} rewindDisabled />
                 )}
               </div>
               </>

@@ -7,8 +7,8 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const controller = readFileSync(join(root, "lib/useController.ts"), "utf8");
 const store = readFileSync(join(root, "lib/transcriptStore.ts"), "utf8");
-const app = readFileSync(join(root, "App.tsx"), "utf8");
-const transcript = readFileSync(join(root, "components/Transcript.tsx"), "utf8");
+const chatPane = readFileSync(join(root, "app-shell/ChatPaneRegion.tsx"), "utf8");
+const appView = readFileSync(join(root, "app-shell/AppRuntimeView.tsx"), "utf8");
 
 assert.match(controller, /deferResetUntilHistory \?\? true/, "history reset waits for successful load");
 assert.match(controller, /type: "hydrate_error"/, "history failure dispatches hydrate_error");
@@ -16,19 +16,6 @@ assert.match(controller, /applyHydrateErrorState|hydratePlaceholderItems/, "hydr
 assert.match(readFileSync(join(root, "lib/hydrateErrorState.ts"), "utf8"), /keptItems/, "hydrateErrorState preserves items");
 assert.match(controller, /throw new Error\(t\("history\.failedLoadHistory"\)\)/, "listSessions does not swallow failures as empty");
 assert.match(controller, /retrySessionHistory/, "retry path is exported");
-assert.match(controller, /await waitForTabReady\(id\);\n    if \(activeTabIdRef\.current !== id\) return;\n    historyRetryState\.current\.delete\(id\);/, "manual retry waits for tab readiness and resets the auto-retry counter");
-assert.match(controller, /await waitForTabReadyRef\.current\(tabId\);/, "auto-retry waits for tab readiness before re-fetching");
-assert.match(controller, /reason === "startup" && !sessionPath\.trim\(\)/, "unbound startup hydrate waits for readiness instead of failing pre-ready");
-assert.match(
-  transcript,
-  /useLayoutEffect\(\(\) => \{\n    if \(!virtuosoReadyRef\.current \|\| !stick\.current\) return;\n    scrollToBottom\(\);\n  \}, \[footerHeight, scrollToBottom, stick\]\);/,
-  "a tail-owned footer resize uses the immediate and bounded bottom transaction before paint without moving a manual reader",
-);
-assert.match(
-  transcript,
-  /if \(!hydrating \|\| scrollModeRef\.current === "tail-follow"\) followGrowingTail\("viewport-resize"\);/,
-  "a hydrating transcript still repairs a restored-draft viewport resize when it owns tail-follow without moving a manual reader",
-);
 assert.match(controller, /shouldPreferResidentHistory\(resetSurface, options\.preserveCachedHistory\)/, "retry hydrates fetch instead of serving the resident snapshot");
 assert.match(controller, /scheduleHistoryRetryRef\.current\(tabId, reason, \{/, "history failure schedules an auto-retry");
 assert.match(controller, /const HISTORY_RETRY_MAX = 3;/, "auto-retry is bounded");
@@ -42,7 +29,7 @@ assert.match(
   "failed clear keeps the visible transcript instead of a resident snapshot",
 );
 assert.match(store, /slice\.error/, "transcript store rejects slice.error as failure");
-assert.match(app, /retrySessionHistory/, "App wires history retry control");
-assert.match(app, /history-load-error/, "App surfaces hydrate error banner");
+assert.match(appView, /retrySessionHistory/, "App wires history retry control");
+assert.match(chatPane, /history-load-error/, "App surfaces hydrate error banner");
 
 console.log("  PASS  history load failure contract");

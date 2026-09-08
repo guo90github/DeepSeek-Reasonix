@@ -123,7 +123,10 @@ type Options struct {
 	// StatsSource labels this frontend's usage records (desktop/cli/serve).
 	// Empty disables usage recording for this controller.
 	StatsSource string
-	TaskStore   taskmonitor.WriteStore // Authoritative store, never a SQLite catalog.
+	// FileBranchesOnly keeps fork/branch/switch/rewind on separate session
+	// files instead of heads inside a schema-2 log.
+	FileBranchesOnly bool
+	TaskStore        taskmonitor.WriteStore // Authoritative store, never a SQLite catalog.
 	// OnConfigLoadWarnings accepts resilient-loader warnings. Returning true
 	// lets boot suppress the duplicate migration diagnostic.
 	OnConfigLoadWarnings func([]string) bool
@@ -1859,6 +1862,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		ReasoningLanguage:      config.ReasoningLanguageForEntry(entry, cfg.ReasoningLanguage()),
 		SessionContextStatic:   sessionContextStatic,
 		DisableColdResumePrune: !cfg.ColdResumePruneEnabled(),
+		FileBranchesOnly:       opts.FileBranchesOnly,
 		Shell:                  shell,
 		ApprovalTimeout:        opts.ApprovalTimeout,
 		Ablation:               opts.Ablation,
@@ -2534,6 +2538,9 @@ func NewProviderWithProxyAndModelInfo(e *config.ProviderEntry, proxy netclient.P
 // clientSearch suppresses new native searches while retaining the adapter's
 // ability to read and replay existing native search history.
 func newProviderWithSearchMode(e *config.ProviderEntry, proxy netclient.ProxySpec, modelInfo *provider.ModelInfo, clientSearch bool) (provider.Provider, error) {
+	if err := config.ReasoningCapabilityForEntry(e).Validate(e.Model, config.EffectiveEffort(e)); err != nil {
+		return nil, err
+	}
 	if modelInfo == nil {
 		resolved := config.NewModelCapabilityResolver().Resolve(e)
 		modelInfo = &resolved.ModelInfo

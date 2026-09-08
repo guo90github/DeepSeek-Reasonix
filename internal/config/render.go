@@ -130,13 +130,13 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		if c.Desktop.ProviderAccess != nil {
 			fmt.Fprintf(&b, "provider_access = %s   # desktop settings: providers shown on Settings > Model > Access\n", renderStringArray(c.Desktop.ProviderAccess))
 		}
+		renderDesktopSessionExperience(&b, c)
 		renderDesktopReasoningDisplayMode(&b, c)
 		fmt.Fprintf(&b, "display_mode = %q   # desktop: standard|compact transcript display mode\n", c.DesktopDisplayMode())
 		if width := c.DesktopConversationWidth(); width == "full" {
 			fmt.Fprintf(&b, "conversation_width = %q   # desktop: standard|full transcript width; empty = standard\n", width)
 		}
 		b.WriteString("\n")
-
 		b.WriteString("[billing]\n")
 		if pref := c.DisplayCurrencyPref(); pref != "" {
 			fmt.Fprintf(&b, "display_currency = %q   # auto|CNY|USD; display only — does not rewrite provider list prices\n", pref)
@@ -333,7 +333,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 			if p.ModelsURL != "" {
 				fmt.Fprintf(&b, "models_url  = %q   # auto-fetch models from this URL on startup\n", p.ModelsURL)
 			}
-			fmt.Fprintf(&b, "api_key_env = %q\n", p.APIKeyEnv)
+			renderProviderIdentity(&b, p.APIKeyEnv, p.DisplayName)
 			if p.PresetID != "" {
 				fmt.Fprintf(&b, "preset_id   = %q   # curated preset identity; settings UI uses it to avoid duplicate installs\n", p.PresetID)
 			}
@@ -1013,7 +1013,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 			if p.ModelsURL != "" {
 				fmt.Fprintf(&b, "models_url  = %q\n", p.ModelsURL)
 			}
-			fmt.Fprintf(&b, "api_key_env = %q\n", p.APIKeyEnv)
+			renderProviderIdentity(&b, p.APIKeyEnv, p.DisplayName)
 			if p.PresetID != "" {
 				fmt.Fprintf(&b, "preset_id   = %q\n", p.PresetID)
 			}

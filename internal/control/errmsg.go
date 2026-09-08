@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
@@ -26,13 +27,20 @@ func explainError(err error) error {
 	if errors.Is(err, turnevent.ErrTurnLedgerUnavailable) {
 		return err
 	}
+	// The exhausted wait wraps its transport cause; explain the wait itself
+	// before the connect/status branches below explain that cause instead.
+	if wait := provider.AsRecoveryWaitExhausted(err); wait != nil {
+		return &explainedError{msg: explainRecoveryWait(wait), cause: err}
+	}
 	if provider.IsStreamInterrupted(err) {
 		return fmt.Errorf("model stream interrupted after recovery attempts: %s. The partial response was kept; retry or ask Reasonix to continue", err.Error())
 	}
 	if provider.IsConnReset(err) {
 		return fmt.Errorf("model stream disconnected before completion after retry attempts: %s. Check the provider/proxy connection, then retry or ask Reasonix to continue", err.Error())
 	}
-	if limit := provider.AsContextLimitError(err); limit != nil {
+	// An overflow without token numbers has nothing to quote; the generic 400
+	// branch below keeps the provider's own reason instead of zeros.
+	if limit := provider.AsContextLimitError(err); limit != nil && limit.WindowTokens > 0 {
 		msg := fmt.Sprintf(i18n.M.ProviderErrContextOverflowFmt, limit.PromptTokens, limit.CompletionTokens, limit.RequestedTokens, limit.WindowTokens)
 		if reason := apiErrorReason(limit.APIError); reason != "" {
 			return fmt.Errorf("%s\n%s", msg, reason)
@@ -99,6 +107,31 @@ func explainError(err error) error {
 		return errors.New(msg)
 	}
 	return err
+}
+
+// explainedError shows the localized message while keeping the typed cause
+// reachable, so DiagnoseFailure on the TurnDone error still classifies it.
+type explainedError struct {
+	msg   string
+	cause error
+}
+
+func (e *explainedError) Error() string { return e.msg }
+func (e *explainedError) Unwrap() error { return e.cause }
+
+func explainRecoveryWait(wait *provider.RecoveryWaitExhaustedError) string {
+	lines := []string{fmt.Sprintf(i18n.M.ProviderErrWaitExhaustedFmt, wait.Waited.Round(time.Second))}
+	var apiErr *provider.APIError
+	switch {
+	case errors.As(wait.Cause, &apiErr):
+		lines = append(lines, fmt.Sprintf("HTTP %d", apiErr.Status))
+		if reason := apiErrorReason(apiErr); reason != "" {
+			lines = append(lines, reason)
+		}
+	case wait.Cause != nil:
+		lines = append(lines, wait.Cause.Error())
+	}
+	return strings.Join(lines, "\n")
 }
 
 func modelFormatMismatchReason(reason string) bool {

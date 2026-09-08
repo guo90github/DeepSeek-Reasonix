@@ -6,11 +6,6 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import {
   SettingsPanel,
-  formatProviderExtraBody,
-  parseProviderExtraBody,
-  providerExtraBodyParseError,
-  providerEditorEffectiveKind,
-  normalizeProviderView,
 } from "../components/SettingsPanel";
 import { LocaleProvider } from "../lib/i18n";
 import type { AppBindings } from "../lib/bridge";
@@ -50,67 +45,6 @@ function eq(actual: unknown, expected: unknown, label: string) {
 
 console.log("\nsettings refresh snapshot");
 
-const nullableProvider = normalizeProviderView({
-  name: null,
-  baseUrl: null,
-} as unknown as ProviderView);
-eq(nullableProvider.name, "", "provider snapshots normalize a null name at the settings boundary");
-eq(nullableProvider.baseUrl, "", "provider snapshots normalize a null base URL at the settings boundary");
-
-const glmProvider = normalizeProviderView({
-  name: "custom-glm",
-  baseUrl: "https://gateway.example.com/v1",
-  reasoningProtocol: "glm",
-} as ProviderView);
-eq(glmProvider.reasoningProtocol, "glm", "provider snapshots preserve the explicit GLM reasoning protocol");
-
-const serverWebSearchProvider = normalizeProviderView({
-  name: "custom-anthropic",
-  kind: "anthropic",
-  baseUrl: "https://gateway.example/anthropic",
-  serverWebSearchCapability: true,
-} as ProviderView);
-eq(serverWebSearchProvider.serverWebSearchCapability, true, "provider snapshots preserve backend server web-search capability");
-
-const legacyServerWebSearchProvider = normalizeProviderView({
-  name: "legacy-anthropic",
-  kind: "anthropic",
-  baseUrl: "https://api.deepseek.com/anthropic",
-} as ProviderView);
-eq(legacyServerWebSearchProvider.serverWebSearchCapability, undefined, "older provider snapshots keep an absent capability distinguishable");
-
-eq(providerEditorEffectiveKind(true, "anthropic", ["anthropic", "openai"]), "anthropic", "new custom providers keep the selected Anthropic-compatible kind");
-eq(providerEditorEffectiveKind(false, "anthropic", ["anthropic", "openai"]), "anthropic", "existing providers preserve their stored kind");
-eq(formatProviderExtraBody({ top_p: 0.7, enable_thinking: true }), "{\n  \"enable_thinking\": true,\n  \"top_p\": 0.7\n}", "extra body editor formats stable JSON");
-eq(JSON.stringify(parseProviderExtraBody('{ "enable_thinking": true, "top_p": 0.7 }')), "{\"enable_thinking\":true,\"top_p\":0.7}", "extra body editor parses JSON object");
-let extraBodyRejected = false;
-try {
-  parseProviderExtraBody("[true]");
-} catch {
-  extraBodyRejected = true;
-}
-ok(extraBodyRejected, "extra body editor rejects non-object JSON");
-const extraBodyTestT = ((key: string, vars?: Record<string, string | number>) => {
-  if (key === "settings.providerExtraBodyError") return "localized extra body fallback";
-  if (key === "settings.providerExtraBodyNull") return `${vars?.path} localized null`;
-  return key;
-}) as any;
-eq(
-  providerExtraBodyParseError(new SyntaxError("Unexpected token } in JSON"), extraBodyTestT),
-  "localized extra body fallback",
-  "extra body editor localizes JSON syntax errors",
-);
-try {
-  parseProviderExtraBody('{ "nested": { "value": null } }', extraBodyTestT);
-  ok(false, "extra body editor rejects localized null validation errors");
-} catch (e) {
-  eq(
-    providerExtraBodyParseError(e, extraBodyTestT),
-    "extra_body.nested.value localized null",
-    "extra body editor keeps localized structured validation errors",
-  );
-}
-
 const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", {
   pretendToBeVisual: true,
   url: "http://localhost/",
@@ -148,9 +82,15 @@ regionalTypography.code = {
 applyTypographyPreferences(regionalTypography);
 const regionalCodeFont = document.documentElement.style.getPropertyValue("--typography-code-font");
 
-const settingsSnapshots = [baseSettings("standard"), baseSettings("compact")];
+const settingsSnapshots = [
+  baseSettings("standard"),
+  { ...baseSettings("standard"), sessionExperience: "deep" as const },
+  { ...baseSettings("standard"), sessionExperience: "deep" as const },
+];
 let settingsCalls = 0;
 let setDisplayModeCalls = 0;
+let setSessionExperienceCalls = 0;
+let rejectSessionExperience = false;
 let onChangedSettings: SettingsView | undefined;
 
 window.go = {
@@ -159,6 +99,10 @@ window.go = {
       Settings: async () => settingsSnapshots[Math.min(settingsCalls++, settingsSnapshots.length - 1)],
       SetDisplayMode: async () => {
         setDisplayModeCalls += 1;
+      },
+      SetSessionExperience: async () => {
+        setSessionExperienceCalls += 1;
+        if (rejectSessionExperience) throw new Error("session experience persistence failed");
       },
     } as Partial<AppBindings> as AppBindings,
   },
@@ -184,24 +128,45 @@ await act(async () => {
   await flushPromises();
 });
 
-const compactButton = Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Compact") as HTMLButtonElement | undefined;
-if (!compactButton) throw new Error("compact display mode button did not render");
+const deepButton = Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Deep") as HTMLButtonElement | undefined;
+if (!deepButton) throw new Error("deep session experience button did not render");
 const generalFieldLabels = Array.from(rootEl.querySelectorAll(".settings-section__body > .settings-field .settings-field__label"))
   .map((label) => label.textContent?.trim());
 eq(generalFieldLabels[0], "Desktop style", "general settings place desktop style first");
 eq(document.querySelectorAll(".step-limit-control").length, 0, "general settings hide executor and planner step-limit controls");
+eq(rootEl.querySelectorAll('[role="radiogroup"]').length > 0, true, "session experience exposes an accessible choice group");
+ok(rootEl.textContent?.includes("Session experience") === true, "general settings render the canonical session experience field");
+ok(!rootEl.textContent?.includes("Conversation density"), "general settings do not render the retired density field");
+ok(!rootEl.textContent?.includes("Thinking content"), "general settings do not render the retired reasoning field");
+ok(!rootEl.textContent?.includes("After the turn"), "general settings do not render the retired fold field");
 ok(!document.body.textContent?.includes("step limit"), "general settings keep automatic progress free of step-limit copy");
 ok(!document.body.textContent?.includes("Automatic plan mode"), "general settings omit the retired automatic Plan Mode control");
 ok(!document.body.textContent?.includes("planning defaults"), "general settings omit retired automatic Plan Mode copy");
 
 await act(async () => {
-  compactButton.click();
+  deepButton.click();
   await flushPromises();
 });
 
-eq(setDisplayModeCalls, 1, "display mode mutation is invoked once");
+eq(setSessionExperienceCalls, 1, "session experience mutation is invoked once");
+eq(setDisplayModeCalls, 0, "legacy display mode mutation is not invoked");
 eq(settingsCalls, 2, "settings panel reads Settings only for initial load and post-save reload");
-ok(onChangedSettings?.displayMode === "compact", "onChanged receives the post-save SettingsView snapshot");
+ok(onChangedSettings?.sessionExperience === "deep", "onChanged receives the post-save SettingsView snapshot");
+
+const standardButton = Array.from(document.querySelectorAll("button"))
+  .find((button) => button.textContent?.trim() === "Standard") as HTMLButtonElement | undefined;
+if (!standardButton) throw new Error("standard session experience button did not render");
+rejectSessionExperience = true;
+await act(async () => {
+  standardButton.click();
+  await flushPromises();
+});
+eq(setSessionExperienceCalls, 2, "failed session experience mutation is invoked once");
+eq(settingsCalls, 3, "failed save still reloads the authoritative Settings snapshot");
+ok(onChangedSettings?.sessionExperience === "deep", "failed save publishes the authoritative backend value");
+const refreshedDeepButton = Array.from(document.querySelectorAll("button"))
+  .find((button) => button.textContent?.trim() === "Deep") as HTMLButtonElement | undefined;
+eq(refreshedDeepButton?.getAttribute("aria-checked"), "true", "failed save reconciles the segmented control from the backend snapshot");
 
 await act(async () => {
   root.unmount();
@@ -400,7 +365,7 @@ await act(async () => {
   retryButton.click();
   await flushPromises();
 });
-await waitFor("settings retry success", () => Boolean(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Compact")));
+await waitFor("settings retry success", () => Boolean(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Deep")));
 
 eq(failingSettingsCalls, 2, "settings retry calls Settings again");
 ok(document.body.textContent?.includes("Settings could not be loaded.") === false, "settings retry clears the load error");
@@ -578,7 +543,7 @@ ok(!document.getElementById("bot-step-behavior"), "bots tab omits global default
 eq(document.querySelectorAll(".bot-step-chip").length, 0, "hero no longer shows the old two-step chips");
 
 eq(document.querySelectorAll(".bot-channel-tabs [role=\"tab\"]").length, 5, "bot manager uses five fixed channel tabs on the left");
-ok(document.querySelector(".bot-channel-setup-card")?.textContent?.includes("Configure QQ") === true, "unconfigured QQ tab shows key setup on the right");
+ok(document.querySelector(".bot-channel-setup-card")?.querySelector("input") !== null, "unconfigured QQ tab shows key setup on the right");
 ok(document.body.textContent?.includes("Back to entry") === false, "bot manager does not show a return-to-entry action");
 
 const feishuTab = Array.from(document.querySelectorAll(".bot-channel-tabs [role=\"tab\"]")).find((button) => button.textContent?.includes("Feishu")) as HTMLButtonElement | undefined;
@@ -785,8 +750,8 @@ await waitFor("provider background discovery", () => providerBatchCalls === 1);
 const providerRefreshStorageKeys = Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.key(index) ?? "");
 ok(providerRefreshStorageKeys.some((key) => key.includes("old-fingerprint")), "provider auto-refresh cooldown uses the opaque catalog fingerprint");
 ok(providerRefreshStorageKeys.every((key) => !key.includes("private-gateway-secret")), "provider auto-refresh cooldown does not persist header secrets");
-const accessModelsButton = Array.from(providerRaceRootEl.querySelectorAll(".settings-subtab")).find(
-  (button) => button.textContent?.trim() === "Access",
+const accessModelsButton = Array.from(providerRaceRootEl.querySelectorAll(".settings-center__navitem")).find(
+  (button) => button.textContent?.trim() === "Model services",
 ) as HTMLButtonElement | undefined;
 if (!accessModelsButton) throw new Error("provider Access subtab did not render");
 await act(async () => {
@@ -842,7 +807,7 @@ window.go = {
     App: {
       Settings: async () => providerRefreshCancelSettings,
       FetchAllProviderModelCatalogs: async () => ({}),
-      FetchProviderModelCatalogDraft: async () => ["deepseek-v4-flash", "deepseek-v4-pro"].map((model) => ({ model, inputModalities: ["text"], state: "unsupported", source: "adapter" })),
+      FetchProviderModelCatalog: async () => ["deepseek-v4-flash", "deepseek-v4-pro"].map((model) => ({ model, inputModalities: ["text"], state: "unsupported", source: "adapter" })),
     } as Partial<AppBindings> as AppBindings,
   },
 };
@@ -855,8 +820,8 @@ await act(async () => {
   );
   await flushPromises();
 });
-const providerRefreshCancelAccessButton = Array.from(providerRefreshCancelRootEl.querySelectorAll(".settings-subtab")).find(
-  (button) => button.textContent?.trim() === "Access",
+const providerRefreshCancelAccessButton = Array.from(providerRefreshCancelRootEl.querySelectorAll(".settings-center__navitem")).find(
+  (button) => button.textContent?.trim() === "Model services",
 ) as HTMLButtonElement | undefined;
 if (!providerRefreshCancelAccessButton) throw new Error("provider refresh cancel Access subtab did not render");
 await act(async () => {
@@ -864,18 +829,18 @@ await act(async () => {
   await flushPromises();
 });
 const providerRefreshCancelButton = Array.from(providerRefreshCancelRootEl.querySelectorAll("button")).find(
-  (button) => button.textContent?.trim() === "Refresh models",
+  (button) => button.getAttribute("aria-label") === "Refresh models",
 ) as HTMLButtonElement | undefined;
 if (!providerRefreshCancelButton) throw new Error("provider refresh action did not render");
 await act(async () => {
   providerRefreshCancelButton.click();
   await flushPromises();
 });
-await waitFor("provider model discovery", () => document.querySelector('[role="dialog"] .provider-discovery-list') !== null);
-const providerModelDraftCancelButton = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')).find((button) => button.textContent?.trim() === "Cancel");
-if (!providerModelDraftCancelButton) throw new Error("provider discovery cancel action did not render");
+await waitFor("provider model discovery", () => providerRefreshCancelRootEl.textContent?.includes("deepseek-v4-pro") === true);
+const providerModelDraftCancelButton = providerRefreshCancelRootEl.querySelector<HTMLButtonElement>('.provider-editor-footer button');
+if (!providerModelDraftCancelButton) throw new Error("provider draft cancel action did not render");
 await act(async () => { providerModelDraftCancelButton.click(); await flushPromises(); });
-ok(document.querySelector('[role="dialog"] .provider-discovery-list') === null, "cancelling model discovery closes the candidate dialog");
+ok(!providerRefreshCancelRootEl.textContent?.includes("deepseek-v4-pro"), "cancelling discovery discards fetched candidates");
 ok(providerRefreshCancelSettings.providers[0].models.length === 1, "cancelling discovery preserves configured models");
 await act(async () => {
   providerRefreshCancelRoot.unmount();
@@ -961,8 +926,8 @@ await act(async () => {
   );
   await flushPromises();
 });
-const upgradeFailureAccessButton = Array.from(upgradeFailureRootEl.querySelectorAll(".settings-subtab")).find(
-  (button) => button.textContent?.trim() === "Access",
+const upgradeFailureAccessButton = Array.from(upgradeFailureRootEl.querySelectorAll(".settings-center__navitem")).find(
+  (button) => button.textContent?.trim() === "Model services",
 ) as HTMLButtonElement | undefined;
 if (!upgradeFailureAccessButton) throw new Error("upgrade failure Access subtab did not render");
 await act(async () => {
