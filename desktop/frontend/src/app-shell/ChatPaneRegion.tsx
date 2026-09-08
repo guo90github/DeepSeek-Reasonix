@@ -8,6 +8,7 @@ import type { RemoteSessionApi } from "../lib/useRemoteSession";
 import type { Translator } from "../lib/i18n";
 
 const RemoteSessionSurface = lazy(() => import("../components/RemoteSessionSurface").then((module) => ({ default: module.RemoteSessionSurface })));
+const SplitWorkspace = lazy(() => import("../components/SplitWorkspace").then((module) => ({ default: module.SplitWorkspace })));
 const SidebarImConnectionDetail = lazy(() => import("./SidebarImConnectionDetail").then((module) => ({ default: module.SidebarImConnectionDetail })));
 
 export type ChatPaneTranscriptInput = {
@@ -35,6 +36,7 @@ export type ChatPaneTranscriptInput = {
 };
 
 export type ChatPaneRegionProps = {
+  splitMode?: boolean;
   transitioning: boolean;
   t: Translator;
   imDetail: {
@@ -99,6 +101,25 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
                 (node as HTMLElement & { inert?: boolean }).inert = transitioning;
               }}
             >
+              {props.splitMode ? (
+                <Suspense fallback={null}>
+                  <SplitWorkspace
+                    items={transcript.items}
+                    live={transitioning ? undefined : state.live}
+                    liveStore={transcript.liveStore}
+                    tabId={transcript.tabId}
+                    footerHeight={transcript.footerHeight}
+                    running={state.running || rewind.committing}
+                    hasOlderHistory={!transitioning && state.historyHasOlder && !rewind.stateActive}
+                    loadingOlderHistory={state.historyOlderLoading}
+                    olderHistoryError={state.historyOlderError}
+                    onLoadOlderHistory={commands.onLoadOlderHistory}
+                    hydrating={transcript.transcriptHydrating || (transitioning && !transcript.navigationDataReady)}
+                    surfaceCommitToken={transcript.surfaceCommitToken}
+                    onSurfacePaintReady={commands.onSurfacePaintReady}
+                  />
+                </Suspense>
+              ) : (
               <Transcript
                 items={transcript.items}
                 live={transitioning ? undefined : state.live}
@@ -136,6 +157,7 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
                 surfaceCommitToken={transcript.surfaceCommitToken}
                 onSurfacePaintReady={commands.onSurfacePaintReady}
               />
+              )}
             </div>
             {transitioning ? (
               <div className="transcript-navigation-overlay" role="status" aria-live="polite">

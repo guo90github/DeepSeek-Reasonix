@@ -13,7 +13,7 @@ import type { BotRuntimeStatusView, DesktopStartupSettingsView, SettingsView } f
 
 export type DesktopPreferencesSnapshot = DesktopStartupSettingsView | SettingsView;
 export function layoutStyleFromSnapshot(style?: string) {
-  return style === "creation" ? "creation" : style === "classic" ? "classic" : "workbench";
+  return style === "creation" ? "creation" : style === "classic" ? "classic" : style === "split" ? "split" : "workbench";
 }
 export function applyPreferencesAppearance(settings: DesktopPreferencesSnapshot) {
   const theme = normalizeThemePreference(settings.desktopTheme);

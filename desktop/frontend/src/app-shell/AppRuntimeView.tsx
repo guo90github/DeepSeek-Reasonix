@@ -311,6 +311,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           })} />
 
           <ChatPaneRegion
+            splitMode={(shell.preferences.desktopLayoutStyle as string) === "split"}
             transitioning={runtimeTransitioning}
             t={t}
             imDetail={sidebarImDetailConnection ? {

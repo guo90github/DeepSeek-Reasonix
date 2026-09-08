@@ -50,6 +50,7 @@
     "check:app-layers": "node scripts/check-app-entry-contract.mjs && node scripts/check-app-layers.test.mjs && node scripts/check-app-layers.mjs"
   },
   "dependencies": {
+    "react-virtuoso": "^4.18.11",
     "@modelcontextprotocol/ext-apps": "1.7.5",
     "@tanstack/react-virtual": "^3.14.9",
     "@xterm/addon-fit": "0.11.0",
