@@ -5302,7 +5302,6 @@ export default function App() {
                 <Suspense fallback={null}>
                   <ContextPanel
                     tabId={remoteSurfaceActive ? undefined : activeTabId}
-                    items={exportItems}
                     context={visibleRuntimeState.context}
                     usage={visibleRuntimeState.usage}
                     sessionTokens={visibleRuntimeState.sessionTokens}
