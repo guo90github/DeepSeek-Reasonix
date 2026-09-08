@@ -75,6 +75,29 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
     || rewind.stateActive || rewind.committing || state.running
     || state.messageAction != null || state.approval != null || state.ask != null
     || transcript.clearContextPending || transitioning;
+  if (props.splitMode && !props.imDetail && !props.remote && !noticePreviewMockEnabled()) {
+    return (
+      <main className="main main--split">
+        <Suspense fallback={null}>
+          <SplitWorkspace
+            items={transcript.items}
+            live={transitioning ? undefined : state.live}
+            liveStore={transcript.liveStore}
+            tabId={transcript.tabId}
+            footerHeight={transcript.footerHeight}
+            running={state.running || rewind.committing}
+            hasOlderHistory={!transitioning && state.historyHasOlder && !rewind.stateActive}
+            loadingOlderHistory={state.historyOlderLoading}
+            olderHistoryError={state.historyOlderError}
+            onLoadOlderHistory={commands.onLoadOlderHistory}
+            hydrating={transcript.transcriptHydrating || (transitioning && !transcript.navigationDataReady)}
+            surfaceCommitToken={transcript.surfaceCommitToken}
+            onSurfacePaintReady={commands.onSurfacePaintReady}
+          />
+        </Suspense>
+      </main>
+    );
+  }
   return (
     <main className="main">
       {props.imDetail && !transitioning ? (
@@ -101,25 +124,6 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
                 (node as HTMLElement & { inert?: boolean }).inert = transitioning;
               }}
             >
-              {props.splitMode ? (
-                <Suspense fallback={null}>
-                  <SplitWorkspace
-                    items={transcript.items}
-                    live={transitioning ? undefined : state.live}
-                    liveStore={transcript.liveStore}
-                    tabId={transcript.tabId}
-                    footerHeight={transcript.footerHeight}
-                    running={state.running || rewind.committing}
-                    hasOlderHistory={!transitioning && state.historyHasOlder && !rewind.stateActive}
-                    loadingOlderHistory={state.historyOlderLoading}
-                    olderHistoryError={state.historyOlderError}
-                    onLoadOlderHistory={commands.onLoadOlderHistory}
-                    hydrating={transcript.transcriptHydrating || (transitioning && !transcript.navigationDataReady)}
-                    surfaceCommitToken={transcript.surfaceCommitToken}
-                    onSurfacePaintReady={commands.onSurfacePaintReady}
-                  />
-                </Suspense>
-              ) : (
               <Transcript
                 items={transcript.items}
                 live={transitioning ? undefined : state.live}
@@ -157,7 +161,6 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
                 surfaceCommitToken={transcript.surfaceCommitToken}
                 onSurfacePaintReady={commands.onSurfacePaintReady}
               />
-              )}
             </div>
             {transitioning ? (
               <div className="transcript-navigation-overlay" role="status" aria-live="polite">

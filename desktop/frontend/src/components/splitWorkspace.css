@@ -477,3 +477,28 @@
 .process-pane [data-virtuoso-scroller] {
   overflow-anchor: none;
 }
+
+/* ---- v1.39 app-shell integration: <main class="main main--split"> hosts the
+   split grid directly (the old .app--split .chat-pane shell no longer exists).
+   Single content row: conversation | 8px divider | process. Composer stays in
+   the shell footer below this main. ---- */
+.main--split {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 8px minmax(0, var(--split-process-width, 60%));
+  min-height: 0;
+  overflow: hidden;
+  transition: grid-template-columns 0.28s cubic-bezier(0.2, 0.72, 0.2, 1);
+}
+.main--split:has(.split-workspace--resizing) { transition: none; }
+.main--split .split-workspace { display: contents; }
+.main--split .conversation-pane {
+  grid-row: 1; grid-column: 1; min-height: 0; min-width: 0;
+}
+.main--split .process-pane-host {
+  grid-row: 1; grid-column: 3; min-height: 0; min-width: 0;
+}
+.main--split .split-workspace__divider {
+  grid-row: 1; grid-column: 2; position: relative; z-index: 1;
+  cursor: col-resize; touch-action: none; background: transparent; outline: none;
+}

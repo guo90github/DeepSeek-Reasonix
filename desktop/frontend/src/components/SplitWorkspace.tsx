@@ -147,7 +147,7 @@ export function SplitWorkspace({
   // drag must stay 1:1, so the resizing class (checked via :has in CSS) freezes
   // the transition while the pointer is down.
   useEffect(() => {
-    const pane = rootRef.current?.closest(".chat-pane") as HTMLElement | null;
+    const pane = rootRef.current?.closest(".chat-pane, .main--split") as HTMLElement | null;
     pane?.style.setProperty("--split-process-width", `${Math.round(effectiveProcessWidth * 100)}%`);
   }, [effectiveProcessWidth]);
 
@@ -281,7 +281,7 @@ export function SplitWorkspace({
     setProcessWidthResizing(true);
     setDividerGlow(true);
     if (glowTimerRef.current !== null) window.clearTimeout(glowTimerRef.current);
-    chatPaneRef.current = (event.currentTarget as HTMLElement).closest(".chat-pane") as HTMLElement | null;
+    chatPaneRef.current = (event.currentTarget as HTMLElement).closest(".chat-pane, .main--split") as HTMLElement | null;
     event.currentTarget.setPointerCapture(event.pointerId);
   }, [effectiveProcessWidth]);
 
