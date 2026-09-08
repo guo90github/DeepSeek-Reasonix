@@ -495,8 +495,9 @@
 .main--split .conversation-pane {
   grid-row: 1; grid-column: 1; min-height: 0; min-width: 0;
 }
-.main--split .process-pane-host {
+.main--split .process-pane {
   grid-row: 1; grid-column: 3; min-height: 0; min-width: 0;
+  position: relative;
 }
 .main--split .split-workspace__divider {
   grid-row: 1; grid-column: 2; position: relative; z-index: 1;
