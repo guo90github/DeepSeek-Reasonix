@@ -445,6 +445,19 @@ export function createTranscriptTailSettle({
         armLayoutTransientIdle();
         return;
       }
+      // Pinned hysteresis: while the tail owns a bottom it already reached,
+      // a small displacement with NO real growth (Virtuoso re-anchors a few
+      // px on every parent re-render — the other pane streaming re-renders
+      // this one) must not start a chase: write→re-anchor→write at a few Hz
+      // is the visible no-content jitter. Only growth past the rearm minimum
+      // (or a displacement past it) re-arms the writer.
+      if (tailPinned
+        && distance <= TRANSCRIPT_TAIL_REARM_MIN_HEIGHT_PX
+        && !transcriptTailShouldReaim(lastBottomHeight, element.scrollHeight)) {
+        tailSettleProgress = null;
+        armLayoutTransientIdle();
+        return;
+      }
       if (distance <= TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX) {
         tailPinned = true;
         tailSettleProgress = null;

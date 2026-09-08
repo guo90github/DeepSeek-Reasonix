@@ -428,5 +428,33 @@ check(scrollWrites[1] === 1600, "the real-growth write lands on the new bottom (
 check(scrollTopValue === 1600, "the viewport converges on real growth");
 await unmount();
 
+// Scenario 13: Virtuoso re-anchors a few px on every parent re-render (the
+// other pane streaming re-renders this one) with NO content growth. The tail
+// must not chase that displacement — the no-content jitter; real growth past
+// the pinned hysteresis still re-arms.
+scrollHeightValue = 1200;
+scrollTopValue = 1100;
+await mount();
+scrollHeightValue = 1500;
+await act(() => api?.grow());
+await flushAllFrames();
+check(scrollWrites.length === 1 && scrollWrites[0] === 1400, "growth pins the bottom first");
+scrollWrites = [];
+// Virtuoso re-anchor: scrollTop pulled up 12px, content height UNCHANGED.
+scrollTopValue = 1388;
+await nativeScrollTo(1388); // dispatch scroll so a re-aim is attempted
+await act(() => api?.grow()); // parent re-render arrives (no content change)
+await flushAllFrames();
+check(scrollWrites.length === 0, "a no-growth re-anchor displacement is not chased");
+check(scrollTopValue === 1388, "the displaced viewport stays put (hysteresis)");
+// Real growth past the hysteresis writes exactly once to the new bottom.
+scrollHeightValue = 1700;
+await act(() => api?.grow());
+await flushAllFrames();
+check(scrollWrites.length === 1, "growth past the hysteresis re-arms the writer");
+check(scrollWrites[0] === 1600, "the re-armed write lands on the new bottom (1700 - 100)");
+check(scrollTopValue === 1600, "the viewport converges again on real growth");
+await unmount();
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
