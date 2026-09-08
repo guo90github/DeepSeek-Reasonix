@@ -260,6 +260,6 @@ func (s *frontendEventSink) RecordReasoningAudit(t event.ReasoningAuditTotals) {
 	event.RecordReasoningAudit(s.inner, t)
 }
 
-func (s *frontendEventSink) RecordCompletionValidation(info event.CompletionValidationInfo) {
-	event.RecordCompletionValidation(s.inner, info)
+func (s *frontendEventSink) RecordSubagentLifecycle(info event.SubagentLifecycleInfo) {
+	event.RecordSubagentLifecycle(s.inner, info)
 }

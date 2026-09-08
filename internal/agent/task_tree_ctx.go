@@ -6,6 +6,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"reasonix/internal/taskmonitor"
@@ -109,10 +110,22 @@ type treeRecording struct {
 	callID    string
 }
 
-func beginTreeRecording(ctx context.Context, t *TaskTool, spec ProfileExecSpec) *treeRecording {
-	obs := taskTreeObserverFromContext(ctx)
+// nonNilTreeObserver drops a typed-nil observer (e.g. NewTaskTreeRecorderOrNil
+// with no TaskStore) so the recording path can treat "off" uniformly.
+func nonNilTreeObserver(obs taskmonitor.TaskTreeObserver) taskmonitor.TaskTreeObserver {
 	if obs == nil {
-		obs = t.treeObserver
+		return nil
+	}
+	if v := reflect.ValueOf(obs); v.Kind() == reflect.Pointer && v.IsNil() {
+		return nil
+	}
+	return obs
+}
+
+func beginTreeRecording(ctx context.Context, t *TaskTool, spec ProfileExecSpec) *treeRecording {
+	obs := nonNilTreeObserver(taskTreeObserverFromContext(ctx))
+	if obs == nil {
+		obs = nonNilTreeObserver(t.treeObserver)
 	}
 	slot, hasSlot := taskTreeSlotFromContext(ctx)
 	if obs == nil || spec.Sched.RunInBackground || taskTreeSuppressed(ctx) {

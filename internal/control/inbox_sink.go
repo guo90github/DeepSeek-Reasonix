@@ -171,9 +171,9 @@ func (s *inboxEventSink) RecordReasoningAudit(t event.ReasoningAuditTotals) {
 	event.RecordReasoningAudit(s.inner, t)
 }
 
-func (s *inboxEventSink) RecordCompletionValidation(info event.CompletionValidationInfo) {
+func (s *inboxEventSink) RecordSubagentLifecycle(info event.SubagentLifecycleInfo) {
 	if s == nil {
 		return
 	}
-	event.RecordCompletionValidation(s.inner, info)
+	event.RecordSubagentLifecycle(s.inner, info)
 }

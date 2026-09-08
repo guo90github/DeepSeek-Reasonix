@@ -1,7 +1,6 @@
 package openai
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -29,9 +28,9 @@ func TestEffortOverrideDeepSeekFlash(t *testing.T) {
 	if got := c.buildRequest(provider.Request{EffortOverride: "medium"}).ReasoningEffort; got != "high" {
 		t.Fatalf("override outside DeepSeek vocabulary must keep the default, got %q", got)
 	}
-	off := c.buildRequest(provider.Request{EffortOverride: "disabled"})
-	if off.Thinking == nil || off.Thinking.Type != "disabled" || off.ReasoningEffort != "" {
-		t.Fatalf("override disabled = thinking %+v, effort %q; want disabled/empty", off.Thinking, off.ReasoningEffort)
+	request := c.buildRequest(provider.Request{EffortOverride: "disabled"})
+	if request.ReasoningEffort != "" || request.Thinking == nil || request.Thinking.Type != "disabled" {
+		t.Fatalf("disabled override = thinking:%#v effort:%q, want thinking disabled and no effort", request.Thinking, request.ReasoningEffort)
 	}
 }
 
@@ -64,58 +63,10 @@ func TestEffortOverrideHonorsSupportedEfforts(t *testing.T) {
 	if got := c.buildRequest(provider.Request{EffortOverride: "max"}).ReasoningEffort; got != "high" {
 		t.Fatalf("undeclared level must keep the default, got %q", got)
 	}
-	off := c.buildRequest(provider.Request{EffortOverride: "disabled"})
-	if off.Thinking == nil || off.Thinking.Type != "disabled" || off.ReasoningEffort != "" {
-		t.Fatalf("override disabled = thinking %+v, effort %q; want disabled/empty", off.Thinking, off.ReasoningEffort)
+	request := c.buildRequest(provider.Request{EffortOverride: "disabled"})
+	if request.ReasoningEffort != "" || request.Thinking == nil || request.Thinking.Type != "disabled" {
+		t.Fatalf("disabled override = thinking:%#v effort:%q, want thinking disabled and no effort", request.Thinking, request.ReasoningEffort)
 	}
-}
-
-func TestEffortOverrideDisabledTurnsThinkingOff(t *testing.T) {
-	c := newTestClient(t, "deepseek-v4", map[string]any{"reasoning_protocol": "deepseek"})
-	off := c.buildRequest(provider.Request{EffortOverride: "disabled"})
-	if off.Thinking == nil || off.Thinking.Type != "disabled" || off.ReasoningEffort != "" {
-		t.Fatalf("override disabled = thinking %+v, effort %q; want disabled/empty", off.Thinking, off.ReasoningEffort)
-	}
-	// The session path never sets the override: configured thinking and depth stay.
-	normal := c.buildRequest(provider.Request{})
-	if normal.Thinking == nil || normal.Thinking.Type != "enabled" || normal.ReasoningEffort != "high" {
-		t.Fatalf("no override must keep thinking %+v / effort %q, want enabled/high", normal.Thinking, normal.ReasoningEffort)
-	}
-}
-
-func TestEffortOverrideDisabledQwenDropsEnableThinking(t *testing.T) {
-	p, err := New(provider.Config{
-		Name:    "qwen",
-		BaseURL: "https://ws-x.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
-		Model:   "qwen3.7-plus",
-		APIKey:  "k",
-		Extra:   map[string]any{"extra_body": map[string]any{"enable_thinking": true}},
-	})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
-	c := p.(*client)
-	off := marshalChatRequest(t, c.buildRequest(provider.Request{EffortOverride: "disabled"}))
-	if got, _ := off["enable_thinking"].(bool); got {
-		t.Fatalf("override disabled must send enable_thinking=false, got %v", off["enable_thinking"])
-	}
-	normal := marshalChatRequest(t, c.buildRequest(provider.Request{}))
-	if got, _ := normal["enable_thinking"].(bool); !got {
-		t.Fatalf("no override must keep the provider's enable_thinking=true, got %v", normal["enable_thinking"])
-	}
-}
-
-func marshalChatRequest(t *testing.T, r chatRequest) map[string]any {
-	t.Helper()
-	raw, err := json.Marshal(r)
-	if err != nil {
-		t.Fatalf("marshal request: %v", err)
-	}
-	var body map[string]any
-	if err := json.Unmarshal(raw, &body); err != nil {
-		t.Fatalf("unmarshal request: %v", err)
-	}
-	return body
 }
 
 func TestEffortOverrideIgnoredByBinaryThinkingKnobs(t *testing.T) {

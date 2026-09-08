@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -30,6 +29,7 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"reasonix/desktop/internal/instanceidentity"
 	"reasonix/internal/agent"
 	"reasonix/internal/billing"
 	"reasonix/internal/boot"
@@ -77,27 +77,9 @@ func sessionTempFromController(ctrl control.SessionAPI) *sessiontemp.Manager {
 // `data:` frames.
 const eventChannel = "agent:event"
 
-const singleInstanceIDPrefix = "com.reasonix.desktop"
+const singleInstanceIDPrefix = instanceidentity.Prefix
 
-// singleInstanceID is used by Wails to route a second desktop launch back to the
-// process that owns the same Reasonix data home. Basing the identity on the
-// executable path let installed, portable, stable, and canary binaries write the
-// same sessions concurrently. Explicit REASONIX_HOME isolation still produces
-// an independent instance; REASONIX_DEV continues to bypass the lock entirely.
-func singleInstanceID() string {
-	root := strings.TrimSpace(config.ReasonixHomeDir())
-	if root == "" {
-		return singleInstanceIDPrefix
-	}
-	// Reuse the lease path canonicalizer so a missing home below a symlink or
-	// junction still hashes to the same physical data directory.
-	if marker := agent.CanonicalSessionPath(filepath.Join(root, ".reasonix-home.identity")); marker != "" {
-		root = filepath.Dir(marker)
-	}
-	root = filepath.Clean(root)
-	sum := sha256.Sum256([]byte(root))
-	return singleInstanceIDPrefix + "." + hex.EncodeToString(sum[:8])
-}
+func singleInstanceID() string { return instanceidentity.ForHome(config.ReasonixHomeDir()) }
 
 // PromptHistoryEntry is one user prompt extracted from a session JSONL file.
 // The frontend uses these for ↑/↓ prompt-history navigation.
@@ -177,6 +159,10 @@ type App struct {
 	// tabSelectionMu serializes cross-registry activation. A remote selection
 	// must not overtake the local-session snapshot that makes switching safe.
 	tabSelectionMu sync.Mutex
+	// sessionVersionActivationMu serializes version selection's validation,
+	// preference update, and tab rebind so concurrent Wails calls cannot publish
+	// a different active version than the one persisted as preferred.
+	sessionVersionActivationMu sync.Mutex
 
 	// Ticketed topic activation bookkeeping (StartTopicActivation). Guarded by
 	// mu. activationGen bumps on every activation-or-supersede so a background
@@ -1080,44 +1066,100 @@ func (a *App) SubmitToTab(tabID, input string) error {
 // by the IM takeover bridge; local (frontend) submissions on a taken-over tab
 // reclaim remote control first — typing locally is the grab-back gesture.
 func (a *App) submitToTab(tabID, input string, fromBridge bool, submissionID ...string) error {
+	_, err := a.submitToTabResult(tabID, input, fromBridge, false, submissionID...)
+	return err
+}
+
+func (a *App) submitToTabResult(tabID, input string, fromBridge, classifyManagement bool, submissionID ...string) (control.SubmitResult, error) {
+	management := control.SubmitResult{Disposition: control.SubmitManagementHandled}
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "/reload" {
 		tab, _ := a.tabAndCtrlByID(tabID)
 		if a.tabIsReadOnly(tab) {
-			return readOnlyChannelErr()
+			return control.SubmitResult{}, readOnlyChannelErr()
 		}
 		if tab == nil {
-			return a.workspaceNotReadyErr(tab)
+			return control.SubmitResult{}, a.workspaceNotReadyErr(tab)
 		}
 		if !fromBridge && a.botBridge != nil {
 			a.botBridge.reclaimFromDesktop(tab.ID)
 		}
-		return a.ReloadRuntime(tab.ID)
+		return management, a.ReloadRuntime(tab.ID)
 	}
 	if trimmed == "/effort" || strings.HasPrefix(trimmed, "/effort ") {
 		tab, _ := a.tabAndCtrlByID(tabID)
 		if a.tabIsReadOnly(tab) {
-			return readOnlyChannelErr()
+			return control.SubmitResult{}, readOnlyChannelErr()
 		}
 		if tab == nil {
-			return a.workspaceNotReadyErr(tab)
+			return control.SubmitResult{}, a.workspaceNotReadyErr(tab)
 		}
 		if !fromBridge && a.botBridge != nil {
 			a.botBridge.reclaimFromDesktop(tab.ID)
 		}
 		a.runEffortCommandForTab(tabID, trimmed)
-		return nil
+		return management, nil
+	}
+	if classifyManagement {
+		tab, ctrl := a.tabAndCtrlByID(tabID)
+		if a.tabIsReadOnly(tab) {
+			return control.SubmitResult{}, readOnlyChannelErr()
+		}
+		if err := a.workspaceRuntimeAdmissionErr(tab, ctrl); err != nil {
+			return control.SubmitResult{}, err
+		}
+		if err := a.ensureTabControllerWorkspace(tab); err != nil {
+			return control.SubmitResult{}, err
+		}
+		ctrl = a.controllerForTab(tab)
+		if ctrl == nil {
+			return control.SubmitResult{}, a.workspaceNotReadyErr(tab)
+		}
+		managementRoute := false
+		if classifier, ok := ctrl.(interface {
+			ClassifySubmitRoute(input string) control.SubmitDisposition
+		}); ok {
+			managementRoute = classifier.ClassifySubmitRoute(input) == control.SubmitManagementHandled
+		}
+		if managementRoute {
+			// Management commands still take the tab admission lock so they cannot
+			// race an active turn or a controller replacement.
+			admission, admittedCtrl, err := a.beginTabTurn(tabID, !fromBridge, submissionID...)
+			if err != nil {
+				return control.SubmitResult{}, err
+			}
+			defer admission.abort()
+			tab = admission.tab
+			a.ensureTabTopicIndexedForUserTurn(tab)
+			if submitter, supported := admittedCtrl.(interface {
+				SubmitDisplayWithResult(display, input string) control.SubmitResult
+			}); supported {
+				result := submitter.SubmitDisplayWithResult(input, input)
+				admission.finish(admittedCtrl)
+				return result, nil
+			}
+			admittedCtrl.SubmitDisplay(input, input)
+			admission.finish(admittedCtrl)
+			return management, nil
+		}
 	}
 	admission, ctrl, err := a.beginTabTurn(tabID, !fromBridge, submissionID...)
 	if err != nil {
-		return err
+		return control.SubmitResult{}, err
 	}
 	defer admission.abort()
 	tab := admission.tab
 	a.ensureTabTopicIndexedForUserTurn(tab)
-	ctrl.SubmitDisplay(input, input)
+	result := control.SubmitResult{Disposition: control.SubmitTurnStarted}
+	if submitter, ok := ctrl.(interface {
+		SubmitDisplayWithResult(display, input string) control.SubmitResult
+	}); ok {
+		result = submitter.SubmitDisplayWithResult(input, input)
+	} else {
+		ctrl.SubmitDisplay(input, input)
+	}
 	admission.finish(ctrl)
-	return nil
+	return result, nil
 }
 
 func (a *App) submitUserTurnToTabWithSink(tabID, input string, forwarder event.Sink) bool {
@@ -4032,7 +4074,7 @@ func (a *App) rebindTabToLoadedSessionPath(tab *WorkspaceTab, sessionPath string
 	tab.ActivityStatus = ""
 	tab.replaceTelemetry(candidate.telemetry, sessionRuntimeKey(sessionPath))
 	if tab.sink != nil {
-		tab.sink.setBinding(tab.ID, a)
+		tab.sink.setBinding(tab.ID, a, tab.SessionGeneration)
 		tab.sink.setContext(a.ctx)
 	}
 	// Wiring a mirror inspects App state under a read lock, so defer it until
@@ -5190,15 +5232,16 @@ type HistoryMessage struct {
 	ToolResultError    string                    `json:"toolResultError,omitempty"`
 	// Execution is local shell metadata restored onto ToolCards after history
 	// reload. Omitted when absent so older frontends ignore it safely.
-	Execution       *provider.ToolExecution     `json:"execution,omitempty"`
-	Pending         bool                        `json:"pending,omitempty"`
-	Trigger         string                      `json:"trigger,omitempty"`
-	Messages        int                         `json:"messages,omitempty"`
-	Summary         string                      `json:"summary,omitempty"`
-	Archive         string                      `json:"archive,omitempty"`
-	DecisionReceipt *provider.DecisionReceipt   `json:"decisionReceipt,omitempty"`
-	Readiness       *event.FinalReadiness       `json:"readiness,omitempty"`
-	ServerSearch    []provider.ServerSearchCall `json:"serverSearch,omitempty"`
+	Execution        *provider.ToolExecution          `json:"execution,omitempty"`
+	Pending          bool                             `json:"pending,omitempty"`
+	Trigger          string                           `json:"trigger,omitempty"`
+	Messages         int                              `json:"messages,omitempty"`
+	Summary          string                           `json:"summary,omitempty"`
+	Archive          string                           `json:"archive,omitempty"`
+	DecisionReceipt  *provider.DecisionReceipt        `json:"decisionReceipt,omitempty"`
+	Readiness        *event.FinalReadiness            `json:"readiness,omitempty"`
+	ProtocolRecovery *provider.ProtocolRecoveryAction `json:"protocolRecovery,omitempty"`
+	ServerSearch     []provider.ServerSearchCall      `json:"serverSearch,omitempty"`
 }
 
 type HistoryToolCall struct {
@@ -6710,6 +6753,14 @@ func (a *App) MetaForTab(tabID string) Meta {
 	// stale entry schedules a refresh and serves the last known values (empty
 	// on the very first call; the "tab:meta" event delivers the refresh).
 	extras, refreshExtras := tabMetaExtrasFor(tab, cwd, snap.model)
+	// Native image routing is already frozen in the Controller. Reading this
+	// cheap snapshot also makes rebuilds visible immediately, without mixing
+	// newly saved config with a provider from the preceding runtime generation.
+	if capability, ok := snap.ctrl.(interface{ ImageInputSnapshot() (bool, bool, bool) }); ok {
+		if enabled, fallback, available := capability.ImageInputSnapshot(); available {
+			extras.imageInputEnabled, extras.visionFallbackEnabled = enabled, fallback
+		}
+	}
 	if refreshExtras {
 		a.scheduleTabMetaExtrasRefresh(tab.ID)
 	}
@@ -9280,10 +9331,12 @@ func removeServerOrder(order []string, name string) []string {
 // ModelInfo is one (provider, model) the bottom switcher can pick. Ref ("provider/
 // model") is what SetModel takes; Provider/Model are for display.
 type ModelInfo struct {
-	Ref      string `json:"ref"`
-	Provider string `json:"provider"`
-	Model    string `json:"model"`
-	Current  bool   `json:"current"`
+	Ref           string `json:"ref"`
+	Provider      string `json:"provider"`
+	Model         string `json:"model"`
+	Current       bool   `json:"current"`
+	ContextWindow int    `json:"contextWindow,omitempty"`
+	Vision        bool   `json:"vision,omitempty"`
 }
 
 type EffortInfo struct {

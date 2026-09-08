@@ -555,8 +555,8 @@ func (s *metricsSink) RecordReasoningAudit(t event.ReasoningAuditTotals) {
 	event.RecordReasoningAudit(s.inner, t)
 }
 
-func (s *metricsSink) RecordCompletionValidation(info event.CompletionValidationInfo) {
-	event.RecordCompletionValidation(s.inner, info)
+func (s *metricsSink) RecordSubagentLifecycle(info event.SubagentLifecycleInfo) {
+	event.RecordSubagentLifecycle(s.inner, info)
 }
 
 // MergeCapabilityAudit copies a capability audit snapshot plus process-local

@@ -127,8 +127,8 @@ func (s *syncSink) RecordReasoningAudit(t ReasoningAuditTotals) {
 	RecordReasoningAudit(s.inner, t)
 }
 
-func (s *syncSink) RecordCompletionValidation(info CompletionValidationInfo) {
+func (s *syncSink) RecordSubagentLifecycle(info SubagentLifecycleInfo) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	RecordCompletionValidation(s.inner, info)
+	RecordSubagentLifecycle(s.inner, info)
 }

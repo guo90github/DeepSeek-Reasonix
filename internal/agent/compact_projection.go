@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"reasonix/internal/event"
@@ -152,6 +153,7 @@ func anchorPreview(text string) string {
 type visibleCompressionPlan struct {
 	result    tool.CompressResult
 	foldMask  []bool
+	dropMask  []bool
 	fold      []provider.Message
 	firstFold int
 }
@@ -326,10 +328,19 @@ func (a *Agent) planVisibleCompression(snap explicitCompressionSnapshot, directi
 	}
 
 	plan.foldMask = make([]bool, len(snap.visible))
+	plan.dropMask = make([]bool, len(snap.visible))
 	plan.firstFold = len(snap.visible)
+	latestContext := latestSessionContextIndex(snap.visible)
 	for i, msg := range snap.visible {
 		selected := i >= start && i < end
 		mergeSummary := i < completedEnd && isCompactionSummary(msg)
+		if isSessionContextMessage(msg) {
+			// Context never enters the summarizer. Once an older snapshot falls
+			// inside the explicitly compressed range, remove it from the
+			// projection; the latest valid snapshot remains byte-identical.
+			plan.dropMask[i] = selected && i != latestContext
+			continue
+		}
 		if msg.Role == provider.RoleSystem || i < head || (!selected && !mergeSummary) {
 			continue
 		}
@@ -383,7 +394,7 @@ func buildVisibleCompressionProjection(visible []provider.Message, plan visibleC
 		if i == plan.firstFold {
 			projection = append(projection, formatSummaryMessage(summary))
 		}
-		if !plan.foldMask[i] {
+		if !plan.foldMask[i] && (len(plan.dropMask) <= i || !plan.dropMask[i]) {
 			projection = append(projection, msg)
 		}
 	}
@@ -443,25 +454,14 @@ func (a *Agent) foldSummaryWithChunkedFallback(ctx context.Context, trigger stri
 }
 
 // compact writes a context projection; trigger stays "auto"/"manual" for UI cards.
-func (a *Agent) compact(ctx context.Context, trigger, instructions string, force bool) error {
-	_, err := a.compactToProjection(ctx, trigger, instructions, force, false)
-	return err
+func (a *Agent) summarizeFold(ctx context.Context, trigger string, fold []provider.Message, instructions string, sourceTokens int, inputMode string, allowChunked bool) (foldSummary, CompactionTelemetry, error) {
+	if allowChunked {
+		return a.foldSummaryWithChunkedFallback(ctx, trigger, fold, instructions, sourceTokens, inputMode)
+	}
+	return a.foldSummaryWithTelemetry(ctx, trigger, fold, instructions, sourceTokens, inputMode)
 }
 
-// compactToProjection installs one content-driven summary checkpoint:
-// stable prefix + one structured digest + recent verbatim tail.
-// The canonical transcript is never rewritten. CompactionNoop means nothing
-// was foldable; callers at physical overflow must treat that as hard failure.
-// mustFree marks the fold the caller cannot proceed without. Automatic and
-// over-ceiling manual rescue paths cap the summary input; ordinary manual
-// compaction keeps the uncapped user-requested range.
-func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions string, force, mustFree bool) (CompactionOutcome, error) {
-	a.sess.compactionRunMu.Lock()
-	defer a.sess.compactionRunMu.Unlock()
-	return a.compactToProjectionLocked(ctx, trigger, instructions, force, mustFree)
-}
-
-func (a *Agent) compactToProjectionLocked(ctx context.Context, trigger, instructions string, force, mustFree bool) (CompactionOutcome, error) {
+func (a *Agent) compactToProjectionLocked(ctx context.Context, trigger, instructions string, force, mustFree, allowChunked bool) (CompactionOutcome, error) {
 	activeTurn := a.activeTurnCreatedAt.Load()
 	canonical, transcriptVersion := a.sess.conversation.snapshotMessagesVersion()
 	a.sess.compactionMu.Lock()
@@ -475,7 +475,8 @@ func (a *Agent) compactToProjectionLocked(ctx context.Context, trigger, instruct
 	if !ok {
 		return CompactionNoop, nil
 	}
-	_, preliminaryFold, _ := a.partitionFoldForProjection(msgs[head:start])
+	latestContext := latestSessionContextIndex(msgs)
+	_, preliminaryFold, _ := a.partitionFoldForProjectionAt(msgs[head:start], head, latestContext)
 	if len(preliminaryFold) == 0 || (!force && !foldEconomics(preliminaryFold)) {
 		return CompactionNoop, nil
 	}
@@ -506,7 +507,7 @@ func (a *Agent) compactToProjectionLocked(ctx context.Context, trigger, instruct
 
 	covered, bodySuffix := projectionCoverageForFold(stateSnapshot, msgs, start, onProjection)
 	regionHadPinnedRevision := containsPinnedContextRevision(msgs[head:start])
-	kept, fold, retention := a.partitionFoldForProjection(msgs[head:start])
+	kept, fold, retention := a.partitionFoldForProjectionAt(msgs[head:start], head, latestContext)
 	if len(fold) == 0 {
 		a.emitCompactionAborted(trigger)
 		return CompactionNoop, nil
@@ -536,7 +537,7 @@ func (a *Agent) compactToProjectionLocked(ctx context.Context, trigger, instruct
 	} else if providerVisibleFingerprint(modelInputMessages(fold)) != originalFoldHash {
 		inputMode = SummaryInputExtensionRewritten
 	}
-	res, tele, err := a.foldSummaryWithChunkedFallback(ctx, trigger, fold, instructions, sourceTokens, inputMode)
+	res, tele, err := a.summarizeFold(ctx, trigger, fold, instructions, sourceTokens, inputMode, allowChunked)
 	if err != nil {
 		a.emitCompactionTelemetry(tele)
 		a.emitCompactionAborted(trigger)
@@ -634,8 +635,8 @@ func (a *Agent) visibleInputForFold(state CompactionState, canonical []provider.
 func checkpointProjectionMessages(msgs []provider.Message, head int, kept []provider.Message, summary string) []provider.Message {
 	projMsgs := make([]provider.Message, 0, head+1+len(kept))
 	projMsgs = append(projMsgs, msgs[:head]...)
-	projMsgs = append(projMsgs, formatSummaryMessage(summary))
 	projMsgs = append(projMsgs, kept...)
+	projMsgs = append(projMsgs, formatSummaryMessage(summary))
 	return provider.ProjectionMessages(projMsgs)
 }
 
@@ -739,8 +740,18 @@ type userTurnRetention struct {
 }
 
 func (a *Agent) partitionFoldForProjection(region []provider.Message) (kept, fold []provider.Message, retention userTurnRetention) {
-	for _, m := range region {
+	return a.partitionFoldForProjectionAt(region, 0, latestSessionContextIndex(region))
+}
+
+func (a *Agent) partitionFoldForProjectionAt(region []provider.Message, offset, latestContext int) (kept, fold []provider.Message, retention userTurnRetention) {
+	for i, m := range region {
 		if m.LocalOnly || IsPinnedContextRevision(m) {
+			continue
+		}
+		if isSessionContextMessage(m) {
+			if offset+i == latestContext {
+				kept = append(kept, m)
+			}
 			continue
 		}
 		fold = append(fold, m)
@@ -749,6 +760,15 @@ func (a *Agent) partitionFoldForProjection(region []provider.Message) (kept, fol
 		}
 	}
 	return kept, fold, retention
+}
+
+func latestSessionContextIndex(messages []provider.Message) int {
+	for i := range slices.Backward(messages) {
+		if isSessionContextMessage(messages[i]) {
+			return i
+		}
+	}
+	return -1
 }
 
 // runCompactionSummary uses the single local summarizer path for every provider.

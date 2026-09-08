@@ -54,6 +54,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/recovery"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/sessioncontext"
 	"reasonix/internal/sessioninbox"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/shellrun"
@@ -108,10 +109,15 @@ type auditConfig struct {
 // Controller drives one chat session. Construct with New; drive with the command
 // methods; observe through the Sink passed in Options.
 type Controller struct {
-	runner       agent.Runner
-	executor     *agent.Agent
-	guardianSess *guardian.Session // nil when guardian is disabled
-	guardianPath string            // persisted guardian session file ("" when disabled)
+	// promptResolveMu serializes exact prompt decisions on one controller. It
+	// prevents two UI submissions from racing through separate prompt managers.
+	promptResolveMu    sync.Mutex
+	promptRuntimeEpoch string
+	promptOwner        PendingPromptOwner
+	runner             agent.Runner
+	executor           *agent.Agent
+	guardianSess       *guardian.Session // nil when guardian is disabled
+	guardianPath       string            // persisted guardian session file ("" when disabled)
 	// recoveryGate is the shared Auto Guard state for this controller.
 	// nil when the feature is not wired for this controller.
 	recoveryGate *recovery.Gate
@@ -142,9 +148,13 @@ type Controller struct {
 	promptOptimizeModel            string
 	promptOptimizeProviderResolver func(string) (provider.Provider, error)
 	audit                          auditConfig
+	modelCapabilityResolver        func(*config.ProviderEntry) config.ResolvedModelCapability
+	frozenImageInput               *bool
+	imageCapabilityChanged         func() bool
 	systemPrompt                   string
 	prompt                         controllerPromptState
 	pinnedContextLoader            PinnedContextLoader
+	sessionContextStatic           sessioncontext.Sections
 	sessionDir                     string
 	commands                       atomic.Pointer[[]command.Command]
 	// skills owns the session's discovered skills (enabled subset, full set, and
@@ -434,8 +444,18 @@ type SessionRecoveryInfo struct {
 	RecoveryPath string
 	Existing     bool
 	Reason       string
+	BaseRevision int64
+	DiskRevision int64
 	Meta         agent.BranchMeta
 	commit       *sessionRecoveryCommit
+}
+
+func snapshotConflictRevisions(err error) (base, disk int64) {
+	var conflict *agent.SessionSnapshotConflictError
+	if errors.As(err, &conflict) && conflict != nil {
+		return conflict.BaseRevision, conflict.DiskRevision
+	}
+	return 0, 0
 }
 
 // OnCommit defers publication work until the controller has installed the
@@ -519,6 +539,12 @@ type Options struct {
 	// AuditEffort is the reasoning-depth the audit model itself uses when
 	// scoring; empty = auto/provider default.
 	AuditEffort string
+	// ModelCapabilityResolver returns the adapter/config-resolved metadata for
+	// the exact active model. Nil keeps the legacy config-only behavior.
+	ModelCapabilityResolver func(*config.ProviderEntry) config.ResolvedModelCapability
+	// FrozenImageInput belongs to the provider instance built for this runtime.
+	FrozenImageInput       *bool
+	ImageCapabilityChanged func() bool
 	// PinnedContextLoader snapshots the current session sidecar at turn
 	// admission. The Agent persists changes as append-only user-role revisions.
 	PinnedContextLoader PinnedContextLoader
@@ -591,6 +617,10 @@ type Options struct {
 	// means no transient injection because the stable language policy already
 	// follows the conversation language.
 	ReasoningLanguage string
+	// SessionContextStatic carries boot-observed runtime facts that belong in a
+	// host user-turn snapshot rather than the cache-stable system prompt. Only
+	// Environment and Workspace are consumed; memory and skills stay live.
+	SessionContextStatic sessioncontext.Sections
 	// DisableColdResumePrune suppresses the cold-resume cache-state notice.
 	// Resume never rewrites history regardless of this flag.
 	DisableColdResumePrune bool
@@ -698,6 +728,9 @@ func New(opts Options) *Controller {
 		visionModel:                    strings.TrimSpace(opts.VisionModel),
 		visionProviderResolver:         opts.VisionProviderResolver,
 		visionModelSelector:            opts.VisionModelSelector,
+		modelCapabilityResolver:        opts.ModelCapabilityResolver,
+		frozenImageInput:               opts.FrozenImageInput,
+		imageCapabilityChanged:         opts.ImageCapabilityChanged,
 		promptOptimizeModel:            strings.TrimSpace(opts.PromptOptimizeModel),
 		promptOptimizeProviderResolver: opts.PromptOptimizeProviderResolver,
 		audit: auditConfig{
@@ -711,6 +744,7 @@ func New(opts Options) *Controller {
 		systemPrompt:                      opts.SystemPrompt,
 		prompt:                            newControllerPromptState(opts.SystemPrompt, opts.Executor),
 		pinnedContextLoader:               opts.PinnedContextLoader,
+		sessionContextStatic:              opts.SessionContextStatic,
 		sessionDir:                        opts.SessionDir,
 		sessionPath:                       opts.SessionPath,
 		commands:                          atomic.Pointer[[]command.Command]{},
@@ -784,7 +818,6 @@ func New(opts Options) *Controller {
 	// Auto Guard is built into Auto. Ask and YOLO bypass it through the mode
 	// provider, so no separate enablement state is needed.
 	c.initRecoveryGate(opts.RecoveryReviewer, opts.RecoveryHeadless)
-
 	// Task monitoring: record background-job lifecycle into the project-local
 	// task store so CLI, Desktop, scripts, and future clients observe the same
 	// state/event evidence. The recorder swallows its own failures — monitoring
@@ -1119,6 +1152,10 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 		ItemID:         activeInboxID,
 	}
 	done = c.applyTurnDoneProtocol(done, cancelRequested)
+	done.Diagnostic = provider.DiagnoseFailure(err)
+	if !cancelRequested {
+		done.ProtocolRecovery = c.executor.PendingProtocolRecovery()
+	}
 	var readinessErr *agent.FinalReadinessError
 	if errors.As(err, &readinessErr) {
 		done.Readiness = &event.FinalReadiness{Attempts: readinessErr.Attempts, Missing: append([]string(nil), readinessErr.Missing...)}
@@ -1507,6 +1544,10 @@ func (c *Controller) submitCommandOrTurnReady(trimmed, input, display string, sc
 		runGoalLoop = func(ctx context.Context, input, raw, display string) error {
 			return c.runEditedGoalLoopWithRawDisplay(ctx, input, raw, display, editedOriginal)
 		}
+	}
+	if id, guidance, ok := ParseProtocolRecoveryCommand(trimmed); ok {
+		c.SubmitProtocolRecovery(id, guidance)
+		return
 	}
 	if c.submitFinalReadinessCommand(trimmed, display) {
 		return
@@ -2079,6 +2120,7 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 		defer func() { c.hooks.StopResult(context.Background(), lastAssistantText(c.History()), turn, err) }()
 	}
 	marker = c.markInFlightTurn(startMessages, true)
+	ctx = c.withTurnContext(ctx, true)
 	ctx = c.withPlannerTurnMetadata(ctx, rawInput, false, startMessages)
 	modelInput := c.withCapabilityRoute(ctx, input, rawInput)
 	modelInput, ctx, err = c.prepareVisionTurn(ctx, modelInput, agent.SubagentImageCandidates(ctx))
@@ -2137,6 +2179,12 @@ func (c *Controller) RunSubagentProfile(ctx context.Context, name, task string, 
 // Cancel aborts the in-flight turn. A goroutine blocked awaiting approval
 // unblocks via the cancelled context.
 func (c *Controller) Cancel() {
+	c.promptResolveMu.Lock()
+	defer c.promptResolveMu.Unlock()
+	c.cancelLocked()
+}
+
+func (c *Controller) cancelLocked() {
 	c.mu.Lock()
 	cancel := c.cancel
 	if cancel != nil {
@@ -2145,6 +2193,7 @@ func (c *Controller) Cancel() {
 	c.mu.Unlock()
 	if cancel != nil {
 		c.emitTurnStatus(event.TurnCancelling)
+		c.promptOwner.CancelAll()
 		c.approval.clearAll()
 		cancel()
 		return
@@ -2545,17 +2594,23 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 	// Registering after the lock left a queued question invisible everywhere:
 	// no event, absent from the snapshot, unreachable by ReplayPendingPrompts.
 	id, reply := c.approval.registerAsk(questions)
+	c.registerOwnedPrompt(id, PromptAsk)
 
 	if !c.lockPromptFor(ctx, "question") {
-		c.approval.cancelAsk(id)
+		c.cancelOwnedPrompt(id)
 		return nil, ctx.Err()
 	}
 	defer c.approval.promptMu.Unlock()
 
 	c.approval.promptEmitMu.Lock()
-	if err := event.EmitChecked(c.sink, event.Event{Kind: event.AskRequest, ItemID: id, Ask: event.Ask{ID: id, Questions: questions}}); err != nil {
+	turnID, _, _, _ := c.turnEventRuntimeStatus()
+	_, runtimeEpoch := c.promptIdentitySnapshot()
+	if identity := c.bindOwnedPromptRouting(id, turnID, runtimeEpoch); identity.TurnID != "" {
+		turnID = identity.TurnID
+	}
+	if err := event.EmitChecked(c.sink, event.Event{Kind: event.AskRequest, TurnID: turnID, ItemID: id, Ask: event.Ask{ID: id, Questions: questions, TurnID: turnID}}); err != nil {
 		c.approval.promptEmitMu.Unlock()
-		c.approval.cancelAsk(id)
+		c.cancelOwnedPrompt(id)
 		return nil, fmt.Errorf("persist ask request: %w", err)
 	}
 	c.approval.markAskEmitted(id)
@@ -2568,7 +2623,7 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 	case ans := <-reply:
 		return ans, nil
 	case <-waitCtx.Done():
-		c.approval.cancelAsk(id)
+		c.cancelOwnedPrompt(id)
 		return nil, waitCtx.Err()
 	}
 }
@@ -2582,6 +2637,12 @@ func (c *Controller) AnswerQuestion(id string, answers []event.AskAnswer) {
 // AnswerQuestionChecked persists the prompt transition before releasing the
 // agent loop. A failed ledger write leaves the prompt pending and retryable.
 func (c *Controller) AnswerQuestionChecked(id string, answers []event.AskAnswer) error {
+	c.promptResolveMu.Lock()
+	defer c.promptResolveMu.Unlock()
+	return c.answerQuestionCheckedLocked(id, answers)
+}
+
+func (c *Controller) answerQuestionCheckedLocked(id string, answers []event.AskAnswer) error {
 	pending, ok, err := c.approval.resolveAskAfter(id, func(p pendingAsk) error {
 		return c.emitTurnEventChecked(event.Event{Kind: event.PromptAnswered, ItemID: id, Status: event.TurnInProgress})
 	})
@@ -2589,6 +2650,7 @@ func (c *Controller) AnswerQuestionChecked(id string, answers []event.AskAnswer)
 		return err
 	}
 	if ok {
+		c.promptOwner.Remove(id)
 		// An answer batch with no selections is the explicit "skip and continue
 		// chat" path. End the current turn instead of feeding a prose dismissal
 		// back to the model and trusting it not to ask again (#6869).
@@ -2597,7 +2659,7 @@ func (c *Controller) AnswerQuestionChecked(id string, answers []event.AskAnswer)
 			activeTurn := c.cancel != nil
 			c.mu.Unlock()
 			if activeTurn {
-				c.Cancel()
+				c.cancelLocked()
 				return nil
 			}
 		}
@@ -2706,13 +2768,22 @@ func (c *Controller) emitPendingPrompts(sink event.Sink, approvals []event.Appro
 		return
 	}
 	for _, a := range approvals {
+		if identity, ok := c.promptOwner.Identity(a.ID); ok {
+			a.TurnID = identity.TurnID
+		}
 		sink.Emit(c.approvalRequestEvent(a))
 	}
 	for _, a := range asks {
-		sink.Emit(event.Event{Kind: event.AskRequest, ItemID: a.ID, Ask: a})
+		if identity, ok := c.promptOwner.Identity(a.ID); ok {
+			a.TurnID = identity.TurnID
+		}
+		sink.Emit(event.Event{Kind: event.AskRequest, TurnID: a.TurnID, ItemID: a.ID, Ask: a})
 	}
 	for _, i := range interactions {
-		sink.Emit(event.Event{Kind: event.MCPInteractionRequest, ItemID: i.ID, MCPInteraction: i})
+		if identity, ok := c.promptOwner.Identity(i.ID); ok {
+			i.TurnID = identity.TurnID
+		}
+		sink.Emit(event.Event{Kind: event.MCPInteractionRequest, TurnID: i.TurnID, ItemID: i.ID, MCPInteraction: i})
 	}
 }
 
@@ -4053,10 +4124,13 @@ func (c *Controller) recoverSnapshotConflict(path string, saveErr error, forceRe
 	if c.sessionRecoveryMeta != nil {
 		meta = c.sessionRecoveryMeta(req)
 	}
+	baseRevision, diskRevision := snapshotConflictRevisions(saveErr)
 	info, err := c.executor.Session().SaveRecoveryBranch(agent.RecoveryBranchOptions{
 		OriginalPath: path,
 		Reason:       reason,
 		BranchMeta:   meta,
+		BaseRevision: baseRevision,
+		DiskRevision: diskRevision,
 	})
 	if err != nil {
 		if errors.Is(err, agent.ErrSessionRecoveryNotNeeded) {
@@ -4123,6 +4197,8 @@ func (c *Controller) commitRecoveredSession(originalPath, reason string, info ag
 		RecoveryPath: info.Path,
 		Existing:     info.Existing,
 		Reason:       reason,
+		BaseRevision: info.Meta.BaseRevision,
+		DiskRevision: info.Meta.DiskRevision,
 		Meta:         info.Meta,
 		commit:       commit,
 	}
@@ -4449,14 +4525,21 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 			m.Role = provider.RoleTool
 			m.ToolCallID = provider.LocalOnlyToolID
 			m.Name = provider.LocalOnlyToolName
+			previousRecovery := m.InterruptedTurn
 			m.InterruptedTurn = nil
-			m.ToolCalls = displayOnlyToolCalls(m.ToolCalls)
 			next = append(next, m)
 			localIndexes = append(localIndexes, len(next)-1)
 			recovery.DroppedPartialText = recovery.DroppedPartialText || strings.TrimSpace(m.Content) != ""
 			recovery.DroppedPartialReasoning = recovery.DroppedPartialReasoning || strings.TrimSpace(m.ReasoningContent) != ""
-			for _, call := range m.ToolCalls {
-				recovery.InterruptedTools = appendUniqueString(recovery.InterruptedTools, call.Name)
+			if previousRecovery != nil {
+				recovery.CompletedTools = append(recovery.CompletedTools, previousRecovery.CompletedTools...)
+				recovery.InterruptedTools = append(recovery.InterruptedTools, previousRecovery.InterruptedTools...)
+				recovery.NotStartedTools = append(recovery.NotStartedTools, previousRecovery.NotStartedTools...)
+				recovery.UnknownTools = append(recovery.UnknownTools, previousRecovery.UnknownTools...)
+			} else {
+				for _, call := range m.ToolCalls {
+					provider.RecordToolRecovery(recovery, interruptedToolSummary(call), provider.ToolRunUnknown)
+				}
 			}
 			i++
 			continue
@@ -4470,15 +4553,11 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 			i++
 			continue
 		}
+		if m.Role == provider.RoleAssistant {
+			recordInterruptedAssistantRecovery(recovery, msgs, i)
+		}
 		if end, ok := completeToolTurnEnd(msgs, i); ok && c.executor.CanReplayAssistantMessage(m) {
 			next = append(next, msgs[i:end]...)
-			for k, call := range m.ToolCalls {
-				if toolResultWasInterrupted(msgs[i+1+k].Content) {
-					recovery.InterruptedTools = appendUniqueString(recovery.InterruptedTools, call.Name)
-					continue
-				}
-				recovery.CompletedTools = append(recovery.CompletedTools, interruptedToolSummary(call))
-			}
 			i = end
 			continue
 		}
@@ -4490,20 +4569,14 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 			local.ToolCallID = provider.LocalOnlyToolID
 			local.Name = provider.LocalOnlyToolName
 			local.InterruptedTurn = nil
-			local.ReasoningSignature = ""
-			local.ToolCalls = displayOnlyToolCalls(local.ToolCalls)
 			next = append(next, local)
 			localIndexes = append(localIndexes, len(next)-1)
 			recovery.DroppedPartialText = recovery.DroppedPartialText || strings.TrimSpace(local.Content) != ""
 			recovery.DroppedPartialReasoning = recovery.DroppedPartialReasoning || strings.TrimSpace(local.ReasoningContent) != ""
-			for _, call := range local.ToolCalls {
-				recovery.InterruptedTools = appendUniqueString(recovery.InterruptedTools, call.Name)
-			}
 		case provider.RoleTool:
 			local := m
 			local.LocalOnly = true
 			local.ToolCalls = []provider.ToolCall{{ID: m.ToolCallID, Name: m.Name}}
-			recovery.InterruptedTools = appendUniqueString(recovery.InterruptedTools, m.Name)
 			local.ToolCallID = provider.LocalOnlyToolID
 			local.Name = provider.LocalOnlyToolName
 			next = append(next, local)
@@ -4625,30 +4698,6 @@ func completeToolTurnEnd(msgs []provider.Message, i int) (int, bool) {
 		}
 	}
 	return end, true
-}
-
-func toolResultWasInterrupted(content string) bool {
-	content = strings.ToLower(strings.TrimSpace(content))
-	return strings.HasPrefix(content, "cancelled:") || strings.Contains(content, "context canceled") || strings.Contains(content, "context cancelled")
-}
-
-func displayOnlyToolCalls(calls []provider.ToolCall) []provider.ToolCall {
-	out := make([]provider.ToolCall, 0, len(calls))
-	for _, call := range calls {
-		out = append(out, provider.ToolCall{ID: call.ID, Name: strings.TrimSpace(call.Name)})
-	}
-	return out
-}
-
-func appendUniqueString(dst []string, value string) []string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return dst
-	}
-	if slices.Contains(dst, value) {
-		return dst
-	}
-	return append(dst, value)
 }
 
 func interruptedToolSummary(call provider.ToolCall) provider.InterruptedToolSummary {
@@ -5046,10 +5095,9 @@ func (c *Controller) SetSkillEnabled(name string, enabled bool) error {
 
 // CreateSkill writes a new skill file at the given scope and returns its
 // path. Skills()/AllSkills()/RunSkill() read the live store on demand, so the
-// new skill is usable (by name) immediately with no rebuild; the caller
-// should still rebuild the controller for the pinned Skills index and tool
-// registry to reflect it on the model's next turn, mirroring how
-// SetSkillEnabled's callers already rebuild after a config change.
+// new skill is usable (by name) immediately with no rebuild and appears in the
+// next real user turn's live session-context catalog. Rebuilds remain necessary
+// when the tool registry or enabled-skill configuration changes.
 func (c *Controller) CreateSkill(name string, scope skill.Scope, content string) (string, error) {
 	w := c.skills.writer()
 	if w == nil {
@@ -5418,6 +5466,9 @@ func (c *Controller) ModelRef() string { return c.modelRef }
 func (c *Controller) WorkspaceRoot() string { return c.workspaceRoot }
 
 func (c *Controller) imageInputEnabled() bool {
+	if c.frozenImageInput != nil {
+		return *c.frozenImageInput
+	}
 	ref := c.modelRef
 	cfg, err := config.LoadForRoot(c.workspaceRoot)
 	if err == nil && ref == "" {
@@ -5427,12 +5478,33 @@ func (c *Controller) imageInputEnabled() bool {
 		return false
 	}
 	entry, ok := cfg.ResolveModel(ref)
-	return ok && config.EffectiveVision(entry)
+	if !ok {
+		return false
+	}
+	if c.modelCapabilityResolver != nil {
+		return c.modelCapabilityResolver(entry).State == config.CapabilitySupported
+	}
+	return config.EffectiveVision(entry)
 }
 
 // ImageInputEnabled reports whether the current model accepts direct image
 // inputs, so frontends can gate image-only UX before a turn starts.
 func (c *Controller) ImageInputEnabled() bool { return c.imageInputEnabled() }
+
+// ImageInputSnapshot avoids configuration reads on the Desktop metadata path.
+// Legacy/custom controllers without a frozen boot snapshot use the existing
+// background metadata fallback instead.
+func (c *Controller) ImageInputSnapshot() (enabled, fallback, available bool) {
+	if c == nil || c.frozenImageInput == nil {
+		return false, false, false
+	}
+	return *c.frozenImageInput, c.visionModel != "", true
+}
+
+// ImageCapabilityChanged lets desktop refresh an idle runtime before admission.
+func (c *Controller) ImageCapabilityChanged() bool {
+	return c.imageCapabilityChanged != nil && c.imageCapabilityChanged()
+}
 
 // InheritLifecycleFrom carries same-session lifecycle state across controller
 // rebuilds, such as model switches that preserve the conversation.
@@ -5535,8 +5607,13 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		if cancel != nil {
 			// clearAll deliberately does not signal waiters. Pair it with the
 			// foreground cancellation so approval/ask waits always unblock.
+			c.promptResolveMu.Lock()
+			c.promptOwner.CancelAll()
 			c.approval.clearAll()
+			c.promptResolveMu.Unlock()
 			cancel()
+		} else {
+			c.promptOwner.Clear()
 		}
 		if fireSessionEnd && started {
 			c.hooks.SessionEnd(context.Background(), "other")
@@ -5757,7 +5834,7 @@ func (c *Controller) Bypass() bool {
 
 // memory
 //
-// The memory snapshot, the pending turn-tail notes queue, and write serialization
+// The memory snapshot, pending standing-doc notes, and write serialization
 // live in c.memory (a memoryManager) behind its own locks, off c.mu — so a
 // memory-panel save never stalls an approval or status poll. These methods are
 // the SessionAPI surface; each is a thin delegation. See memory.go.
@@ -5787,10 +5864,9 @@ func (c *Controller) ForgetMemory(name string) error {
 	return c.memory.forget(name)
 }
 
-// QueueMemory implements memory.Queue: when the model runs the remember/forget
-// tool, the tool calls this with a note that rides the next turn so the change
-// applies this session without touching the cache-stable prefix. It also
-// refreshes the snapshot a memory panel reads.
+// QueueMemory implements memory.Queue: model remember/forget tool results are
+// already visible in the current loop, so this refreshes the background snapshot
+// that will be published in session-context on the next real user turn.
 func (c *Controller) QueueMemory(note string) {
 	c.memory.queue(note)
 }
@@ -6251,19 +6327,25 @@ func (c *Controller) requestApprovalDecisionWithOptions(ctx context.Context, too
 	c.approval.promptEmitMu.Lock()
 	var id string
 	var reply chan approvalReply
+	kind := ""
 	if opts.fresh || opts.requireHuman || tool == planApprovalTool {
-		kind := ""
 		if tool == planApprovalTool {
 			kind = "plan"
 		}
 		id, reply = c.approval.registerDecisionKindWithInput(tool, subject, reason, args, opts.fresh, opts.requireHuman, kind, nil)
+		ownerKind := PromptApproval
+		if kind == "plan" {
+			ownerKind = PromptPlan
+		}
+		c.registerOwnedPrompt(id, ownerKind)
 	} else {
 		id, reply = c.approval.registerWithInput(tool, subject, reason, args)
+		c.registerOwnedPrompt(id, PromptApproval)
 	}
 
-	if err := event.EmitChecked(c.sink, c.approvalRequestEvent(event.Approval{ID: id, Tool: tool, Subject: subject, Reason: reason, RawInput: append(json.RawMessage(nil), args...), Fresh: opts.fresh})); err != nil {
+	if err := event.EmitChecked(c.sink, c.approvalRequestEvent(event.Approval{ID: id, Tool: tool, Subject: subject, Reason: reason, RawInput: append(json.RawMessage(nil), args...), Fresh: opts.fresh, Kind: kind})); err != nil {
 		c.approval.promptEmitMu.Unlock()
-		c.approval.cancel(id)
+		c.cancelOwnedPrompt(id)
 		return approvalReply{}, fmt.Errorf("persist approval request: %w", err)
 	}
 	c.approval.promptEmitMu.Unlock()
@@ -6278,13 +6360,20 @@ func (c *Controller) requestApprovalDecisionWithOptions(ctx context.Context, too
 	case r := <-reply:
 		return r, nil
 	case <-waitCtx.Done():
-		c.approval.cancel(id)
+		c.cancelOwnedPrompt(id)
 		return approvalReply{}, waitCtx.Err()
 	}
 }
 
 func (c *Controller) approvalRequestEvent(approval event.Approval) event.Event {
-	return event.Event{Kind: event.ApprovalRequest, ItemID: approval.ID, Approval: approval}
+	if approval.TurnID == "" {
+		approval.TurnID, _, _, _ = c.turnEventRuntimeStatus()
+	}
+	_, runtimeEpoch := c.promptIdentitySnapshot()
+	if identity := c.bindOwnedPromptRouting(approval.ID, approval.TurnID, runtimeEpoch); identity.TurnID != "" {
+		approval.TurnID = identity.TurnID
+	}
+	return event.Event{Kind: event.ApprovalRequest, TurnID: approval.TurnID, ItemID: approval.ID, Approval: approval}
 }
 
 func (c *Controller) emitRememberResult(r RememberResult) {

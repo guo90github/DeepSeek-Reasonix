@@ -72,6 +72,22 @@ Rules: be terse — bullet points and fragments, not prose. Preserve identifiers
 // budgets are intentionally absent: they are clipped against the final request
 // at send time and must never make compaction happen earlier than the user's
 // configured compact_ratio.
+func (a *Agent) compact(ctx context.Context, trigger, instructions string, force bool) error {
+	allowChunked := trigger == CompactionTriggerManual
+	_, err := a.compactToProjectionWithChunked(ctx, trigger, instructions, force, false, allowChunked)
+	return err
+}
+
+func (a *Agent) compactToProjection(ctx context.Context, trigger, instructions string, force, mustFree bool) (CompactionOutcome, error) {
+	return a.compactToProjectionWithChunked(ctx, trigger, instructions, force, mustFree, false)
+}
+
+func (a *Agent) compactToProjectionWithChunked(ctx context.Context, trigger, instructions string, force, mustFree, allowChunked bool) (CompactionOutcome, error) {
+	a.sess.compactionRunMu.Lock()
+	defer a.sess.compactionRunMu.Unlock()
+	return a.compactToProjectionLocked(ctx, trigger, instructions, force, mustFree, allowChunked)
+}
+
 func (a *Agent) compactTrigger() int {
 	window := a.effectiveContextWindow()
 	if a == nil || window <= 0 {
@@ -412,7 +428,7 @@ func (a *Agent) summarize(ctx context.Context, region []provider.Message, instru
 	if a.svc.prov == nil {
 		return "", usage, fmt.Errorf("summary unavailable")
 	}
-	ch, err := a.svc.prov.Stream(ctx, req)
+	ch, err := provider.StreamAuxiliary(provider.WithRecoverySleeper(ctx, recoverySleep), a.svc.prov, req)
 	if err != nil {
 		return "", usage, err
 	}

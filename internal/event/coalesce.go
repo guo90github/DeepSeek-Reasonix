@@ -251,6 +251,6 @@ func (c *coalescer) RecordReasoningAudit(t ReasoningAuditTotals) {
 	c.enqueueCapability(func() { RecordReasoningAudit(c.inner, t) })
 }
 
-func (c *coalescer) RecordCompletionValidation(info CompletionValidationInfo) {
-	c.enqueueCapability(func() { RecordCompletionValidation(c.inner, info) })
+func (c *coalescer) RecordSubagentLifecycle(info SubagentLifecycleInfo) {
+	c.enqueueCapability(func() { RecordSubagentLifecycle(c.inner, info) })
 }

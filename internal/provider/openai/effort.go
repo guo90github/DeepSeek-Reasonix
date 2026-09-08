@@ -40,8 +40,6 @@ type effortEndpoint struct {
 // requestEffortVocabulary lists exactly the depth levels New would accept as a
 // configured effort for this endpoint. Binary thinking knobs and disabled
 // thinking yield nil — an override adjusts depth, never whether thinking runs.
-// The sole exception is the "disabled" override: adapters treat it as a
-// per-request thinking-off signal mapped onto the endpoint's reasoning-off knob.
 func requestEffortVocabulary(e effortEndpoint) []string {
 	if e.thinkingType == "disabled" || e.protocol == "none" || e.minimax || e.zhipu || e.longcat {
 		return nil
@@ -77,28 +75,20 @@ func depthOnly(levels []string) []string {
 }
 
 // requestEffort resolves one request's reasoning depth: a vocabulary-approved
-// EffortOverride wins, anything else falls back to the configured effort. The
-// "disabled" override is not a depth: it returns "" so the wire drops the depth
-// hint alongside the disabled-thinking knob (see thinkingDisabled).
+// EffortOverride wins, anything else falls back to the configured effort.
 func (c *client) requestEffort(req provider.Request) string {
 	want := strings.ToLower(strings.TrimSpace(req.EffortOverride))
-	if want == "" {
-		return c.effort
-	}
-	if want == "disabled" {
-		return ""
-	}
-	if !supportsEffort(c.requestEfforts, want) {
+	if want == "" || !supportsEffort(c.requestEfforts, want) {
 		return c.effort
 	}
 	return want
 }
 
-// thinkingDisabled reports whether this request must not think: the provider is
-// configured with thinking off, or the request itself carries a disabled
-// reasoning override (the session never sets one, so its thinking is untouched).
-func thinkingDisabled(thinkingType string, req provider.Request) bool {
-	return thinkingType == "disabled" || req.ThinkingDisabled()
+func (c *client) deepSeekRequestThinking(req provider.Request) string {
+	if c.thinkingType == "disabled" || strings.EqualFold(strings.TrimSpace(req.EffortOverride), "disabled") {
+		return "disabled"
+	}
+	return "enabled"
 }
 
 func supportsEffort(levels []string, want string) bool {

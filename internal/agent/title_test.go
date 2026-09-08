@@ -26,7 +26,7 @@ func TestFinishProtocolRepairIsNotUserAuthored(t *testing.T) {
 		// the persisted shape must still classify as synthetic.
 		"<reasoning-language>\nzh\n</reasoning-language>\n\n<response-language>\nzh\n</response-language>\n\nProtocol repair: finish this turn now. A visible final answer has already been provided, so do not repeat it.",
 	} {
-		if IsUserAuthoredTurn(injected) {
+		if IsUserAuthoredTurnMessage(provider.Message{Role: provider.RoleUser, Content: injected}) {
 			t.Fatalf("finish protocol repair %q must not count as user-authored", injected)
 		}
 	}

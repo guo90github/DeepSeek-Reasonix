@@ -191,7 +191,31 @@ console.log("\nbundle budgets");
 // bring the merged stable path to 462.587 KiB. Windows' embedded build metadata
 // lands just above the rounded 462.6 KiB boundary; retain one cross-platform
 // decimal step without widening any chunk or raw gate.
-const initialJSBudgetKiB = 462.7;
+// Reading the applied item-list transform (instead of the remembered offset)
+// keeps the reader/anchor visual guards from compounding under reduced-motion
+// WebView2; the merged path measures 462.827 KiB. Retain one decimal step.
+// Generation-bound native-thumb transactions and the rebased custom-scrollbar
+// drag add 0.3 KiB gzip; the merged path measures 463.102 KiB.
+// Absorbing content-preserving block-window prepends into the active reader
+// transaction adds 0.2 KiB gzip on top; the merged path measures 463.292 KiB,
+// 8 bytes under the next decimal. Retain one cross-platform decimal step.
+// The subagent outcome envelope, partial-state card, and history hydration add
+// 0.5 KiB gzip on the initial path. The model-capability resolver and its
+// read-only provider badges add a measured 0.2 KiB including gzip/toolchain
+// rounding. The integrated management shell, image capability controls, and
+// upstream updater refresh measure 465.4 KiB gzip (base: 464.7 KiB).
+// Keep the next decimal ceiling and leave feature editors lazy.
+// Durable protocol recovery controls and search-source status add 1.2 KiB
+// over the same-environment main-v2 build (465.4 -> 466.6 KiB gzip).
+// Keep one decimal of cross-platform headroom for this measured shell change.
+// Integrating main-v2 rich-link menus measures 466.905 KiB combined.
+// The AskCard session-draft wiring adds a bounded 30-byte gzip drift on the
+// initial route. The session-runtime ordering fence adds 56 bytes and
+// cross-platform zlib rounding reaches the same startup path; retain the
+// explicit budget rather than failing on a rounded 467.0 KiB display value.
+// The latest main-v2 session-runtime fence and exact prompt protocol measure
+// 468.2 KiB here; retain a 0.1 KiB ceiling for platform zlib rounding.
+const initialJSBudgetKiB = 468.3;
 assertBudget("initial JavaScript gzip", initialJSGzip, initialJSBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk gzip", largestInitialJS, 280 * 1024);
 // Render-blocking CSS is intentionally absent: styles.css loads deferred via
@@ -213,6 +237,9 @@ if (initialCSS.length > 0) {
 // Reasoning-audit button/card CSS adds a bounded 0.3 KiB; step to 117.0 KiB
 // (personal use — no production shipping constraint).
 // Audit dialog resize handle + six-class display add ~0.3 KiB; step to 117.4 KiB.
+// main-v2: the one-row model configuration list, responsive stacking, and the
+// shared harness decision surface measure 116.9 KiB gzip while reusing existing
+// layout primitives; retain a bounded 0.1 KiB headroom ratchet on top.
 assertBudget("deferred app-shell CSS gzip", appShellCSSGzip, 117.4 * 1024);
 if (localeChunks.length !== 2) {
   throw new Error(`expected 2 on-demand Chinese locale chunks, found ${localeChunks.length}`);
@@ -258,7 +285,19 @@ for (const path of localeChunks) {
   // reclaim), while Sticky Context adds file-state and limit diagnostics. The
   // merged stable chunks measure 60.395 KiB zh and 61.232 KiB zh-TW; retain
   // only the next one-decimal ceiling for each dialect.
-  const budget = name.startsWith("zh-TW-") ? 61.3 * 1024 : 60.4 * 1024;
+  // The outcome card adds one short localized status label per dialect. CI's
+  // Windows zlib measured zh at 60.4 KiB exactly; capability-status copy adds
+  // a small 0.1 KiB ratchet, so retain the next decimal ceiling rather than
+  // dropping the unknown-state explanation.
+  // Image input mode, provenance and unknown-state guidance measure 60.724 KiB
+  // zh and 61.570 KiB zh-TW. Keep the next decimal ceiling per locale.
+  // Protocol recovery and source-availability copy measure 60.927 KiB zh
+  // and 61.789 KiB zh-TW (base: 60.8 / 61.6 rounded).
+  // Rich-link action copy on the current base brings these to
+  // 61.027/61.881 KiB; retain bounded cross-platform headroom.
+  // Recovery retry copy reaches the rounded 61.1 KiB boundary on Node/zlib
+  // toolchains; keep the next one-decimal ceiling for cross-platform CI.
+  const budget = name.startsWith("zh-TW-") ? 62.0 * 1024 : 61.2 * 1024;
   assertBudget(`${name} gzip`, gzipBytes(path), budget);
 }
 
@@ -337,6 +376,30 @@ const rawInitialBytes = [...initialJS, ...initialCSS, ...appShellCSS]
 // Session takeover banners and #9703/#9711's provisional-selection handoff
 // combine with Sticky Context's pinned-file state at 2469.125 KiB raw on the
 // merged stable path. Retain only the next one-decimal ceiling.
-const rawInitialBudgetKiB = 2_469.2;
+// The passive reader-anchor lease for delayed WebView2 range commits measures
+// 2469.347 KiB raw (+0.222 KiB, +0.009%). Retain only the next one-decimal
+// ceiling; gzip and largest-chunk budgets remain unchanged.
+// Reading the applied item-list transform for the reader/anchor visual guards
+// adds 0.5 KiB raw on top; the merged path measures 2469.815 KiB.
+// The scrollbar generation fence and drag rebase add 1.1 KiB raw; the merged
+// path measures 2470.932 KiB.
+// The reader-transaction offset absorption adds 0.8 KiB raw on top; the merged
+// path measures 2471.741 KiB. Controller-owned management dispositions and
+// optimistic management settlement add 0.6 KiB raw; retain the smallest
+// one-decimal ceiling with bounded headroom.
+// The outcome card and history hydration add 2.3 KiB raw on the initial path
+// (2474.0 KiB measured in CI). Keep this narrowly attributable ratchet rather
+// than removing persisted-result visibility or changing chunk ownership.
+// On the current main-v2 base, the combined measured path is 2474.6 KiB;
+// the model-capability helper and localized status copy add 0.9 KiB; retain
+// the smallest bounded cross-platform ceiling.
+// Retain the upstream updater ceiling and independent chunk gates.
+// Recovery controls add 3.6 KiB raw over the measured 2480.9 KiB base;
+// current payload is 2484.509 KiB. Retain only bounded toolchain headroom.
+// With the current-base rich-link menus: 2485.715 KiB raw.
+// The shared harness decision surface adds a bounded startup stylesheet
+// payload. The current base plus exact prompt identity and stale-card recovery
+// measure 2496.4 KiB locally; retain the smallest bounded ceiling.
+const rawInitialBudgetKiB = 2_496.5;
 assertBudget("initial raw JavaScript and CSS", rawInitialBytes, rawInitialBudgetKiB * 1024);
 assertBudget("largest initial JavaScript chunk raw", largestInitialJSRaw, 1_000 * 1024);
