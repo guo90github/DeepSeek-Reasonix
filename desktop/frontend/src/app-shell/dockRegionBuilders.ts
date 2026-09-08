@@ -83,7 +83,7 @@ export function buildWorkspaceDockProps(input: {
       initialViewMode: input.mode === "changed" ? "changed" : "files",
       completionSummary: input.completionSummary, turnStartAt: input.turnStartAt,
       verificationRevealRequest: input.verification.verificationRevealRequest, qualityFloor: input.qualityFloor,
-      showViewTabs: false, creationMode: input.creation,
+      showViewTabs: true, creationMode: input.creation,
     },
     resizer: surface.gridOpen ? {
       min: workspacePanelResizeMinWidth,
