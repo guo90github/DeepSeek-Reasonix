@@ -2,9 +2,12 @@
    .main and .split-workspace dissolve (display:contents) so the panes and the
    footer become direct grid children: the composer owns the bottom row of the
    conversation column only, and the process column spans the full height —
-   composer growth never squeezes the process pane. */
+   composer growth never squeezes the process pane.
+   AppRuntimeView adds .chat-pane--split when the split surface renders (the
+   grid must live on .chat-pane, the common ancestor of the panes and the
+   shell footer, not on <main>). */
 
-.app--split .chat-pane {
+.chat-pane--split {
   display: grid;
   grid-template-rows: var(--topicbar-height) minmax(0, 1fr) auto;
   grid-template-columns: minmax(0, 1fr) 8px minmax(0, var(--split-process-width, 60%));
@@ -14,19 +17,17 @@
   transition: grid-template-columns 0.28s cubic-bezier(0.2, 0.72, 0.2, 1);
 }
 
-.app--split .chat-pane:has(.split-workspace--resizing) {
+.chat-pane--split:has(.split-workspace--resizing) {
   transition: none;
 }
 
-.app--split .chat-pane .topicbar {
+.chat-pane--split .topicbar {
   grid-row: 1;
   grid-column: 1 / 4;
 }
 
-.app--split .chat-pane .main,
-.app--split .chat-pane .transcript-navigation-surface,
-.app--split .chat-pane .transcript-navigation-content,
-.app--split .split-workspace {
+.chat-pane--split .main,
+.chat-pane--split .split-workspace {
   display: contents;
 }
 
@@ -176,7 +177,7 @@
   min-height: 0;
 }
 
-.app--split .chat-pane .footer {
+.chat-pane--split .footer {
   grid-row: 3;
   grid-column: 1;
   min-width: 0;
@@ -335,7 +336,7 @@
    conversation column and the full-height process pane keep a common bottom
    edge — no full-width overlay, no height drift. The shelf card's own
    max-height caps tall cards and scrolls internally. */
-.app--split .chat-pane .footer.footer--decision {
+.chat-pane--split .footer.footer--decision {
   overflow: visible;
   max-height: none;
 }
@@ -351,7 +352,7 @@
 }
 
 @media (max-width: 1100px) {
-  .app--split .chat-pane {
+  .chat-pane--split {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -476,30 +477,4 @@
 .conversation-pane [data-virtuoso-scroller],
 .process-pane [data-virtuoso-scroller] {
   overflow-anchor: none;
-}
-
-/* ---- v1.39 app-shell integration: <main class="main main--split"> hosts the
-   split grid directly (the old .app--split .chat-pane shell no longer exists).
-   Single content row: conversation | 8px divider | process. Composer stays in
-   the shell footer below this main. ---- */
-.main--split {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  grid-template-columns: minmax(0, 1fr) 8px minmax(0, var(--split-process-width, 60%));
-  min-height: 0;
-  overflow: hidden;
-  transition: grid-template-columns 0.28s cubic-bezier(0.2, 0.72, 0.2, 1);
-}
-.main--split:has(.split-workspace--resizing) { transition: none; }
-.main--split .split-workspace { display: contents; }
-.main--split .conversation-pane {
-  grid-row: 1; grid-column: 1; min-height: 0; min-width: 0;
-}
-.main--split .process-pane {
-  grid-row: 1; grid-column: 3; min-height: 0; min-width: 0;
-  position: relative;
-}
-.main--split .split-workspace__divider {
-  grid-row: 1; grid-column: 2; position: relative; z-index: 1;
-  cursor: col-resize; touch-action: none; background: transparent; outline: none;
 }

@@ -25,6 +25,7 @@ import { buildTopicbarView, TopicbarActionsStack } from "./TopicbarActionsStack"
 import { DockToggleButton } from "./DockToggleButton";
 import { SessionStatusBanners } from "./SessionStatusBanners";
 import { ChatPaneRegion } from "./ChatPaneRegion";
+import { noticePreviewMockEnabled } from "./NoticePreviewPanel";
 import { DecisionFooterRegion } from "./DecisionFooterRegion";
 import { WorkspaceDockRegion } from "./WorkspaceDockRegion";
 import { AppBottomRegions } from "./AppBottomRegions";
@@ -113,6 +114,12 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
     sidebarWorkbench ? "sidebar--workbench" : "",
   ].filter(Boolean).join(" ");
   const startupSplashHold = !activeTabId && state.meta?.ready !== true && !state.meta?.startupErr;
+
+  // Split grid lives on .chat-pane (not <main>): the composer/footer must join
+  // the conversation column's bottom row, so the class mirrors ChatPaneRegion's
+  // split-branch condition exactly.
+  const splitSurface = (shell.preferences.desktopLayoutStyle as string) === "split"
+    && !sidebarImDetailConnection && !activeTab?.remote && !noticePreviewMockEnabled();
 
   const layoutStyle = useMemo(
     () =>
@@ -266,7 +273,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           },
         })} />
 
-        <section className={`chat-pane${session.transcript.creationEmptyHero ? " chat-pane--creation-empty" : ""}`}>
+        <section className={`chat-pane${splitSurface ? " chat-pane--split" : ""}${session.transcript.creationEmptyHero ? " chat-pane--creation-empty" : ""}`}>
           <TopicbarRegion view={buildTopicbarView({
             t, locale, activeTab, cwd: state.meta?.cwd, imDetail: sidebarImDetailConnection, imTopicSources: shell.preferences.imTopicSources,
             creation: sidebarCreation, chromeHidden: workbenchChromeHidden, automationReturn: shell.automationReturn,
@@ -311,7 +318,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           })} />
 
           <ChatPaneRegion
-            splitMode={(shell.preferences.desktopLayoutStyle as string) === "split"}
+            splitMode={splitSurface}
             transitioning={runtimeTransitioning}
             t={t}
             imDetail={sidebarImDetailConnection ? {
