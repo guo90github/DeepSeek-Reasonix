@@ -477,9 +477,24 @@ var bufPool = sync.Pool{
 	New: func() any { return new(bytes.Buffer) },
 }
 
+// acceptsDisabledThinkingOverride reports whether EffortOverride "disabled" —
+// the deterministic thinking-off switch used by the prompt-optimize and
+// reasoning-audit utilities — is expressible on this endpoint through a channel
+// outside its reasoning_effort vocabulary. DashScope/MaaS qwen gates thinking
+// with extra_body enable_thinking (applied in applyReasoning), so its empty
+// vocabulary must not reject the off switch.
+func acceptsDisabledThinkingOverride(baseURL string) bool {
+	return IsQwenCompatible(baseURL)
+}
+
 func (c *client) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
 	if err := c.reasoning.Validate(c.model, req.EffortOverride); err != nil {
-		return nil, err
+		// EffortOverride "disabled" is the deterministic thinking-off switch for
+		// standalone utilities; DashScope/MaaS qwen turns thinking off via
+		// extra_body enable_thinking (applyReasoning), outside its effort vocabulary.
+		if !(req.EffortOverride == "disabled" && acceptsDisabledThinkingOverride(c.baseURL)) {
+			return nil, err
+		}
 	}
 	stream, err := c.openStream(ctx, c.chatURL, c.buildRequest(req), req.Tools)
 	if err != nil {

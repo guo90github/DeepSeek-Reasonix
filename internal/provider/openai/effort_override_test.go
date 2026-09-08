@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"reasonix/internal/provider"
@@ -91,4 +92,45 @@ func TestEffortOverrideRejectedWithoutDepthVocabulary(t *testing.T) {
 	assertRejectedEffort(t, c, "low")
 	disabled := newTestClient(t, "deepseek-v4", map[string]any{"reasoning_protocol": "deepseek", "thinking": "disabled"})
 	assertRejectedEffort(t, disabled, "high")
+}
+
+func TestEffortOverrideQwenDisabledUsesEnableThinking(t *testing.T) {
+	p, err := New(provider.Config{Name: "qwen", BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", Model: "qwen3.7-flash", APIKey: "k"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	c := p.(*client)
+	req := c.buildRequest(provider.Request{EffortOverride: "disabled"})
+	if req.ReasoningEffort != "" {
+		t.Fatalf("qwen wire must omit reasoning_effort, got %q", req.ReasoningEffort)
+	}
+	if off, _ := req.ExtraBody["enable_thinking"].(bool); off {
+		t.Fatalf("enable_thinking must be false for the disabled override, got %v", req.ExtraBody["enable_thinking"])
+	}
+	raw, err := req.MarshalJSON()
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(raw), "reasoning_effort") {
+		t.Fatalf("request body must not carry reasoning_effort: %s", raw)
+	}
+	if !strings.Contains(string(raw), `"enable_thinking":false`) {
+		t.Fatalf("request body must carry enable_thinking:false: %s", raw)
+	}
+}
+
+func TestQwenDisabledOverrideAcceptedBeforeIO(t *testing.T) {
+	for _, url := range []string{
+		"https://dashscope.aliyuncs.com/compatible-mode/v1",
+		"https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+	} {
+		if !acceptsDisabledThinkingOverride(url) {
+			t.Fatalf("%s must accept the disabled thinking override", url)
+		}
+	}
+	for _, url := range []string{"https://api.deepseek.com/v1", "https://open.bigmodel.cn/api/paas/v4", "https://api.openai.com/v1"} {
+		if acceptsDisabledThinkingOverride(url) {
+			t.Fatalf("%s must not accept via the off-switch channel", url)
+		}
+	}
 }

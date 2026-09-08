@@ -129,8 +129,10 @@ func (c *client) applyReasoning(out *chatRequest, req provider.Request) {
 			out.ReasoningEffort = ""
 		}
 	case IsQwenCompatible(c.baseURL):
-		// DashScope/MaaS thinking is enable_thinking in extra_body; force it off
-		// when the request disables thinking (prompt-optimize never thinks).
+		// DashScope/MaaS thinking is enable_thinking in extra_body; reasoning_effort
+		// is not part of its vocabulary, so never send it (thinking off for
+		// prompt-optimize/audit rides the enable_thinking=false body field).
+		out.ReasoningEffort = ""
 		out.ExtraBody = c.thinkingOffExtraBody(out.ExtraBody, req)
 	case c.thinkingType != "":
 		// Generic OpenAI-compatible provider with an explicit `thinking` config
