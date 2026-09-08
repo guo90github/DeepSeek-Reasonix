@@ -21,9 +21,12 @@ import { fileURLToPath } from "node:url";
 
 const SOURCE_ROOT = fileURLToPath(new URL("../src", import.meta.url));
 
-// Every kernel/adapter command routes through this one gateway.
+// Every kernel/adapter command routes through one of these gateways:
+// the native app-shell viewport writer, or the generation-fenced writer that
+// owns the split-pane Virtuoso transcript.
 const ALLOWED_WRITERS = new Set([
   "lib/transcriptViewportWriter.ts",
+  "lib/transcriptScrollWriter.ts",
 ]);
 
 // Raw `.scrollTop` writes bypass the kernel entirely. The allowed
@@ -41,6 +44,7 @@ const ALLOWED_WRITERS = new Set([
 //   onScroll user-read check.
 const ALLOWED_RAW_SCROLLTOP = new Set([
   "lib/transcriptViewportWriter.ts",
+  "lib/transcriptScrollWriter.ts",
   "lib/useReasoningScrollFollow.ts",
   "components/SettingsPanel.tsx",
   "components/RemoteConnectWizard.tsx",

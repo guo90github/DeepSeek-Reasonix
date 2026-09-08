@@ -82,3 +82,4 @@ site/.generated/
 !/CLAUDE.md
 /.playwright-mcp
 /mobile/.expo/dev/logs/
+/desktop/frontend/scripts/jitter-log.txt
