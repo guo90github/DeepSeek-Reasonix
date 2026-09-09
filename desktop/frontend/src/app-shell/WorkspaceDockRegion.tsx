@@ -2,6 +2,7 @@ import { lazy, Suspense, type ComponentProps, type KeyboardEvent, type PointerEv
 import { Activity, FileText, Server } from "lucide-react";
 import type { Translator } from "../lib/i18n";
 import type { RightDockMode } from "../store/layout";
+import { DockToggleButton } from "./DockToggleButton";
 
 const ContextPanel = lazy(() => import("../components/ContextPanel").then((module) => ({ default: module.ContextPanel })));
 const RemotePanel = lazy(() => import("../components/RemotePanel").then((module) => ({ default: module.RemotePanel })));
@@ -23,6 +24,7 @@ export type WorkspaceDockRegionProps = {
   t: Translator;
   onMode: (mode: RightDockMode) => void;
   onRemote: () => void;
+  onClose?: () => void;
   remote: ComponentProps<typeof RemotePanel>;
   context: ComponentProps<typeof ContextPanel>;
   workspace: ComponentProps<typeof WorkspacePanel>;
@@ -45,7 +47,7 @@ export type WorkspaceDockRegionProps = {
  * shows only the files tab and the plain workspace panel.
  */
 export function WorkspaceDockRegion(props: WorkspaceDockRegionProps) {
-  const { visible, overlay, mode, creation, remoteAvailable, showContext, t, onMode, onRemote } = props;
+  const { visible, overlay, mode, creation, remoteAvailable, showContext, t, onMode, onRemote, onClose } = props;
   const merged = !creation && mode !== "remote";
   return (
     <>
@@ -66,6 +68,11 @@ export function WorkspaceDockRegion(props: WorkspaceDockRegionProps) {
               {creation && <DockTab active={mode === "files"} onClick={() => onMode("files")} icon={<FileText size={13} />} label={t("workspace.filesTab")} />}
               {remoteAvailable && <DockTab active={mode === "remote"} onClick={onRemote} icon={<Server size={13} />} label={t("rightDock.remote")} />}
             </div>
+            {onClose && (
+              <div className="workbench-dock__collapse">
+                <DockToggleButton renderable={true} t={t} onToggle={onClose} />
+              </div>
+            )}
           </div>
           <div className={["workbench-dock__body", merged ? "workbench-dock__body--merged" : ""].filter(Boolean).join(" ")}>
             {mode === "remote" ? (

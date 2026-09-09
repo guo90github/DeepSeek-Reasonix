@@ -93,6 +93,11 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
             hydrating={transcript.transcriptHydrating || (transitioning && !transcript.navigationDataReady)}
             surfaceCommitToken={transcript.surfaceCommitToken}
             onSurfacePaintReady={commands.onSurfacePaintReady}
+            onPrompt={commands.onPrompt}
+            onDeliveryContinue={commands.onDeliveryContinue}
+            onAcceptDelivery={commands.onAcceptDelivery}
+            onOpenChanges={commands.onOpenChanges}
+            onOpenVerification={commands.onOpenVerification}
           />
         </Suspense>
       </main>

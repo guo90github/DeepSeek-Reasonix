@@ -26492,6 +26492,12 @@ body > .mermaid-diagram--fullscreen {
   --wails-draggable: drag;
 }
 
+.workbench-dock__collapse {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+}
+
 /* Dock collapse/expand toggle pinned to the top-right corner of the window.
 /* Dock collapse/expand toggle pinned to the top-right corner of the window.
    Fixed position keeps it at the same spot whether the dock is open (it

@@ -18,6 +18,7 @@ import { resolveAutoSplitProcessWidth, snapSplitWidth, stepSplitWidth } from "..
 import { attachPaneParallax } from "../lib/paneParallax";
 import { advanceSurfacePaintCommit, type SurfacePaintProgress } from "../lib/navigationSurfaceTransition";
 import type { ControllerLiveStore, Item, LiveStream } from "../lib/useController";
+import type { WireCompletionSummary } from "../lib/types";
 
 export const SPLIT_PROCESS_WIDTH_STORAGE_KEY = "reasonix-split-process-width";
 export const SPLIT_PROCESS_MODE_STORAGE_KEY = "reasonix-split-process-mode";
@@ -71,6 +72,11 @@ export function SplitWorkspace({
   hydrating = false,
   surfaceCommitToken,
   onSurfacePaintReady,
+  onDeliveryContinue,
+  onAcceptDelivery,
+  onOpenChanges,
+  onOpenVerification,
+  onPrompt,
 }: {
   items: readonly Item[];
   live?: LiveStream;
@@ -85,6 +91,11 @@ export function SplitWorkspace({
   hydrating?: boolean;
   surfaceCommitToken?: string;
   onSurfacePaintReady?: (token: string, outcome: "ready" | "degraded") => void;
+  onDeliveryContinue?: () => void;
+  onAcceptDelivery?: () => void;
+  onOpenChanges?: () => void;
+  onOpenVerification?: (summary: WireCompletionSummary) => void;
+  onPrompt?: (text: string) => void;
 }) {
   const t = useT();
   const liveStream = useSyncExternalStore(
@@ -437,6 +448,11 @@ export function SplitWorkspace({
           scrollerRef={setConvScroller}
           hoveredIndex={hoveredIndex}
           onHoverIndex={setHoveredIndex}
+          onDeliveryContinue={onDeliveryContinue}
+          onAcceptDelivery={onAcceptDelivery}
+          onOpenChanges={onOpenChanges}
+          onOpenVerification={onOpenVerification}
+          onPrompt={onPrompt}
         />
         <div
           ref={dividerRef}

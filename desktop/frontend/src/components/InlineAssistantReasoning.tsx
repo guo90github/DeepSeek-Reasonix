@@ -12,6 +12,11 @@ import { useTranscriptUserResizeIntent } from "./TranscriptLayoutIntentContext";
 import { resolveReasoningLayoutVariant } from "../lib/transcriptRowGeometry";
 import { useReasoningScrollFollow } from "../lib/useReasoningScrollFollow";
 
+function reasoningDurationMeta(durationMs: number | undefined, t: ReturnType<typeof useT>): string {
+  if (typeof durationMs !== "number" || !Number.isFinite(durationMs) || durationMs <= 0) return t("msg.thinkingDone");
+  return t("msg.thinkingDuration", { s: Math.max(1, Math.round(durationMs / 1000)) });
+}
+
 export function InlineAssistantReasoning({
   item,
   autoFollowActive,
@@ -25,8 +30,21 @@ export function InlineAssistantReasoning({
   const beginUserResize = useTranscriptUserResizeIntent();
   const live = useContext(LiveStreamContext);
   const presentation = useWorkProcessPresentation();
-  const shown = live?.id === item.id ? { reasoning: live.reasoning, streaming: true, reasoningComplete: live.reasoningComplete } : item;
+  const shown = live?.id === item.id
+    ? {
+        reasoning: live.reasoning,
+        streaming: true,
+        reasoningComplete: live.reasoningComplete,
+        // Mirror TranscriptVirtuosoParts: derive the elapsed the moment the
+        // live reasoning completes so the meta shows during the answer stream,
+        // not only after the turn settles into the item.
+        reasoningDurationMs: live.reasoningStartedAt && live.reasoningCompletedAt && live.reasoningCompletedAt >= live.reasoningStartedAt
+          ? live.reasoningCompletedAt - live.reasoningStartedAt
+          : item.reasoningDurationMs,
+      }
+    : item;
   const running = shown.streaming && !shown.reasoningComplete;
+  const doneMeta = running ? "" : reasoningDurationMeta(shown.reasoningDurationMs, t);
   const followActive = autoFollowActive ?? shown.streaming;
   const [open, setOpen] = useState(presentation.keepExpandedAfterCompletion || (presentation.showWhileRunning && followActive));
   const userOverridden = useRef(false);
@@ -70,6 +88,7 @@ export function InlineAssistantReasoning({
       <button type="button" className="turn-collapse__reasoning-head" data-running={running ? "" : undefined} onClick={toggle} aria-expanded={open}>
         <ProcessBrainIcon size={12} />
         <span>{running ? t("msg.thinkingRunning") : t("msg.thinking")}</span>
+        {doneMeta && <span className="reasoning__meta">{doneMeta}</span>}
         <ChevronRight className={`reasoning__chevron${open ? " reasoning__chevron--open" : ""}`} size={12} />
       </button>
       {open ? (

@@ -10,11 +10,13 @@ import { useT } from "../lib/i18n";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { isSteerNoticeText } from "../lib/useController";
+import type { WireCompletionSummary } from "../lib/types";
 import { paneTurnDefaultOpen, type ConversationPaneTurn } from "../lib/transcriptPanes";
 import { UserMessage } from "./Message";
 import { LiveAssistantMessage } from "./TranscriptVirtuosoParts";
 import { NoticeCard, SteerCard } from "./TranscriptCards";
 import { ExtensionCard } from "./ExtensionCard";
+import { LiveAwaitElapsed } from "./LiveAwaitElapsed";
 import { TurnBadge } from "./ProcessPane";
 
 function ConversationTurnCard({
@@ -25,6 +27,11 @@ function ConversationTurnCard({
   mirrorActive,
   onPointerEnter,
   onPointerLeave,
+  onDeliveryContinue,
+  onAcceptDelivery,
+  onOpenChanges,
+  onOpenVerification,
+  onPrompt,
 }: {
   turn: ConversationPaneTurn;
   running: boolean;
@@ -33,6 +40,11 @@ function ConversationTurnCard({
   mirrorActive: boolean;
   onPointerEnter?: () => void;
   onPointerLeave?: () => void;
+  onDeliveryContinue?: () => void;
+  onAcceptDelivery?: () => void;
+  onOpenChanges?: () => void;
+  onOpenVerification?: (summary: WireCompletionSummary) => void;
+  onPrompt?: (text: string) => void;
 }) {
   const t = useT();
   const question = turn.user?.text ?? "";
@@ -78,12 +90,29 @@ function ConversationTurnCard({
             }
             if (item.kind === "notice") {
               if (isSteerNoticeText(item.text)) return <SteerCard key={item.id} id={item.id} text={item.text} />;
-              return <NoticeCard key={item.id} item={item} actionDisabled={running} />;
+              // Mirror the single-column Transcript action mapping so split
+              // notices keep their 查看改动 / 继续 / 验证 buttons.
+              const action = item.action === "continue_delivery"
+                ? (onDeliveryContinue ?? (() => onPrompt?.(t("notice.deliveryIncompleteContinuePrompt"))))
+                : item.action === "open_changes" ? onOpenChanges : undefined;
+              return (
+                <NoticeCard
+                  key={item.id}
+                  item={item}
+                  actionDisabled={running}
+                  onAction={action}
+                  onOpenVerification={item.variant === "completion" ? onOpenVerification : undefined}
+                  onAccept={item.action === "continue_delivery" ? onAcceptDelivery : undefined}
+                />
+              );
             }
             return <ExtensionCard key={item.id} item={item} tabId={undefined} />;
           })}
           {turn.answers.length === 0 && turn.user && turn.isActive && (
-            <div className="conversation-pane__empty-answer">{t("split.awaitingAnswer")}</div>
+            <div className="conversation-pane__empty-answer">
+              {t("split.awaitingAnswer")}
+              {running && typeof turn.user.createdAt === "number" && <LiveAwaitElapsed since={turn.user.createdAt} />}
+            </div>
           )}
         </div>
       )}
@@ -106,6 +135,11 @@ export function ConversationPane({
   scrollerRef,
   hoveredIndex,
   onHoverIndex,
+  onDeliveryContinue,
+  onAcceptDelivery,
+  onOpenChanges,
+  onOpenVerification,
+  onPrompt,
 }: {
   turns: readonly ConversationPaneTurn[];
   tabId?: string;
@@ -121,6 +155,11 @@ export function ConversationPane({
   scrollerRef?: (node: HTMLElement | Window | null) => void;
   hoveredIndex?: number | null;
   onHoverIndex?: (index: number | null) => void;
+  onDeliveryContinue?: () => void;
+  onAcceptDelivery?: () => void;
+  onOpenChanges?: () => void;
+  onOpenVerification?: (summary: WireCompletionSummary) => void;
+  onPrompt?: (text: string) => void;
 }) {
   const t = useT();
   // Older history pages prepend turns at the top; keep their absolute index
@@ -182,8 +221,13 @@ export function ConversationPane({
       mirrorActive={hoveredIndex === index}
       onPointerEnter={() => onHoverIndex?.(index)}
       onPointerLeave={() => onHoverIndex?.(null)}
+      onDeliveryContinue={onDeliveryContinue}
+      onAcceptDelivery={onAcceptDelivery}
+      onOpenChanges={onOpenChanges}
+      onOpenVerification={onOpenVerification}
+      onPrompt={onPrompt}
     />
-  ), [hoveredIndex, newestKey, onHoverIndex, overrides, running, toggle]);
+  ), [hoveredIndex, newestKey, onAcceptDelivery, onDeliveryContinue, onHoverIndex, onOpenChanges, onOpenVerification, onPrompt, overrides, running, toggle]);
 
   const listComponents = useMemo(() => ({
     Header: () => olderHeader,
