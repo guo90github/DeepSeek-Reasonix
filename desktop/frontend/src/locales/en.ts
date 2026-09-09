@@ -373,6 +373,7 @@ export const en = {
   "workspace.copyAbsolutePath": "Copy absolute path",
   "workspace.viewMode": "Workspace view",
   "workspace.filesTab": "Files",
+  "workspace.backToFiles": "Back to files",
   "workspace.changedTab": "Changes",
   "workspace.revertSessionFile": "Revert this file to its state before Reasonix edited it",
   "workspace.revertSessionFileShort": "Revert",

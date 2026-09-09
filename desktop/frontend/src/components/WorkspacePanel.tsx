@@ -17,6 +17,8 @@ import {
   Maximize2,
   MessageSquarePlus,
   Minimize2,
+  PanelLeft,
+  PanelRight,
   RefreshCw,
   Search,
   X,
@@ -1573,6 +1575,19 @@ export function WorkspacePanel({
                 {maximized ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
               </button>
             </Tooltip>
+            {changedMode && !selectedPath ? (
+              <Tooltip label={t("workspace.backToFiles")}>
+                <button className="workspace-iconbtn" type="button" aria-label={t("workspace.backToFiles")} onClick={() => setViewMode("files")}>
+                  <PanelLeft size={15} />
+                </button>
+              </Tooltip>
+            ) : (
+              <Tooltip label={t("rightDock.collapse")}>
+                <button className="workspace-iconbtn" type="button" aria-label={t("rightDock.collapse")} onClick={onClose}>
+                  <PanelRight size={15} />
+                </button>
+              </Tooltip>
+            )}
             {previewVisible && !changedMode && (
               <Tooltip label={actualTreeVisible ? t("workspace.hideTree") : t("workspace.showTree")}>
                 <button

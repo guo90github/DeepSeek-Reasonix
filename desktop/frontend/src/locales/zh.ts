@@ -374,6 +374,7 @@ export const zh: Record<DictKey, string> = {
   "workspace.copyAbsolutePath": "复制绝对路径",
   "workspace.viewMode": "工作区视图",
   "workspace.filesTab": "文件",
+  "workspace.backToFiles": "返回文件树",
   "workspace.changedTab": "改动",
   "workspace.revertSessionFile": "撤销本任务对此文件的修改（恢复到 Reasonix 首次修改前）",
   "workspace.revertSessionFileShort": "撤销",
