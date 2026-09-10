@@ -34,6 +34,34 @@ const FINDING_KEYS = {
   omission: "audit.typeOmission",
 } as const;
 
+type FindingType = keyof typeof FINDING_KEYS;
+
+const ISSUE_DEFS: { key: FindingType; labelKey: (typeof FINDING_KEYS)[FindingType] }[] = [
+  { key: "contradiction", labelKey: "audit.typeContradiction" },
+  { key: "factual_error", labelKey: "audit.typeFactualError" },
+  { key: "invalid_inference", labelKey: "audit.typeInvalidInference" },
+  { key: "redundancy", labelKey: "audit.typeRedundancy" },
+  { key: "instruction_drift", labelKey: "audit.typeDrift" },
+  { key: "omission", labelKey: "audit.typeOmission" },
+];
+
+function issueCount(totals: ReasoningAuditTotals, key: FindingType): number {
+  switch (key) {
+    case "contradiction":
+      return totals.contradiction ?? 0;
+    case "factual_error":
+      return totals.factualError ?? 0;
+    case "invalid_inference":
+      return totals.invalidInference ?? 0;
+    case "redundancy":
+      return totals.redundancy ?? 0;
+    case "instruction_drift":
+      return totals.instructionDrift ?? 0;
+    case "omission":
+      return totals.omission ?? 0;
+  }
+}
+
 // AuditSection is a reusable collapsed block (header + chevron + optional body).
 function AuditSection({
   title,
@@ -74,10 +102,14 @@ function AuditMeta({ totals, t }: { totals: ReasoningAuditTotals; t: ReturnType<
   return <span className="audit__meta">{parts.join(" · ")}</span>;
 }
 
-// AuditVerdict is the audit deliverable: score + bar + pass/attention badge +
-// rationale (explanation) + per-issue findings.
+// AuditVerdict is the audit deliverable: score + bar + pass/attention badge,
+// the six failure-class cards (click to filter findings), then the rationale
+// and per-issue findings.
 function AuditVerdict({ totals, threshold, t }: { totals: ReasoningAuditTotals; threshold: number; t: ReturnType<typeof useT> }) {
   const low = totals.score < threshold;
+  const [filter, setFilter] = useState<FindingType | null>(null);
+  const findings = Array.isArray(totals.findings) ? totals.findings : [];
+  const visible = filter ? findings.filter((f) => f.type === filter) : findings;
   return (
     <div className="audit-result">
       <div className="audit-result__row">
@@ -85,14 +117,6 @@ function AuditVerdict({ totals, threshold, t }: { totals: ReasoningAuditTotals; 
           {totals.score.toFixed(2)}
         </span>
         <span className={`audit-badge${low ? " audit-badge--warn" : ""}`}>{low ? t("audit.attention") : t("audit.pass")}</span>
-        <span className="audit__issues">
-          {t("audit.contradiction", { n: String(totals.contradiction ?? 0) })} ·{" "}
-          {t("audit.factualError", { n: String(totals.factualError ?? 0) })} ·{" "}
-          {t("audit.invalidInference", { n: String(totals.invalidInference ?? 0) })} ·{" "}
-          {t("audit.redundancy", { n: String(totals.redundancy ?? 0) })} ·{" "}
-          {t("audit.drift", { n: String(totals.instructionDrift ?? 0) })} ·{" "}
-          {t("audit.omission", { n: String(totals.omission ?? 0) })}
-        </span>
         <AuditMeta totals={totals} t={t} />
       </div>
       <div
@@ -100,16 +124,36 @@ function AuditVerdict({ totals, threshold, t }: { totals: ReasoningAuditTotals; 
         style={{ background: `linear-gradient(to right, var(--accent) ${totals.score * 100}%, var(--border) ${totals.score * 100}%)` }}
         aria-hidden="true"
       />
+      <div className="audit-issues" role="group" aria-label={t("audit.issuesLabel")}>
+        {ISSUE_DEFS.map(({ key, labelKey }) => {
+          const count = issueCount(totals, key);
+          const active = filter === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              className={`audit-issue${count > 0 ? " has-issues" : ""}${active ? " is-active" : ""}`}
+              onClick={() => setFilter(active ? null : key)}
+              aria-pressed={active}
+            >
+              <span className="audit-issue__label">{t(labelKey)}</span>
+              <span className="audit-issue__count">{count}</span>
+            </button>
+          );
+        })}
+      </div>
       {totals.explanation && <p className="audit-result__evidence">{totals.explanation}</p>}
-      {Array.isArray(totals.findings) && totals.findings.length > 0 && (
+      {visible.length > 0 ? (
         <ul className="audit-findings">
-          {totals.findings.map((f, i) => (
+          {visible.map((f, i) => (
             <li key={i} className={`audit-finding is-${f.type}`}>
               <span className="audit-finding__tag">{t(FINDING_KEYS[f.type as keyof typeof FINDING_KEYS] ?? "audit.typeDrift")}</span>
               <span className="audit-finding__quote">“{f.quote}”</span>
             </li>
           ))}
         </ul>
+      ) : (
+        <p className="audit-findings__empty">{t("audit.findingsNone")}</p>
       )}
     </div>
   );
@@ -118,8 +162,8 @@ function AuditVerdict({ totals, threshold, t }: { totals: ReasoningAuditTotals; 
 // AuditModal shows one audit run in a centered modal. It owns the stream
 // lifecycle: subscribes on mount, cleans up on unmount (Escape / backdrop /
 // close button). The deliverable (verdict + evidence) leads, then the audited
-// input, then the technical trace (collapsed, live output) — so the run is
-// transparent without raw mechanics dominating.
+// input, then two independent sections — editable prompt and model output —
+// so a custom prompt can be tried and re-run without losing the trace.
 export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose: () => void }) {
   const t = useT();
   const [status, setStatus] = useState<AuditStatus>("loading");
@@ -129,7 +173,10 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
   const [totals, setTotals] = useState<ReasoningAuditTotals | null>(null);
   const [error, setError] = useState("");
   const [showInput, setShowInput] = useState(false);
-  const [showTech, setShowTech] = useState(false);
+  const [showPrompt, setShowPrompt] = useState(false);
+  const [showOutput, setShowOutput] = useState(false);
+  const [prompt, setPrompt] = useState("");
+  const [defaultPrompt, setDefaultPrompt] = useState("");
   const [threshold, setThreshold] = useState(0.6);
   const [dialogSize, setDialogSize] = useState(() => {
     const width = loadLayoutSize("auditDialogWidth", 680, (v) => clampAuditSize(v, 0).width);
@@ -147,6 +194,8 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
 
   const closeRef = useRef<HTMLButtonElement>(null);
   const streaming = status === "streaming";
+  const busy = status === "loading" || streaming;
+  const promptDirty = prompt !== defaultPrompt && defaultPrompt !== "";
 
   // Load the configured audit threshold for the pass / needs-attention badge.
   useEffect(() => {
@@ -179,20 +228,23 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
     closeRef.current?.focus();
   }, []);
 
-  // Keep the technical trace open while the model output streams, so progress
-  // is visible; it stays open afterwards but the user can collapse it.
+  // Keep the output section open while the model streams, so progress is
+  // visible; it stays open afterwards but the user can collapse it.
   useEffect(() => {
-    if (streaming) setShowTech(true);
+    if (streaming) setShowOutput(true);
   }, [streaming]);
 
   // Run the audit: subscribe to the stream and call the binding. The stream
   // events carry request/chunk/done; the resolved promise only means no error.
-  // On unmount we cancel in-flight handlers and unsubscribe.
+  // On unmount we cancel in-flight handlers and unsubscribe. Reruns reuse the
+  // same subscription via runAudit.
   useEffect(() => {
     let cancelled = false;
     const offRequest = onAuditRequest((_tabId, ev) => {
       if (cancelled) return;
       setRequest(ev);
+      setPrompt(ev.systemPrompt);
+      setDefaultPrompt((p) => (p === "" ? ev.systemPrompt : p));
       setStatus("streaming");
     });
     const offChunk = onAuditChunk((_tabId, ev: AuditChunkEvent) => {
@@ -205,7 +257,7 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
       setTotals(ev);
       setStatus("done");
     });
-    app.AuditTurn(reasoning).catch((err) => {
+    app.AuditTurn(reasoning, "").catch((err) => {
       if (cancelled) return;
       setError(err instanceof Error ? err.message : String(err));
       setStatus("error");
@@ -217,6 +269,18 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
       offDone();
     };
   }, [reasoning]);
+
+  const runAudit = (customPrompt: string) => {
+    setStatus("loading");
+    setThink("");
+    setText("");
+    setTotals(null);
+    setError("");
+    app.AuditTurn(reasoning, customPrompt).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+      setStatus("error");
+    });
+  };
 
   const hasThink = think.trim().length > 0;
 
@@ -335,13 +399,39 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
                 </AuditSection>
               )}
 
-              <AuditSection title={t("audit.technical")} open={showTech} onToggle={() => setShowTech((v) => !v)}>
-                {request && (
-                  <>
-                    <div className="audit-stage__label">{t("audit.requestPrompt")}</div>
-                    <pre className="audit-stage__pre">{request.systemPrompt}</pre>
-                  </>
-                )}
+              <AuditSection
+                title={t("audit.prompt")}
+                open={showPrompt}
+                onToggle={() => setShowPrompt((v) => !v)}
+                extra={promptDirty ? <span className="audit-prompt__dirty">{t("audit.promptEdited")}</span> : null}
+              >
+                <div className="audit-prompt-editor">
+                  <textarea
+                    className="audit-prompt-editor__textarea"
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    spellCheck={false}
+                    aria-label={t("audit.prompt")}
+                  />
+                  <div className="audit-prompt-editor__actions">
+                    <button
+                      type="button"
+                      className="audit-prompt-editor__rerun"
+                      onClick={() => runAudit(prompt)}
+                      disabled={busy || prompt.trim() === ""}
+                    >
+                      {t("audit.rerun")}
+                    </button>
+                    {promptDirty && (
+                      <button type="button" className="audit-prompt-editor__reset" onClick={() => setPrompt(defaultPrompt)}>
+                        {t("audit.resetPrompt")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </AuditSection>
+
+              <AuditSection title={t("audit.output")} open={showOutput} onToggle={() => setShowOutput((v) => !v)}>
                 {hasThink && (
                   <>
                     <div className="audit-stage__label">{t("audit.processReasoning")}</div>

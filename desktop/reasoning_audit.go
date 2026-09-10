@@ -30,15 +30,17 @@ type auditChunkEvent struct {
 }
 
 // AuditTurn manually audits the given reasoning chain with the configured audit
-// model. It is user-triggered only (no background auto-run) and streams the
-// whole run to the webview over events so the frontend is not a black box:
+// model. customSystemPrompt overrides the embedded evaluator prompt; empty
+// falls back to the default. It is user-triggered only (no background
+// auto-run) and streams the whole run to the webview over events so the
+// frontend is not a black box:
 //   - audit:request (tabID, {systemPrompt, input}) before the model call
 //   - audit:chunk   (tabID, {kind, chunk}) live as the model produces output
 //   - audit:done    (tabID, totals) once the verdict is final
 //
 // The resolved promise only means "no error"; audit:done is the completion
 // signal. Results are one-shot and never persisted.
-func (a *App) AuditTurn(reasoning string) (event.ReasoningAuditTotals, error) {
+func (a *App) AuditTurn(reasoning string, customSystemPrompt string) (event.ReasoningAuditTotals, error) {
 	reasoning = strings.TrimSpace(reasoning)
 	if reasoning == "" {
 		return event.ReasoningAuditTotals{}, fmt.Errorf("该回复没有可审计的思考过程")
@@ -63,6 +65,7 @@ func (a *App) AuditTurn(reasoning string) (event.ReasoningAuditTotals, error) {
 	totals, err := ctrl.AuditStream(
 		a.bootContext(),
 		reasoning,
+		customSystemPrompt,
 		func(systemPrompt, input string, truncated bool) {
 			a.runtimeEvents.Emit(a.ctx, "audit:request", tabID, auditRequestPayload{SystemPrompt: systemPrompt, Input: input, Truncated: truncated})
 		},

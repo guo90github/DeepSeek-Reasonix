@@ -575,7 +575,8 @@
       "kind": "owner-inputs",
       "resolver": "App.AuditTurn",
       "inputs": [
-        "reasoning"
+        "reasoning",
+        "customSystemPrompt"
       ]
     }
   },

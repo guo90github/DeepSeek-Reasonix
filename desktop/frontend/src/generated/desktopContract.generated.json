@@ -1112,6 +1112,9 @@
       "params": [
         {
           "kind": "string"
+        },
+        {
+          "kind": "string"
         }
       ],
       "result": {
@@ -1121,7 +1124,8 @@
       "returnsError": true,
       "scope": {
         "inputs": [
-          "reasoning"
+          "reasoning",
+          "customSystemPrompt"
         ],
         "kind": "owner-inputs",
         "resolver": "App.AuditTurn"

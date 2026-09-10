@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:8003b1f6da081602caee13cfa1579b9bb8997e83e48993a6c4252a5fae87d962";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:f157366987595f91cf0dd3c153cef0b4fa57d2f828052c37b38e64fece2e55b4";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -4280,7 +4280,7 @@ export interface GeneratedDesktopCommands {
   ApproveTabForTurn(arg0: string, arg1: string, arg2: string, arg3: string, arg4: boolean, arg5: boolean, arg6: boolean): Promise<void>;
   AttachDropped(arg0: string): Promise<DroppedItem>;
   AttachmentDataURL(arg0: string): Promise<string>;
-  AuditTurn(arg0: string): Promise<ReasoningAuditTotals>;
+  AuditTurn(arg0: string, arg1: string): Promise<ReasoningAuditTotals>;
   AuthenticateMCPServer(arg0: string): Promise<void>;
   AuthorizeAndConnectMCPServer(arg0: string): Promise<void>;
   AvailableSubagentTools(): Promise<ToolView[]>;

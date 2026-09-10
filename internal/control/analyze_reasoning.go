@@ -36,19 +36,21 @@ var reasoningAuditSystemPrompt = auditSystemPromptContent
 // the result and never enters the session history or provider-visible prefix.
 // It is a shadow utility: an error or evaluator failure never affects the turn.
 func (c *Controller) AnalyzeReasoning(ctx context.Context, reasoning string) (event.ReasoningAuditTotals, error) {
-	return c.AuditStream(ctx, reasoning, nil, nil, nil)
+	return c.AuditStream(ctx, reasoning, "", nil, nil, nil)
 }
 
-// AuditStream runs one audit and streams its progress. onRequest fires once
-// with the exact request params before the model call (truncated reports whether
-// the audited input was cut to reasoningAuditMaxChars); onReasoning fires per
-// thinking delta; onText fires per verdict-text delta. Text deltas stream live
-// even when the audit model runs with effort disabled (the final JSON verdict
-// still arrives as ChunkText), so the frontend renders the model's output as it
-// is produced instead of a black-box single result.
+// AuditStream runs one audit and streams its progress. systemPrompt overrides
+// the embedded evaluator prompt; empty falls back to the default. onRequest
+// fires once with the exact request params before the model call (truncated
+// reports whether the audited input was cut to reasoningAuditMaxChars);
+// onReasoning fires per thinking delta; onText fires per verdict-text delta.
+// Text deltas stream live even when the audit model runs with effort disabled
+// (the final JSON verdict still arrives as ChunkText), so the frontend renders
+// the model's output as it is produced instead of a black-box single result.
 func (c *Controller) AuditStream(
 	ctx context.Context,
 	reasoning string,
+	systemPrompt string,
 	onRequest func(systemPrompt, input string, truncated bool),
 	onReasoning func(string),
 	onText func(string),
@@ -60,6 +62,9 @@ func (c *Controller) AuditStream(
 	reasoning = strings.TrimSpace(reasoning)
 	if reasoning == "" {
 		return zero, fmt.Errorf("reasoning audit: empty reasoning")
+	}
+	if systemPrompt = strings.TrimSpace(systemPrompt); systemPrompt == "" {
+		systemPrompt = reasoningAuditSystemPrompt
 	}
 	c.mu.Lock()
 	modelRef := c.audit.model
@@ -77,7 +82,7 @@ func (c *Controller) AuditStream(
 		truncated = true
 	}
 	if onRequest != nil {
-		onRequest(reasoningAuditSystemPrompt, reasoning, truncated)
+		onRequest(systemPrompt, reasoning, truncated)
 	}
 
 	start := time.Now()
@@ -85,7 +90,7 @@ func (c *Controller) AuditStream(
 	defer cancel()
 	stream, err := p.Stream(requestCtx, provider.Request{
 		Messages: []provider.Message{
-			{Role: provider.RoleSystem, Content: reasoningAuditSystemPrompt},
+			{Role: provider.RoleSystem, Content: systemPrompt},
 			{Role: provider.RoleUser, Content: reasoning},
 		},
 		Temperature:    provider.TemperaturePtr(0),

@@ -24436,6 +24436,105 @@ body > .mermaid-diagram--fullscreen {
   font-style: italic;
   word-break: break-word;
 }
+.audit-findings__empty {
+  margin: 6px 0 0;
+  color: var(--text-3);
+  font-size: 11px;
+}
+.audit-issues {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+.audit-issue {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-2);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+.audit-issue:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.audit-issue.has-issues {
+  border-color: color-mix(in srgb, var(--warning, #e8a33d) 55%, transparent);
+  background: color-mix(in srgb, var(--warning, #e8a33d) 7%, transparent);
+}
+.audit-issue.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.audit-issue__label {
+  font-weight: 500;
+}
+.audit-issue__count {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--fg);
+}
+.audit-prompt-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.audit-prompt-editor__textarea {
+  width: 100%;
+  min-height: 140px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.audit-prompt-editor__textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.audit-prompt-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.audit-prompt-editor__rerun {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-fg, #fff);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.audit-prompt-editor__rerun:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.audit-prompt-editor__reset {
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+.audit-prompt__dirty {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--warning, #e8a33d);
+}
 .audit-truncated {
   font-size: 10px;
   font-style: italic;

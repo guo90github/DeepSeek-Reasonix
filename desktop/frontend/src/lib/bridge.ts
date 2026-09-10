@@ -633,7 +633,7 @@ export interface AppBindings extends ModelSettingsBindings, SessionCatalogBindin
   PickThemeBackground(): Promise<string>;
   SetDesktopLayoutStyle(style: string): Promise<void>;
   OptimizePrompt(text: string): Promise<string>;
-  AuditTurn(reasoning: string): Promise<import("../generated/desktopContract.generated").ReasoningAuditTotals>;
+  AuditTurn(reasoning: string, customSystemPrompt: string): Promise<import("../generated/desktopContract.generated").ReasoningAuditTotals>;
   SetAuditModel(name: string): Promise<void>;
   SetAuditThreshold(threshold: number): Promise<void>;
   SetAuditEffort(effort: string): Promise<void>;
@@ -2382,7 +2382,7 @@ function makeMockApp(): AppBindings {
   return {
     ...makeMockSessionCatalogBindings(cloneProjectTree),
     ...makeMockBlankProjectBindings(),
-    async AuditTurn(_reasoning: string) {
+    async AuditTurn(_reasoning: string, _customSystemPrompt: string) {
       throw new Error("AuditTurn unavailable in mock");
     },
     async SetAuditModel() {},
