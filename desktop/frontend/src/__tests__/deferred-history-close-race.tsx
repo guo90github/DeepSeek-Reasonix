@@ -12,6 +12,7 @@ type OlderHistoryState = {
   items: Array<{ kind: string; text?: string }>;
   historyOlderLoading: boolean;
   historyOlderError?: string;
+  historyRevision?: number;
 };
 
 export async function verifyStaleHistoryFingerprint({
@@ -31,12 +32,13 @@ export async function verifyStaleHistoryFingerprint({
   equal: (actual: unknown, expected: unknown, label: string) => void;
   getState: () => OlderHistoryState | undefined;
 }) {
+  const callsBefore = historyCalls();
   let olderLoad: Promise<boolean> | undefined;
   await act(async () => {
     olderLoad = loadOlderHistory();
     await flushPromises();
   });
-  await waitFor("tab-l older page request", () => historyCalls() === 2);
+  await waitFor("tab-l older page request", () => historyCalls() === callsBefore + 1);
   olderPage.resolve({
     ...historySliceFromMessages(
       "tab-l",
@@ -54,7 +56,50 @@ export async function verifyStaleHistoryFingerprint({
   const state = getState();
   equal(state?.items.some((item) => item.kind === "user" && item.text === "stale older L") ?? false, false, "stale older page is discarded after session fingerprint changes");
   equal(state?.historyOlderLoading, false, "stale older page releases its loading state");
-  equal(state?.historyOlderError, "history identity changed", "stale older page enters the explicit retry state instead of silently auto-retrying");
+  equal(state?.historyOlderError, undefined, "stale older page releases silently so the pane can re-request against the settled identity");
+}
+
+export async function verifyStaleOlderPageReloadAdoptsIdentity({
+  olderPage,
+  loadOlderHistory,
+  historyCalls,
+  waitFor,
+  flushPromises,
+  equal,
+  getState,
+}: {
+  olderPage: DeferredHistory;
+  loadOlderHistory: () => Promise<boolean> | undefined;
+  historyCalls: () => number;
+  waitFor: (label: string, predicate: () => boolean) => Promise<void>;
+  flushPromises: () => Promise<void>;
+  equal: (actual: unknown, expected: unknown, label: string) => void;
+  getState: () => OlderHistoryState | undefined;
+}) {
+  const callsBefore = historyCalls();
+  let olderLoad: Promise<boolean> | undefined;
+  await act(async () => {
+    olderLoad = loadOlderHistory();
+    await flushPromises();
+  });
+  await waitFor("tab-l stale-cursor older page request", () => historyCalls() === callsBefore + 1);
+  olderPage.resolve({
+    ...historySliceFromMessages(
+      "tab-l",
+      [{ role: "user", content: "stale cursor older L" }],
+      { cursor: "", turns: 12 },
+      { revision: 1, digest: "digest-l-v1" },
+    ),
+    stale: true,
+  });
+  await act(async () => {
+    await olderLoad;
+    await flushPromises();
+  });
+  const state = getState();
+  equal(state?.historyRevision, 3, "reload adopts the newest identity instead of an error banner");
+  equal(state?.historyOlderError, undefined, "reload never surfaces the identity-changed error");
+  equal(state?.items.some((item) => item.kind === "user" && item.text === "stale cursor older L") ?? false, false, "stale-cursor older rows are not spliced into the transcript");
 }
 
 export async function verifyDeferredHistoryCloseRace({
@@ -76,12 +121,13 @@ export async function verifyDeferredHistoryCloseRace({
   equal: (actual: unknown, expected: unknown, label: string) => void;
   sessionPath: string;
 }) {
+  const callsBefore = historyCalls();
   let closingOlderLoad: Promise<boolean> | undefined;
   await act(async () => {
     closingOlderLoad = loadOlderHistory();
     await flushPromises();
   });
-  await waitFor("tab-l closing older page request", () => historyCalls() === 3);
+  await waitFor("tab-l closing older page request", () => historyCalls() === callsBefore + 1);
 
   const transcriptStore = getTranscriptStore();
   const originalSetPinned = transcriptStore.setPinned.bind(transcriptStore);

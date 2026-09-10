@@ -5,7 +5,7 @@ import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import type { AppBindings } from "../lib/bridge";
 import { useController } from "../lib/useController";
-import { verifyDeferredHistoryCloseRace, verifyStaleHistoryFingerprint } from "./deferred-history-close-race";
+import { verifyDeferredHistoryCloseRace, verifyStaleHistoryFingerprint, verifyStaleOlderPageReloadAdoptsIdentity } from "./deferred-history-close-race";
 import { historySliceFromMessages } from "./mockHistorySlice";
 import type { BalanceInfo, CheckpointMeta, ContextInfo, EffortInfo, HistoryMessage, HistorySlice, HistorySliceRequest, JobView, Meta, TabMeta, TopicActivationEvent, TopicActivationRequest, WireEvent } from "../lib/types";
 import { installDesktopHostStub } from "./desktopHostStub";
@@ -270,7 +270,8 @@ const appStubTable = ({
         if (tabID === "tab-l") {
           historyLCalls += 1;
           if (req.cursor) return historyLOlder.promise;
-          const latest = historySliceFromMessages(tabID, [userMessage("newest L")], req, { revision: 1, digest: "digest-l-v1" });
+          const tab = tabsById.get("tab-l");
+          const latest = historySliceFromMessages(tabID, [userMessage("newest L")], req, { revision: tab?.sessionRevision ?? 1, digest: tab?.sessionDigest ?? "digest-l-v1" });
           return {
             ...latest,
             entries: latest.entries.map((entry) => ({ ...entry, entryId: "smock-tab-l:r1:m3:o0", order: 3, turn: 4 })),
@@ -898,6 +899,14 @@ await act(async () => {
 await waitFor("tab-l metadata advances", () => controller?.state.meta?.sessionRevision === 2);
 historyLOlder = deferred<HistorySlice>();
 await verifyStaleHistoryFingerprint({
+  olderPage: historyLOlder, loadOlderHistory: () => controller?.loadOlderHistory("tab-l"),
+  historyCalls: () => historyLCalls, waitFor, flushPromises, equal: eq,
+  getState: () => controller?.state,
+});
+
+tabsById.set("tab-l", { ...tabL, sessionRevision: 3, sessionDigest: "digest-l-v3" });
+historyLOlder = deferred<HistorySlice>();
+await verifyStaleOlderPageReloadAdoptsIdentity({
   olderPage: historyLOlder, loadOlderHistory: () => controller?.loadOlderHistory("tab-l"),
   historyCalls: () => historyLCalls, waitFor, flushPromises, equal: eq,
   getState: () => controller?.state,

@@ -3243,8 +3243,24 @@ export function useController() {
     const state = statesRef.current.get(targetTabId);
     if (!state?.historyHasOlder || state.historyOlderLoading || state.running) return false;
     const sessionPath = state.meta?.sessionPath ?? "";
-    const sessionRevision = state.meta?.sessionRevision ?? state.historyRevision;
-    const sessionDigest = state.meta?.sessionDigest ?? state.historyDigest;
+    // Meta and history both carry the session identity; prefer the newer so a
+    // settled reload adopted into historyRevision is not rejected because the
+    // meta channel lags behind it on the next request.
+    const preferredIdentity = (
+      metaRevision: number | undefined,
+      metaDigest: string | undefined,
+      histRevision: number | undefined,
+      histDigest: string | undefined,
+    ) => {
+      const preferMeta = metaRevision !== undefined && (histRevision === undefined || metaRevision > histRevision);
+      return {
+        revision: preferMeta ? metaRevision : histRevision,
+        digest: preferMeta ? metaDigest ?? histDigest : histDigest ?? metaDigest,
+      };
+    };
+    const identity = preferredIdentity(state.meta?.sessionRevision, state.meta?.sessionDigest, state.historyRevision, state.historyDigest);
+    const sessionRevision = identity.revision;
+    const sessionDigest = identity.digest;
     const pageBudget = historyPageRequestBudget(state.historyStartTurn, state.historyTotalTurns, targetTurn);
     const requestSeq = (historyOlderSeq.current.get(targetTabId) ?? 0) + 1;
     historyOlderSeq.current.set(targetTabId, requestSeq);
@@ -3259,46 +3275,16 @@ export function useController() {
       if (historyOlderSeq.current.get(targetTabId) !== requestSeq) return false;
       const current = statesRef.current.get(targetTabId);
       if (!current) return false;
-      const currentRevision = current?.meta?.sessionRevision ?? current?.historyRevision;
-      const currentDigest = current?.meta?.sessionDigest ?? current?.historyDigest;
-      const fingerprintMatches = (expected: number | undefined, actual: number | undefined) =>
-        expected === undefined || expected <= 0 ? true : actual === expected;
-      const digestMatches = (expected: string | undefined, actual: string | undefined) =>
-        !expected || actual === expected;
-      // A replace-level hydrate while the page was in flight clears
-      // historyOlderLoading; a metadata or canonical-identity change also
-      // makes the page belong to a different transcript generation.
-      const snapshotStale =
-        (current.meta?.sessionPath ?? "") !== sessionPath ||
-        !fingerprintMatches(sessionRevision, currentRevision) || !digestMatches(sessionDigest, currentDigest);
-      const resultStale =
-        result !== undefined &&
-        (!fingerprintMatches(sessionRevision, result.revisionKnown ? result.revision : undefined) ||
-          !digestMatches(sessionDigest, result.digest));
-      if (!current.historyOlderLoading || snapshotStale || resultStale) {
-        // Re-request once only when the request snapshot itself predates the
-        // settled identity (first-open restore race); a result-only mismatch
-        // is a genuinely stale page and gets the explicit retry surface.
-        if (snapshotStale && !historyOlderAutoRetried.current.get(targetTabId)) {
-          historyOlderAutoRetried.current.set(targetTabId, true);
-          setTimeout(() => { void loadOlderHistory(targetTabId, targetTurn, "retry"); }, 0);
+      // A reload means the store already saw the canonical identity move and
+      // re-primed from the newest page: it is the settled state, never a
+      // stale page to reject. Adopt it as a replace so historyRevision and
+      // historyDigest advance to the new identity.
+      if (result?.kind === "reload") {
+        if ((current.meta?.sessionPath ?? "") !== sessionPath) {
+          // The tab switched sessions while the request was in flight.
+          dispatchTo(targetTabId, { type: "history_older_error" });
           return false;
         }
-        dispatchTo(targetTabId, { type: "history_older_error", error: "history identity changed" });
-        return false;
-      }
-      if (!result) {
-        // Superseded (a rewrite or restore moved the store generation while
-        // this request was in flight) or nothing older exists. Neither is a
-        // user-facing failure: release the loading surface without an error
-        // banner — the newer page's own backfill drives the next request, and
-        // genuine fetch failures surface through the catch below.
-        dispatchTo(targetTabId, { type: "history_older_error" });
-        return false;
-      }
-      if (result.kind === "reload") {
-        // The cursor went stale (session rewritten): the store reloaded the
-        // latest page; replace instead of prepend.
         dispatchTo(targetTabId, {
           type: "history_replace",
           items: result.items,
@@ -3308,21 +3294,62 @@ export function useController() {
           revision: result.revisionKnown ? result.revision : undefined,
           digest: result.digest || undefined,
         });
-      } else {
-        dispatchTo(targetTabId, {
-          type: "history_prepend",
-          items: result.prependItems,
-          removeIds: result.removeIds,
-          startTurn: result.startTurn,
-          totalTurns: result.totalTurns,
-          hasOlder: result.hasOlder,
-          revision: result.revisionKnown ? result.revision : undefined,
-          digest: result.digest || undefined,
-        });
+        addBreadcrumb(
+          "tab.hydrate",
+          `history older ${targetTabId} trigger=${trigger} kind=reload items=${result.items.length} turns=${result.startTurn}-${result.endTurn}/${result.totalTurns} ms=${Date.now() - startedAt}`,
+        );
+        historyOlderAutoRetried.current.set(targetTabId, false);
+        return true;
       }
+      const currentIdentity = preferredIdentity(current.meta?.sessionRevision, current.meta?.sessionDigest, current.historyRevision, current.historyDigest);
+      const currentRevision = currentIdentity.revision;
+      const currentDigest = currentIdentity.digest;
+      const fingerprintMatches = (expected: number | undefined, actual: number | undefined) =>
+        expected === undefined || expected <= 0 ? true : actual === expected;
+      const digestMatches = (expected: string | undefined, actual: string | undefined) =>
+        !expected || actual === expected;
+      const snapshotStale =
+        (current.meta?.sessionPath ?? "") !== sessionPath ||
+        !fingerprintMatches(sessionRevision, currentRevision) || !digestMatches(sessionDigest, currentDigest);
+      const resultStale =
+        result !== undefined &&
+        (!fingerprintMatches(sessionRevision, result.revisionKnown ? result.revision : undefined) ||
+          !digestMatches(sessionDigest, result.digest));
+      if (!current.historyOlderLoading || snapshotStale || resultStale) {
+        // Re-request once when the request snapshot predates the settled
+        // identity (first-open restore race). Release the loading surface
+        // first, otherwise the re-entry guard rejects the retry.
+        if (snapshotStale && !historyOlderAutoRetried.current.get(targetTabId)) {
+          historyOlderAutoRetried.current.set(targetTabId, true);
+          dispatchTo(targetTabId, { type: "history_older_error" });
+          setTimeout(() => { void loadOlderHistory(targetTabId, targetTurn, "retry"); }, 0);
+          return false;
+        }
+        // Superseded by a concurrent replace, or the page belongs to another
+        // generation. Not a user-facing failure: release the surface so the
+        // pane's backfill effect re-requests against the settled identity.
+        dispatchTo(targetTabId, { type: "history_older_error" });
+        addBreadcrumb("tab.hydrate", `history older superseded ${targetTabId} trigger=${trigger}`);
+        return false;
+      }
+      if (!result) {
+        // Nothing older exists or the store generation moved; release silently.
+        dispatchTo(targetTabId, { type: "history_older_error" });
+        return false;
+      }
+      dispatchTo(targetTabId, {
+        type: "history_prepend",
+        items: result.prependItems,
+        removeIds: result.removeIds,
+        startTurn: result.startTurn,
+        totalTurns: result.totalTurns,
+        hasOlder: result.hasOlder,
+        revision: result.revisionKnown ? result.revision : undefined,
+        digest: result.digest || undefined,
+      });
       addBreadcrumb(
         "tab.hydrate",
-        `history older ${targetTabId} trigger=${trigger} kind=${result.kind} items=${result.kind === "prepend" ? result.prependItems.length : result.items.length} turns=${result.startTurn}-${result.endTurn}/${result.totalTurns} ms=${Date.now() - startedAt}`,
+        `history older ${targetTabId} trigger=${trigger} kind=prepend items=${result.prependItems.length} turns=${result.startTurn}-${result.endTurn}/${result.totalTurns} ms=${Date.now() - startedAt}`,
       );
       historyOlderAutoRetried.current.set(targetTabId, false);
       return true;
