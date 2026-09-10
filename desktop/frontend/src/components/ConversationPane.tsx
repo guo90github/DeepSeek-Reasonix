@@ -18,6 +18,7 @@ import { NoticeCard, SteerCard } from "./TranscriptCards";
 import { ExtensionCard } from "./ExtensionCard";
 import { LiveAwaitElapsed } from "./LiveAwaitElapsed";
 import { TurnBadge } from "./ProcessPane";
+import "./conversationPane.css";
 
 function ConversationTurnCard({
   turn,
@@ -48,11 +49,15 @@ function ConversationTurnCard({
 }) {
   const t = useT();
   const question = turn.user?.text ?? "";
+  // One status rail per card: the running turn outranks a failed submission,
+  // so both are findable without reading the text.
+  const status = turn.isActive ? "conversation-pane__turn--live" : turn.user?.failed ? "conversation-pane__turn--failed" : "";
   return (
     <article className={[
       "conversation-pane__turn",
       open ? "conversation-pane__turn--open" : "conversation-pane__turn--collapsed",
       mirrorActive ? "conversation-pane__turn--mirror" : "",
+      status,
     ].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
       <header className="conversation-pane__turn-head" role="button" tabIndex={0} aria-expanded={open} onClick={onToggle} onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
