@@ -10,7 +10,6 @@ shown inline under that message.
 ```toml
 [agent]
 audit_model = "deepseek-v4-pro"   # standalone evaluator; empty = off
-audit_enabled = true              # allow manual auditing
 audit_threshold = 0.6             # score below this is flagged "needs attention"
 audit_effort = "low"              # audit model's own thinking depth (off|low|medium|high)
 

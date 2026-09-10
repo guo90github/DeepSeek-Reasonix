@@ -635,11 +635,9 @@ export interface AppBindings extends ModelSettingsBindings, SessionCatalogBindin
   OptimizePrompt(text: string): Promise<string>;
   AuditTurn(reasoning: string): Promise<import("../generated/desktopContract.generated").ReasoningAuditTotals>;
   SetAuditModel(name: string): Promise<void>;
-  SetAuditEnabled(on: boolean): Promise<void>;
   SetAuditThreshold(threshold: number): Promise<void>;
   SetAuditEffort(effort: string): Promise<void>;
   GetAuditModel(): Promise<string>;
-  GetAuditEnabled(): Promise<boolean>;
   GetAuditThreshold(): Promise<number>;
   GetAuditEffort(): Promise<string>;
   SetDesktopZoomFactor(factor: number): Promise<void>;
@@ -1591,9 +1589,6 @@ function makeMockApp(): AppBindings {
     subagentModel: "",
     subagentEffort: "",
     auditModel: "",
-    auditEnabled: false,
-    auditThreshold: 0.6,
-    auditEffort: "",
     autoPlan: "off",
     providers: [
       { name: "deepseek", builtIn: true, added: deepSeekUpgradeMock, kind: "openai", baseUrl: "https://api.deepseek.com", modelsUrl: "", models: ["deepseek-v4-flash"], visionModels: [], visionModelsConfigured: false, default: "deepseek-v4-flash", apiKeyEnv: "DEEPSEEK_API_KEY", headers: deepSeekUpgradeMock ? { "X-Route": "official-custom" } : undefined, keySet: true, balanceUrl: "https://api.deepseek.com/user/balance", contextWindow: 1_000_000, reasoningProtocol: "", thinking: "enabled", webSearch: true, serverWebSearchCapability: true, supportedEfforts: ["disabled", "low", "high", "max"], defaultEffort: "high", recommendedUpgradeAvailable: false },
@@ -2391,14 +2386,10 @@ function makeMockApp(): AppBindings {
       throw new Error("AuditTurn unavailable in mock");
     },
     async SetAuditModel() {},
-    async SetAuditEnabled() {},
     async SetAuditThreshold() {},
     async SetAuditEffort() {},
     async GetAuditModel() {
       return "";
-    },
-    async GetAuditEnabled() {
-      return false;
     },
     async GetAuditThreshold() {
       return 0.6;

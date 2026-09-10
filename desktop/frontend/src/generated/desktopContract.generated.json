@@ -4017,24 +4017,6 @@
     {
       "cancellation": "before-dispatch",
       "domain": "desktop/audit_settings_app.go",
-      "name": "GetAuditEnabled",
-      "owner": "App.GetAuditEnabled",
-      "params": [],
-      "result": {
-        "kind": "boolean"
-      },
-      "scope": {
-        "inputs": [],
-        "kind": "owner-state",
-        "resolver": "App.GetAuditEnabled"
-      },
-      "sources": [
-        "desktop/audit_settings_app.go"
-      ]
-    },
-    {
-      "cancellation": "before-dispatch",
-      "domain": "desktop/audit_settings_app.go",
       "name": "GetAuditModel",
       "owner": "App.GetAuditModel",
       "params": [],
@@ -11037,28 +11019,6 @@
         ],
         "kind": "owner-inputs",
         "resolver": "App.SetAuditEffort"
-      },
-      "sources": [
-        "desktop/audit_settings_app.go"
-      ]
-    },
-    {
-      "cancellation": "before-dispatch",
-      "domain": "desktop/audit_settings_app.go",
-      "name": "SetAuditEnabled",
-      "owner": "App.SetAuditEnabled",
-      "params": [
-        {
-          "kind": "boolean"
-        }
-      ],
-      "returnsError": true,
-      "scope": {
-        "inputs": [
-          "on"
-        ],
-        "kind": "owner-inputs",
-        "resolver": "App.SetAuditEnabled"
       },
       "sources": [
         "desktop/audit_settings_app.go"
@@ -30336,24 +30296,6 @@
         },
         {
           "name": "auditModel",
-          "type": {
-            "kind": "string"
-          }
-        },
-        {
-          "name": "auditEnabled",
-          "type": {
-            "kind": "boolean"
-          }
-        },
-        {
-          "name": "auditThreshold",
-          "type": {
-            "kind": "number"
-          }
-        },
-        {
-          "name": "auditEffort",
           "type": {
             "kind": "string"
           }

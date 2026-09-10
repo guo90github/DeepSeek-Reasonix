@@ -11,11 +11,6 @@ func (a *App) SetAuditModel(name string) error {
 	return a.applyConfigOnly(func(c *config.Config) error { return c.SetAuditModel(name) })
 }
 
-// SetAuditEnabled toggles whether manual reasoning auditing is available.
-func (a *App) SetAuditEnabled(on bool) error {
-	return a.applyConfigOnly(func(c *config.Config) error { return c.SetAuditEnabled(on) })
-}
-
 // SetAuditThreshold sets the quality score below which an audit result is
 // flagged for attention.
 func (a *App) SetAuditThreshold(threshold float64) error {
@@ -35,15 +30,6 @@ func (a *App) GetAuditModel() string {
 		return ""
 	}
 	return cfg.Agent.AuditModel
-}
-
-// GetAuditEnabled reports whether reasoning auditing is enabled.
-func (a *App) GetAuditEnabled() bool {
-	cfg, err := config.Load()
-	if err != nil {
-		return false
-	}
-	return cfg.Agent.AuditEnabled
 }
 
 // GetAuditThreshold returns the audit attention threshold.

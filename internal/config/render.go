@@ -255,7 +255,6 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	if c.Agent.AuditModel != "" {
 		fmt.Fprintf(&b, "audit_model = %q   # standalone model behind the reasoning-quality analyser\n", c.Agent.AuditModel)
 	}
-	fmt.Fprintf(&b, "audit_enabled = %v   # audit each turn's reasoning with AuditModel\n", c.Agent.AuditEnabled)
 	fmt.Fprintf(&b, "audit_threshold = %g   # score below this surfaces the tab for attention\n", c.Agent.AuditThreshold)
 	if c.Agent.AuditEffort != "" {
 		fmt.Fprintf(&b, "audit_effort = %q   # reasoning depth for the audit model (off|low|medium|high)\n", c.Agent.AuditEffort)

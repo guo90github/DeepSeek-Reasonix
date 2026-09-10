@@ -150,12 +150,6 @@ func (c *Config) SetAuditModel(name string) error {
 	return nil
 }
 
-// SetAuditEnabled toggles whether reasoning auditing is available.
-func (c *Config) SetAuditEnabled(on bool) error {
-	c.Agent.AuditEnabled = on
-	return nil
-}
-
 // SetAuditThreshold sets the quality score (0..1) below which an audit result
 // is flagged for attention.
 func (c *Config) SetAuditThreshold(threshold float64) error {

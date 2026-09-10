@@ -1831,8 +1831,6 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			}
 			return entry.RateCardForModel(entry.Model), true
 		},
-		AuditEnabled:                   cfg.Agent.AuditEnabled,
-		AuditThreshold:                 cfg.Agent.AuditThreshold,
 		AuditEffort:                    cfg.Agent.AuditEffort,
 		ModelCapabilityResolver:        modelCapabilities.Resolve,
 		SystemPrompt:                   sysPrompt,

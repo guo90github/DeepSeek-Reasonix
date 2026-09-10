@@ -1262,9 +1262,8 @@ type AgentConfig struct {
 	// empty means off. Like PromptOptimizeModel it must never run on the session
 	// model, and it is an independent provider instance via AuditProviderResolver.
 	AuditModel string `toml:"audit_model"`
-	// AuditEnabled gates per-turn reasoning auditing. AuditThreshold is the
-	// score (0..1) below which a tab surface is surfaced for attention.
-	AuditEnabled   bool    `toml:"audit_enabled"`
+	// AuditThreshold is the score (0..1) below which an audit result surfaces
+	// for attention. Auditing itself is always available.
 	AuditThreshold float64 `toml:"audit_threshold"`
 	// AuditEffort is the reasoning-depth level the audit model itself uses when
 	// scoring (off/low/medium/high/provider-default). Empty = auto/provider default.

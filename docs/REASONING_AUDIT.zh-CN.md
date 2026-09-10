@@ -7,7 +7,6 @@ Reasonix 用**独立 evaluator 模型**分析一条回复的思考链质量—�
 ```toml
 [agent]
 audit_model = "deepseek-v4-pro"   # 独立评估模型；留空 = 关闭
-audit_enabled = true              # 允许手动审计
 audit_threshold = 0.6             # 低于此评分标记为"需关注"
 audit_effort = "low"              # 审计模型自身的思考深度 (off|low|medium|high)
 

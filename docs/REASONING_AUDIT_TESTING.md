@@ -10,7 +10,6 @@ Run it against the packaged client that contains the feature.
 ```toml
 [agent]
 audit_model = "<your evaluator model ref>"   # e.g. "deepseek-v4-pro"; must be non-empty
-audit_enabled = true
 audit_threshold = 0.6
 
 [notifications]
@@ -152,4 +151,3 @@ With correct config but no red dot, check in order:
 1. `audit_model` is non-empty and valid (most common cause).
 2. The turn actually produced a **reasoning chain** (`Message.Reasoning` non-empty) — a turn without thinking is not audited (`turnReasoning` empty returns early).
 3. The score is truly below `audit_threshold` (a healthy turn rightly shows no red dot).
-4. `audit_enabled` is `true`.

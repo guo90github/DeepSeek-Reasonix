@@ -8,7 +8,6 @@
 ```toml
 [agent]
 audit_model = "<你的评估模型 ref>"   # 例如 "deepseek-v4-pro"；必须非空
-audit_enabled = true
 audit_threshold = 0.6
 
 [notifications]
@@ -143,4 +142,3 @@ audit_below = true        # 低于阈值发送系统通知
 1. `audit_model` 是否非空且有效（最常见原因）。
 2. 该回合是否真产生了**思考链**（`Message.Reasoning` 非空）——无思考则不审计（`turnReasoning` 为空直接返回）。
 3. 分数是否真的 < `audit_threshold`（健康回合本就不该有红点）。
-4. `audit_enabled` 是否为 `true`。

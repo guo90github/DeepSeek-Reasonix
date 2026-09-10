@@ -47,8 +47,7 @@ func auditTestController(t *testing.T, stub *reasoningAuditTestProvider) *Contro
 		// auditModel ref is resolved.
 		selection: modelSelection{ref: "session/model"},
 		audit: auditConfig{
-			model:   "audit/qwen",
-			enabled: true,
+			model: "audit/qwen",
 			providerResolver: func(ref string) (provider.Provider, error) {
 				return stub, nil
 			},
@@ -92,19 +91,21 @@ func TestAnalyzeReasoningRunsOnDedicatedModel(t *testing.T) {
 	}
 }
 
-func TestAnalyzeReasoningGatedByAuditEnabled(t *testing.T) {
+func TestAnalyzeReasoningRequiresModelAndResolver(t *testing.T) {
 	stub := &reasoningAuditTestProvider{verdict: `{"score":0.9}`}
-	disabled := &Controller{audit: auditConfig{model: "audit/qwen", enabled: false, providerResolver: func(string) (provider.Provider, error) { return stub, nil }}}
-	if _, err := disabled.AnalyzeReasoning(context.Background(), "hi"); err == nil {
-		t.Fatal("expected disabled error")
-	}
-	unconfigured := &Controller{audit: auditConfig{enabled: true}}
+	// Auditing has no enable gate; a missing model or resolver is still an
+	// error rather than a silent skip.
+	unconfigured := &Controller{audit: auditConfig{providerResolver: func(string) (provider.Provider, error) { return stub, nil }}}
 	if _, err := unconfigured.AnalyzeReasoning(context.Background(), "hi"); err == nil {
 		t.Fatal("expected unconfigured-model error")
 	}
-	noResolver := &Controller{audit: auditConfig{enabled: true, model: "audit/qwen"}}
+	noResolver := &Controller{audit: auditConfig{model: "audit/qwen"}}
 	if _, err := noResolver.AnalyzeReasoning(context.Background(), "hi"); err == nil {
 		t.Fatal("expected missing-resolver error")
+	}
+	configured := &Controller{audit: auditConfig{model: "audit/qwen", providerResolver: func(string) (provider.Provider, error) { return stub, nil }}, sink: event.Discard}
+	if _, err := configured.AnalyzeReasoning(context.Background(), "hi"); err != nil {
+		t.Fatalf("auditing must run without an enable gate: %v", err)
 	}
 }
 

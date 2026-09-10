@@ -2147,18 +2147,6 @@
       "inputs": []
     }
   },
-  "GetAuditEnabled": {
-    "domain": "desktop/audit_settings_app.go",
-    "owner": "App.GetAuditEnabled",
-    "sources": [
-      "desktop/audit_settings_app.go"
-    ],
-    "scope": {
-      "kind": "owner-state",
-      "resolver": "App.GetAuditEnabled",
-      "inputs": []
-    }
-  },
   "GetAuditModel": {
     "domain": "desktop/audit_settings_app.go",
     "owner": "App.GetAuditModel",
@@ -5978,20 +5966,6 @@
       "resolver": "App.SetAuditEffort",
       "inputs": [
         "effort"
-      ]
-    }
-  },
-  "SetAuditEnabled": {
-    "domain": "desktop/audit_settings_app.go",
-    "owner": "App.SetAuditEnabled",
-    "sources": [
-      "desktop/audit_settings_app.go"
-    ],
-    "scope": {
-      "kind": "owner-inputs",
-      "resolver": "App.SetAuditEnabled",
-      "inputs": [
-        "on"
       ]
     }
   },

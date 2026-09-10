@@ -94,15 +94,12 @@ var errNoSessionPath = errors.New("session has content but no session path; conv
 
 // auditConfig groups the reasoning-quality audit coupling on a Controller into
 // one lifetime so the struct-state ratchet counts it as a single field: the
-// dedicated audit model, its resolver, the pricing rate card, the enabled gate,
-// and the attention threshold share the controller's lifetime and are swapped
-// together.
+// dedicated audit model, its resolver and the pricing rate card share the
+// controller's lifetime and are swapped together.
 type auditConfig struct {
 	model            string
 	providerResolver func(string) (provider.Provider, error)
 	rateCard         func() (billing.RateCard, bool)
-	enabled          bool
-	threshold        float64
 	effort           string // reasoning depth for the audit model; "" = auto
 }
 
@@ -531,18 +528,14 @@ type Options struct {
 	// by boot; the optimizer never runs on the session model.
 	PromptOptimizeModel            string
 	PromptOptimizeProviderResolver func(string) (provider.Provider, error)
-	// AuditModel is the standalone model behind the per-turn reasoning-quality
-	// analyser; empty or AuditEnabled=false disables auditing. The resolver is
-	// assembled by boot; the analyser never runs on the session model.
+	// AuditModel is the standalone model behind the reasoning-quality
+	// analyser; empty means off. The resolver is assembled by boot; the
+	// analyser never runs on the session model.
 	AuditModel            string
 	AuditProviderResolver func(string) (provider.Provider, error)
 	// AuditRateCardResolver resolves the audit model's price table for cost
 	// estimation; nil disables cost accounting for the audit call.
 	AuditRateCardResolver func() (billing.RateCard, bool)
-	// AuditEnabled gates per-turn reasoning auditing; AuditThreshold is the
-	// score (0..1) below which a turn's audit surfaces for attention.
-	AuditEnabled   bool
-	AuditThreshold float64
 	// AuditEffort is the reasoning-depth the audit model itself uses when
 	// scoring; empty = auto/provider default.
 	AuditEffort string
@@ -750,8 +743,6 @@ func New(opts Options) *Controller {
 			model:            strings.TrimSpace(opts.AuditModel),
 			providerResolver: opts.AuditProviderResolver,
 			rateCard:         opts.AuditRateCardResolver,
-			enabled:          opts.AuditEnabled,
-			threshold:        opts.AuditThreshold,
 			effort:           strings.ToLower(strings.TrimSpace(opts.AuditEffort)),
 		},
 		visionModel:                       strings.TrimSpace(opts.VisionModel),

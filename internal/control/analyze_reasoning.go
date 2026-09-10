@@ -62,15 +62,11 @@ func (c *Controller) AuditStream(
 		return zero, fmt.Errorf("reasoning audit: empty reasoning")
 	}
 	c.mu.Lock()
-	audited := c.audit.enabled
 	modelRef := c.audit.model
 	resolver := c.audit.providerResolver
 	rateCard := c.audit.rateCard
 	effort := c.audit.effort
 	c.mu.Unlock()
-	if !audited {
-		return zero, fmt.Errorf("reasoning audit: disabled")
-	}
 	p, err := c.resolveStandaloneModel("reasoning audit", modelRef, resolver)
 	if err != nil {
 		return zero, err

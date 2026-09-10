@@ -337,9 +337,6 @@ type SettingsView struct {
 	SubagentModel                string               `json:"subagentModel"`
 	SubagentEffort               string               `json:"subagentEffort"`
 	AuditModel                   string               `json:"auditModel"`
-	AuditEnabled                 bool                 `json:"auditEnabled"`
-	AuditThreshold               float64              `json:"auditThreshold"`
-	AuditEffort                  string               `json:"auditEffort"`
 	AutoPlan                     string               `json:"autoPlan"`
 	Providers                    []ProviderView       `json:"providers"`
 	OfficialProviders            []ProviderView       `json:"officialProviders"`
@@ -1086,17 +1083,14 @@ func (a *App) Settings() SettingsView {
 	}
 	ctrl := a.activeCtrl()
 	v := SettingsView{
-		ModelSettingsFingerprint: modelSettingsEditFingerprint(cfg),DefaultModel:        cfg.DefaultModel,
-		PlannerModel:        cfg.Agent.PlannerModel,
-		VisionModel:         cfg.Agent.VisionModel,WebSearchModel:           cfg.Agent.WebSearchModel,
-		WebSearchModels:          []string{},
+		ModelSettingsFingerprint: modelSettingsEditFingerprint(cfg), DefaultModel: cfg.DefaultModel,
+		PlannerModel: cfg.Agent.PlannerModel,
+		VisionModel:  cfg.Agent.VisionModel, WebSearchModel: cfg.Agent.WebSearchModel,
+		WebSearchModels:     []string{},
 		PromptOptimizeModel: cfg.Agent.PromptOptimizeModel,
 		SubagentModel:       cfg.Agent.SubagentModel,
 		SubagentEffort:      cfg.Agent.SubagentEffort,
 		AuditModel:          cfg.Agent.AuditModel,
-		AuditEnabled:        cfg.Agent.AuditEnabled,
-		AuditThreshold:      cfg.Agent.AuditThreshold,
-		AuditEffort:         cfg.Agent.AuditEffort,
 		AutoPlan:            "off", // deprecated JSON compatibility for older frontends
 		Providers:           []ProviderView{},
 		OfficialProviders:   []ProviderView{},
