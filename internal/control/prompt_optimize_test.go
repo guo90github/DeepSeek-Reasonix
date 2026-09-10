@@ -37,7 +37,7 @@ func optimizeTestController(t *testing.T, stub *promptOptimizeTestProvider, sess
 	c := &Controller{
 		// The session model must never be the optimizer: only the dedicated
 		// promptOptimizeModel ref is resolved.
-		modelRef:            "session/model",
+		selection:           modelSelection{ref: "session/model"},
 		promptOptimizeModel: "opt/qwen",
 		promptOptimizeProviderResolver: func(ref string) (provider.Provider, error) {
 			resolvedRef = ref
@@ -120,7 +120,7 @@ func TestOptimizePromptRejectsEmptyInputAndUnconfiguredModel(t *testing.T) {
 	if _, err := c.OptimizePrompt(context.Background(), "   "); err == nil {
 		t.Fatal("expected empty-input error")
 	}
-	unconfigured := &Controller{modelRef: "session/model"}
+	unconfigured := &Controller{selection: modelSelection{ref: "session/model"}}
 	if _, err := unconfigured.OptimizePrompt(context.Background(), "hi"); err == nil {
 		t.Fatal("expected unconfigured-model error")
 	}

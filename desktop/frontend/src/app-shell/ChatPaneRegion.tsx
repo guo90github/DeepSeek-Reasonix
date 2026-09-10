@@ -1,11 +1,13 @@
 import { lazy, Suspense } from "react";
 import { Transcript, type TranscriptProps } from "../components/Transcript";
+import { SessionRecoveryBanner, SessionRecoveryPlaceholder } from "../components/SessionRecoveryBanner";
 import { NoticePreviewPanel, noticePreviewMockEnabled } from "./NoticePreviewPanel";
 import type { SidebarImConnection } from "../app-runtime/sidebarImProjection";
 import type { TabMeta } from "../lib/types";
 import type { State } from "../lib/useController";
 import type { RemoteSessionApi } from "../lib/useRemoteSession";
 import type { Translator } from "../lib/i18n";
+import type { SessionAvailability } from "../lib/sessionAvailability";
 
 const RemoteSessionSurface = lazy(() => import("../components/RemoteSessionSurface").then((module) => ({ default: module.RemoteSessionSurface })));
 const SplitWorkspace = lazy(() => import("../components/SplitWorkspace").then((module) => ({ default: module.SplitWorkspace })));
@@ -28,6 +30,8 @@ export type ChatPaneTranscriptInput = {
   hydratePlaceholderActive: boolean;
   clearContextPending: boolean;
   creation: boolean;
+  emptyHero?: boolean;
+  availability: SessionAvailability;
   rewind: {
     stateActive: boolean;
     committing: boolean;
@@ -48,7 +52,7 @@ export type ChatPaneRegionProps = {
   } | null;
   remote: { tab: TabMeta; session: RemoteSessionApi } | undefined;
   transcript: ChatPaneTranscriptInput;
-  onRetryHistory: () => void;
+  onRetryHistory: () => Promise<unknown>;
   commands: {
     onPrompt: TranscriptProps["onPrompt"];
     onDeliveryContinue: TranscriptProps["onDeliveryContinue"];
@@ -103,7 +107,17 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
       </main>
     );
   }
+  const noticePreview = noticePreviewMockEnabled();
+  if (props.remote && !(props.imDetail && !transitioning) && !noticePreview) {
+    return <Suspense fallback={null}><RemoteSessionSurface tab={props.remote.tab} session={props.remote.session}
+      surfaceCommitToken={transcript.surfaceCommitToken} onSurfacePaintReady={commands.onSurfacePaintReady} /></Suspense>;
+  }
+  const recoveringEmpty = !transitioning && transcript.availability.kind !== "ready" && transcript.items.length === 0
+    && !state.live?.text && !state.live?.reasoning;
   return (
+    <>
+    {!transitioning && !props.imDetail && !noticePreview && <SessionRecoveryBanner key={transcript.tabId}
+      availability={transcript.availability} onRetry={props.onRetryHistory} />}
     <main className="main">
       {props.imDetail && !transitioning ? (
         <SidebarImConnectionDetail
@@ -113,11 +127,8 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
           onManageAllowlist={() => props.imDetail!.onManageAllowlist(props.imDetail!.connection.connectionId)}
           onOpenSession={() => props.imDetail!.onOpenSession(props.imDetail!.connection)}
         />
-      ) : noticePreviewMockEnabled() ? (
+      ) : noticePreview ? (
         <NoticePreviewPanel />
-      ) : props.remote ? (
-        <Suspense fallback={null}><RemoteSessionSurface tab={props.remote.tab} session={props.remote.session}
-          surfaceCommitToken={transcript.surfaceCommitToken} onSurfacePaintReady={commands.onSurfacePaintReady} /></Suspense>
       ) : (
         <>
           <div className="transcript-navigation-surface" aria-busy={transitioning}>
@@ -129,7 +140,7 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
                 (node as HTMLElement & { inert?: boolean }).inert = transitioning;
               }}
             >
-              <Transcript
+              {recoveringEmpty ? <SessionRecoveryPlaceholder availability={transcript.availability} /> : <Transcript
                 items={transcript.items}
                 live={transitioning ? undefined : state.live}
                 liveStore={transcript.liveStore}
@@ -150,7 +161,7 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
                 turnStartAt={state.turnStartAt}
                 contentRevision={state.historyLayoutRevision}
                 historyMutation={state.historyMutation}
-                welcomeVariant={transcript.creation ? "creation" : "default"}
+                welcomeVariant={transcript.creation || transcript.emptyHero ? "creation" : "default"}
                 creationMode={transcript.creation}
                 actionHoverMenus={transcript.creation && !transcript.hydratePlaceholderActive && !transitioning}
                 rewindSignal={rewind.signal}
@@ -165,7 +176,7 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
                 invocationMetadata={transcript.invocationMetadata}
                 surfaceCommitToken={transcript.surfaceCommitToken}
                 onSurfacePaintReady={commands.onSurfacePaintReady}
-              />
+              />}
             </div>
             {transitioning ? (
               <div className="transcript-navigation-overlay" role="status" aria-live="polite">
@@ -174,9 +185,9 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
               </div>
             ) : null}
           </div>
-          {!transitioning && state.hydrateError ? <div className="history-load-error" role="alert"><span>{state.hydrateError}</span><button type="button" className="btn btn--small" onClick={props.onRetryHistory}>{t("common.retry")}</button></div> : null}
         </>
       )}
     </main>
+    </>
   );
 }

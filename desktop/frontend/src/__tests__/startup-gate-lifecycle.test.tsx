@@ -5,14 +5,15 @@ import { JSDOM } from "jsdom";
 import { StartupGateLifecycle } from "../app-runtime/StartupGateLifecycle";
 import { useAppNavigationStore } from "../store/appNavigation";
 import { useOverlayStore } from "../store/overlays";
+import { installDesktopHostStub } from "./desktopHostStub";
 
 const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost" });
 Object.assign(globalThis, { window: dom.window, document: dom.window.document,
   localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
 const pending: Array<(needs: boolean) => void> = [];
-Object.defineProperty(window, "go", { value: { main: { App: {
+installDesktopHostStub({
   NeedsOnboarding: () => new Promise<boolean>((resolve) => { pending.push(resolve); }),
-} } }, configurable: true });
+});
 async function mount() {
   localStorage.clear();
   useAppNavigationStore.setState({ page: { kind: "workspace" }, generation: 0, settingsFocus: null });
@@ -28,7 +29,7 @@ try {
   assert.equal(useOverlayStore.getState().providerSetupNeeded, false, "retired StrictMode probe cannot publish");
   await act(async () => pending.shift()!(true));
   assert.deepEqual(useAppNavigationStore.getState().settingsFocus, { target: "model-access", onboarding: true });
-  assert.deepEqual(useAppNavigationStore.getState().page, { kind: "settings", tab: "models" });
+  assert.deepEqual(useAppNavigationStore.getState().page, { kind: "settings", tab: "providers" });
   await act(async () => root.unmount());
 
   root = await mount();

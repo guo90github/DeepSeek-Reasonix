@@ -6,6 +6,7 @@ import (
 )
 
 func newFromConfig(cfg provider.Config) (provider.Provider, error) {
+	cfg = provider.ApplyOpenCodeGoContract("responses", cfg)
 	effort, _ := cfg.Extra["effort"].(string)
 	mode, _ := cfg.Extra["mode"].(string)
 	webSearch, _ := cfg.Extra["web_search"].(bool)
@@ -22,7 +23,8 @@ func newFromConfig(cfg provider.Config) (provider.Provider, error) {
 	maxOutputTokens, _ := cfg.Extra["max_output_tokens"].(int)
 	requestURL, _ := cfg.Extra["request_url"].(string)
 	return New(Config{
-		Name: cfg.Name, APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model,
+		HTTPClient: cfg.HTTPClient,
+		Name:       cfg.Name, DisplayName: cfg.DisplayName, Protocol: cfg.Protocol, APIKey: cfg.APIKey, BaseURL: cfg.BaseURL, Model: cfg.Model,
 		ModelInfo: cfg.ModelInfo,
 		Effort:    effort, Mode: mode, Stateful: stateful, WebSearch: webSearch, Proxy: proxy,
 		KeyEnv: keyEnv, KeySource: keySource, MaxOutputTokens: maxOutputTokens, RequestURL: requestURL,

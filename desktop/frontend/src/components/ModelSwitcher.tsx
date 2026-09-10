@@ -1,6 +1,6 @@
 import { formatTokens } from "../lib/format";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Brain, Check, ChevronsUpDown, Search, Settings } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Brain, Check, ChevronDown, Cpu, Search, Settings } from "lucide-react";
 import { asArray } from "../lib/array";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
@@ -13,11 +13,21 @@ import { Tooltip } from "./Tooltip";
 export function ModelSwitcher({
   label,
   tabId,
+  ready = true,
+  sessionKey,
   onPick,
   onManage,
+  detailLabel,
+  details,
+  composerMenu = false,
 }: {
   label: string;
+  detailLabel?: string;
+  details?: ReactNode;
+  composerMenu?: boolean;
   tabId?: string;
+  ready?: boolean;
+  sessionKey?: string;
   onPick: (name: string) => boolean | Promise<boolean>;
   onManage?: () => void;
 }) {
@@ -64,7 +74,7 @@ export function ModelSwitcher({
 
   useEffect(() => {
     void loadModels();
-  }, [loadModels]);
+  }, [loadModels, ready, sessionKey, label]);
 
   useEffect(() => {
     const refresh = () => void loadModels();
@@ -108,7 +118,7 @@ export function ModelSwitcher({
     const cur = models.find((m) => m.current) ?? models.find((m) => m.model === label || m.ref === label);
     return cur ? (cur.displayName?.trim() || providerLabel(cur.provider, t)) : null;
   }, [label, models, t]);
-  const triggerLabel = currentProvider ? `${label} · ${currentProvider}` : label;
+  const triggerLabel = [label, currentProvider, detailLabel].filter(Boolean).join(" · ");
 
   const pick = (model: ModelInfo) => {
     setOpen(false);
@@ -167,17 +177,17 @@ export function ModelSwitcher({
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
         >
-          <Brain size={14} className="modelsw__kind" />
-          <span className="modelsw__label">{label}</span>
-          <ChevronsUpDown size={11} />
+          <Cpu size={14} className="modelsw__kind" />
+          <span className="modelsw__label">{label}{detailLabel && <span className="modelsw__detail"> · {detailLabel}</span>}</span>
+          <ChevronDown size={12} />
         </button>
       </Tooltip>
       <AnchoredPopover
         open={open}
         anchorRef={triggerRef}
         onClose={() => setOpen(false)}
-        className="modelsw__menu modelsw__menu--portal"
-        style={{ minWidth: Math.max(triggerWidth || 200, 200), maxWidth: "min(90vw, 480px)" }}
+        className={`modelsw__menu modelsw__menu--portal${composerMenu ? " composer-menu-surface" : ""}`}
+        style={composerMenu ? undefined : { minWidth: Math.max(triggerWidth || 200, 200), maxWidth: "min(90vw, 480px)" }}
       >
         <div role="listbox">
           <div className="modelsw__search" role="presentation">
@@ -220,6 +230,7 @@ export function ModelSwitcher({
             </div>
           ))}
         </div>
+        {details}
         {onManage && <button className="modelsw__item modelsw__manage" type="button" onClick={() => { setOpen(false); onManage(); }}><Settings size={14} />{t("providerUI.manageModels")}</button>}
       </AnchoredPopover>
     </div>

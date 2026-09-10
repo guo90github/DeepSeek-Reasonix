@@ -247,9 +247,10 @@ export type ComposerSurfaceInput = {
     runtimeTransitioning: boolean;
     controllerReady: boolean;
     showContextWindowRing: boolean;
+    submitDisabledReason?: string;
   };
   base: ComposerBase;
-  tab: { readOnly?: boolean; floorInferred?: boolean } | undefined;
+  tab: { readOnly?: boolean; floorInferred?: boolean; sessionPath?: string; remote?: { hostId: string; workspace: string } } | undefined;
   tabId: string | undefined;
   profile: ReturnType<typeof useComposerProfileProjection>;
   router: { handleSend: ComposerProps["onSend"]; handleSteer: ComposerProps["onSteer"] };
@@ -313,12 +314,16 @@ export function buildComposerSurface(input: ComposerSurfaceInput): DecisionFoote
       readOnly: Boolean(input.tab?.readOnly),
       disabled: view.runtimeTransitioning || view.rewindCommitting || view.messageActionPending || view.decisionActive,
       submitDisabled: view.remote ? !remoteComposer.ready || !remoteComposer.profileReady : !view.controllerReady,
+      submitDisabledReason: view.submitDisabledReason,
       decisionPending: view.rewindCommitting || view.messageActionPending || view.decisionActive,
       ready: view.remote ? remoteComposer.ready && remoteComposer.profileReady : view.controllerReady,
       liveStore: view.remote ? remoteComposer.liveStore : input.localLiveStore,
       suspendedByDecision: view.decisionActive,
       transientDismissSignal: input.transientDismissSignal,
       sessionKey: input.sessionKey,
+      inboxSessionPath: input.tab?.sessionPath,
+      inboxHostId: input.tab?.remote?.hostId,
+      inboxWorkspace: input.tab?.remote?.workspace,
       workspaceScopeKey: input.workspaceScopeKey,
       fileRefRefreshKey: input.fileRefRefreshKey,
       guidanceConsumedKey: input.guidance?.key,
@@ -326,7 +331,7 @@ export function buildComposerSurface(input: ComposerSurfaceInput): DecisionFoote
       guidanceConsumedText: input.guidance?.text,
       guidanceQueuePreviewItems: input.guidanceQueuePreviewItems,
       showContextWindowRing: view.showContextWindowRing,
-      heroMode: view.hero,
+      heroMode: view.hero && view.showContextWindowRing,
     },
   };
 }

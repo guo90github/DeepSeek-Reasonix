@@ -60,6 +60,7 @@ func init() {
 
 // New builds an OpenAI-compatible provider from a resolved config.
 func New(cfg provider.Config) (provider.Provider, error) {
+	cfg = provider.ApplyOpenCodeGoContract("openai", cfg)
 	if cfg.BaseURL == "" {
 		return nil, fmt.Errorf("openai: base_url is required for provider %q", cfg.Name)
 	}
@@ -100,8 +101,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 	if cfg.ModelInfo != nil {
 		vision = modelInfo.SupportsInput(provider.ModalityImage)
 	}
-	// Official DeepSeek image input is pinned to one SKU even when a catalog
-	// or gateway metadata entry claims otherwise.
+	// Keep known text-only models blocked; unknown models use declared capability.
 	vision = DeepSeekImageInputAllowed(officialDeepSeek, chatURL, cfg.Model, cfg.ModelInfo != nil, vision)
 	if vision {
 		modelInfo.InputModalities = []provider.ModelModality{provider.ModalityText, provider.ModalityImage}
@@ -238,6 +238,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		identityHeaders: provider.NewClientIdentityHeaders(),
 		reasoningState:  reasoningState{ollamaCloud: ollamaCloud, thinkingLocked: configuredThinkingType(cfg) == "disabled", reasoning: ReasoningForConfig(cfg)},
 		name:            name,
+		identity:        provider.RequestIdentity{Provider: name, DisplayName: cfg.DisplayName, Protocol: cfg.Protocol},
 		apiKey:          cfg.APIKey,
 		keyEnv:          keyEnv,
 		keySource:       keySource,
@@ -246,7 +247,7 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		prefixChatURL:   prefixChatURL,
 		headers:         cleanCustomHeaders(headers),
 		extraBody:       cleanExtraBody(extraBody),
-		model:           normalizeModelID(cfg.BaseURL, cfg.Model),
+		model:           deepSeekChatWireModel(chatURL, normalizeModelID(cfg.BaseURL, cfg.Model)),
 		deepseek:        deepseek,
 		minimax:         minimax,
 		zhipu:           zhipu,
@@ -265,6 +266,9 @@ func New(cfg provider.Config) (provider.Provider, error) {
 }
 
 func newHTTPClient(cfg provider.Config) (*http.Client, error) {
+	if cfg.HTTPClient != nil {
+		return cfg.HTTPClient, nil
+	}
 	spec, _ := cfg.Extra["proxy_spec"].(netclient.ProxySpec)
 	return netclient.NewHTTPClient(spec, netclient.TransportOptions{
 		DialTimeout:           30 * time.Second,
@@ -278,6 +282,7 @@ type client struct {
 	identityHeaders http.Header
 	reasoningState
 	name            string
+	identity        provider.RequestIdentity
 	apiKey          string
 	keyEnv          string // api_key_env name, surfaced in auth errors
 	keySource       string // source of keyEnv, surfaced in auth errors
@@ -379,11 +384,13 @@ func (c *client) MissingToolCallReasoningWarningIdentity() string {
 
 func (c *client) sendOpts() provider.SendOptions {
 	return provider.SendOptions{
-		Provider:   c.name,
-		KeyEnv:     c.keyEnv,
-		KeySource:  c.keySource,
-		KeyPresent: c.apiKey != "",
-		RetryAuth:  c.authed.Load(),
+		Provider:            c.name,
+		ProviderDisplayName: c.identity.DisplayName,
+		Protocol:            c.identity.Protocol,
+		KeyEnv:              c.keyEnv,
+		KeySource:           c.keySource,
+		KeyPresent:          c.apiKey != "",
+		RetryAuth:           c.authed.Load(),
 	}
 }
 
@@ -785,7 +792,7 @@ func (c *client) buildRequest(req provider.Request) chatRequest {
 			cm.Content = m.Content
 		}
 		msgs = append(msgs, cm)
-		if c.vision && m.Role == provider.RoleTool && !IsDeepSeek(c.baseURL) {
+		if c.vision && m.Role == provider.RoleTool {
 			pendingToolImages = append(pendingToolImages, m.Images...)
 		}
 	}

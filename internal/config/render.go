@@ -119,6 +119,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		}
 		fmt.Fprintf(&b, "close_behavior = %q   # desktop: quit|background when the window close button is clicked\n", c.DesktopCloseBehavior())
 		fmt.Fprintf(&b, "status_bar_style = %q   # desktop: icon|text metric labels in the bottom status bar\n", c.DesktopStatusBarStyle())
+		b.WriteString("status_bar_style_initialized = true   # icon default upgrade applied; preserve later user choices\n")
 		fmt.Fprintf(&b, "status_bar_items = %s   # desktop: ordered visible bottom status bar items\n", renderStringArray(c.DesktopStatusBarItems()))
 		fmt.Fprintf(&b, "default_tool_approval_mode = %q   # desktop: Ask/Auto/YOLO default for newly-created sessions\n", c.DesktopDefaultToolApprovalMode())
 		fmt.Fprintf(&b, "check_updates = %v   # desktop: check for new versions on startup\n", c.DesktopCheckUpdates())
@@ -245,16 +246,7 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 		b.WriteString("# recent_keep         = 2   # deprecated compatibility field; ignored at runtime\n")
 	}
 	renderAgentSafetyControls(&b, c, scope)
-	if c.Agent.PlannerModel != "" {
-		fmt.Fprintf(&b, "planner_model = %q   # low-frequency planner (two-model collaboration)\n", c.Agent.PlannerModel)
-	} else {
-		b.WriteString("# planner_model = \"deepseek-pro\"   # optional: enable two-model collaboration\n")
-	}
-	if c.Agent.VisionModel != "" {
-		fmt.Fprintf(&b, "vision_model = %q   # image understanding fallback: auto or provider/model\n", c.Agent.VisionModel)
-	} else {
-		b.WriteString("# vision_model = \"auto\"   # optional: summarize images for text-only models\n")
-	}
+	renderAgentModelAssignments(&b, c)
 	if c.Agent.PromptOptimizeModel != "" {
 		fmt.Fprintf(&b, "prompt_optimize_model = %q   # standalone model for the composer's prompt-optimization utility\n", c.Agent.PromptOptimizeModel)
 	} else {
@@ -267,16 +259,6 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	fmt.Fprintf(&b, "audit_threshold = %g   # score below this surfaces the tab for attention\n", c.Agent.AuditThreshold)
 	if c.Agent.AuditEffort != "" {
 		fmt.Fprintf(&b, "audit_effort = %q   # reasoning depth for the audit model (off|low|medium|high)\n", c.Agent.AuditEffort)
-	}
-	if c.Agent.SubagentModel != "" {
-		fmt.Fprintf(&b, "subagent_model = %q   # default model for runAs=subagent skills\n", c.Agent.SubagentModel)
-	} else {
-		b.WriteString("# subagent_model = \"deepseek-pro\"   # optional default for runAs=subagent skills\n")
-	}
-	if len(c.Agent.SubagentModels) > 0 {
-		fmt.Fprintf(&b, "subagent_models = %s   # per-skill overrides\n", renderStringMap(c.Agent.SubagentModels))
-	} else {
-		b.WriteString("# subagent_models = { review = \"deepseek-pro\", security_review = \"deepseek-pro\" }   # per-skill overrides\n")
 	}
 	if c.Agent.SubagentEffort != "" {
 		fmt.Fprintf(&b, "subagent_effort = %q   # default effort for subagent entry points\n", c.Agent.SubagentEffort)
@@ -949,22 +931,7 @@ func RenderTOMLProjectDelta(c *Config) string {
 		fmt.Fprintf(&agentBuf, "plan_mode_read_only_commands = %s\n", renderStringArray(c.Agent.PlanModeReadOnlyCommands))
 		anyAgent = true
 	}
-	if c.Agent.PlannerModel != "" && c.Agent.PlannerModel != d.Agent.PlannerModel {
-		fmt.Fprintf(&agentBuf, "planner_model = %q\n", c.Agent.PlannerModel)
-		anyAgent = true
-	}
-	if c.Agent.VisionModel != d.Agent.VisionModel {
-		fmt.Fprintf(&agentBuf, "vision_model = %q\n", c.Agent.VisionModel)
-		anyAgent = true
-	}
-	if c.Agent.SubagentModel != "" && c.Agent.SubagentModel != d.Agent.SubagentModel {
-		fmt.Fprintf(&agentBuf, "subagent_model = %q\n", c.Agent.SubagentModel)
-		anyAgent = true
-	}
-	if len(c.Agent.SubagentModels) > 0 && !reflect.DeepEqual(c.Agent.SubagentModels, d.Agent.SubagentModels) {
-		fmt.Fprintf(&agentBuf, "subagent_models = %s\n", renderStringMap(c.Agent.SubagentModels))
-		anyAgent = true
-	}
+	renderAgentModelAssignmentDelta(&agentBuf, c, d, &anyAgent)
 	if c.Agent.SubagentEffort != "" && c.Agent.SubagentEffort != d.Agent.SubagentEffort {
 		fmt.Fprintf(&agentBuf, "subagent_effort = %q\n", c.Agent.SubagentEffort)
 		anyAgent = true

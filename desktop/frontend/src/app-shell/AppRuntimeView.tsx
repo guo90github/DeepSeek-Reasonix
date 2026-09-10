@@ -273,7 +273,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           },
         })} />
 
-        <section className={`chat-pane${splitSurface ? " chat-pane--split" : ""}${session.transcript.creationEmptyHero ? " chat-pane--creation-empty" : ""}`}>
+        <section className={`chat-pane${splitSurface ? " chat-pane--split" : ""}${session.transcript.emptyHero ? " chat-pane--creation-empty" : ""}`}>
           <TopicbarRegion view={buildTopicbarView({
             t, locale, activeTab, cwd: state.meta?.cwd, imDetail: sidebarImDetailConnection, imTopicSources: shell.preferences.imTopicSources,
             creation: sidebarCreation, chromeHidden: workbenchChromeHidden, automationReturn: shell.automationReturn,
@@ -346,14 +346,16 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
               hydratePlaceholderActive: session.hydratePlaceholderActive,
               clearContextPending: session.clearCommands.clearContextPending,
               creation: sidebarCreation,
+              emptyHero: session.transcript.emptyHero,
+              availability: session.transcript.availability,
               rewind: { stateActive: session.sessionUndo.rewindState != null, committing: session.sessionUndo.rewindCommitting, signal: session.sessionUndo.rewindSignal },
             }}
-            onRetryHistory={() => void runtime.sessionActions.retrySessionHistory(activeTabId)}
+            onRetryHistory={() => runtime.sessionActions.retrySessionHistory(activeTabId)}
             commands={{
               onPrompt: session.transcript.handleTranscriptPrompt,
               onDeliveryContinue: () => void session.delivery.handleDeliveryContinue(),
               onAcceptDelivery: session.controlCommands.handleAcceptDelivery,
-              onOpenChanges: () => session.workspacePanelCommands.openRightDockMode("changed"),
+              onOpenChanges: session.turnVerificationCommands.openTurnChanges,
               onOpenVerification: session.turnVerificationCommands.openTurnVerification,
               onEditPrompt: session.sessionUndo.handleEditPrompt,
               onRewind: session.sessionUndo.handleMessageAction,
@@ -374,14 +376,16 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
               view: {
                 hidden: composerSurfaceHidden,
                 inert: runtimeTransitioning,
-                hero: session.transcript.creationEmptyHero,
+                hero: session.transcript.emptyHero,
                 headline: t("welcome.creation.title"),
                 remote: core.remoteSurfaceActive,
                 rewindCommitting: session.sessionUndo.rewindCommitting,
                 messageActionPending: state.messageAction != null,
                 decisionActive: Boolean(decisionSurface),
                 runtimeTransitioning,
-                controllerReady,
+                controllerReady: controllerReady && session.transcript.availability.kind === "ready",
+                submitDisabledReason: session.transcript.availability.kind !== "ready" && session.transcript.availability.source !== "runtime"
+                  ? t("sessionRecovery.sendAfterRecovery") : undefined,
                 showContextWindowRing: sidebarCreation,
               },
               base: conversationView.composer,

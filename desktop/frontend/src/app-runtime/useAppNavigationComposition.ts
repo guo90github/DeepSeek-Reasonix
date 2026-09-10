@@ -1,4 +1,5 @@
 import { browserMockScenarioParam, GUIDANCE_QUEUE_MOCK_ITEMS, isGuidanceMockScenario } from "../lib/mockScenarios";
+import { desktopHost } from "../lib/desktopHost";
 import { formatShortcutCombo, resolvedShortcutCombo } from "../lib/keyboardShortcuts";
 import { showWorktreeCleanupNotice } from "../lib/worktreeCleanupNotice";
 import { desktopBridge } from "./desktopBridgeAdapter";
@@ -104,6 +105,9 @@ export function useAppNavigationComposition(input: AppNavigationCompositionInput
     showToast,
     closeTransientOverlays,
     clearImDetail: () => setSidebarImDetailConnectionId(""),
+    prepareBlankWorkspace: (workspaceRoot) => {
+      if (shell.sidebarWorkbench) session.workspacePanelCommands.prepareBlankWorkspace(workspaceRoot);
+    },
     navigation: { enqueueNavigation, enqueueNavigationWithIntent, openRemoteProject },
     noteNavigationIntent,
     beginNavigationSurface,
@@ -174,7 +178,7 @@ export function useAppNavigationComposition(input: AppNavigationCompositionInput
   const sidebarToggleTitle = sidebarCollapsed
       ? t("sidebar.expand")
       : t("sidebar.collapse");
-  const browserPreviewChrome = typeof window !== "undefined" && !window.runtime;
+  const browserPreviewChrome = typeof window !== "undefined" && desktopHost().kind === "none";
   const browserMockScenario = browserPreviewChrome ? browserMockScenarioParam() : "";
   const guidanceQueueMockItems = isGuidanceMockScenario(browserMockScenario) ? GUIDANCE_QUEUE_MOCK_ITEMS : undefined;
   // Command palette shortcut label (⌘K / Ctrl+K), platform-aware.

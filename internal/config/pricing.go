@@ -281,14 +281,23 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 	if header.ConfigVersion > defaultVersion {
 		return false, nil
 	}
+	if header.ConfigVersion >= openCodeGoUpgradeVersion {
+		resolved, _, err := statConfigPath(path)
+		if err != nil {
+			return false, err
+		}
+		if err := finalizeOpenCodeGoJournal(resolved); err != nil {
+			return false, err
+		}
+	}
 	classicDesktopLayout := strings.EqualFold(strings.TrimSpace(header.Desktop.LayoutStyle), "classic")
 	if header.ConfigVersion == defaultVersion && !classicDesktopLayout {
 		return false, nil
 	}
-	// Version 7 already completed the older migrations. Preserve its original
-	// TOML byte-for-byte except for the protocol scalars and version marker.
-	if header.ConfigVersion >= deepSeekScheduledPricingConfigVersion && header.ConfigVersion < deepSeekChatDefaultConfigVersion && !classicDesktopLayout {
-		return upgradeDeepSeekChatDefaultFileLocked(path)
+	// Versions 7-9 commit the protocol upgrades and final version together,
+	// preserving the original bytes in one backup before any replacement.
+	if header.ConfigVersion >= deepSeekScheduledPricingConfigVersion && header.ConfigVersion < openCodeGoUpgradeVersion {
+		return upgradeOpenCodeGoFileLocked(path)
 	}
 	cfg := LoadForEdit(path)
 	changed := false
@@ -328,14 +337,23 @@ func ApplyUserConfigUpgradesOnStartup(path string) (bool, error) {
 		restoreDeepSeekChatDefaults(cfg)
 		changed = true
 	}
+	if header.ConfigVersion < deepSeekOfficialChatUpgradeConfigVersion {
+		migrateOfficialDeepSeekChat(cfg)
+		changed = true
+	}
 	if !changed {
 		return false, nil
 	}
 	if header.ConfigVersion < defaultVersion {
-		cfg.ConfigVersion = defaultVersion
+		cfg.ConfigVersion = deepSeekOfficialChatUpgradeConfigVersion
 	}
 	if err := cfg.SaveTo(path); err != nil {
 		return false, err
+	}
+	if header.ConfigVersion < openCodeGoUpgradeVersion {
+		if _, err := upgradeOpenCodeGoFileLocked(path); err != nil {
+			return false, err
+		}
 	}
 	return true, nil
 }

@@ -27,7 +27,7 @@ import { summarizeProjectTreeSessions } from "../lib/projectTreeDiagnostics";
 import { GLOBAL_PROJECT_ORDER_KEY, ProjectTreeFolderActivity, ProjectTreeGroupRows, applyProjectOrder, projectTreeProjectRoots, reorderedProjectRoots, useProjectTreeOrganization, type ProjectDropPosition } from "./ProjectTreeOrganization";
 import { ProjectTreeSessionArchiveMenu } from "./ProjectTreeSessionArchiveMenu";
 import { ProjectTreeHeaderAddControl, ProjectTreeRemoteAction, projectTreeHeaderAddItems } from "./ProjectTreeAddControls";
-import { activeRemoteProjectAncestorKeys, buildRemoteProjectMenuItems, mergeRemoteSessionsIntoTree, openRemoteSessionNode, remoteProjectKey, remoteServeBadgeState, renameRemoteProjectTitle, RemoteProjectEmptyState, useRemoteProjectGroups, useRemoteSessionActions } from "./ProjectTreeRemoteGroups";
+import { activeRemoteProjectAncestorKeys, buildRemoteProjectMenuItems, useRemoteRuntimeTree, openRemoteSessionNode, remoteProjectKey, remoteServeBadgeState, renameRemoteProjectTitle, RemoteProjectEmptyState, useRemoteProjectGroups, useRemoteSessionActions } from "./ProjectTreeRemoteGroups";
 import type { ProjectTreeProps } from "./ProjectTreeProps";
 
 function projectNodeKey(node: ProjectNode, depth: number): string {
@@ -442,7 +442,7 @@ export function ProjectTree({
   }, [applyRuntimeProjection]);
   refreshRef.current = refresh;
   const { openRemoteProject, openRemoteWindow, remoteSessions, setRemoteSessions, remoteServers, remoteGroupBusy, remoteGroupError, ensureRemoteGroupSessions, refreshRemoteSessions } = useRemoteProjectGroups(tree, showToast, expanded, query);
-  const treeWithRemoteSessions = useMemo(() => mergeRemoteSessionsIntoTree(tree, remoteSessions, t), [remoteSessions, t, tree]);
+  const treeWithRemoteSessions = useRemoteRuntimeTree(tree, remoteSessions, t);
   const remoteSessionActions = useRemoteSessionActions(remoteSessions, refreshRemoteSessions, (error) => showToast(error instanceof Error ? error.message : String(error), "error"));
   const { addingProject, handleAddProject, openBlankProjectFlow, blankProjectFlow, openRemoteConnectFlow, remoteConnectFlow } = useProjectCreation({
     onAddProject,
@@ -708,7 +708,6 @@ export function ProjectTree({
     setMenuPoint(contextMenuPointFromEvent(event));
     setWorkbenchHeaderMenu((value) => (value === menu ? null : menu));
   };
-
   const handleCreateTopic = async (scope: string, workspaceRoot: string, key: string) => {
     if (creatingRef.current) return;
     creatingRef.current = true;
@@ -733,10 +732,11 @@ export function ProjectTree({
         await onTopicsChanged?.();
         return;
       }
-      const topic = await app.CreateTopic(scope, workspaceRoot, "");
+      const targetRoot = scope === "project" ? workspaceRoot : "";
+      const topic = await app.CreateTopic(scope, targetRoot, "");
       await refresh();
       await onTopicsChanged?.();
-      await onOpenTopic(scope, workspaceRoot, topic.id);
+      await onOpenTopic(scope, targetRoot, topic.id);
     } catch {
       /* ignore */
     } finally {
@@ -1121,7 +1121,7 @@ export function ProjectTree({
       // spinning orange dot, and that pill replaces the relative time so the
       // paused-for-user state is scannable in the background tab list.
       const showStatusInSide = status === "thinking" || status === "streaming" || status === "waiting_confirmation" || status === "background_job";
-      const showWaitingPill = waitingConfirmation;
+      const showWaitingPill = waitingConfirmation || status === "finishing" || status === "cancelling" || status === "unknown";
       const showSideTime = sideTimeVisible && !showWaitingPill;
       const unread = projectTreeTopicHasUnreadActivity(node, readActivity, activeScope, activeWorkspaceRoot, activeTopicId, activeSessionPath, readBaselineAt);
       const topicId = node.topicId ?? "";
@@ -1489,7 +1489,7 @@ export function ProjectTree({
         icon: <Plus size={13} />,
         label: t("projectTree.newTopic"),
         onSelect: () => {
-          void handleCreateTopic(scope, projectRoot, key);
+          void handleCreateTopic(scope, projectPath, key);
         },
       },
       ...isolatedWorkspaceItems,
@@ -1776,7 +1776,7 @@ export function ProjectTree({
               disabled={creatingProject !== null}
               onClick={(e) => {
                 e.stopPropagation();
-                void handleCreateTopic(scope, projectRoot, key);
+                void handleCreateTopic(scope, projectPath, key);
               }}
             >
               {compactTopics ? <Plus size={15} aria-hidden="true" /> : <Plus size={12} aria-hidden="true" />}

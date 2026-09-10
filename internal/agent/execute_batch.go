@@ -16,6 +16,7 @@ import (
 // mutationBarrierCause is an immutable, argument-free description of the
 // first durable-state write that failed or was blocked in a tool batch.
 type mutationBarrierCause struct {
+	evidenceOnly          bool
 	callID                string
 	toolName              string
 	stateMutation         bool
@@ -47,6 +48,8 @@ func (c *mutationBarrierCause) message() string {
 // form the model sees; rawOutput is the full original when truncation applied
 // (empty when identical so we avoid double storage). images ride outside text.
 type toolOutcome struct {
+	runState                   provider.ToolRunState
+	visionSummary              *provider.VisionSummary
 	output                     string
 	rawOutput                  string // full original when different from output
 	images                     []string
@@ -72,6 +75,13 @@ type toolOutcome struct {
 	// recoveryStopTurn is set when Auto Episode budgets are exhausted.
 	recoveryStopTurn   bool
 	recoveryStopReason string
+	readTaskID         string
+	readEnvelope       *tool.ReadResultEnvelope
+	diagnostic         *tool.OperationDiagnostic
+	evidenceSource     tool.EvidenceTargetInfo
+	finalReadEnvelope  *tool.ReadResultEnvelope
+	readReference      *readDelivery
+	readActiveMillis   int64
 	incompleteRead     *incompleteReadDeferred
 	subagentOutcome    *SubagentOutcome
 }
@@ -93,6 +103,8 @@ type batchExecution struct {
 // ordering stays provider-ordered. Each completed serial call (or read-only
 // group) is checkpointed before the next group starts.
 func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []provider.ToolCall) batchExecution {
+	turn.evidenceBlocked.clearChecks()
+	defer turn.evidenceBlocked.clearChecks()
 	// The assistant message already stored this slice in Session. Keep execution
 	// state separate so refreshing a dependent preview never mutates shared
 	// session memory outside Session's lock.
@@ -105,6 +117,10 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	}
 
 	slots := newBatchSlots(calls)
+	// Evidence is evaluated once for the whole batch, before anything runs: a
+	// call whose writer cannot prove what it replaces never starts, and a read
+	// from this same batch can never satisfy it.
+	evidenceBlocked := a.preflightEvidenceBatch(ctx, calls)
 	results, outcomes, durations, startedAt := slots.results, slots.outcomes, slots.durations, slots.startedAt
 	ranParallel := make([]bool, len(calls))
 	batchStart := time.Now()
@@ -123,6 +139,11 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 	var batchErr error
 	var batchErrOnce sync.Once
 	run := func(s *batchSlots, i int) {
+		if pre, blocked := evidenceBlocked[i]; blocked {
+			s.outcomes[i] = pre
+			s.results[i] = pre.output
+			return
+		}
 		t, _, ambiguous := a.svc.tools.ResolveCall(s.calls[i].Name)
 		known := t != nil && len(ambiguous) == 0
 		writer := known && !t.ReadOnly()
@@ -163,10 +184,11 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			return
 		}
 		committed[i] = true
-		a.finalizeIncompleteReadOutcome(outcomes[i].incompleteRead, &outcomes[i])
+		a.finalizeIncompleteReadOutcome(ctx, outcomes[i].incompleteRead, &outcomes[i])
+		a.finalizeReadDelivery(ctx, calls[i], &outcomes[i])
 		results[i] = outcomes[i].output
 		a.commitBatchCallResolution(calls[i])
-		a.storeBatchToolResult(calls[i], outcomes[i])
+		a.storeBatchToolResult(ctx, calls[i], outcomes[i])
 		if err := a.emitBatchToolResult(calls[i], outcomes[i], durations[i], startedAt[i], ranParallel[i], batchStart); err != nil {
 			batchErrOnce.Do(func() { batchErr = fmt.Errorf("persist tool result %s: %w", calls[i].ID, err) })
 		}
@@ -235,7 +257,11 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 		if batch.parallel && batch.end-batch.start > 1 {
 			// Parallel segments are read-only by construction; no mutation barrier.
 			private := slots.fork()
-			ranUntil, finished := runParallel(ctx, batch.start, batch.end, func(i int) { run(private, i) })
+			ranUntil, finished := runParallel(ctx, batch.start, batch.end, func(i int) {
+				a.stragglers.enter()
+				defer a.stragglers.leave()
+				run(private, i)
+			})
 			for i := batch.start; i < ranUntil; i++ {
 				if finished[i] {
 					slots.adopt(private, i)
@@ -398,6 +424,7 @@ func batchCallMutationFailureCause(a *Agent, call provider.ToolCall, o toolOutco
 		phase = "blocked"
 	}
 	return &mutationBarrierCause{
+		evidenceOnly:        o.blocked && !o.executed && o.diagnostic != nil && o.diagnostic.Code == tool.WriteEvidenceMissing,
 		callID:              call.ID,
 		toolName:            toolName,
 		stateMutation:       effects.StateMutation,

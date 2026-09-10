@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { desktopHost } from "../lib/desktopHost";
 import { useCommittedCommand } from "../lib/useCommittedCommand";
 import { useCommittedAsyncCommand } from "../lib/useCommittedAsyncCommand";
 import { useConfigLoadWarnings } from "../lib/useConfigLoadWarnings";
@@ -43,13 +44,13 @@ export function useDesktopPreferences() {
     void reload(undefined, true);
   }, [reload]);
   useEffect(() => { void app.SetTrayLocale(locale).catch(() => {}); }, [locale]);
-  const nativeRuntime = typeof window === "undefined" || Boolean(window.runtime);
+  const nativeRuntime = typeof window === "undefined" || desktopHost().kind !== "none";
   const sidebarImConnections = useMemo(() => snapshot ? sidebarImConnectionsFromBot(snapshot.bot, t, botRuntime, nativeRuntime) : [], [snapshot, t, botRuntime, nativeRuntime]);
   const imTopicSources = useMemo(() => snapshot ? sidebarImTopicSourcesFromBot(snapshot.bot, t) : {}, [snapshot, t]);
   return {
     desktopLayoutStyle: layoutStyleFromSnapshot(snapshot?.desktopLayoutStyle),
     startupUpdateChecksEnabled: snapshot ? snapshot.checkUpdates !== false : startupFailed ? true : null,
-    statusBarStyle: snapshot ? snapshot.statusBarStyle === "text" ? "text" as const : "icon" as const : "text" as const,
+    statusBarStyle: snapshot?.statusBarStyle === "text" ? "text" as const : "icon" as const,
     statusBarItems: snapshot ? normalizeStatusBarItems(snapshot.statusBarItems) : DEFAULT_STATUS_BAR_ITEMS,
     sidebarImConnections, imTopicSources,
     configLoadWarnings: warnings.configLoadWarnings, reloadConfigWarnings: warnings.reload, dismissConfigWarnings: warnings.dismiss,

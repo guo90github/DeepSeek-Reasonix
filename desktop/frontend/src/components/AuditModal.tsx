@@ -6,7 +6,7 @@ import { onAuditChunk, onAuditDone, onAuditRequest, type AuditChunkEvent, type A
 import { useT } from "../lib/i18n";
 import { loadLayoutSize, saveLayoutSize } from "../lib/layoutPreferences";
 import { createRafResizeUpdater } from "../lib/resizeDrag";
-import type { event } from "../../wailsjs/go/models";
+import type { ReasoningAuditTotals } from "../generated/desktopContract.generated";
 
 type AuditStatus = "loading" | "streaming" | "done" | "error";
 
@@ -61,7 +61,7 @@ function AuditSection({
 }
 
 // AuditMeta renders the evaluator cost line (tokens / cost / elapsed).
-function AuditMeta({ totals, t }: { totals: event.ReasoningAuditTotals; t: ReturnType<typeof useT> }) {
+function AuditMeta({ totals, t }: { totals: ReasoningAuditTotals; t: ReturnType<typeof useT> }) {
   const parts: string[] = [];
   if (typeof totals.evalTokens === "number" && totals.evalTokens > 0) {
     parts.push(t("audit.tokens", { n: String(totals.evalTokens) }));
@@ -76,7 +76,7 @@ function AuditMeta({ totals, t }: { totals: event.ReasoningAuditTotals; t: Retur
 
 // AuditVerdict is the audit deliverable: score + bar + pass/attention badge +
 // rationale (explanation) + per-issue findings.
-function AuditVerdict({ totals, threshold, t }: { totals: event.ReasoningAuditTotals; threshold: number; t: ReturnType<typeof useT> }) {
+function AuditVerdict({ totals, threshold, t }: { totals: ReasoningAuditTotals; threshold: number; t: ReturnType<typeof useT> }) {
   const low = totals.score < threshold;
   return (
     <div className="audit-result">
@@ -126,7 +126,7 @@ export function AuditModal({ reasoning, onClose }: { reasoning: string; onClose:
   const [request, setRequest] = useState<AuditRequestPayload | null>(null);
   const [think, setThink] = useState("");
   const [text, setText] = useState("");
-  const [totals, setTotals] = useState<event.ReasoningAuditTotals | null>(null);
+  const [totals, setTotals] = useState<ReasoningAuditTotals | null>(null);
   const [error, setError] = useState("");
   const [showInput, setShowInput] = useState(false);
   const [showTech, setShowTech] = useState(false);

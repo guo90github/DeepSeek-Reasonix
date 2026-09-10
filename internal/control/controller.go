@@ -109,6 +109,7 @@ type auditConfig struct {
 // Controller drives one chat session. Construct with New; drive with the command
 // methods; observe through the Sink passed in Options.
 type Controller struct {
+	runtimeState controllerRuntimeState
 	// promptResolveMu serializes exact prompt decisions on one controller. It
 	// prevents two UI submissions from racing through separate prompt managers.
 	promptResolveMu    sync.Mutex
@@ -140,23 +141,25 @@ type Controller struct {
 	// one — sub-agents then keep whatever gate they were constructed with.
 	subagentGate *SharedHeadlessGate
 
-	label                          string
-	modelRef                       string
-	visionModel                    string
-	visionProviderResolver         func(string) (provider.Provider, error)
-	visionModelSelector            func(string, string) (string, bool)
+	label                   string
+	selection               modelSelection
+	resolveSessionModel     func(string, string) (string, error)
+	visionModel             string
+	visionProviderResolver  func(string) (provider.Provider, error)
+	visionModelSelector     func(string, string) (string, bool)
+	modelCapabilityResolver func(*config.ProviderEntry) config.ResolvedModelCapability
+	frozenImageInput        *bool
+	imageCapabilityChanged  func() bool
+	modelSettings           controllerModelSettings
+	prompt                  controllerPromptState
+	pinnedContextLoader     PinnedContextLoader
+	sessionContextStatic    sessioncontext.Sections
+	sessionDir              string
+	commands                atomic.Pointer[[]command.Command]
+
 	promptOptimizeModel            string
 	promptOptimizeProviderResolver func(string) (provider.Provider, error)
 	audit                          auditConfig
-	modelCapabilityResolver        func(*config.ProviderEntry) config.ResolvedModelCapability
-	frozenImageInput               *bool
-	imageCapabilityChanged         func() bool
-	systemPrompt                   string
-	prompt                         controllerPromptState
-	pinnedContextLoader            PinnedContextLoader
-	sessionContextStatic           sessioncontext.Sections
-	sessionDir                     string
-	commands                       atomic.Pointer[[]command.Command]
 	// skills owns the session's discovered skills (enabled subset, full set, and
 	// the reloadable stores) — the skills slice of the Capabilities concern. See
 	// skill.go.
@@ -512,9 +515,11 @@ type Options struct {
 	// SetToolApprovalMode and ApplyHeadlessApprovalMode call Update on it so a
 	// runtime approval-mode switch reaches sub-agents, not just the parent
 	// executor's own gate.
-	SubagentGate *SharedHeadlessGate
-	Label        string
-	ModelRef     string
+	SubagentGate        *SharedHeadlessGate
+	Label               string
+	ModelRef            string
+	ModelIdentity       string
+	ResolveSessionModel func(string, string) (string, error)
 	// VisionModel is empty (off), "auto", or a canonical provider/model ref.
 	// The resolver and selector are assembled by boot so the controller remains
 	// transport-agnostic and tests can inject deterministic fake providers.
@@ -545,15 +550,22 @@ type Options struct {
 	// the exact active model. Nil keeps the legacy config-only behavior.
 	ModelCapabilityResolver func(*config.ProviderEntry) config.ResolvedModelCapability
 	// FrozenImageInput belongs to the provider instance built for this runtime.
-	FrozenImageInput       *bool
-	ImageCapabilityChanged func() bool
+	FrozenImageInput            *bool
+	ImageCapabilityChanged      func() bool
+	ModelSettingsRevision       string
+	ModelSettingsSourceRevision string
+	ModelSettingsCurrent        func() (string, error)
+	// BeforeInboxDispatch lets the owner reserve runtime admission before a
+	// queued message becomes a new turn. The returned release runs after claim
+	// and synchronous turn admission, outside every controller lock.
+	BeforeInboxDispatch func(*Controller) (func(), error)
+	SystemPrompt        string
 	// PinnedContextLoader snapshots the current session sidecar at turn
 	// admission. The Agent persists changes as append-only user-role revisions.
 	PinnedContextLoader PinnedContextLoader
 	// MCPHostProfile is the surface lazily created hosts declare; injected
 	// hosts keep their own profile.
 	MCPHostProfile plugin.HostProfile
-	SystemPrompt   string
 	SessionDir     string
 	SessionPath    string
 	Host           *plugin.Host
@@ -730,13 +742,8 @@ func New(opts Options) *Controller {
 		policy:                         opts.Policy,
 		subagentGate:                   opts.SubagentGate,
 		label:                          opts.Label,
-		modelRef:                       opts.ModelRef,
-		visionModel:                    strings.TrimSpace(opts.VisionModel),
-		visionProviderResolver:         opts.VisionProviderResolver,
-		visionModelSelector:            opts.VisionModelSelector,
-		modelCapabilityResolver:        opts.ModelCapabilityResolver,
-		frozenImageInput:               opts.FrozenImageInput,
-		imageCapabilityChanged:         opts.ImageCapabilityChanged,
+		selection:                      modelSelection{ref: opts.ModelRef, identity: opts.ModelIdentity},
+		resolveSessionModel:            opts.ResolveSessionModel,
 		promptOptimizeModel:            strings.TrimSpace(opts.PromptOptimizeModel),
 		promptOptimizeProviderResolver: opts.PromptOptimizeProviderResolver,
 		audit: auditConfig{
@@ -747,7 +754,13 @@ func New(opts Options) *Controller {
 			threshold:        opts.AuditThreshold,
 			effort:           strings.ToLower(strings.TrimSpace(opts.AuditEffort)),
 		},
-		systemPrompt:                      opts.SystemPrompt,
+		visionModel:                       strings.TrimSpace(opts.VisionModel),
+		visionProviderResolver:            opts.VisionProviderResolver,
+		visionModelSelector:               opts.VisionModelSelector,
+		modelCapabilityResolver:           opts.ModelCapabilityResolver,
+		frozenImageInput:                  opts.FrozenImageInput,
+		imageCapabilityChanged:            opts.ImageCapabilityChanged,
+		modelSettings:                     newControllerModelSettings(opts),
 		prompt:                            newControllerPromptState(opts.SystemPrompt, opts.Executor),
 		pinnedContextLoader:               opts.PinnedContextLoader,
 		sessionContextStatic:              opts.SessionContextStatic,
@@ -830,18 +843,21 @@ func New(opts Options) *Controller {
 	// state/event evidence. The recorder swallows its own failures — monitoring
 	// must never affect the agent pipeline. The session id is resolved lazily
 	// because the session path is only fixed once the first turn begins.
-	if c.jobs != nil && c.workspaceRoot != "" {
-		taskStore := opts.TaskStore
-		if taskStore == nil {
-			taskStore = taskmonitor.NewFileStore(filepath.Join(".reasonix", "tasks"))
-		}
-		c.jobs.SetTaskRecorder(taskmonitor.NewTaskRecorder(
-			taskStore,
-			c.workspaceRoot,
-			func() string { return c.parentSessionID() },
-		))
-	}
+	c.initializeTaskRecorder(opts.TaskStore)
+	c.initializeRuntimeState()
 	return c
+}
+
+func (c *Controller) initializeTaskRecorder(store taskmonitor.WriteStore) {
+	if c.jobs == nil || c.workspaceRoot == "" {
+		return
+	}
+	if store == nil {
+		store = taskmonitor.NewFileStore(filepath.Join(".reasonix", "tasks"))
+	}
+	c.jobs.SetTaskRecorder(taskmonitor.NewTaskRecorder(
+		store, c.workspaceRoot, func() string { return c.parentSessionID() },
+	))
 }
 
 // SetDisplayRecorder installs an optional hook used by frontends that persist a
@@ -1117,6 +1133,7 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 	}
 	c.mu.Unlock()
 
+	c.refreshRuntimeState(event.Event{})
 	defer func() {
 		c.mu.Lock()
 		c.finishing = false
@@ -1124,12 +1141,14 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 		c.finishingBoundary.end()
 		if c.closed {
 			c.mu.Unlock()
+			c.refreshRuntimeState(event.Event{})
 			return
 		}
 		if len(c.parkedTurns) == 0 {
 			c.mu.Unlock()
 			// No parked compatibility body: admit the next durable inbox item.
 			c.maybeDispatchInbox()
+			c.refreshRuntimeState(event.Event{})
 			return
 		}
 		next := c.parkedTurns[0]
@@ -1140,6 +1159,7 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 		c.canceling = false
 		c.mu.Unlock()
 		c.spawnGuardedTurn(ctx, cancel, next)
+		c.refreshRuntimeState(event.Event{})
 	}()
 	c.inbox.mu.Lock()
 	// Prefer a single representative id for the wire event (first active).
@@ -1159,8 +1179,27 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 		Receipt:        c.executor.CompletionReceipt(),
 		ItemID:         activeInboxID,
 	}
+	if done.CheckpointTurn != nil {
+		changes := completion.checkpoint.store.FreezeTurnChanges(*done.CheckpointTurn)
+		if done.Receipt == nil && (len(changes.Files) > 0 || len(changes.Reasons) > 0) {
+			done.Receipt = &event.CompletionReceipt{Verdict: "unknown"}
+		}
+		if done.Receipt != nil {
+			// Detach the executor's receipt before adding host-owned file facts.
+			receipt := *done.Receipt
+			receipt.Diff = changes.Summary()
+			receipt.Interrupted = cancelRequested
+			done.Receipt = &receipt
+		}
+	}
+	done.Receipt = bindCompletionLogSources(done.Receipt, c.History())
 	done = c.applyTurnDoneProtocol(done, cancelRequested)
+	var readErr *agent.IncompleteReadError
+	if errors.As(err, &readErr) {
+		done.ReadPause = readErr.Pause
+	}
 	done.Diagnostic = provider.DiagnoseFailure(err)
+	done.Detail = provider.FailureDiagnosticDetail(done.Diagnostic)
 	if !cancelRequested {
 		done.ProtocolRecovery = c.executor.PendingProtocolRecovery()
 	}
@@ -2618,6 +2657,7 @@ func (c *Controller) AnswerQuestion(id string, answers []event.AskAnswer) {
 // AnswerQuestionChecked persists the prompt transition before releasing the
 // agent loop. A failed ledger write leaves the prompt pending and retryable.
 func (c *Controller) AnswerQuestionChecked(id string, answers []event.AskAnswer) error {
+	defer c.refreshRuntimeState(event.Event{})
 	c.promptResolveMu.Lock()
 	defer c.promptResolveMu.Unlock()
 	return c.answerQuestionCheckedLocked(id, answers)
@@ -3496,7 +3536,7 @@ func (c *Controller) cacheColdAfter() time.Duration {
 	if err != nil {
 		return 24 * time.Hour
 	}
-	ref := c.modelRef
+	ref := c.selection.ref
 	if ref == "" {
 		ref = cfg.DefaultModel
 	}
@@ -3516,11 +3556,11 @@ func (c *Controller) Snapshot() error {
 	return c.snapshot(false, false, false)
 }
 
-// SnapshotForShutdown performs the final session snapshot and, only when the
-// compatibility file lock remains held for the full bounded wait, persists the
-// in-memory transcript to a distinct recovery branch before teardown proceeds.
-// Other snapshot errors retain their normal behavior and remain visible to the
-// caller.
+// SnapshotForShutdown performs the final session snapshot. Only when the
+// compatibility file lock stays held for the full bounded wait does it fall
+// back: a schema-2 log takes the unsaved tail without the lock, a schema-1
+// session gets a distinct recovery branch. Other snapshot errors retain their
+// normal behavior and remain visible to the caller.
 func (c *Controller) SnapshotForShutdown() error {
 	return c.snapshot(false, false, true)
 }
@@ -3555,7 +3595,7 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 
 	c.mu.Lock()
 	path := c.sessionPath
-	modelRef := c.modelRef
+	modelRef := c.selection.ref
 	c.mu.Unlock()
 	if c.executor == nil {
 		return false, nil
@@ -3604,7 +3644,7 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 	}
 	if err != nil {
 		if shutdownRecovery && errors.Is(err, agent.ErrSessionFileLockHeld) {
-			recoveredPath, recoverErr := c.recoverShutdownSnapshot(path, err)
+			recoveredPath, recoverErr := c.recoverShutdownSave(s, path, err, forceRewrite)
 			if recoverErr != nil {
 				return false, recoverErr
 			}
@@ -3631,7 +3671,7 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 		recoveredPath, outcome, recoverErr := c.recoverSnapshotConflict(path, err, forceRewrite)
 		if recoverErr != nil {
 			if shutdownRecovery && errors.Is(recoverErr, agent.ErrSessionFileLockHeld) {
-				recoveredPath, recoverErr = c.recoverShutdownSnapshot(path, recoverErr)
+				recoveredPath, recoverErr = c.recoverShutdownSave(s, path, recoverErr, forceRewrite)
 				if recoverErr != nil {
 					return false, recoverErr
 				}
@@ -3669,19 +3709,24 @@ func (c *Controller) snapshotWithDurability(markActivity, forceRewrite, shutdown
 	// like SetBranchModelPreserveUpdated. The single write subsumes the old
 	// EnsureBranchMeta / SetBranchModel / TouchBranchMeta sequence.
 	preview, turns := agent.SessionPreviewFromMessages(s.Snapshot())
-	if err := updateSessionListingProjection(s, path, modelRef, preview, turns, markActivity); err != nil {
+	if err := updateSessionModelProjection(s, path, modelRef, c.selection.identity, preview, turns, markActivity); err != nil && !listingDeferredAfterUnlockedAppend(s, path, err) {
 		return transcriptDurable, err
 	}
 	c.extensionSessionPayloadEvent(extension.PointSessionSave, savePayload)
 	return transcriptDurable, nil
 }
 
-func updateSessionListingProjection(s *agent.Session, path, modelRef, preview string, turns int, markActivity bool) error {
+func updateSessionModelProjection(s *agent.Session, path, modelRef, identity, preview string, turns int, markActivity bool) error {
 	persisted, ok := s.PersistedState(path)
 	if !ok {
 		return fmt.Errorf("session persistence baseline missing after save")
 	}
-	_, err := agent.UpdateSessionListingProjectionIfCurrent(path, modelRef, preview, turns, markActivity, persisted)
+	var err error
+	if s.WriteAuthorityRequired() {
+		_, err = agent.UpdateOwnedSessionListingProjectionIfCurrent(path, modelRef, identity, preview, turns, markActivity, persisted, s.WriteAuthority())
+	} else {
+		_, err = agent.UpdateSessionListingProjectionIfCurrent(path, modelRef, identity, preview, turns, markActivity, persisted)
+	}
 	return err
 }
 
@@ -4267,6 +4312,7 @@ func (c *Controller) SetFreshSessionPath(p string) {
 }
 
 func (c *Controller) setSessionPath(p string, fresh bool) {
+	defer c.refreshRuntimeState(event.Event{})
 	// See snapshotMu: the swap must not interleave with an in-flight save.
 	c.snapshotMu.Lock()
 	c.mu.Lock()
@@ -4925,7 +4971,10 @@ func (c *Controller) UnregisterMCPServerTools(name string) bool {
 func (c *Controller) Label() string { return c.label }
 
 // ModelRef returns the canonical provider/model reference for the session.
-func (c *Controller) ModelRef() string { return c.modelRef }
+func (c *Controller) ModelRef() string { return c.selection.ref }
+
+// ModelSelectionIdentity is frozen with the provider assembled for this runtime.
+func (c *Controller) ModelSelectionIdentity() string { return c.selection.identity }
 
 // WorkspaceRoot returns the workspace root for this controller's session
 // (the directory that file-writers and @-references are scoped to).
@@ -4936,7 +4985,7 @@ func (c *Controller) imageInputEnabled() bool {
 	if c.frozenImageInput != nil {
 		return *c.frozenImageInput
 	}
-	ref := c.modelRef
+	ref := c.selection.ref
 	cfg, err := config.LoadForRoot(c.workspaceRoot)
 	if err == nil && ref == "" {
 		ref = cfg.DefaultModel
@@ -4972,6 +5021,20 @@ func (c *Controller) ImageInputSnapshot() (enabled, fallback, available bool) {
 func (c *Controller) ImageCapabilityChanged() bool {
 	return c.imageCapabilityChanged != nil && c.imageCapabilityChanged()
 }
+
+// ModelSettingsState compares this immutable runtime with current disk config.
+// It is intentionally separate from provider-visible messages and metadata.
+func (c *Controller) ModelSettingsState() (applied, desired string, err error) {
+	if c.modelSettings.current == nil {
+		return "", "", nil
+	}
+	desired, err = c.modelSettings.current()
+	return c.modelSettings.revision, desired, err
+}
+
+// ModelSettingsSourceRevision identifies an immutable Desktop resolver bundle.
+// It is transport bookkeeping only, never part of the conversation.
+func (c *Controller) ModelSettingsSourceRevision() string { return c.modelSettings.sourceRevision }
 
 // InheritLifecycleFrom carries same-session lifecycle state across controller
 // rebuilds, such as model switches that preserve the conversation.
@@ -5047,6 +5110,7 @@ const (
 )
 
 func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
+	defer c.refreshRuntimeState(event.Event{})
 	// Desktop tab lifecycles can race a rebind/model-switch/close on the same
 	// controller; make teardown idempotent so a duplicate Close cannot re-fire
 	// SessionEnd hooks or re-run cleanup. The first caller's jobsMode wins.
@@ -5082,6 +5146,13 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		} else {
 			c.promptOwner.Clear()
 		}
+		// Join sidecar creation and queue scans without waiting for the
+		// dispatcher itself: host admission may retire its own controller.
+		c.inbox.scanMu.Lock()
+		c.inbox.mu.Lock()
+		c.inbox.closed = true
+		c.inbox.mu.Unlock()
+		c.inbox.scanMu.Unlock()
 		if fireSessionEnd && started {
 			c.hooks.SessionEnd(context.Background(), "other")
 			c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, c.SessionPath())
@@ -5185,6 +5256,7 @@ func (c *Controller) SetToolApprovalMode(mode string) {
 // and config writes never drain; Auto keeps explicit memory asks but drains
 // fallback ones; YOLO drains both. Frontends must keep the rest (#6432).
 func (c *Controller) ApplyToolApprovalMode(mode string) []string {
+	defer c.refreshRuntimeState(event.Event{})
 	mode = normalizeToolApprovalMode(mode)
 	// Capture mode-change recovery dismissals before approval drain so a
 	// same-value hydrate/reconcile never rotates Episode state, while a real

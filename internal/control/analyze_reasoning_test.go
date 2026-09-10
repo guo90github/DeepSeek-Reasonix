@@ -45,7 +45,7 @@ func auditTestController(t *testing.T, stub *reasoningAuditTestProvider) *Contro
 	c := &Controller{
 		// The session model must never be the auditor: only the dedicated
 		// auditModel ref is resolved.
-		modelRef: "session/model",
+		selection: modelSelection{ref: "session/model"},
 		audit: auditConfig{
 			model:   "audit/qwen",
 			enabled: true,

@@ -1,3 +1,4 @@
+import { selectSettingsValue, settingsOptionValues } from "./settingsSelectTestUtils";
 import catalogData from "../lib/providerCatalog.generated.json";
 // Run: tsx src/__tests__/provider-access-card.test.tsx
 
@@ -16,6 +17,7 @@ import { LocaleProvider } from "../lib/i18n";
 import type { AppBindings } from "../lib/bridge";
 import type { ProviderPresetView, ProviderView, SettingsView } from "../lib/types";
 import { baseSettings } from "../test-support/settingsTestFixtures";
+import { installDesktopHostStub } from "./desktopHostStub";
 
 let passed = 0;
 let failed = 0;
@@ -285,17 +287,20 @@ defaultCustomSettings.defaultModel = "my-proxy/my-model";
 defaultCustomSettings.providers = [defaultCustomProvider];
 defaultCustomSettings.providerKinds = ["openai"];
 let removedDefaultCustomProviders: string[] = [];
-window.go = {
+installDesktopHostStub(({
   main: {
     App: {
       Settings: async () => defaultCustomSettings,
-      RemoveProviderAccesses: async (names: string[]) => {
+      ApplyModelSettings: async (change) => {
+        if (change.kind !== "access_remove") throw new Error("unexpected settings operation");
+        const names = change.names;
         removedDefaultCustomProviders = [...names];
         defaultCustomSettings.providers = defaultCustomSettings.providers.filter((provider) => !names.includes(provider.name));
+        return {requestId: change.requestId, persisted: true, revision: "removed", application: "not_required", targets: [], issues: [], appliedCatalogs: []};
       },
     } as Partial<AppBindings> as AppBindings,
   },
-};
+}).main.App);
 const settingsRootEl = document.createElement("div");
 document.body.appendChild(settingsRootEl);
 const settingsRoot = createRoot(settingsRootEl);
@@ -455,14 +460,11 @@ ok(brandButtons.length === 2, "DeepSeek and all OpenCode products render as two 
 ok(Array.from(brandButtons).some(button => button.textContent?.includes("OpenCode")), "OpenCode has one selectable brand entry");
 ok(Array.from(brandButtons).every(button => !button.textContent?.includes("Anthropic")), "protocols never appear as top-level brands");
 await act(async () => { (Array.from(brandButtons).find(button => button.textContent?.includes("OpenCode")) as HTMLButtonElement).click(); });
-const products = rootEl.querySelector<HTMLSelectElement>('select[id$="-product"]');
-ok(Array.from(products?.options ?? []).map(option => option.value).join(",") === "go,zen", "Go and Zen remain distinct access plans within OpenCode");
-await act(async () => {
-  if (products) { products.value = "zen"; products.dispatchEvent(new dom.window.Event("change", {bubbles: true})); }
-  await flushPromises();
-});
+const products = rootEl.querySelector<HTMLButtonElement>('button.settings-select[id$="-product"]');
+ok((products ? await settingsOptionValues(products) : []).join(",") === "go,zen", "Go and Zen remain distinct access plans within OpenCode");
+if (products) await selectSettingsValue(products, "zen");
 ok(rootEl.querySelector<HTMLInputElement>('input[placeholder*="OPENCODE_API_KEY"]') !== null, "selecting Zen changes the credential reference");
-ok(rootEl.querySelector<HTMLSelectElement>('select[id$="-format"]')?.value === "anthropic", "Zen selects its supported API format");
+ok(rootEl.querySelector<HTMLButtonElement>('button.settings-select[id$="-format"]')?.value === "anthropic", "Zen selects its supported API format");
 
 const openCodeProviders: ProviderView[] = [
   { ...deepSeekAnthropic, builtIn: false, name: "opencode-go", kind: "openai", baseUrl: "https://opencode.ai/zen/go/v1", apiKeyEnv: "OPENCODE_GO_API_KEY", webSearch: false },

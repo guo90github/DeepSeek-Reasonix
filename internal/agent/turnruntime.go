@@ -104,6 +104,14 @@ type turnRuntime struct {
 	// or finish from a silent partial read.
 	incompleteReads incompleteReadState
 
+	// readShadow owns read obligations unless the legacy rollback is selected.
+	readShadow readShadowState
+
+	// evidenceBlocked records paths whose writer was blocked for missing
+	// evidence this turn. While it is non-empty an unknown-scope writer may not
+	// route around the block. Parallel tool calls write it, so it is guarded.
+	evidenceBlocked evidenceBlockState
+
 	phase phaseClock
 
 	// sessionContext is the content-free diagnostic for the snapshot selected

@@ -1,8 +1,9 @@
+import { makeMockModelSettingsBindings, type ModelSettingsBindings } from "./modelSettingsBridge";
 import { mockProviderTemplate, mockPreset, mockBundlePreset, mockKimiAPIModels, mockLongCatModels, mockTokenRhythmModels, mockTokenRhythmModelOverrides, mockMiMoV25Models, mockMiniMaxModels, mockGLMAPIModels, mockGLMCodingModels, mockGLMAnthropicModels, mockQwenAPIModels, mockQwenPlanModels, mockQwenPlanVisionModels, mockStepFunModels, mockOpenCodeGoModels, mockNovitaModels, mockGMIModels, mockVercelModels, mockOllamaCloudModels } from "./mockProviderTemplates";
-// Wails and the browser mock share this React-to-Go contract.
-// @ts-ignore generated locally; fresh checkouts use the disabled drift check below.
-import type * as GeneratedApp from "../../wailsjs/go/main/App";
+// The Electron host and the browser mock share this React-to-Go contract.
+import type { DesktopCommandName } from "../generated/desktopContract.generated";
 import type { InvocationRequest } from "./invocationDisplay";
+import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
 import { maybeShare } from "./queryCoalesce";
 import { makeMockSessionCatalogBindings } from "./sessionCatalogBridge";
@@ -11,7 +12,7 @@ import { makeMockTaskCatalogBindings, type TaskCatalogBindings } from "./taskCat
 import { makeMockBlankProjectBindings, type BlankProjectBindings } from "./blankProjectBridge";
 import { makeMockQualityFloorBindings, type QualityFloorBindings } from "./deliveryFloorBridge";
 import { t } from "./i18n";
-import { makeMockForkBindings } from "./forkWorktree";
+import { makeMockForkBindings } from "./mockForkWorktree";
 import { makeMockWorktreeMergeBindings } from "./worktreeMergeMock";
 import { providerIsConfigured, providerRequiresKey, removeProviderAccessesForMock } from "./providerModels";
 import { DEFAULT_STATUS_BAR_ITEMS } from "./statusBarItems";
@@ -31,6 +32,8 @@ import { makeMockMCPAppBindings, type MCPAppBindings } from "./mcpAppBridge";
 import { makeMockPinnedContextBindings, type PinnedContextBindings } from "./pinnedContextBridge";
 import { createDesktopPreferencesMock } from "./desktopPreferencesMock";
 import type {
+  TurnChanges,
+  TurnFileChange,
   RemoteHostView,
   RemoteHostInput,
   RemoteConnectionStatus,
@@ -151,6 +154,7 @@ import type {
   SessionClearResult,
 } from "./types";
 import { browserPreviewShellSupport } from "./shellSupportPreview";
+import { desktopHost } from "./desktopHost";
 export * from "./remoteTabEvents";
 export const COMPACT_RATIO_MIN_PERCENT = 30, COMPACT_RATIO_MAX_PERCENT = 85;
 
@@ -172,10 +176,12 @@ function stripLegacyGoalBudgetFlags(arg: string): string {
   return parts.join(" ");
 }
 
-// AppBindings is derived from the Wails-generated Go → TS method signatures, so
-// the compiler catches drift between the Go binding surface and the frontend mock.
-// Run `wails generate module` after adding/renaming a bound method on App, then
-// `pnpm typecheck` to verify the mock still satisfies the contract.
+// AppBindings is checked against the generated desktop host contract (see
+// src/generated/desktopContract.generated.ts), so the compiler catches drift
+// between the Go binding surface and the frontend mock. After adding or
+// renaming a bound method on App, run `cd desktop && go run . -emit-contract
+// frontend/src/generated`, then `pnpm typecheck` to verify the mock still
+// satisfies the contract.
 //
 // Types for native-feel bindings, used only by AppBindings and the dev mock.
 interface NativeConfirmRequest {
@@ -196,7 +202,7 @@ interface DesktopWindowState {
 }
 // AppBindings is the hand-written React-to-Go contract. _CheckGeneratedBindings
 // catches generated methods missing here; update this interface and typecheck.
-export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings {
+export interface AppBindings extends ModelSettingsBindings, SessionCatalogBindings, ProjectTreeOrganizationBindings, HistoryCatalogBindings, TaskCatalogBindings, BlankProjectBindings, QualityFloorBindings, SessionTitleBindings, ScrollDiagnosticBindings, RemoteProjectBindings, MCPAppBindings, PinnedContextBindings, FollowupBindings {
   Platform(): Promise<string>;
   MinimiseMainWindow(): Promise<void>;
   ToggleMaximiseMainWindow(): Promise<void>;
@@ -233,7 +239,6 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   SubmitInitialGoalToTabWithID(tabID: string, goal: string, display: string, input: string, invocations: InvocationRequest[], collaborationMode: string, toolApprovalMode: string, submissionID: string): Promise<string[]>;
   SubmitEditedDisplayToTab(tabID: string, display: string, input: string, original: string): Promise<void>;
   SubmitEditedDisplayToTabWithID(tabID: string, display: string, input: string, original: string, submissionID: string): Promise<void>;
-  RunShell(command: string): Promise<void>;
   RunShellForTab(tabID: string, command: string): Promise<void>;
   Steer(text: string): Promise<void>;
   SteerForTab(tabID: string, text: string): Promise<void>;
@@ -257,8 +262,6 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
     maxItems: number;
     maxBytes: number;
   }>;
-  EnqueueInboxFollowup(tabID: string, display: string, submit: string, idempotency: string): Promise<{ itemId: string; disposition: string; position: number; paused: boolean; idempotent?: boolean; error?: string }>;
-  EnqueueInboxFollowupWithInvocations(tabID: string, display: string, submit: string, invocations: InvocationRequest[], idempotency: string): Promise<{ itemId: string; disposition: string; position: number; paused: boolean; idempotent?: boolean; error?: string }>;
   EnqueueInboxSteer(tabID: string, display: string, submit: string, idempotency: string): Promise<{ itemId: string; disposition: string; position: number; paused: boolean; idempotent?: boolean; error?: string }>;
   EnqueueInboxSteerForTurn?(tabID: string, turnID: string, display: string, submit: string, idempotency: string): Promise<{ itemId: string; disposition: string; position: number; paused: boolean; idempotent?: boolean; error?: string }>;
   SteerInboxItem(tabID: string, itemID: string): Promise<{
@@ -318,7 +321,6 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   // Returns auto-allowed prompt ids; unlisted prompts remain pending (#6432).
   SetModeForTab(tabID: string, mode: string): Promise<string[] | void>;
   SetAutoApproveTools(on: boolean): Promise<void>;
-  SetCollaborationMode(mode: string): Promise<void>;
   SetCollaborationModeForTab(tabID: string, mode: string): Promise<void>;
   SetToolApprovalMode(mode: string): Promise<void>;
   // Same drained-prompt-id contract as SetModeForTab.
@@ -330,7 +332,6 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   SetGoalForTab(tabID: string, goal: string): Promise<void>;
   ResumeGoalForTab(tabID: string): Promise<boolean>;
   PauseGoalForTab(tabID: string): Promise<boolean>;
-  ClearGoal(): Promise<void>;
   ClearGoalForTab(tabID: string): Promise<void>;
   Compact(): Promise<void>;
   CompactForTab(tabID: string): Promise<void>;
@@ -393,7 +394,6 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   PickWorkspace(): Promise<string>;
   SwitchWorkspace(path: string): Promise<string>;
   RemoveWorkspace(path: string): Promise<void>;
-  ContextUsage(): Promise<ContextInfo>;
   ContextUsageForTab(tabID: string): Promise<ContextInfo>;
   Balance(): Promise<BalanceInfo>;
   BalanceForTab(tabID: string): Promise<BalanceInfo>;
@@ -403,11 +403,8 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   CurrentTaskSessionID(): Promise<string>;
   ListTasksForSession(sessionID: string): Promise<TaskSnapshot[]>;
   GetTask(taskID: string): Promise<TaskSnapshot | null>;
-  ListTaskEvents(taskID: string, afterSequence: number): Promise<TaskEvent[]>;
   StopTask(taskID: string, expectedVersion: number, reason: string, idemKey: string): Promise<ControlResult>;
   CancelTask(taskID: string, expectedVersion: number, reason: string, idemKey: string): Promise<ControlResult>;
-  RequeueTask(taskID: string, expectedVersion: number, idemKey: string): Promise<ControlResult>;
-  OpenTaskSession(taskID: string): Promise<ControlResult>;
   ListTasksForTab(tabID: string): Promise<TaskSnapshot[]>;
   ListTaskEventsForTab(tabID: string, taskID: string, afterSequence: number): Promise<TaskEvent[]>;
   StopTaskForTab(tabID: string, taskID: string, expectedVersion: number, reason: string, idemKey: string): Promise<ControlResult>;
@@ -491,18 +488,18 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   WorkspaceRevisionForTab(tabID: string): Promise<{ revisions: WorkspaceRevisions; watchState: "active" | "degraded" | "unavailable" }>;
   WorkspaceChanges(tabID: string): Promise<WorkspaceChangesView>;
   WorkspaceChangeDetail(tabID: string, path: string): Promise<WorkspaceChangeDetailView>;
+  WorkspaceTurnChanges(tabID: string, sessionPath: string, turn: number, resultID: string): Promise<TurnChanges>;
+  WorkspaceTurnChangeDetail(tabID: string, sessionPath: string, turn: number, resultID: string, path: string): Promise<TurnFileChange | null>;
+  TurnCheckLog(tabID: string, sessionPath: string, toolID: string, resultID: string): Promise<{ output: string; truncated: boolean } | null>;
   GitBranches(): Promise<string[]>;
   GitCheckout(branch: string): Promise<void>;
   WorkspaceGitHistory(tabID: string, path: string): Promise<GitCommitView[]>;
   WorkspaceGitCommitDetail(tabID: string, hash: string, path: string): Promise<GitCommitDetailView>;
-  OpenWorkspacePath(rel: string): Promise<void>;
   OpenWorkspacePathForTab(tabID: string, rel: string): Promise<void>;
   ResolveWorkspacePathForTab(tabID: string, rel: string): Promise<string>;
   ExternalOpeners(): Promise<ExternalOpenersView>; ExternalOpenersForTab(tabID: string): Promise<ExternalOpenersView>;
   SetPreferredExternalOpener(id: string): Promise<void>;
-  OpenWorkspaceInExternalOpener(id: string): Promise<void>;
   OpenWorkspaceInExternalOpenerForTab(tabID: string, id: string): Promise<void>; OpenLocalPathInExternalOpener(path: string, id: string): Promise<void>; SaveLocalPathAs(path: string): Promise<string>;
-  RevealWorkspacePath(rel: string): Promise<void>;
   RevealWorkspacePathForTab(tabID: string, rel: string): Promise<void>;
   RevealPath(path: string): Promise<void>;
   OpenLocalPath(path: string): Promise<void>;
@@ -547,7 +544,6 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   SaveDoc(path: string, body: string): Promise<string>;
   SaveDocForTab(tabID: string, path: string, body: string): Promise<string>;
   DesktopStartupSettings(): Promise<DesktopStartupSettingsView>;
-  Settings(): Promise<SettingsView>;
   HooksSettings(scope: string): Promise<HooksSettingsView>;
   SaveHooksSettings(scope: string, hooks: HookConfigView[]): Promise<void>;
   SaveHooksSettingsForRoot(scope: string, projectRoot: string, hooks: HookConfigView[]): Promise<void>;
@@ -557,6 +553,7 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   SetPlannerModel(ref: string): Promise<void>;
   SetVisionModel(ref: string): Promise<void>;
   SetPromptOptimizeModel(ref: string): Promise<void>;
+  SetWebSearchModel(ref: string): Promise<void>;
   SetSubagentModel(ref: string): Promise<void>;
   SetSubagentEffort(level: string): Promise<void>;
   SetMaxSubagentDepth(depth: number): Promise<void>;
@@ -566,7 +563,7 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   SetDefaultToolApprovalMode(mode: string): Promise<void>;
   SetDefaultAutoRecoveryCheckpoint(enabled: boolean): Promise<void>;
 
-  RenameProviderConnections: typeof GeneratedApp.RenameProviderConnections;
+  RenameProviderConnections(names: string[], displayName: string): Promise<void>;
   SaveProvider(p: ProviderView): Promise<void>;
   SetProviderWebSearch(names: string[], enabled: boolean): Promise<void>;
   SaveProviderModelCatalogs(updates: ProviderModelCatalogUpdate[]): Promise<string[]>;
@@ -636,7 +633,7 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   PickThemeBackground(): Promise<string>;
   SetDesktopLayoutStyle(style: string): Promise<void>;
   OptimizePrompt(text: string): Promise<string>;
-  AuditTurn(reasoning: string): Promise<import("../../wailsjs/go/models").event.ReasoningAuditTotals>;
+  AuditTurn(reasoning: string): Promise<import("../generated/desktopContract.generated").ReasoningAuditTotals>;
   SetAuditModel(name: string): Promise<void>;
   SetAuditEnabled(on: boolean): Promise<void>;
   SetAuditThreshold(threshold: number): Promise<void>;
@@ -661,7 +658,7 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
   SetCompactRatio(ratio: number): Promise<void>;
   SetReasoningLanguage(lang: string): Promise<void>;
   SetTrayLocale(locale: "en" | "zh" | "zh-TW"): Promise<void>;
-  // SetBypass is the legacy Wails name for YOLO/full-access tool auto-approval
+  // SetBypass is the legacy desktop name for YOLO/full-access tool auto-approval
   // (ask questions and plan approvals still wait; deny rules still apply).
   // Runtime-only.
   SetBypass(on: boolean): Promise<void>;
@@ -766,60 +763,19 @@ export interface AppBindings extends SessionCatalogBindings, ProjectTreeOrganiza
 // from B. If that set is non-empty, AssertNever<non-never> fails with
 // "Type 'X' does not satisfy the constraint 'never'".
 // _CheckGenToApp errors mean a generated Go method has no TS counterpart.
-// These compare method *names* only; full signature checking isn't possible here
-// because local types (types.ts) use plain interfaces while generated types
-// (models.ts) use classes with a convertValues prototype method. The structural
-// mismatch would produce false positives. Method-arity and parameter-order drift
-// are caught at the call sites by tsc when components invoke app.<method>(...).
+// This compares method *names* only: the generated contract uses positional
+// arg0/arg1 parameters and its own DTO interfaces, so full signature
+// assignability would false-positive. Parameter drift is caught at the call
+// sites by tsc when components invoke app.<method>(...).
 type AssertNever<T extends never> = T;
-type GeneratedAppKeys = keyof typeof GeneratedApp;
-type GeneratedAppMissing =
-  string extends GeneratedAppKeys ? true :
-  number extends GeneratedAppKeys ? true :
-  symbol extends GeneratedAppKeys ? true :
-  false;
-export type _CheckGenToApp = AssertNever<
-  GeneratedAppMissing extends true ? never : Exclude<GeneratedAppKeys, keyof AppBindings>
->;
-
-interface WailsRuntime {
-  EventsOn(name: string, cb: (...data: unknown[]) => void): () => void;
-  BrowserOpenURL(url: string): void;
-  WindowSetSystemDefaultTheme?(): void;
-  WindowSetLightTheme?(): void;
-  WindowSetDarkTheme?(): void;
-  WindowSetBackgroundColour?(r: number, g: number, b: number, a: number): void;
-  WindowGetSize?(): Promise<{ w: number; h: number }>;
-  WindowGetPosition?(): Promise<{ x: number; y: number }>;
-  WindowIsMaximised?(): Promise<boolean>;
-  ClipboardSetText?(text: string): Promise<boolean>;
-  ClipboardGetText?(): Promise<string>;
-  // Native OS file drop; useDropTarget gates delivery to --wails-drop-target elements. Absent in browser mocks.
-  OnFileDrop?(cb: (x: number, y: number, paths: string[]) => void, useDropTarget: boolean): void;
-  OnFileDropOff?(): void;
-}
-
-declare global {
-  interface Window {
-    runtime?: WailsRuntime;
-    go?: { main?: { App?: AppBindings } };
-  }
-}
+export type _CheckGenToApp = AssertNever<Exclude<DesktopCommandName, keyof AppBindings>>;
 
 // Must match desktop/app.go's eventChannel constant.
 const EVENT_CHANNEL = "agent:event";
-const RECENT_NATIVE_FILE_DRAG_MS = 2000;
-const WAILS_NON_FILE_DRAG_MESSAGE = "additional File object is not a file on the disk";
-const UNCAUGHT_ERROR_PREFIX_RE = /^Uncaught(?:\s+\(in promise\))?(?:\s+\w*Error)?:\s*/i;
-const WAILS_IPC_CONNECTING_RE = /Failed to execute 'send' on 'WebSocket': Still in CONNECTING state/i;
-const WAILS_IPC_NULL_SEND_RE = /Cannot read properties of null \(reading 'send'\)/i;
 
-// Resolve the Wails binding at CALL time, not module-load time: in dev the Wails
-// runtime can inject window.go AFTER this module first evaluates, so snapshotting
-// once would pin the browser mock for the whole session (and show fake data — the
-// dev mock's model list leaking into the real app was exactly this bug).
-export function realApp(): AppBindings | undefined {
-  return typeof window !== "undefined" ? window.go?.main?.App : undefined;
+function hostEvents(name: string, cb: (...args: unknown[]) => void): (() => void) | null {
+  const host = desktopHost();
+  return host.kind === "none" ? null : host.events.on(name, cb);
 }
 
 let mockSingleton: AppBindings | null = null;
@@ -830,10 +786,7 @@ function getMock(): AppBindings {
 
 // onEvent subscribes to the agent's typed event stream; returns an unsubscribe.
 export function onEvent(cb: (e: WireEvent) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn(EVENT_CHANNEL, (payload) => cb(payload as WireEvent));
-  }
-  return mockSubscribe(cb);
+  return hostEvents(EVENT_CHANNEL, (payload) => cb(payload as WireEvent)) ?? mockSubscribe(cb);
 }
 
 export interface TerminalOutputEvent {
@@ -853,23 +806,21 @@ function terminalEventPayload<T>(payload: unknown): T | null {
 }
 
 export function onTerminalOutput(cb: (event: TerminalOutputEvent) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("terminal:output", (payload) => {
-      const event = terminalEventPayload<TerminalOutputEvent>(payload);
-      if (event?.id && typeof event.data === "string") cb(event);
-    });
-  }
+  const off = hostEvents("terminal:output", (payload) => {
+    const event = terminalEventPayload<TerminalOutputEvent>(payload);
+    if (event?.id && typeof event.data === "string") cb(event);
+  });
+  if (off) return off;
   mockTerminalOutputListeners.add(cb);
   return () => mockTerminalOutputListeners.delete(cb);
 }
 
 export function onTerminalExit(cb: (event: TerminalExitEvent) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("terminal:exit", (payload) => {
-      const event = terminalEventPayload<TerminalExitEvent>(payload);
-      if (event?.id && typeof event.exitCode === "number") cb(event);
-    });
-  }
+  const off = hostEvents("terminal:exit", (payload) => {
+    const event = terminalEventPayload<TerminalExitEvent>(payload);
+    if (event?.id && typeof event.exitCode === "number") cb(event);
+  });
+  if (off) return off;
   mockTerminalExitListeners.add(cb);
   return () => mockTerminalExitListeners.delete(cb);
 }
@@ -889,9 +840,8 @@ export function __emitMockTerminalExit(event: TerminalExitEvent): void {
 // channel from the agent stream); returns an unsubscribe. Must match the event
 // name emitted in desktop/updater_app.go.
 export function onUpdaterProgress(cb: (p: UpdateProgress) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("updater:progress", (p) => cb(p as UpdateProgress));
-  }
+  const off = hostEvents("updater:progress", (p) => cb(p as UpdateProgress));
+  if (off) return off;
   updaterListeners.add(cb);
   return () => {
     updaterListeners.delete(cb);
@@ -902,11 +852,10 @@ export function onUpdaterProgress(cb: (p: UpdateProgress) => void): () => void {
 // chunk per event; must match the emits in desktop/prompt_optimize.go). The
 // callback receives (tabId, chunk); the composer routes by run, not by tab.
 export function onOptimizePromptChunk(cb: (tabId: string, chunk: string) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("prompt-optimize:chunk", (tabId?: unknown, chunk?: unknown) => {
-      if (typeof tabId === "string" && typeof chunk === "string") cb(tabId, chunk);
-    });
-  }
+  const off = hostEvents("prompt-optimize:chunk", (tabId?: unknown, chunk?: unknown) => {
+    if (typeof tabId === "string" && typeof chunk === "string") cb(tabId, chunk);
+  });
+  if (off) return off;
   optimizePromptChunkListeners.add(cb);
   return () => {
     optimizePromptChunkListeners.delete(cb);
@@ -916,120 +865,21 @@ export function onOptimizePromptChunk(cb: (tabId: string, chunk: string) => void
 // onOptimizePromptDone fires once the stream has fully flushed (after the last
 // chunk); the binding's resolved promise only means "no error".
 export function onOptimizePromptDone(cb: (tabId: string) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("prompt-optimize:done", (tabId?: unknown) => {
-      if (typeof tabId === "string") cb(tabId);
-    });
-  }
+  const off = hostEvents("prompt-optimize:done", (tabId?: unknown) => {
+    if (typeof tabId === "string") cb(tabId);
+  });
+  if (off) return off;
   optimizePromptDoneListeners.add(cb);
   return () => {
     optimizePromptDoneListeners.delete(cb);
   };
 }
 
-function errorMessage(err: unknown): string {
-  if (err && typeof err === "object" && "message" in err) {
-    const msg = (err as { message?: unknown }).message;
-    if (typeof msg === "string") return msg;
-  }
-  return String(err);
-}
-
-export function isWailsNonFileDragError(err: unknown, recentNativeFileDrag = false): boolean {
-  const msg = errorMessage(err).trim().replace(UNCAUGHT_ERROR_PREFIX_RE, "");
-  if (msg.includes(WAILS_NON_FILE_DRAG_MESSAGE)) return true;
-  return recentNativeFileDrag && msg.toLowerCase() === "invalid argument";
-}
-
-export function isWailsNonFileDragErrorEvent(
-  event: Pick<ErrorEvent, "error" | "message">,
-  recentNativeFileDrag = false,
-): boolean {
-  if (isWailsNonFileDragError(event.error ?? event.message, recentNativeFileDrag)) return true;
-  return event.error != null && isWailsNonFileDragError(event.message, recentNativeFileDrag);
-}
-
-export function isTransientWailsIPCError(err: unknown): boolean {
-  const msg = errorMessage(err).trim().replace(UNCAUGHT_ERROR_PREFIX_RE, "");
-  return WAILS_IPC_CONNECTING_RE.test(msg) || WAILS_IPC_NULL_SEND_RE.test(msg);
-}
-
-function dataTransferLooksLikeFileDrag(dt: DataTransfer | null): boolean {
-  if (!dt) return false;
-  if (dt.files?.length > 0) return true;
-  return Array.from(dt.types ?? []).includes("Files");
-}
-
-let wailsDragSuppressionRefs = 0;
-let wailsDragSuppressionUninstall: (() => void) | null = null;
-let lastNativeFileDragAt = 0;
-
-export function installWailsNonFileDragErrorSuppression(): () => void {
-  if (typeof window === "undefined") return () => {};
-
-  wailsDragSuppressionRefs += 1;
-  if (!wailsDragSuppressionUninstall) {
-    const markNativeFileDrag = (e: DragEvent) => {
-      if (dataTransferLooksLikeFileDrag(e.dataTransfer)) lastNativeFileDragAt = Date.now();
-    };
-    const hasRecentNativeFileDrag = () => Date.now() - lastNativeFileDragAt <= RECENT_NATIVE_FILE_DRAG_MS;
-    const suppressNonFileDragError = (e: ErrorEvent) => {
-      if (isWailsNonFileDragErrorEvent(e, hasRecentNativeFileDrag()) || isTransientWailsIPCError(e.error ?? e.message)) {
-        e.preventDefault();
-      }
-    };
-    const suppressNonFileDragRejection = (e: PromiseRejectionEvent) => {
-      if (isWailsNonFileDragError(e.reason, hasRecentNativeFileDrag()) || isTransientWailsIPCError(e.reason)) {
-        e.preventDefault();
-      }
-    };
-
-    window.addEventListener("dragenter", markNativeFileDrag, true);
-    window.addEventListener("dragover", markNativeFileDrag, true);
-    window.addEventListener("drop", markNativeFileDrag, true);
-    window.addEventListener("error", suppressNonFileDragError);
-    window.addEventListener("unhandledrejection", suppressNonFileDragRejection);
-    wailsDragSuppressionUninstall = () => {
-      window.removeEventListener("dragenter", markNativeFileDrag, true);
-      window.removeEventListener("dragover", markNativeFileDrag, true);
-      window.removeEventListener("drop", markNativeFileDrag, true);
-      window.removeEventListener("error", suppressNonFileDragError);
-      window.removeEventListener("unhandledrejection", suppressNonFileDragRejection);
-      lastNativeFileDragAt = 0;
-    };
-  }
-
-  let disposed = false;
-  return () => {
-    if (disposed) return;
-    disposed = true;
-    wailsDragSuppressionRefs = Math.max(0, wailsDragSuppressionRefs - 1);
-    if (wailsDragSuppressionRefs === 0 && wailsDragSuppressionUninstall) {
-      wailsDragSuppressionUninstall();
-      wailsDragSuppressionUninstall = null;
-    }
-  };
-}
-
-// onFilesDropped subscribes to native OS file drops landing on the composer (the
-// --wails-drop-target element); the callback gets the dropped files' absolute
-// paths. No-op in the browser dev mock, where the runtime is absent.
+// onFilesDropped subscribes to native OS file drops landing on the composer's
+// drop target; the callback gets the dropped files' absolute paths. No-op in
+// the browser dev mock.
 export function onFilesDropped(cb: (paths: string[]) => void): () => void {
-  const rt = typeof window !== "undefined" ? window.runtime : undefined;
-  if (!rt?.OnFileDrop) return () => {};
-
-  // Wails' internal ResolveFilePaths throws when a non-file object (e.g. the
-  // window icon) is dragged onto the webview. The error is uncaught and crashes
-  // the app. Intercept it here so only real file drops reach the callback.
-  const uninstallDragSuppression = installWailsNonFileDragErrorSuppression();
-
-  rt.OnFileDrop((_x, _y, paths) => {
-    if (Array.isArray(paths) && paths.length > 0) cb(paths);
-  }, true);
-  return () => {
-    rt.OnFileDropOff?.();
-    uninstallDragSuppression();
-  };
+  return desktopHost().native.onFilesDropped(cb);
 }
 
 // onReady subscribes to the agent:ready event fired when boot.Build completes.
@@ -1038,42 +888,34 @@ export function onFilesDropped(cb: (paths: string[]) => void): () => void {
 // (model/effort/token-mode switch, clear-while-running). The rebuilt
 // controller restarts prompt ids, so per-tab id-keyed state must reset.
 export function onRuntimeRebuilt(cb: (tabId?: string, runtimeEpoch?: string) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("runtime:rebuilt", (tabId?: unknown, runtimeEpoch?: unknown) =>
-      cb(
-        typeof tabId === "string" ? tabId : undefined,
-        typeof runtimeEpoch === "string" ? runtimeEpoch : undefined,
-      )
-    );
-  }
-  return () => {};
+  return hostEvents("runtime:rebuilt", (tabId?: unknown, runtimeEpoch?: unknown) =>
+    cb(
+      typeof tabId === "string" ? tabId : undefined,
+      typeof runtimeEpoch === "string" ? runtimeEpoch : undefined,
+    )
+  ) ?? (() => {});
 }
 
 export function onReady(cb: (tabId?: string) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("agent:ready", (tabId?: unknown) => cb(typeof tabId === "string" ? tabId : undefined));
-  }
+  const off = hostEvents("agent:ready", (tabId?: unknown) => cb(typeof tabId === "string" ? tabId : undefined));
+  if (off) return off;
   // In dev mock, fire immediately since there's no real boot sequence.
   cb();
   return () => {};
 }
 
 export function onProjectTreeChanged(cb: () => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("project-tree:changed", (payload?: unknown) => (payload as { reason?: unknown } | undefined)?.reason !== "runtime" && (payload as { reason?: unknown } | undefined)?.reason !== "catalog-v2" && cb());
-  }
-  return () => {};
+  return hostEvents("project-tree:changed", (payload?: unknown) => (payload as { reason?: unknown } | undefined)?.reason !== "runtime" && (payload as { reason?: unknown } | undefined)?.reason !== "catalog-v2" && cb()) ?? (() => {});
 }
 
 // onTopicActivation subscribes to the "topic:activation" channel carrying the
 // lifecycle of ticketed StartTopicActivation requests (starting/ready/failed/
 // cancelled). Returns an unsubscribe.
 export function onTopicActivation(cb: (event: TopicActivationEvent) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("topic:activation", (payload?: unknown) => {
-      if (payload && typeof payload === "object") cb(payload as TopicActivationEvent);
-    });
-  }
+  const off = hostEvents("topic:activation", (payload?: unknown) => {
+    if (payload && typeof payload === "object") cb(payload as TopicActivationEvent);
+  });
+  if (off) return off;
   mockTopicActivationListeners.add(cb);
   return () => mockTopicActivationListeners.delete(cb);
 }
@@ -1082,11 +924,10 @@ export function onTopicActivation(cb: (event: TopicActivationEvent) => void): ()
 // after the backend recomputes the expensive MetaForTab fields (git branch,
 // image-input capability) in the background.
 export function onTabMeta(cb: (event: TabMetaRefreshEvent) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("tab:meta", (payload?: unknown) => {
-      if (payload && typeof payload === "object") cb(payload as TabMetaRefreshEvent);
-    });
-  }
+  const off = hostEvents("tab:meta", (payload?: unknown) => {
+    if (payload && typeof payload === "object") cb(payload as TabMetaRefreshEvent);
+  });
+  if (off) return off;
   mockTabMetaListeners.add(cb);
   return () => mockTabMetaListeners.delete(cb);
 }
@@ -1103,47 +944,34 @@ export function __emitMockTabMeta(event: TabMetaRefreshEvent): void {
 }
 
 export function onSessionRecovered(cb: (payload: SessionRecoveryEvent) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("session:recovered", (payload?: unknown) => cb((payload ?? {}) as SessionRecoveryEvent));
-  }
-  return () => {};
+  return hostEvents("session:recovered", (payload?: unknown) => cb((payload ?? {}) as SessionRecoveryEvent)) ?? (() => {});
 }
 
 export function onSessionActiveVersionChanged(cb: (payload: SessionRecoveryEvent) => void): () => void {
-  if (typeof window === "undefined" || !window.runtime?.EventsOn) return () => {};
-  return window.runtime.EventsOn("session:active-version-changed", (payload?: unknown) => cb((payload ?? {}) as SessionRecoveryEvent));
+  return hostEvents("session:active-version-changed", (payload?: unknown) => cb((payload ?? {}) as SessionRecoveryEvent)) ?? (() => {});
 }
 
 export function onSessionRecoveryFailed(cb: (payload: SessionRecoveryFailedEvent) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("session:recovery-failed", (payload?: unknown) => cb((payload ?? {}) as SessionRecoveryFailedEvent));
-  }
-  return () => {};
+  return hostEvents("session:recovery-failed", (payload?: unknown) => cb((payload ?? {}) as SessionRecoveryFailedEvent)) ?? (() => {});
 }
 
 export function onRemoteStatus(cb: (s: RemoteConnectionStatus) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("remote:status", (payload?: unknown) => cb((payload ?? {}) as RemoteConnectionStatus));
-  }
-  return registerMockRemoteListener("status", cb as (v: unknown) => void);
+  return hostEvents("remote:status", (payload?: unknown) => cb((payload ?? {}) as RemoteConnectionStatus))
+    ?? registerMockRemoteListener("status", cb as (v: unknown) => void);
 }
 
 export function onRemoteForwards(cb: (e: RemoteForwardsEvent) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("remote:forwards", (payload?: unknown) => cb((payload ?? {}) as RemoteForwardsEvent));
-  }
-  return registerMockRemoteListener("forwards", cb as (v: unknown) => void);
+  return hostEvents("remote:forwards", (payload?: unknown) => cb((payload ?? {}) as RemoteForwardsEvent))
+    ?? registerMockRemoteListener("forwards", cb as (v: unknown) => void);
 }
 
 export function onRemoteServer(cb: (s: RemoteServerView) => void): () => void {
-  if (realApp() && typeof window !== "undefined" && window.runtime) {
-    return window.runtime.EventsOn("remote:server", (payload?: unknown) => cb((payload ?? {}) as RemoteServerView));
-  }
-  return registerMockRemoteListener("server", cb as (v: unknown) => void);
+  return hostEvents("remote:server", (payload?: unknown) => cb((payload ?? {}) as RemoteServerView))
+    ?? registerMockRemoteListener("server", cb as (v: unknown) => void);
 }
 
 // Mock event fan-out so browser-dev and tsx tests can drive remote:* events
-// without a Wails runtime.
+// without a shell runtime.
 type MockRemoteChannel = "status" | "forwards" | "server";
 const mockRemoteListeners: Record<MockRemoteChannel, Set<(v: unknown) => void>> = {
   status: new Set(),
@@ -1159,12 +987,13 @@ export function __emitMockRemote(ch: MockRemoteChannel, payload: unknown): void 
 }
 
 // app proxies each call to the live binding (or the dev mock only when truly
-// outside the shell), so a late-injected window.go is picked up transparently.
+// outside the shell), resolving the host at call time so a shell that attaches
+// late is picked up transparently.
 function bridgeBreadcrumb(method: string): string {
   if (method === "ReportCrash" || method === "RecordUIPerf") return "";
   if (/^(Submit|SubmitDisplay|RunShell|Steer|Cancel|Approve|AnswerQuestion|ReplayPendingPrompts)/.test(method))
     return `turn ${method}`;
-  if (/^(SetModel|SetEffort|SetDefaultModel|SetPlannerModel|SetVisionModel|SetSubagentModel|SetSubagentEffort|SetMaxSubagentDepth|SetMaxSubagentConcurrency|SetMaxParallelWriters)/.test(method))
+  if (/^(SetModel|SetEffort|SetDefaultModel|SetPlannerModel|SetVisionModel|SetWebSearchModel|SetSubagentModel|SetSubagentEffort|SetMaxSubagentDepth|SetMaxSubagentConcurrency|SetMaxParallelWriters)/.test(method))
     return `model ${method}`;
   if (/^(SetDesktop|SetCloseBehavior|SetDisplayMode|SetStatusBar|SetReasoningDisplayMode|SetExpandThinking|SetAutoPlan|SetDefaultToolApprovalMode|SetCompactRatio|SetReasoningLanguage)/.test(method))
     return `settings ${method}`;
@@ -1188,7 +1017,7 @@ function elapsedMs(startedAt: number): number {
 
 export const app: AppBindings = new Proxy({} as AppBindings, {
   get(_t, prop) {
-    const target = realApp() ?? getMock();
+    const target = desktopHost().app ?? getMock();
     const v = (target as unknown as Record<string, unknown>)[String(prop)];
     if (typeof v !== "function") return v;
     return (...args: unknown[]) => {
@@ -1223,11 +1052,7 @@ export const app: AppBindings = new Proxy({} as AppBindings, {
 // don't navigate the webview away from the app). Falls back to window.open in the
 // browser dev mock.
 export function openExternal(url: string): void {
-  if (typeof window !== "undefined" && window.runtime?.BrowserOpenURL) {
-    window.runtime.BrowserOpenURL(url);
-  } else if (typeof window !== "undefined") {
-    window.open(url, "_blank", "noopener");
-  }
+  desktopHost().native.openExternal(url);
 }
 
 // --- browser dev mock --------------------------------------------------------
@@ -1274,7 +1099,7 @@ function emitUpdater(p: UpdateProgress) {
 }
 
 // Prompt-optimization stream mock sets: the browser dev mock and the tsx tests
-// drive the same listener path the real Wails event channel uses.
+// drive the same listener path the real host event stream uses.
 const optimizePromptChunkListeners = new Set<(tabId: string, chunk: string) => void>();
 const optimizePromptDoneListeners = new Set<(tabId: string) => void>();
 
@@ -1286,8 +1111,8 @@ export function __emitMockOptimizePromptDone(tabId: string): void {
   optimizePromptDoneListeners.forEach((l) => l(tabId));
 }
 
-// Test seam for the browser-dev updater state machine. Production Wails builds
-// receive the same payloads through runtime.EventsOn("updater:progress").
+// Test seam for the browser-dev updater state machine. The desktop shell
+// receives the same payloads through the host event stream.
 export function __emitMockUpdater(p: UpdateProgress): void {
   emitUpdater(p);
 }
@@ -1301,13 +1126,13 @@ function baseName(path: string): string {
 }
 
 function browserPlatformOverride(): "darwin" | "windows" | "linux" | "" {
-  if (typeof window === "undefined" || window.runtime) return "";
+  if (typeof window === "undefined" || desktopHost().kind !== "none") return "";
   const value = new URLSearchParams(window.location.search).get("platform");
   return value === "darwin" || value === "windows" || value === "linux" ? value : "";
 }
 
 function browserMockDesktopLayoutStyle(): "classic" | "workbench" | "creation" {
-  if (typeof window === "undefined" || window.go?.main?.App) return "workbench";
+  if (typeof window === "undefined" || desktopHost().app) return "workbench";
   const value = new URLSearchParams(window.location.search).get("layout");
   return value === "classic" || value === "creation" ? value : "workbench";
 }
@@ -1513,7 +1338,7 @@ function makeMockApp(): AppBindings {
   let mockHeartbeatTasks: unknown[] = [];
   // Vite rewrites these literal asset URLs in both dev and production builds.
   // Keeping them on the browser mock makes local visual acceptance match the
-  // Wails bridge, whose ListThemePacks response carries the same two URLs.
+  // desktop bridge, whose ListThemePacks response carries the same two URLs.
   const mockOfficialThemeAssets = {
     "official-rose-dawn": {
       previewUrl: new URL("../../../themes/official/official-rose-dawn/preview.webp", import.meta.url).href,
@@ -1755,9 +1580,13 @@ function makeMockApp(): AppBindings {
   }
   // Mutable settings so the Settings panel's edits are observable in browser dev.
   const settings: SettingsView = {
+    modelSettingsFingerprint: "mock-model-settings-0",
     defaultModel: "deepseek",
     plannerModel: "",
     visionModel: "",
+    webSearchModel: "auto",
+    webSearchModels: ["deepseek/deepseek-v4-flash", "deepseek/deepseek-v4-pro"],
+    webSearchModelStatus: "ready",
     promptOptimizeModel: "",
     subagentModel: "",
     subagentEffort: "",
@@ -1942,7 +1771,7 @@ function makeMockApp(): AppBindings {
     conversationWidth: "standard",
     closeBehavior: "background",
     displayMode: "standard", sessionExperience: "standard", reasoningDisplayMode: "auto", reasoningDisplayModeExplicit: false,
-    statusBarStyle: "text",
+    statusBarStyle: "icon",
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
     defaultToolApprovalMode: "auto",
     checkUpdates: true,
@@ -2485,9 +2314,9 @@ function makeMockApp(): AppBindings {
     {
       id: "tab_global",
       scope: "global",
-      workspaceRoot: "",
+      workspaceRoot: globalWorkspaceRoot,
       workspaceName: "Global",
-      workspacePath: "~/projects/joyquant-db",
+      workspacePath: globalWorkspaceRoot,
       topicId: "topic_global",
       topicTitle: "Global",
       label: "DeepSeek-R1",
@@ -2498,7 +2327,7 @@ function makeMockApp(): AppBindings {
       toolApprovalMode: "ask",
       tokenMode: "full",
       active: false,
-      cwd: "~/projects/joyquant-db",
+      cwd: globalWorkspaceRoot,
     },
   ];
   if (sandboxEscapeMock) {
@@ -2986,7 +2815,7 @@ function makeMockApp(): AppBindings {
       const reply =
         `You said: **${input}**\n\n` +
         "This is the browser dev mock — the real reply comes from the kernel " +
-        "inside the Wails shell. Here's a fenced block to exercise the editor seam:\n\n" +
+        "inside the desktop shell. Here's a fenced block to exercise the editor seam:\n\n" +
         "```go\nfunc main() {\n    println(\"hello from the mock\")\n}\n```\n";
       for (const ch of reply) {
         if (cancelled) break;
@@ -3071,23 +2900,22 @@ function makeMockApp(): AppBindings {
         async SubmitInitialGoalToTabWithID(_tabID, goal, display, input, invocations, _collaborationMode, _toolApprovalMode, submissionID) { await this.SetGoalForTab(_tabID, goal); if (invocations.length > 0) await this.SubmitInvocationsToTabWithID(_tabID, display, input, invocations, submissionID); else await this.SubmitDisplayToTabWithID(_tabID, display, input, submissionID); return []; },
         async SubmitEditedDisplayToTab(_tabID, display, input, _original) { await withMockTabScope(_tabID, () => this.SubmitDisplay(display, input)); },
         async SubmitEditedDisplayToTabWithID(_tabID, display, input, _original, submissionID) { await this.SubmitDisplayToTabWithID(_tabID, display, input, submissionID); },
-        async RunShell(command) {
-          cancelled = false;
-          emitMockTurnStarted();
-          await delay(100);
-          if (cancelled) return;
-          const id = `shell-${command.slice(0, 32)}`;
-          emit({ kind: "tool_dispatch", tool: { id, name: "bash", args: JSON.stringify({ command }), readOnly: false } });
-          await delay(200);
-          if (cancelled) return;
-          emit({ kind: "tool_progress", tool: { id, name: "bash", output: `$ ${command}\n(mock output)\n`, readOnly: false } });
-          await delay(100);
-          if (cancelled) return;
-          emit({ kind: "tool_result", tool: { id, name: "bash", output: `$ ${command}\n(mock output)\n`, readOnly: false, durationMs: 300 } });
-          emitMockTurnDone();
-        },
         async RunShellForTab(_tabID, command) {
-          await withMockTabScope(_tabID, () => this.RunShell(command));
+          await withMockTabScope(_tabID, async () => {
+            cancelled = false;
+            emitMockTurnStarted();
+            await delay(100);
+            if (cancelled) return;
+            const id = `shell-${command.slice(0, 32)}`;
+            emit({ kind: "tool_dispatch", tool: { id, name: "bash", args: JSON.stringify({ command }), readOnly: false } });
+            await delay(200);
+            if (cancelled) return;
+            emit({ kind: "tool_progress", tool: { id, name: "bash", output: `$ ${command}\n(mock output)\n`, readOnly: false } });
+            await delay(100);
+            if (cancelled) return;
+            emit({ kind: "tool_result", tool: { id, name: "bash", output: `$ ${command}\n(mock output)\n`, readOnly: false, durationMs: 300 } });
+            emitMockTurnDone();
+          });
         },
         async Steer(_text) {
           // Mock: emit a steer event as confirmation in the transcript.
@@ -3252,10 +3080,6 @@ function makeMockApp(): AppBindings {
           });
           return drainMockApprovalPreviews(nextToolApprovalMode);
         },
-        async SetCollaborationMode(mode) {
-          const active = mockTabs.find((tab) => tab.active);
-          if (active) await this.SetCollaborationModeForTab(active.id, mode);
-        },
         async SetCollaborationModeForTab(tabID, mode) {
           const next = normalizeCollaborationMode(mode);
           mockTabs = mockTabs.map((tab) => {
@@ -3344,9 +3168,6 @@ function makeMockApp(): AppBindings {
           });
           return paused;
         },
-        async ClearGoal() {
-          await this.SetGoal("");
-        },
         async ClearGoalForTab(tabID) {
           await this.SetGoalForTab(tabID, "");
         },
@@ -3429,7 +3250,7 @@ function makeMockApp(): AppBindings {
           if (!match) return out;
           const messages = await this.HistoryForTab(tabID);
           const message = messages[Number(match[1])];
-          if (benchMock && message?.content?.includes("ASYNC LAYOUT EXPANSION COMPLETE")) await delay(1_500);
+          if (benchMock && message?.content?.includes("ASYNC LAYOUT EXPANSION COMPLETE")) await delay((await benchFixturesPromise)!.benchHydrationDelay());
           // Storm fixture: pace ref resolutions deterministically by entry
           // index so opening the session produces a seconds-long patch storm
           // instead of a single burst (#8657).
@@ -3590,7 +3411,7 @@ function makeMockApp(): AppBindings {
       const index = mockProjectTree.findIndex((node) => node.root === path);
       if (index >= 0) mockProjectTree.splice(index, 1);
     },
-        async ContextUsage() {
+        async ContextUsageForTab() {
           return {
             used: 42124,
             window: 128000,
@@ -3610,52 +3431,49 @@ function makeMockApp(): AppBindings {
               rateBand: "mixed",
             },
           };
-        },
-        async ContextUsageForTab() {
-          return this.ContextUsage();
-        },
-        async Balance() {
-      // Mirror the active mock provider: deepseek-flash carries a balance_url.
-      const p = settings.providers.find((x) => x.name === settings.defaultModel);
-      if (!p?.balanceUrl) return { available: false, display: "" };
-          return { available: true, display: "¥128.50" };
-        },
-        async BalanceForTab() {
-          return this.Balance();
-        },
-        async UsageStats() {
-          // Browser dev mock has no stats files; the panel does not consume
-          // provider aggregates, so keep this initial-bundle fallback lean.
-          return { from: "", to: "", tokens: 0, requests: 0, turns: 0, cacheHit: 0, cacheMiss: 0, activeDays: 0, topModel: "", daily: [], models: [] } as unknown as UsageStatsRange;
-        },
-        async Jobs() {
-          return []; // browser dev mock has no background jobs
-        },
-        async JobsForTab() {
-          return this.Jobs();
-        },
-        async CancelJob() {
-          return false;
-        },
-        async CancelJobForTab(_tabID, jobID) {
-          return this.CancelJob(jobID);
-        },
-        async CancelJobsForTab(_tabID, jobIDs) {
-          return { cancelled: [], notRunning: [...jobIDs] };
-        },
-        async ActiveWorkForTab() {
-          return { running: false, pendingPrompt: false, cancellable: false, jobs: [] };
-        },
-        async BackgroundRuntimes() {
-          return [];
-        },
-        async RevealBackgroundRuntime() {
-          throw new Error("background runtime is unavailable in browser preview");
-        },
-        async WorkspaceConflictForTab() {
-          return {
-            state: "none", ownerWork: { running: false, pendingPrompt: false, cancellable: false, jobs: [] },
-            canReveal: false, canCreateWorktree: false,
+          },
+          async Balance() {
+        // Mirror the active mock provider: deepseek-flash carries a balance_url.
+        const p = settings.providers.find((x) => x.name === settings.defaultModel);
+        if (!p?.balanceUrl) return { available: false, display: "" };
+            return { available: true, display: "¥128.50" };
+          },
+          async BalanceForTab() {
+            return this.Balance();
+          },
+          async UsageStats() {
+            // Browser dev mock has no stats files; the panel does not consume
+            // provider aggregates, so keep this initial-bundle fallback lean.
+            return { from: "", to: "", tokens: 0, requests: 0, turns: 0, cacheHit: 0, cacheMiss: 0, activeDays: 0, topModel: "", daily: [], models: [] } as unknown as UsageStatsRange;
+          },
+          async Jobs() {
+            return []; // browser dev mock has no background jobs
+          },
+          async JobsForTab() {
+            return this.Jobs();
+          },
+          async CancelJob() {
+            return false;
+          },
+          async CancelJobForTab(_tabID, jobID) {
+            return this.CancelJob(jobID);
+          },
+          async CancelJobsForTab(_tabID, jobIDs) {
+            return { cancelled: [], notRunning: [...jobIDs] };
+          },
+          async ActiveWorkForTab() {
+            return { running: false, pendingPrompt: false, cancellable: false, jobs: [] };
+          },
+          async BackgroundRuntimes() {
+            return [];
+          },
+          async RevealBackgroundRuntime() {
+            throw new Error("background runtime is unavailable in browser preview");
+          },
+          async WorkspaceConflictForTab() {
+            return {
+              state: "none", ownerWork: { running: false, pendingPrompt: false, cancellable: false, jobs: [] },
+              canReveal: false, canCreateWorktree: false,
           };
         },
         async RevealWorkspaceWriterForTab() {
@@ -4218,7 +4036,7 @@ function makeMockApp(): AppBindings {
     },
     async SearchFileRefs(query: string) {
       const q = query.toLowerCase();
-      return ["desktop/frontend/src/lib/bridge.ts", "frontend/wailsjs/runtime/runtime.js", "internal/control/refs.go"]
+      return ["desktop/frontend/src/lib/bridge.ts", "desktop/frontend/src/main.tsx", "internal/control/refs.go"]
         .filter((path) => path.split("/").pop()?.toLowerCase().includes(q))
         .map((name) => ({ name, isDir: false }));
     },
@@ -4255,6 +4073,11 @@ function makeMockApp(): AppBindings {
         ],
       };
     },
+    async WorkspaceTurnChanges(_tabID: string, _sessionPath: string, turn: number, _resultID: string) {
+      return { turn, coverage: "unknown" as const, files: [], reasons: [], added: 0, removed: 0 };
+    },
+    async WorkspaceTurnChangeDetail() { return null; },
+    async TurnCheckLog() { return null; },
     async WorkspaceChangeDetail(_tabID: string, path: string) {
       return {
         source: "git" as const,
@@ -4280,14 +4103,11 @@ function makeMockApp(): AppBindings {
       }
       return { files: ["mock_file_1.ts", "mock_file_2.ts"] };
     },
-    async OpenWorkspacePath(rel: string) {
-      console.info("mock OpenWorkspacePath", rel);
-    },
     async OpenLocalPath(path: string) {
       console.info("mock OpenLocalPath", path);
     },
     async OpenWorkspacePathForTab(_tabID: string, rel: string) {
-      await this.OpenWorkspacePath(rel);
+      console.info("mock OpenWorkspacePath", rel);
     },
     async ResolveWorkspacePathForTab(_tabID: string, rel: string) { return `${cwd.replace(/[\\/]+$/, "")}/${rel.replace(/^[/\\]+/, "").replace(/[\\/]+$/, "")}`; },
     async ExternalOpeners() {
@@ -4302,15 +4122,9 @@ function makeMockApp(): AppBindings {
       } as ExternalOpenersView;
     }, async ExternalOpenersForTab(_tabID: string) { return { ...(await this.ExternalOpeners()), workspaceOpenable: true }; },
     async SetPreferredExternalOpener(_id: string) {},
-    async OpenWorkspaceInExternalOpener(_id: string) {},
-    async OpenWorkspaceInExternalOpenerForTab(_tabID: string, id: string) {
-      await this.OpenWorkspaceInExternalOpener(id);
-    }, async OpenLocalPathInExternalOpener(path: string, id: string) { console.info("mock OpenLocalPathInExternalOpener", path, id); }, async SaveLocalPathAs(path: string) { console.info("mock SaveLocalPathAs", path); return path; },
-    async RevealWorkspacePath(rel: string) {
-      console.info("mock RevealWorkspacePath", rel);
-    },
+    async OpenWorkspaceInExternalOpenerForTab(_tabID: string, _id: string) {}, async OpenLocalPathInExternalOpener(path: string, id: string) { console.info("mock OpenLocalPathInExternalOpener", path, id); }, async SaveLocalPathAs(path: string) { console.info("mock SaveLocalPathAs", path); return path; },
     async RevealWorkspacePathForTab(_tabID: string, rel: string) {
-      await this.RevealWorkspacePath(rel);
+      console.info("mock RevealWorkspacePath", rel);
     },
     async RevealPath(path: string) {
       console.info("mock RevealPath", path);
@@ -4595,15 +4409,7 @@ function makeMockApp(): AppBindings {
         conversationWidth,
       })) as DesktopStartupSettingsView;
     },
-    async Settings() {
-      await loadMockProviderCatalog();
-      for (const preset of mockProviderPresetViews()) {
-        const existing = settings.providerPresets.find(p => p.id === preset.id);
-        if (existing) existing.catalog = preset.catalog;
-        else settings.providerPresets.push(preset);
-      }
-      return JSON.parse(JSON.stringify(settings)) as SettingsView;
-    },
+    ...makeMockModelSettingsBindings(settings, loadMockProviderCatalog, mockProviderPresetViews),
     async StorageSettings() { return { defaultWorkspace: cwd, statePath: `${cwd}/.reasonix`, cachePath: `${cwd}/.reasonix/cache`, extensionsPath: `${cwd}/.reasonix/plugins` }; },
     async HooksSettings(scope: string) {
       const key = scope === "project" ? "project" : "global";
@@ -4628,6 +4434,13 @@ function makeMockApp(): AppBindings {
     },
     async SetPlannerModel(ref: string) {
       settings.plannerModel = ref;
+    },
+    async SetWebSearchModel(ref: string) {
+      if (ref && ref !== "auto" && !(settings.webSearchModels ?? []).includes(ref)) throw new Error("Search model unavailable");
+      settings.webSearchModel = ref || "auto";
+      settings.effectiveWebSearchModel = settings.webSearchModel;
+      settings.webSearchModelStatus = "ready";
+      settings.webSearchModelReason = "";
     },
     async SetVisionModel(ref: string) {
       settings.visionModel = ref;
@@ -5203,11 +5016,8 @@ function makeMockApp(): AppBindings {
     async CurrentTaskSessionID() { return ""; },
     async ListTasksForSession() { return []; },
     async GetTask() { return null; },
-    async ListTaskEvents() { return []; },
     async StopTask() { return { schema_version: 1, command: "stop", task_id: "", accepted: false, idempotent: false, error: { code: "mock", message: "not available in browser mock" } }; },
     async CancelTask() { return { schema_version: 1, command: "cancel", task_id: "", accepted: false, idempotent: false, error: { code: "mock", message: "not available in browser mock" } }; },
-    async RequeueTask() { return { schema_version: 1, command: "requeue", task_id: "", accepted: false, idempotent: false, error: { code: "mock", message: "not available in browser mock" } }; },
-    async OpenTaskSession() { return { schema_version: 1, command: "open_session", task_id: "", accepted: false, idempotent: false, error: { code: "mock", message: "not available in browser mock" } }; },
     async ListTasksForTab() { return []; },
     ...makeMockTaskCatalogBindings(),
     async ListTaskEventsForTab() { return []; },
@@ -5386,9 +5196,9 @@ function makeMockApp(): AppBindings {
       const tab: TabMeta = {
         id: "tab_" + Date.now(),
         scope: "global",
-        workspaceRoot: "",
+        workspaceRoot: globalWorkspaceRoot,
         workspaceName: "Global",
-        workspacePath: cwd,
+        workspacePath: globalWorkspaceRoot,
         topicId: _topicID,
         topicTitle: topicLabel(_topicID, "Global"),
         sessionPath: `/mock/sessions/${_topicID}.jsonl`,
@@ -5400,7 +5210,7 @@ function makeMockApp(): AppBindings {
         toolApprovalMode: defaultToolApprovalMode,
         tokenMode: "full",
         active: true,
-        cwd: "",
+        cwd: globalWorkspaceRoot,
       };
       mockTabs = [...mockTabs.map((item) => ({ ...item, active: false })), tab];
       return { ...tab };

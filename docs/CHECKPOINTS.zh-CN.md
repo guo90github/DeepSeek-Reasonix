@@ -6,6 +6,8 @@
 
 本文说明 rewind 快照机制。关于自主运行期间智能体何时应暂停并询问用户，参见[任务合约与暂停策略](./TASK_CONTRACT.zh-CN.md)。
 
+基于这些快照展示的本轮差异与检查记录，参见[本轮结果](./TURN_RESULTS.zh-CN.md)。
+
 ## 目标
 
 让用户把会话回退到之前的节点，并恢复**代码**、**会话**或**两者**，且不改动 git 历史。对话回溯改为显式分叉，父会话永不截断。详见 [会话所有权](./SESSION_OWNERSHIP.zh-CN.md)。CLI 与桌面端采用同一套机制。
@@ -99,7 +101,7 @@ func (c *Controller) UndoRewind(transactionID string) (RewindResult, error)
 ## 桌面端体验（与 VS Code 扩展对齐）
 
 - Transcript 中每条用户消息悬停时显示 **rewind** 控件，并提供：恢复代码、恢复会话、同时恢复、从此处分叉。
-- 前端通过 Wails binding 调用同一个 prepare / commit rewind API；Controller 事件流推送恢复结果，React 负责重绘。前端不包含独立 rewind 逻辑。
+- 前端通过桌面 host 协议调用同一个 prepare / commit rewind API；Controller 事件流推送恢复结果，React 负责重绘。前端不包含独立 rewind 逻辑。
 - 对话回溯和“从此处分叉”保留当前标签页并把它切到新 head，原有链留在“查看
   版本”中。只有隔离 worktree 分叉才会打开新标签页，因为它要把会话复制到新的
   工作区。

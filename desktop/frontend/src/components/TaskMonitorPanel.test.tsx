@@ -5,6 +5,7 @@ import { JSDOM } from "jsdom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { LocaleProvider } from "../lib/i18n";
+import { installDesktopHostStub } from "../__tests__/desktopHostStub";
 
 type Task = Record<string, unknown>;
 type Event = Record<string, unknown>;
@@ -130,7 +131,7 @@ const mockApp = {
   },
   OpenTaskSessionForTab: async () => ({ schema_version: 1, command: "open_session", task_id: "", session_id: "sess-1", accepted: true, idempotent: false }),
 };
-(window as unknown as { go: { main: { App: typeof mockApp } } }).go = { main: { App: mockApp } };
+installDesktopHostStub(mockApp);
 
 const { TaskMonitorPanel, useDebouncedValue } = await import("./TaskMonitorPanel");
 
