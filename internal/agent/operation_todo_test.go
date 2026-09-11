@@ -71,3 +71,41 @@ func TestHostDoesNotAdvanceOnAFailedWrite(t *testing.T) {
 		t.Fatalf("a failed write completed a step: %+v", todos)
 	}
 }
+
+func TestHostAdvancesOnAWindowsStyleTodoText(t *testing.T) {
+	a := agentWithTodos(t, []evidence.TodoItem{
+		{Content: `Rewrite desktop\app.go`, Status: "in_progress"},
+		{Content: "Update the docs", Status: "pending"},
+	})
+
+	a.advanceTodoForOperation(evidence.Receipt{
+		ToolName: "write_file", Success: true, Write: true, Paths: []string{"desktop/app.go"},
+	})
+
+	todos := a.CanonicalTodoState()
+	if todos[0].Status != "completed" || todos[1].Status != "in_progress" {
+		t.Fatalf("a backslash todo text did not match the slash-canonical path: %+v", todos)
+	}
+}
+
+func TestRunEndCreditsTheCurrentTodoFromThisTurnsWrites(t *testing.T) {
+	a, ledger := newEvidenceAgent(t, evidenceWriter{}, true)
+	a.setTodoState([]evidence.TodoItem{
+		{Content: "Rewrite internal/auth/login.go", Status: "in_progress"},
+		{Content: "Update the docs", Status: "pending"},
+	})
+	ledger.Record(evidence.Receipt{
+		ToolName: "write_file", Success: true, Write: true, Paths: []string{"internal/auth/login.go"},
+	})
+
+	if !a.CreditCurrentTodoFromEvidence() {
+		t.Fatal("the run-end credit did not advance a step this turn really wrote")
+	}
+	todos := a.CanonicalTodoState()
+	if todos[0].Status != "completed" || todos[1].Status != "in_progress" {
+		t.Fatalf("todos = %+v, want the written step completed and the next promoted", todos)
+	}
+	if a.CreditCurrentTodoFromEvidence() {
+		t.Fatalf("the credit advanced a step no write names: %+v", a.CanonicalTodoState())
+	}
+}

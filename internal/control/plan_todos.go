@@ -4,7 +4,9 @@ package control
 // todo_write-shaped state the model maintains itself.
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -73,6 +75,63 @@ func (c *Controller) replaceAgentTodoState(args string) {
 	if len(todos) == 0 {
 		return
 	}
+	c.executor.ReplaceTodoState(todos)
+}
+
+// convergePlanTodos settles the seeded plan once its execution turn is over.
+// A run whose model never touched the list keeps the coarse "approved plan
+// finished" contract. A run whose model kept its own bookkeeping instead gets
+// the tail it left behind credited from the host's own receipts, so a step
+// whose write really happened cannot stay in_progress just because the model
+// never re-sent the list — while nothing the host cannot prove is completed.
+// An empty seed args string is the no-plan case and settles nothing.
+func (c *Controller) convergePlanTodos(args string, modelUpdated bool) {
+	if args == "" {
+		return
+	}
+	if !modelUpdated {
+		c.completePlanTodos(args)
+		return
+	}
+	if c.executor != nil {
+		c.executor.CreditCurrentTodoFromEvidence()
+	}
+}
+
+// settleInterruptedPlanRun closes out a plan run that ended early: a cancelled
+// turn is stripped back to its start first, then the seeded list is reported so
+// no step is left silently stranded.
+func (c *Controller) settleInterruptedPlanRun(runErr error, execStart int) {
+	if errors.Is(runErr, context.Canceled) && c.CancelRequested() {
+		c.stripInterruptedSyntheticTurnMessagesAfter(execStart)
+	}
+	c.settleAbortedPlanTodos()
+}
+
+// settleAbortedPlanTodos reports the seeded list when its execution turn ended
+// early. Nothing is marked completed — the host holds no receipt for work the
+// run never reached — but the panel and the model see an explicit statement
+// instead of a silently stranded "in progress" nobody can advance.
+func (c *Controller) settleAbortedPlanTodos() {
+	if c.executor == nil {
+		return
+	}
+	todos := c.executor.CanonicalTodoState()
+	if len(todos) == 0 {
+		return
+	}
+	c.emitPlanTodoState(todos, "approved plan run ended before every step finished")
+}
+
+func (c *Controller) emitPlanTodoState(todos []evidence.TodoItem, output string) {
+	args, err := json.Marshal(map[string]any{"todos": todos})
+	if err != nil {
+		return
+	}
+	t := event.Tool{ID: "plan-run", Name: "todo_write", Args: string(args), ReadOnly: true}
+	c.sink.Emit(event.Event{Kind: event.ToolDispatch, Tool: t})
+	t.Output = output
+	c.sink.Emit(event.Event{Kind: event.ToolResult, Tool: t})
 	c.executor.ReplaceTodoState(todos)
 }
 

@@ -361,14 +361,10 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 		return o.runComposedSyntheticTurn(ctx, planApprovedMessage)
 	}()
 	if err != nil {
-		if errors.Is(err, context.Canceled) && c.CancelRequested() {
-			c.stripInterruptedSyntheticTurnMessagesAfter(execStart)
-		}
+		c.settleInterruptedPlanRun(err, execStart)
 		return err
 	}
-	if todoArgs != "" && !c.hasTodoUpdateSince(execStart) {
-		c.completePlanTodos(todoArgs)
-	}
+	c.convergePlanTodos(todoArgs, c.hasTodoUpdateSince(execStart))
 	return nil
 }
 

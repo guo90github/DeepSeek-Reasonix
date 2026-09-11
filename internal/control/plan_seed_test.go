@@ -251,3 +251,49 @@ func TestCompletePlanTodosMirrorsAgentState(t *testing.T) {
 		t.Fatalf("completed plan UI events = %d, want 1", completedResults)
 	}
 }
+
+func TestConvergePlanTodosKeepsTheCoarseContractWithoutModelUpdates(t *testing.T) {
+	executor := &agent.Agent{}
+	c := &Controller{sink: event.Discard, executor: executor}
+	args := c.seedPlanTodos("1. Add the parser\n2. Wire it up")
+	c.convergePlanTodos(args, false)
+	for i, todo := range executor.CanonicalTodoState() {
+		if todo.Status != "completed" {
+			t.Fatalf("todo %d = %q, want completed when the model never touched the list", i, todo.Status)
+		}
+	}
+}
+
+func TestConvergePlanTodosNeverInventsCompletions(t *testing.T) {
+	executor := &agent.Agent{}
+	c := &Controller{sink: event.Discard, executor: executor}
+	args := c.seedPlanTodos("1. Add the parser\n2. Wire it up")
+	c.convergePlanTodos(args, true)
+	got := executor.CanonicalTodoState()
+	if len(got) != 2 || got[0].Status != "in_progress" || got[1].Status != "pending" {
+		t.Fatalf("a model-updated run invented completions without receipts: %+v", got)
+	}
+}
+
+func TestSettleAbortedPlanTodosReportsWithoutCompleting(t *testing.T) {
+	var events []event.Event
+	sink := event.FuncSink(func(e event.Event) { events = append(events, e) })
+	executor := &agent.Agent{}
+	c := &Controller{sink: sink, executor: executor}
+	c.seedPlanTodos("1. Add the parser\n2. Wire it up")
+
+	c.settleAbortedPlanTodos()
+
+	var reported int
+	for _, e := range events {
+		if e.Kind == event.ToolResult && e.Tool.Name == "todo_write" && e.Tool.Output == "approved plan run ended before every step finished" {
+			reported++
+		}
+	}
+	if reported != 1 {
+		t.Fatalf("aborted plan reported %d times, want 1", reported)
+	}
+	if got := executor.CanonicalTodoState(); len(got) != 2 || got[0].Status != "in_progress" {
+		t.Fatalf("the abort report must not claim unproven work: %+v", got)
+	}
+}

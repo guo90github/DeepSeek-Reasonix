@@ -2390,11 +2390,10 @@ func (p plannerPlanApprover) RunWithPlannerApproval(ctx context.Context, plan st
 	c.approval.setPlanAutoApprove(true)
 	defer c.approval.setPlanAutoApprove(false)
 	if err := run(ctx); err != nil {
+		c.settleInterruptedPlanRun(err, execStart)
 		return err
 	}
-	if todoArgs != "" && !c.hasTodoUpdateSince(execStart) {
-		c.completePlanTodos(todoArgs)
-	}
+	c.convergePlanTodos(todoArgs, c.hasTodoUpdateSince(execStart))
 	return nil
 }
 
