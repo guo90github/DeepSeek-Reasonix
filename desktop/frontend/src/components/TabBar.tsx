@@ -1,10 +1,9 @@
 // TabBar renders the browser-like workspace tab strip. Each tab represents one
 // open project/global topic, so switching tabs switches the active conversation.
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, DragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
+import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { FileText, Plus, Search, X } from "lucide-react";
 import { normalizeCollaborationMode, normalizeMode, normalizeToolApprovalMode, type Mode, type TabMeta } from "../lib/types";
-import { projectColorValue } from "../lib/projectColors";
 import { useT } from "../lib/i18n";
 import { Tooltip } from "./Tooltip";
 import { ContextMenu, contextMenuPointFromEvent, type ContextMenuItem, type ContextMenuPoint } from "./ContextMenu";
@@ -45,12 +44,6 @@ function tabFullTitle(tab: TabMeta): string {
 
 function tabMode(tab: TabMeta): Mode {
   return normalizeMode(tab.mode);
-}
-
-function projectAccentStyle(color?: string): CSSProperties | undefined {
-  const value = projectColorValue(color);
-  if (!value) return undefined;
-  return { "--project-accent": value } as CSSProperties;
 }
 
 export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose, onTabsReorder, onNewTab, onOpenPalette, commandCompact = false, revealActiveSignal = 0 }: TabBarProps) {
@@ -231,7 +224,6 @@ export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose
               ].filter(Boolean).join(" ")}
               title={annotatedTitle}
               aria-label={annotatedTitle}
-              style={projectAccentStyle(tab.projectColor)}
               onClick={() => handleTabClick(tab.id)}
               onAuxClick={(event) => handleTabAuxClick(event, tab.id)}
               onMouseDown={(event) => {

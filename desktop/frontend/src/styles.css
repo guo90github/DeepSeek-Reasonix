@@ -127,6 +127,10 @@
   --err: #e0696a;
   --danger: #e5484d;
   --danger-fg: #fff;
+  /* The session dot is a fixed status signal rather than a project accent:
+     blue while the session is idle, red while it owns a live turn. */
+  --tab-status-idle: #4d8df6;
+  --tab-status-running: var(--danger);
   --shell-accent: #22c55e;
   --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.22);
   --shadow-2: 0 14px 40px rgba(0, 0, 0, 0.28);
@@ -23247,10 +23251,10 @@ body > .mermaid-diagram--fullscreen {
 
 @keyframes tab-status-breathe-running {
   0%, 100% {
-    box-shadow: 0 0 0 5px color-mix(in srgb, var(--project-accent, var(--accent)) 22%, transparent);
+    box-shadow: 0 0 0 5px color-mix(in srgb, var(--tab-status-running) 22%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 7px color-mix(in srgb, var(--project-accent, var(--accent)) 12%, transparent);
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--tab-status-running) 12%, transparent);
   }
 }
 
@@ -39498,24 +39502,34 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   flex: 0 0 auto;
 }
 
-/* The dot marks a session that owns a live turn. Idle tabs keep it still: only
-   --running breathes, so a finished turn never looks busy. */
+/* The dot marks a session that owns a live turn. Its colour is a status signal,
+   never the project accent: blue while idle, red while running, and only
+   --running breathes so a finished turn never looks busy. */
 .tabbar__status {
   flex: 0 0 7px;
   width: 7px;
   min-width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--project-accent, var(--accent));
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--project-accent, var(--accent)) 0%, transparent);
+  background: var(--tab-status-idle);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--tab-status-idle) 0%, transparent);
   transition: box-shadow var(--dur-fast) ease, background var(--dur-fast) ease;
 }
 
 .tabbar__tab--active .tabbar__status {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--project-accent, var(--accent)) 18%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tab-status-idle) 18%, transparent);
 }
 
 .tabbar__status--running {
-  box-shadow: 0 0 0 5px color-mix(in srgb, var(--project-accent, var(--accent)) 24%, transparent);
+  background: var(--tab-status-running);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--tab-status-running) 30%, transparent);
   animation: tab-status-breathe-running 1.8s ease-in-out infinite;
+}
+
+/* Explicit override rather than leaning on the global reduce block, which the
+   panel and composer indicators also override individually. */
+@media (prefers-reduced-motion: reduce) {
+  .tabbar__status--running {
+    animation: none;
+  }
 }
