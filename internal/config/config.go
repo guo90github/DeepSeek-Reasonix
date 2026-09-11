@@ -1267,7 +1267,11 @@ type AgentConfig struct {
 	AuditThreshold float64 `toml:"audit_threshold"`
 	// AuditEffort is the reasoning-depth level the audit model itself uses when
 	// scoring (off/low/medium/high/provider-default). Empty = auto/provider default.
-	AuditEffort         string  `toml:"audit_effort"`
+	AuditEffort string `toml:"audit_effort"`
+	// AuditMaxChars caps the reasoning excerpt handed to the audit model, in
+	// runes (0 = built-in default). The unit is runes, not bytes: a byte cut
+	// can split a CJK character mid-rune.
+	AuditMaxChars       int     `toml:"audit_max_chars"`
 	GuardianModel       string  `toml:"guardian_model"`
 	GuardianTemperature float64 `toml:"guardian_temperature"`
 	// RecoveryModel names the optional recovery reviewer. Empty leaves

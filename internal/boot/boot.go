@@ -1832,6 +1832,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 			return entry.RateCardForModel(entry.Model), true
 		},
 		AuditEffort:                    cfg.Agent.AuditEffort,
+		AuditMaxChars:                  cfg.Agent.AuditMaxChars,
 		ModelCapabilityResolver:        modelCapabilities.Resolve,
 		SystemPrompt:                   sysPrompt,
 		PinnedContextLoader:            opts.PinnedContextLoader,

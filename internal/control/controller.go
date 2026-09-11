@@ -101,6 +101,7 @@ type auditConfig struct {
 	providerResolver func(string) (provider.Provider, error)
 	rateCard         func() (billing.RateCard, bool)
 	effort           string // reasoning depth for the audit model; "" = auto
+	maxChars         int    // audited reasoning ceiling in runes; 0 = default
 }
 
 // Controller drives one chat session. Construct with New; drive with the command
@@ -539,6 +540,9 @@ type Options struct {
 	// AuditEffort is the reasoning-depth the audit model itself uses when
 	// scoring; empty = auto/provider default.
 	AuditEffort string
+	// AuditMaxChars caps the audited reasoning excerpt in runes; 0 = built-in
+	// default. It only ever bounds the evaluator's input.
+	AuditMaxChars int
 	// ModelCapabilityResolver returns the adapter/config-resolved metadata for
 	// the exact active model. Nil keeps the legacy config-only behavior.
 	ModelCapabilityResolver func(*config.ProviderEntry) config.ResolvedModelCapability
@@ -744,6 +748,7 @@ func New(opts Options) *Controller {
 			providerResolver: opts.AuditProviderResolver,
 			rateCard:         opts.AuditRateCardResolver,
 			effort:           strings.ToLower(strings.TrimSpace(opts.AuditEffort)),
+			maxChars:         opts.AuditMaxChars,
 		},
 		visionModel:                       strings.TrimSpace(opts.VisionModel),
 		visionProviderResolver:            opts.VisionProviderResolver,

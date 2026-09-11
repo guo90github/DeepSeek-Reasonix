@@ -8,6 +8,7 @@ export interface SettingsView {
   visionModel: string;
   promptOptimizeModel: string; // "" = off; explicit provider/model ref only (no "auto")
   auditModel: string;
+  auditMaxChars: number;
   webSearchModel?: string;
   webSearchModels?: string[];
   webSearchModelStatus?: string;

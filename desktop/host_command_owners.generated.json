@@ -2148,6 +2148,18 @@
       "inputs": []
     }
   },
+  "GetAuditMaxChars": {
+    "domain": "desktop/audit_settings_app.go",
+    "owner": "App.GetAuditMaxChars",
+    "sources": [
+      "desktop/audit_settings_app.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.GetAuditMaxChars",
+      "inputs": []
+    }
+  },
   "GetAuditModel": {
     "domain": "desktop/audit_settings_app.go",
     "owner": "App.GetAuditModel",
@@ -5967,6 +5979,20 @@
       "resolver": "App.SetAuditEffort",
       "inputs": [
         "effort"
+      ]
+    }
+  },
+  "SetAuditMaxChars": {
+    "domain": "desktop/audit_settings_app.go",
+    "owner": "App.SetAuditMaxChars",
+    "sources": [
+      "desktop/audit_settings_app.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SetAuditMaxChars",
+      "inputs": [
+        "maxChars"
       ]
     }
   },

@@ -12,6 +12,7 @@ shown inline under that message.
 audit_model = "deepseek-v4-pro"   # standalone evaluator; empty = off
 audit_threshold = 0.6             # score below this is flagged "needs attention"
 audit_effort = "low"              # audit model's own thinking depth (off|low|medium|high)
+audit_max_chars = 10000           # audited reasoning excerpt cap, in characters (0 = default 10000)
 
 [notifications]
 audit_below = true                # optional system notification when below threshold

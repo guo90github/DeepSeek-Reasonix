@@ -16,13 +16,31 @@ const (
 	// reasoningAuditMaxTokens caps the evaluator's response; the verdict is a
 	// short JSON object, never a long critique.
 	reasoningAuditMaxTokens = 1200
-	// reasoningAuditMaxChars caps the reasoning excerpt sent to the evaluator so
-	// an unbounded thinking chain cannot turn the utility into a context dump.
-	reasoningAuditMaxChars = 8000
+	// reasoningAuditMaxCharsDefault caps the reasoning excerpt sent to the
+	// evaluator so an unbounded thinking chain cannot turn the utility into a
+	// context dump. Overridable per installation via agent.audit_max_chars.
+	reasoningAuditMaxCharsDefault = 10000
 	// reasoningAuditTimeout bounds the independent evaluator call so a slow
 	// audit model can never stall the desktop.
 	reasoningAuditTimeout = 90 * time.Second
 )
+
+// truncateAuditInput cuts s to max runes and reports whether it cut anything.
+// max <= 0 means the built-in default. The cut never lands inside a rune, so a
+// CJK chain is not split into an invalid UTF-8 tail.
+func truncateAuditInput(s string, max int) (string, bool) {
+	if max <= 0 {
+		max = reasoningAuditMaxCharsDefault
+	}
+	n := 0
+	for i := range s {
+		if n == max {
+			return s[:i], true
+		}
+		n++
+	}
+	return s, false
+}
 
 // reasoningAuditSystemPrompt instructs the standalone evaluator to score a
 // thinking chain against six failure classes and return a structured JSON
@@ -42,7 +60,7 @@ func (c *Controller) AnalyzeReasoning(ctx context.Context, reasoning string) (ev
 // AuditStream runs one audit and streams its progress. systemPrompt overrides
 // the embedded evaluator prompt; empty falls back to the default. onRequest
 // fires once with the exact request params before the model call (truncated
-// reports whether the audited input was cut to reasoningAuditMaxChars);
+// reports whether the audited input was cut to the configured rune ceiling);
 // onReasoning fires per thinking delta; onText fires per verdict-text delta.
 // Text deltas stream live even when the audit model runs with effort disabled
 // (the final JSON verdict still arrives as ChunkText), so the frontend renders
@@ -71,16 +89,13 @@ func (c *Controller) AuditStream(
 	resolver := c.audit.providerResolver
 	rateCard := c.audit.rateCard
 	effort := c.audit.effort
+	maxChars := c.audit.maxChars
 	c.mu.Unlock()
 	p, err := c.resolveStandaloneModel("reasoning audit", modelRef, resolver)
 	if err != nil {
 		return zero, err
 	}
-	truncated := false
-	if len(reasoning) > reasoningAuditMaxChars {
-		reasoning = reasoning[:reasoningAuditMaxChars]
-		truncated = true
-	}
+	reasoning, truncated := truncateAuditInput(reasoning, maxChars)
 	if onRequest != nil {
 		onRequest(systemPrompt, reasoning, truncated)
 	}

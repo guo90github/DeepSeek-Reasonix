@@ -4021,6 +4021,24 @@
     {
       "cancellation": "before-dispatch",
       "domain": "desktop/audit_settings_app.go",
+      "name": "GetAuditMaxChars",
+      "owner": "App.GetAuditMaxChars",
+      "params": [],
+      "result": {
+        "kind": "integer"
+      },
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.GetAuditMaxChars"
+      },
+      "sources": [
+        "desktop/audit_settings_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/audit_settings_app.go",
       "name": "GetAuditModel",
       "owner": "App.GetAuditModel",
       "params": [],
@@ -11023,6 +11041,28 @@
         ],
         "kind": "owner-inputs",
         "resolver": "App.SetAuditEffort"
+      },
+      "sources": [
+        "desktop/audit_settings_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/audit_settings_app.go",
+      "name": "SetAuditMaxChars",
+      "owner": "App.SetAuditMaxChars",
+      "params": [
+        {
+          "kind": "integer"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "maxChars"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SetAuditMaxChars"
       },
       "sources": [
         "desktop/audit_settings_app.go"
@@ -30302,6 +30342,12 @@
           "name": "auditModel",
           "type": {
             "kind": "string"
+          }
+        },
+        {
+          "name": "auditMaxChars",
+          "type": {
+            "kind": "integer"
           }
         },
         {

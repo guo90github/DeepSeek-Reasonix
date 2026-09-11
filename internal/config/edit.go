@@ -172,6 +172,16 @@ func (c *Config) SetAuditEffort(effort string) error {
 	}
 }
 
+// SetAuditMaxChars caps the audited reasoning excerpt in runes. Zero restores
+// the built-in default; the ceiling only ever bounds the evaluator's input.
+func (c *Config) SetAuditMaxChars(maxChars int) error {
+	if maxChars < 0 || maxChars > 200000 {
+		return fmt.Errorf("set audit max chars: %d out of range [0,200000] (0 = default)", maxChars)
+	}
+	c.Agent.AuditMaxChars = maxChars
+	return nil
+}
+
 // SetAutoPlan is retained for source compatibility with older desktop clients.
 // Automatic plan mode is retired: "off" is an idempotent compatibility write,
 // while every attempt to enable it is rejected explicitly.

@@ -637,9 +637,11 @@ export interface AppBindings extends ModelSettingsBindings, SessionCatalogBindin
   SetAuditModel(name: string): Promise<void>;
   SetAuditThreshold(threshold: number): Promise<void>;
   SetAuditEffort(effort: string): Promise<void>;
+  SetAuditMaxChars(maxChars: number): Promise<void>;
   GetAuditModel(): Promise<string>;
   GetAuditThreshold(): Promise<number>;
   GetAuditEffort(): Promise<string>;
+  GetAuditMaxChars(): Promise<number>;
   SetDesktopZoomFactor(factor: number): Promise<void>;
   GetDesktopZoomFactor(): Promise<number>;
   RestartApplication(): Promise<void>;
@@ -1589,6 +1591,7 @@ function makeMockApp(): AppBindings {
     subagentModel: "",
     subagentEffort: "",
     auditModel: "",
+    auditMaxChars: 10000,
     autoPlan: "off",
     providers: [
       { name: "deepseek", builtIn: true, added: deepSeekUpgradeMock, kind: "openai", baseUrl: "https://api.deepseek.com", modelsUrl: "", models: ["deepseek-v4-flash"], visionModels: [], visionModelsConfigured: false, default: "deepseek-v4-flash", apiKeyEnv: "DEEPSEEK_API_KEY", headers: deepSeekUpgradeMock ? { "X-Route": "official-custom" } : undefined, keySet: true, balanceUrl: "https://api.deepseek.com/user/balance", contextWindow: 1_000_000, reasoningProtocol: "", thinking: "enabled", webSearch: true, serverWebSearchCapability: true, supportedEfforts: ["disabled", "low", "high", "max"], defaultEffort: "high", recommendedUpgradeAvailable: false },
@@ -2388,6 +2391,7 @@ function makeMockApp(): AppBindings {
     async SetAuditModel() {},
     async SetAuditThreshold() {},
     async SetAuditEffort() {},
+    async SetAuditMaxChars() {},
     async GetAuditModel() {
       return "";
     },
@@ -2396,6 +2400,9 @@ function makeMockApp(): AppBindings {
     },
     async GetAuditEffort() {
       return "";
+    },
+    async GetAuditMaxChars() {
+      return 10000;
     },
     async MinimiseMainWindow() {
       console.info("mock MinimiseMainWindow");

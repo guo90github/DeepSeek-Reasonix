@@ -3747,6 +3747,8 @@ export const en = {
   "settings.auditSectionHint": "Manually audit each turn's reasoning with a dedicated model. Always on, never runs automatically.",
   "settings.auditModel": "Audit model",
   "settings.auditModelHint": "The standalone model used when you audit a turn. Never the session model.",
+  "settings.auditMaxChars": "Audit input limit",
+  "settings.auditMaxCharsHint": "Maximum characters of the audited reasoning sent to the audit model (characters, not bytes). Empty or 0 = default 10000.",
 
   "terminal.outputIncomplete": "Some terminal output may be missing after reconnection. Start a new terminal for a complete output stream.",
   "composer.planInputPlaceholder": "Describe your task to create a plan…",

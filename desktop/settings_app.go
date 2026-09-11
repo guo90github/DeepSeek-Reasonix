@@ -337,6 +337,7 @@ type SettingsView struct {
 	SubagentModel                string               `json:"subagentModel"`
 	SubagentEffort               string               `json:"subagentEffort"`
 	AuditModel                   string               `json:"auditModel"`
+	AuditMaxChars                int                  `json:"auditMaxChars"`
 	AutoPlan                     string               `json:"autoPlan"`
 	Providers                    []ProviderView       `json:"providers"`
 	OfficialProviders            []ProviderView       `json:"officialProviders"`
@@ -1091,6 +1092,7 @@ func (a *App) Settings() SettingsView {
 		SubagentModel:       cfg.Agent.SubagentModel,
 		SubagentEffort:      cfg.Agent.SubagentEffort,
 		AuditModel:          cfg.Agent.AuditModel,
+		AuditMaxChars:       cfg.Agent.AuditMaxChars,
 		AutoPlan:            "off", // deprecated JSON compatibility for older frontends
 		Providers:           []ProviderView{},
 		OfficialProviders:   []ProviderView{},

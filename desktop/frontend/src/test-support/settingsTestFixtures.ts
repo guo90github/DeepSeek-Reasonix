@@ -40,6 +40,7 @@ export function baseSettings(displayMode: "standard" | "compact" = "standard"): 
     subagentModel: "",
     subagentEffort: "",
     auditModel: "",
+    auditMaxChars: 10000,
     autoPlan: "off",
     providers: [],
     officialProviders: [],
