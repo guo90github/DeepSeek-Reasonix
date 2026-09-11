@@ -54,6 +54,12 @@ try {
   running = false;
   await paintPane(false);
   assert.ok(calls.includes(false), "the split pane re-arms the older-history backfill once the run settles");
+
+  // 1b. Older pages are available but no request is in flight and no error is
+  // recorded: the header must not render an empty strip that pads the pane and
+  // reads as an empty control above the first turn.
+  assert.equal(document.querySelector(".conversation-pane__older"), null,
+    "an idle older-history header renders nothing and takes no layout space");
   await act(async () => paneRoot.unmount());
 
   // 2. Split mode must surface history recovery instead of an empty pane.

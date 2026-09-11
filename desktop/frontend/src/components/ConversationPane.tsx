@@ -11,7 +11,7 @@ import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { isSteerNoticeText } from "../lib/useController";
 import type { WireCompletionSummary } from "../lib/types";
-import { paneTurnDefaultOpen, type ConversationPaneTurn } from "../lib/transcriptPanes";
+import { paneTurnDefaultOpen, paneTurnShowsHeader, type ConversationPaneTurn } from "../lib/transcriptPanes";
 import { UserMessage } from "./Message";
 import { LiveAssistantMessage } from "./TranscriptVirtuosoParts";
 import { NoticeCard, SteerCard } from "./TranscriptCards";
@@ -52,23 +52,30 @@ function ConversationTurnCard({
   // One status rail per card: the running turn outranks a failed submission,
   // so both are findable without reading the text.
   const status = turn.isActive ? "conversation-pane__turn--live" : turn.user?.failed ? "conversation-pane__turn--failed" : "";
+  // A numberless turn carries no prompt (paging/placeholder rows). It keeps its
+  // slot so the panes stay index-aligned, but it must not paint a blank,
+  // clickable header — its body renders directly instead.
+  const showHeader = paneTurnShowsHeader(turn);
+  const bodyVisible = open || !showHeader;
   return (
     <article className={[
       "conversation-pane__turn",
-      open ? "conversation-pane__turn--open" : "conversation-pane__turn--collapsed",
+      bodyVisible ? "conversation-pane__turn--open" : "conversation-pane__turn--collapsed",
       mirrorActive ? "conversation-pane__turn--mirror" : "",
       status,
     ].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
-      <header className="conversation-pane__turn-head" role="button" tabIndex={0} aria-expanded={open} onClick={onToggle} onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onToggle();
-        }
-      }}>
-        {turn.turn !== undefined && <TurnBadge turn={turn.turn} />}
-        <span className="conversation-pane__turn-question" title={question}>{question || (turn.hasShownContent ? "" : t("split.emptyTurn"))}</span>
-      </header>
-      {open && (
+      {showHeader && (
+        <header className="conversation-pane__turn-head" role="button" tabIndex={0} aria-expanded={open} onClick={onToggle} onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onToggle();
+          }
+        }}>
+          {turn.turn !== undefined && <TurnBadge turn={turn.turn} />}
+          <span className="conversation-pane__turn-question" title={question}>{question || (turn.hasShownContent ? "" : t("split.emptyTurn"))}</span>
+        </header>
+      )}
+      {bodyVisible && (
         <div className="conversation-pane__turn-body">
           {turn.user && (
             <UserMessage
@@ -205,16 +212,19 @@ export function ConversationPane({
     onLoadOlderHistory?.();
   }, [hasOlderHistory, hydrating, loadingOlderHistory, olderHistoryError, onLoadOlderHistory, running]);
 
-  const olderHeader = hasOlderHistory || loadingOlderHistory || olderHistoryError ? (
+  // The header renders only when it has something to say. Keying it on
+  // hasOlderHistory alone painted an empty, padded strip above the first turn
+  // for the whole time older pages were merely *available*, not loading.
+  const olderHeader = loadingOlderHistory || olderHistoryError ? (
     <div className="conversation-pane__older">
       {loadingOlderHistory ? (
         <span>{t("common.loading")}</span>
-      ) : olderHistoryError ? (
+      ) : (
         <>
           <span>{olderHistoryError}</span>
           <button type="button" className="btn btn--small" onClick={() => onLoadOlderHistory?.()}>{t("common.retry")}</button>
         </>
-      ) : null}
+      )}
     </div>
   ) : null;
 

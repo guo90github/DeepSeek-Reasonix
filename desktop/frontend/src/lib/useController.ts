@@ -8,6 +8,7 @@ import { asArray } from "./array";
 import { createControllerModelCommands } from "./controllerModelCommands";
 import { compactArchivedToolItems } from "./archivedToolItems";
 import { addBreadcrumb } from "./breadcrumbs";
+import { recordHistoryOlderRefusal } from "./historyPagingProbe";
 import { app, onEvent, onReady, onRuntimeRebuilt, onTabMeta, onTopicActivation } from "./bridge";
 import { startControllerEventRecovery } from "./controllerEventRecovery";
 import { metaFromTab } from "./controllerTabMeta";
@@ -3258,6 +3259,7 @@ export function useController() {
       // A refusal leaves no loading state and no error behind, so without this
       // trace a pane that never re-arms is indistinguishable from one waiting.
       addBreadcrumb("tab.hydrate", `history older refused ${targetTabId} trigger=${trigger} known=${Boolean(state)} hasOlder=${Boolean(state?.historyHasOlder)} loading=${Boolean(state?.historyOlderLoading)} running=${Boolean(state?.running)}`);
+      recordHistoryOlderRefusal({ trigger, known: Boolean(state), hasOlder: Boolean(state?.historyHasOlder), loading: Boolean(state?.historyOlderLoading), running: Boolean(state?.running) });
       return false;
     }
     const sessionPath = state.meta?.sessionPath ?? "";

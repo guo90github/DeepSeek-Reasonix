@@ -53,6 +53,13 @@ export function paneTurnDefaultOpen(isActive: boolean, turnKey: string, newestKe
   return isActive || turnKey === newestKey;
 }
 
+/** A turn without a number carries no prompt: paging and placeholder rows look
+ * like that. Such a card must not paint a blank, clickable header — it keeps
+ * its slot (pane indices stay aligned) and shows its body directly instead. */
+export function paneTurnShowsHeader(turn: Pick<ConversationPaneTurn, "turn" | "user">): boolean {
+  return turn.turn !== undefined || (turn.user?.text ?? "") !== "";
+}
+
 // Mirror of transcriptRows.foldDisplayItems for the pane model: assistant
 // items reach the pane stripped to their reasoning (answer text renders in the
 // conversation pane), parented/plan-bookkeeping tools never surface. The live

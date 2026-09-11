@@ -1,5 +1,6 @@
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { Transcript, type TranscriptProps } from "../components/Transcript";
+import { recordHistoryPaneView } from "../lib/historyPagingProbe";
 import { SessionRecoveryBanner, SessionRecoveryPlaceholder } from "../components/SessionRecoveryBanner";
 import { NoticePreviewPanel, noticePreviewMockEnabled } from "./NoticePreviewPanel";
 import type { SidebarImConnection } from "../app-runtime/sidebarImProjection";
@@ -87,6 +88,24 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
   // to retry, so a refused or failed history load was indistinguishable.
   const recoveringEmpty = !transitioning && transcript.availability.kind !== "ready" && transcript.items.length === 0
     && !state.live?.text && !state.live?.reasoning;
+  const paneHydrating = transcript.transcriptHydrating || (transitioning && !transcript.navigationDataReady);
+  // Mirrors the pane props below; a stable build has no opt-in recorder, so the
+  // export path is how "older pages exist but nothing fetched them" is readable.
+  useEffect(() => {
+    recordHistoryPaneView({
+      splitMode: Boolean(props.splitMode),
+      paneHasOlder: !transitioning && state.historyHasOlder && !rewind.stateActive,
+      paneLoading: state.historyOlderLoading,
+      paneError: Boolean(state.historyOlderError),
+      hasOlder: state.historyHasOlder,
+      olderLoading: state.historyOlderLoading,
+      running: state.running,
+      hydrating: paneHydrating,
+      startTurn: state.historyStartTurn,
+      totalTurns: state.historyTotalTurns,
+      revision: state.historyRevision ?? 0,
+    });
+  }, [props.splitMode, paneHydrating, rewind.stateActive, state.historyHasOlder, state.historyOlderError, state.historyOlderLoading, state.historyRevision, state.historyStartTurn, state.historyTotalTurns, state.running, transitioning]);
   if (props.splitMode && !props.imDetail && !props.remote && !noticePreview) {
     if (recoveringEmpty) {
       return (

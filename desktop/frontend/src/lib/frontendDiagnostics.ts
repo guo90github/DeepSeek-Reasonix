@@ -9,6 +9,7 @@
 
 import { notifyFrontendDiagnosticStart, setFrontendDiagnosticSink } from "./frontendDiagnosticBridge";
 import type { FrontendDiagnosticFields } from "./frontendDiagnosticBridge";
+import { historyPagingProbeSnapshot } from "./historyPagingProbe";
 
 export { isFrontendDiagnosticsBuild } from "./frontendDiagnosticsBuild";
 
@@ -132,6 +133,21 @@ export type FrontendDiagnosticEvent = {
   running?: boolean;
   hydrating?: boolean;
   runtimeTransitioning?: boolean;
+  historySplit?: boolean;
+  historyPaneHasOlder?: boolean;
+  historyPaneLoading?: boolean;
+  historyPaneError?: boolean;
+  historyHasOlder?: boolean;
+  historyOlderLoading?: boolean;
+  historyRunning?: boolean;
+  historyHydrating?: boolean;
+  historyRefusalHasOlder?: boolean;
+  historyRefusalLoading?: boolean;
+  historyRefusalRunning?: boolean;
+  historyStartTurn?: number;
+  historyTotalTurns?: number;
+  historyRevision?: number;
+  historyRefusals?: number;
   atBottom?: boolean;
   scrollable?: boolean;
   blank?: boolean;
@@ -209,10 +225,13 @@ const NUMBER_FIELDS = [
   "rowIndex", "estimatedSize", "previousSize", "measuredSize", "sizeDelta", "relativeError", "disclosureCount", "contentRevision", "tabCount", "patchCount", "button", "modifiers", "intent",
   "sequence", "generation", "surfaceGeneration", "ownershipEpoch", "geometryRevision", "transactionId", "footerHeight", "viewport", "mounted", "total", "reverseDisplacement", "extentDelta", "stableFrames", "direction",
   "workspaceSessions", "visibleSessions", "hiddenSessions", "hiddenByFilter", "hiddenByCollapsed", "hiddenByTruncation", "runtimeSessions", "runtimeOnlySessions", "recoveryOnlySessions", "recoveryCopySessions", "recoveryCopies", "runningSessions", "unreadSessions", "pinnedSessions", "activeSessions", "activeVisibleSessions", "folderCount", "expandedFolders", "showAllFolders", "catalogRevision", "catalogIndexed", "catalogTotal", "repairPending", "treeRevision", "organizationRevision", "unloadedSessions", "deltaWorkspaceSessions", "deltaVisibleSessions", "deltaHiddenSessions", "deltaRecoveryCopies", "deltaRuntimeOnlySessions",
+  "historyStartTurn", "historyTotalTurns", "historyRevision", "historyRefusals",
 ] as const;
 const BOOLEAN_FIELDS = [
   "hasActiveTab", "ready", "running", "hydrating", "runtimeTransitioning", "atBottom", "scrollable", "blank", "readerIntent", "canClaimTail", "substantial", "tailCommand", "isTrusted",
   "queryActive", "timeFilterActive", "catalogPartial", "catalogRebuilding", "transient",
+  "historySplit", "historyPaneHasOlder", "historyPaneLoading", "historyPaneError", "historyHasOlder", "historyOlderLoading", "historyRunning", "historyHydrating",
+  "historyRefusalHasOlder", "historyRefusalLoading", "historyRefusalRunning",
 ] as const;
 const STRING_FIELDS = [
   "source", "eventSource", "action", "target", "targetRole", "targetTag", "keyClass", "pointerType", "inputType", "visibility", "phase",
@@ -607,8 +626,38 @@ export function createFrontendDiagnostics(options: {
 
 export const frontendDiagnostics = createFrontendDiagnostics();
 
+/** History state is a controller/pane fact rather than transcript geometry, so
+ * a sample records it even when no transcript element is mounted. */
+function historyPagingFields(): EventFields {
+  const { view, refusals } = historyPagingProbeSnapshot();
+  const fields: EventFields = { historyRefusals: refusals.length };
+  const last = refusals[refusals.length - 1];
+  if (last) {
+    fields.trigger = last.trigger;
+    fields.historyRefusalHasOlder = last.hasOlder;
+    fields.historyRefusalLoading = last.loading;
+    fields.historyRefusalRunning = last.running;
+  }
+  if (!view) return fields;
+  return {
+    ...fields,
+    historySplit: view.splitMode,
+    historyPaneHasOlder: view.paneHasOlder,
+    historyPaneLoading: view.paneLoading,
+    historyPaneError: view.paneError,
+    historyHasOlder: view.hasOlder,
+    historyOlderLoading: view.olderLoading,
+    historyRunning: view.running,
+    historyHydrating: view.hydrating,
+    historyStartTurn: view.startTurn,
+    historyTotalTurns: view.totalTurns,
+    historyRevision: view.revision,
+  };
+}
+
 export function frontendDiagnosticSample(element: HTMLElement | null, totalRows?: number): EventFields | null {
-  if (!element) return null;
+  const history = historyPagingFields();
+  if (!element) return history;
   const viewport = element.getBoundingClientRect();
   const rows = element.querySelectorAll<HTMLElement>(".transcript__row");
   let firstVisibleIndex: number | undefined;
@@ -622,6 +671,7 @@ export function frontendDiagnosticSample(element: HTMLElement | null, totalRows?
     break;
   }
   return {
+    ...history,
     ...transcriptGeometry(element),
     mountedRows: rows.length,
     totalRows: totalRows ?? Number(element.dataset.transcriptRowCount ?? 0),

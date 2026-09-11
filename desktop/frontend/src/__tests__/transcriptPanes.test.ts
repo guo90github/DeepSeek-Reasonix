@@ -1,7 +1,7 @@
 // Run: tsx src/__tests__/transcriptPanes.test.ts
 
 import { buildTurnModels, NO_LIVE, type Item, type TranscriptLiveFlags } from "../lib/transcriptRows";
-import { conversationPaneTurns, paneTurnDefaultOpen, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
+import { conversationPaneTurns, paneTurnDefaultOpen, paneTurnShowsHeader, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
 
 let passed = 0;
 let failed = 0;
@@ -77,6 +77,10 @@ eq(preludeProcess.length, 1, "prelude keeps process count equal");
 eq(preludeConversation[0].turn, undefined, "prelude turn has no turn number");
 eq(preludeProcess[0].turn, undefined, "process prelude turn has no turn number");
 eq(turnHasShownContent(preludeModels[0]), true, "answer turn shows content");
+// The prelude is the blank-shell case: no number and no prompt, so its card
+// must skip the interactive header and paint the body directly instead.
+eq(paneTurnShowsHeader(preludeConversation[0]), false, "a numberless prelude turn paints no header");
+eq(paneTurnShowsHeader(conversation[0]), true, "a numbered turn keeps its header");
 
 // A bare recovery notice yields a turn with no shown content but stays present.
 const recoveryModels = buildTurnModels([{ kind: "notice", id: "n0", level: "info", text: "恢复通知" }], NO_LIVE, false, false);
