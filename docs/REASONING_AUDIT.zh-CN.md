@@ -9,6 +9,7 @@ Reasonix 用**独立 evaluator 模型**分析一条回复的思考链质量—�
 audit_model = "deepseek-v4-pro"   # 独立评估模型；留空 = 关闭
 audit_threshold = 0.6             # 低于此评分标记为"需关注"
 audit_effort = "low"              # 审计模型自身的思考深度 (off|low|medium|high)
+audit_max_chars = 10000           # 送审思考链的字符上限（按字符计；0 = 默认 10000）
 
 [notifications]
 audit_below = true                # 低于阈值时的可选系统通知

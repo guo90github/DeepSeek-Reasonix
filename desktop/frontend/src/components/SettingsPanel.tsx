@@ -4700,6 +4700,33 @@ export function ModelsSection({ s, busy, apply, backgroundApply, subtab, onboard
                 onPick={(ref) => void apply(() => app.SetAuditModel(ref))}
               />
             </SettingsField>
+            <SettingsField label={t("settings.auditMaxChars")} hint={t("settings.auditMaxCharsHint")}>
+              <input
+                key={`audit-max-chars-${s.auditMaxChars}`}
+                className="mem-input set-narrow"
+                type="number"
+                min={0}
+                max={200000}
+                step={1000}
+                inputMode="numeric"
+                defaultValue={s.auditMaxChars > 0 ? s.auditMaxChars : ""}
+                placeholder="10000"
+                disabled={busy}
+                aria-label={t("settings.auditMaxChars")}
+                onBlur={(event) => {
+                  const raw = event.currentTarget.value.trim();
+                  const next = raw === "" ? 0 : Number.parseInt(raw, 10);
+                  if (!Number.isFinite(next) || next === s.auditMaxChars) return;
+                  void apply(() => app.SetAuditMaxChars(next));
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    event.currentTarget.blur();
+                  }
+                }}
+              />
+            </SettingsField>
           </SettingsSection>
         </div>
       ) : null}

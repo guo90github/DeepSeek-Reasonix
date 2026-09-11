@@ -146,6 +146,55 @@ func TestAnalyzeReasoningCapturesUsageAndCost(t *testing.T) {
 	}
 }
 
+func TestAuditInputTruncationUsesDefaultRuneCeiling(t *testing.T) {
+	stub := &reasoningAuditTestProvider{verdict: `{"score":0.9}`}
+	c := auditTestController(t, stub)
+	var gotInput string
+	var gotTruncated bool
+	reasoning := strings.Repeat("思", reasoningAuditMaxCharsDefault+1)
+	if _, err := c.AuditStream(context.Background(), reasoning, "", func(_, input string, truncated bool) {
+		gotInput, gotTruncated = input, truncated
+	}, nil, nil); err != nil {
+		t.Fatalf("AuditStream: %v", err)
+	}
+	if !gotTruncated {
+		t.Fatal("truncated = false, want true for an over-ceiling chain")
+	}
+	// Equality (not just a rune count) pins the byte-for-byte cut: a byte-based
+	// slice would split a multi-byte rune and fail here.
+	if want := strings.Repeat("思", reasoningAuditMaxCharsDefault); gotInput != want {
+		t.Fatalf("input = %d runes, want %d", len([]rune(gotInput)), reasoningAuditMaxCharsDefault)
+	}
+	if sent := stub.lastRequest.Messages[1].Content; sent != gotInput {
+		t.Fatal("the evaluator received a different excerpt than the one reported to the caller")
+	}
+}
+
+func TestAuditInputTruncationHonorsConfiguredCeiling(t *testing.T) {
+	stub := &reasoningAuditTestProvider{verdict: `{"score":0.9}`}
+	c := auditTestController(t, stub)
+	c.audit.maxChars = 5
+	var gotInput string
+	var gotTruncated bool
+	report := func(_, input string, truncated bool) { gotInput, gotTruncated = input, truncated }
+	if _, err := c.AuditStream(context.Background(), "一二三四五六七八", "", report, nil, nil); err != nil {
+		t.Fatalf("AuditStream: %v", err)
+	}
+	if !gotTruncated || gotInput != "一二三四五" {
+		t.Fatalf("input = %q / truncated = %v, want 一二三四五 / true", gotInput, gotTruncated)
+	}
+	calls := 0
+	if _, err := c.AuditStream(context.Background(), "一二三", "", func(_, input string, truncated bool) {
+		calls++
+		report("", input, truncated)
+	}, nil, nil); err != nil {
+		t.Fatalf("AuditStream: %v", err)
+	}
+	if calls != 1 || gotTruncated || gotInput != "一二三" {
+		t.Fatalf("under-ceiling chain: input = %q / truncated = %v / reports = %d, want 一二三 / false / 1", gotInput, gotTruncated, calls)
+	}
+}
+
 func TestAuditRequestEffortMapping(t *testing.T) {
 	for _, tc := range []struct {
 		in, want string

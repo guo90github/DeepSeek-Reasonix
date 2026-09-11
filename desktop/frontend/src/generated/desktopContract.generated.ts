@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:f157366987595f91cf0dd3c153cef0b4fa57d2f828052c37b38e64fece2e55b4";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:020908423c406127caea191ebd43914525c35eefe953d2e82e52a1e12a45380b";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -154,6 +154,7 @@ export const DESKTOP_COMMANDS = [
   "ForkWorktreeForTab",
   "GetActiveThemePack",
   "GetAuditEffort",
+  "GetAuditMaxChars",
   "GetAuditModel",
   "GetAuditThreshold",
   "GetDesktopShellStatus",
@@ -425,6 +426,7 @@ export const DESKTOP_COMMANDS = [
   "SetAgentPreset",
   "SetAgentPresetForTab",
   "SetAuditEffort",
+  "SetAuditMaxChars",
   "SetAuditModel",
   "SetAuditThreshold",
   "SetAutoApproveTools",
@@ -3354,6 +3356,7 @@ export interface SettingsView {
   subagentModel: string;
   subagentEffort: string;
   auditModel: string;
+  auditMaxChars: number;
   autoPlan: string;
   providers: ProviderView[];
   officialProviders: ProviderView[];
@@ -4391,6 +4394,7 @@ export interface GeneratedDesktopCommands {
   ForkWorktreeForTab(arg0: string, arg1: number): Promise<ForkWorktreeResultView>;
   GetActiveThemePack(): Promise<ThemeActiveView>;
   GetAuditEffort(): Promise<string>;
+  GetAuditMaxChars(): Promise<number>;
   GetAuditModel(): Promise<string>;
   GetAuditThreshold(): Promise<number>;
   GetDesktopShellStatus(): Promise<DesktopShellStatusView>;
@@ -4662,6 +4666,7 @@ export interface GeneratedDesktopCommands {
   SetAgentPreset(arg0: string): Promise<void>;
   SetAgentPresetForTab(arg0: string, arg1: string): Promise<void>;
   SetAuditEffort(arg0: string): Promise<void>;
+  SetAuditMaxChars(arg0: number): Promise<void>;
   SetAuditModel(arg0: string): Promise<void>;
   SetAuditThreshold(arg0: number): Promise<void>;
   SetAutoApproveTools(arg0: boolean): Promise<void>;

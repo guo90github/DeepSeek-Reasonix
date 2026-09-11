@@ -2460,6 +2460,8 @@ export const zhTW: Record<DictKey, string> = {
   "settings.auditSectionHint": "手動審計每輪推理，使用獨立模型。恆啟用，絕不自動執行。",
   "settings.auditModel": "審計模型",
   "settings.auditModelHint": "審計一輪時使用的獨立模型。絕不用會話模型。",
+  "settings.auditMaxChars": "審計輸入上限",
+  "settings.auditMaxCharsHint": "送往審計模型的思考過程最多保留多少個字元（按字元計，非位元組）。留空或 0 = 預設 10000。",
   "sidebar.im": "機器人",
   "sidebar.imConnected": "已連線",
   "sidebar.imDisconnected": "未連線",

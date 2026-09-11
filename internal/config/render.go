@@ -259,6 +259,9 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	if c.Agent.AuditEffort != "" {
 		fmt.Fprintf(&b, "audit_effort = %q   # reasoning depth for the audit model (off|low|medium|high)\n", c.Agent.AuditEffort)
 	}
+	if c.Agent.AuditMaxChars > 0 {
+		fmt.Fprintf(&b, "audit_max_chars = %d   # audited reasoning excerpt cap in runes\n", c.Agent.AuditMaxChars)
+	}
 	if c.Agent.SubagentEffort != "" {
 		fmt.Fprintf(&b, "subagent_effort = %q   # default effort for subagent entry points\n", c.Agent.SubagentEffort)
 	} else {

@@ -3772,6 +3772,8 @@ export const zh: Record<DictKey, string> = {
   "settings.auditSectionHint": "手动审计每轮推理，使用独立模型。恒启用，绝不自动运行。",
   "settings.auditModel": "审计模型",
   "settings.auditModelHint": "审计一轮时使用的独立模型。绝不用会话模型。",
+  "settings.auditMaxChars": "审计输入上限",
+  "settings.auditMaxCharsHint": "送往审计模型的思考过程最多保留多少个字符（按字符计，不是字节）。留空或 0 = 默认 10000。",
 
   "completion.checksFailed": "{count} 项检查失败",
   "completion.checksPassed": "{count} 项检查通过",

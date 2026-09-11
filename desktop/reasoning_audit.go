@@ -13,12 +13,17 @@ import (
 // results are one-shot and never aggregated across tabs or sessions.
 const defaultAuditThreshold = 0.6
 
+// defaultAuditMaxChars is the audited reasoning ceiling (in runes) reported by
+// GetAuditMaxChars when the config leaves agent.audit_max_chars unset. The
+// controller applies the same default at audit time.
+const defaultAuditMaxChars = 10000
+
 // auditRequestPayload is the first event of an audit run: the exact request
 // parameters sent to the audit model (system prompt + the audited reasoning).
 type auditRequestPayload struct {
 	SystemPrompt string `json:"systemPrompt"`
 	Input        string `json:"input"`
-	Truncated    bool   `json:"truncated"` // input was cut to reasoningAuditMaxChars
+	Truncated    bool   `json:"truncated"` // input was cut to the configured rune ceiling
 }
 
 // auditChunkEvent is one streamed model delta. Kind is "reasoning" (thinking,
