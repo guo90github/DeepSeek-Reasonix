@@ -78,6 +78,20 @@ ok(fencedNavigationCalls.every(([startMarker, callMarker]) => {
   return start >= 0 && fence > start && call > fence;
 }), "navigation entry points await backend intent registration before switching");
 ok(/navigationIntentRegistrationTail\.then/.test(navigationFence) && /navigationIntentRegistrationTail = registered/.test(navigationFence), "navigation registrations preserve user-intent order across deferred bridge calls and remounts");
+ok(!/registrationsRef\.current\.clear\(\)/.test(navigationFence)
+  && /registrations\.size > NAVIGATION_INTENT_REGISTRATION_LIMIT/.test(navigationFence),
+  "concurrent navigations keep their own live registration instead of the newest clearing the whole map");
+ok(/const closeTabs = useCallback/.test(controller)
+  && /targets\.includes\(activeTabIdRef\.current[\s\S]*beginActiveNavigation/.test(controller)
+  && /closeTabs, reorderTabs/.test(controller),
+  "batch tab close registers one navigation intent for the whole close set");
+const tabBarCommands = source("../app-runtime/useTabBarCommands.ts");
+const sessionComposition = source("../app-runtime/useAppSessionComposition.ts");
+ok(/onTabsClose: \(tabIds: string\[\], nextActiveTabId\?: string\)[\s\S]{0,220}handleTabsClose\(tabIds, nextActiveTabId\)[\s\S]{0,40}\.catch\(\(\) => \{\}\)/
+  .test(sessionComposition) && !/onTabsClose:[\s\S]{0,220}tabIds\.forEach/.test(sessionComposition),
+  "close others runs as one batched command, never as N racing per-tab closes");
+ok(/closeTabs\(closing, keepTabId, policy\)/.test(tabBarCommands) && /handleTabsClose = useCommittedCommand/.test(tabBarCommands),
+  "the tab close prompt resolves its whole batch through the single close command");
 
 const { makeMockForkBindings } = await import("../lib/mockForkWorktree");
 const { settleForkConversationForTab } = await import("../lib/controllerSwitchNotices");

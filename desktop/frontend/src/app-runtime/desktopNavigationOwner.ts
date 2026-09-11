@@ -13,8 +13,8 @@ export type DesktopNavigationIntent =
   | { kind: "remote-project"; remote: RemoteTabRefView; options: RemoteTabOpenOptions };
 type Runtime = ReturnType<typeof useAppRuntimeAdapter>;
 export type DesktopNavigationPorts = Pick<Runtime["navigation"],
-  "isNavigationIntentCurrent" | "activateTopic"
-  | "ensureBlankSurface" | "createIsolatedWorktree" | "registeredNavigationIntent" | "switchRemoteTab"> &
+  "isNavigationIntentCurrent" | "activateTopic" | "openTopicSession" | "openGlobalTab" | "openProjectTab"
+  | "ensureBlankSurface" | "ensureBlankTab" | "createIsolatedWorktree" | "registeredNavigationIntent" | "switchRemoteTab"> &
   Pick<Runtime["sessionActions"], "openChannelSession" | "resumeSession"> & {
     listTabs(): Promise<TabMeta[]>;
     openRemoteProject(hostId: string, workspace: string, options: RemoteTabOpenOptions): Promise<TabMeta>;
@@ -38,6 +38,7 @@ export type NavigationNotice = {
 export type DesktopNavigationCapture = {
   intent: DesktopNavigationIntent;
   navigationIntentSeq: number;
+  singleSurface: boolean;
   ports: DesktopNavigationPorts;
 };
 class InvalidSessionTarget extends Error {
@@ -46,7 +47,7 @@ class InvalidSessionTarget extends Error {
 
 /** One executor for topic, blank, IM, worktree and history activation. */
 export async function executeDesktopNavigation(input: DesktopNavigationCapture, authority: SessionOperationAuthority) {
-  const { intent: request, navigationIntentSeq: seq, ports } = input;
+  const { intent: request, navigationIntentSeq: seq, ports, singleSurface } = input;
   const checkpoint = () => {
     authority.checkpoint();
     if (!ports.isNavigationIntentCurrent(seq)) throw new CommandCancelled("superseded");
@@ -56,10 +57,15 @@ export async function executeDesktopNavigation(input: DesktopNavigationCapture, 
     checkpoint();
     ports.applyTabs(tabs);
   };
-  const openTopic = (scope: string, workspace: string, topic: string, path?: string) =>
-    ports.activateTopic(scope, workspace, topic, path || "", seq);
-  const openBlank = (scope: string, workspace: string) =>
-    ports.ensureBlankSurface(scope, scope === "project" ? workspace : "", seq);
+  // Split lists every open session, so it must add or reuse a surface; the
+  // one-surface styles replace the single surface they show.
+  const openTopic = (scope: string, workspace: string, topic: string, path?: string) => singleSurface
+    ? ports.activateTopic(scope, workspace, topic, path || "", seq)
+    : path ? ports.openTopicSession(scope, workspace, topic, path, seq)
+      : scope === "global" ? ports.openGlobalTab(topic, seq) : ports.openProjectTab(workspace, topic, seq);
+  const openBlank = (scope: string, workspace: string) => singleSurface
+    ? ports.ensureBlankSurface(scope, scope === "project" ? workspace : "", seq)
+    : ports.ensureBlankTab(scope, scope === "project" ? workspace : "", seq);
   checkpoint();
   try {
     if (request.kind === "remote-project") {

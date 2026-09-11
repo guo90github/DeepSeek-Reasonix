@@ -6,6 +6,10 @@ interface NavigationIntentRegistration {
   registered: Promise<string>;
 }
 
+// Bounded so a long session cannot retain every registration, while a burst of
+// concurrent navigations still resolves each of its own tokens.
+const NAVIGATION_INTENT_REGISTRATION_LIMIT = 8;
+
 let navigationIntentRegistrationTail: Promise<void> = Promise.resolve();
 let navigationIntentCounter = 0;
 
@@ -39,8 +43,16 @@ export function useNavigationIntentFence() {
       token: scheduled.token,
       registered: scheduled.registered.catch(() => ""),
     };
-    registrationsRef.current.clear();
-    registrationsRef.current.set(seq, registration);
+    // Concurrent navigations (a batch tab close plus the switch that follows it)
+    // each keep their own live registration, so eviction is oldest-first rather
+    // than the newest registration clearing the whole map.
+    const registrations = registrationsRef.current;
+    registrations.set(seq, registration);
+    while (registrations.size > NAVIGATION_INTENT_REGISTRATION_LIMIT) {
+      const oldest = registrations.keys().next();
+      if (oldest.done) break;
+      registrations.delete(oldest.value);
+    }
   }, []);
   const registeredNavigationIntent = useCallback(async (seq: number): Promise<string> => {
     const registration = registrationsRef.current.get(seq);

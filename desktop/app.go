@@ -715,9 +715,12 @@ func (a *App) restoreOrBuildTabs() {
 		}
 		a.setDesktopLocale(i18n.DetectLanguage(lang))
 	}
-	// Every surviving layout style is single-surface, and a config that failed
-	// to load already took this path when the predicate could still be false.
-	f = singleSurfaceTabsFile(f)
+	// Split restores every open session onto the shell's tab strip; the
+	// single-surface styles keep one, and a config that failed to load takes
+	// the safe single-surface path.
+	if cfgErr != nil || singleSurfaceLayoutStyle(startupCfg.DesktopLayoutStyle()) {
+		f = singleSurfaceTabsFile(f)
+	}
 	// Restore remote tabs as disconnected shells; activation performs the
 	// first network work so desktop startup remains offline-safe.
 	a.restoreRemoteTabShells(f)
@@ -3251,7 +3254,14 @@ func (a *App) openFallbackRuntime(target fallbackRuntimeTarget) error {
 	if topicID == "" {
 		return a.openTransientBlankRuntime(scope, root)
 	}
-	_, err := a.ActivateTopic(scope, root, topicID, "")
+	var err error
+	if a.singleSurfaceLayoutEnabled() {
+		_, err = a.ActivateTopic(scope, root, topicID, "")
+	} else if scope == "global" {
+		_, err = a.OpenGlobalTab(topicID)
+	} else {
+		_, err = a.OpenProjectTab(root, topicID)
+	}
 	return err
 }
 
@@ -5022,11 +5032,26 @@ func (a *App) SwitchWorkspace(dir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	meta, err := a.ActivateTopic("project", dir, topic.ID, "")
+	var meta TabMeta
+	if a.singleSurfaceLayoutEnabled() {
+		meta, err = a.ActivateTopic("project", dir, topic.ID, "")
+	} else {
+		meta, err = a.OpenProjectTab(dir, topic.ID)
+	}
 	if err != nil {
 		return "", err
 	}
 	return meta.WorkspaceRoot, nil
+}
+
+// singleSurfaceLayoutEnabled reports whether the active layout shows one
+// surface at a time; split keeps every open session as its own tab.
+func (a *App) singleSurfaceLayoutEnabled() bool {
+	cfg, _, err := a.loadDesktopUserConfigForView()
+	if err != nil {
+		return true
+	}
+	return singleSurfaceLayoutStyle(cfg.DesktopLayoutStyle())
 }
 
 // HistoryMessage is one prior turn, for the frontend to repopulate its transcript

@@ -1,10 +1,9 @@
 import type { DecisionSurfaceKind as MockDecisionSurfaceKind } from "../lib/decisionSurfaceMock";
 import type { State } from "../lib/useController";
-import type { ActiveWorkView, WorkspaceConflictView } from "../lib/types";
+import type { WorkspaceConflictView } from "../lib/types";
+import type { PendingClose } from "./useTabBarCommands";
 
 export type AppDecisionSurfaceKind = MockDecisionSurfaceKind | "extension_form";
-
-type PendingClose = { tabId: string; work: ActiveWorkView; stopping: boolean } | null;
 
 /**
  * Single footer decision surface precedence. Composer stays mounted
@@ -17,7 +16,7 @@ export function projectDecisionSurface(input: {
   mcpInteraction: State["mcpInteraction"];
   extensionForm: State["extensionForm"];
   workspaceConflict: WorkspaceConflictView | null;
-  pendingClose: PendingClose;
+  pendingClose: PendingClose | null;
   clearContextPending: boolean;
 }): AppDecisionSurfaceKind | null {
   if (input.approval) {

@@ -4454,9 +4454,33 @@ func TestCreationLayoutQuickClicksSerializeWorkspaceRebuild(t *testing.T) {
 	runQuickClickWorkspaceReconcileTest(t, "creation")
 }
 
+// Split is the layout that keeps every open session on the shell's tab strip,
+// so the one-surface policy must not apply to it.
+func TestSplitLayoutKeepsEveryOpenSession(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	if err := editUserConfig(func(c *config.Config) error { return c.SetDesktopLayoutStyle("split") }); err != nil {
+		t.Fatalf("set split layout: %v", err)
+	}
+	if NewApp().singleSurfaceLayoutEnabled() {
+		t.Fatal("split must keep the multi-session model")
+	}
+	if err := editUserConfig(func(c *config.Config) error { return c.SetDesktopLayoutStyle("workbench") }); err != nil {
+		t.Fatalf("set workbench layout: %v", err)
+	}
+	if !NewApp().singleSurfaceLayoutEnabled() {
+		t.Fatal("workbench must stay single-surface")
+	}
+	if !singleSurfaceLayoutStyle("creation") {
+		t.Fatal("creation must stay single-surface")
+	}
+}
+
 func runQuickClickWorkspaceReconcileTest(t *testing.T, layoutStyle string) {
 	t.Helper()
 	f := newStaleWorkspaceBindingFixtureWithLayout(t, "quick_click_"+layoutStyle, layoutStyle)
+	if got, want := f.app.singleSurfaceLayoutEnabled(), singleSurfaceLayoutStyle(layoutStyle); got != want {
+		t.Fatalf("singleSurfaceLayoutEnabled(%q) = %v, want %v", layoutStyle, got, want)
+	}
 	blockingCtrl := f.installBlockingSnapshotController()
 
 	type quickAction struct {

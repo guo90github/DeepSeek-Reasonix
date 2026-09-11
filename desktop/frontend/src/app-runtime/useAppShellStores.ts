@@ -68,6 +68,9 @@ export function useAppShellStores() {
   const managementActive = page.kind !== "workspace";
   const settingsTarget = page.kind === "settings" ? page.tab : null;
   const desktopLayoutStyle = preferences.desktopLayoutStyle;
+  // Split is the only layout that lists several sessions at once, so the
+  // one-surface navigation primitives must not be used there.
+  const singleSurfaceLayout = desktopLayoutStyle === "workbench" || desktopLayoutStyle === "creation";
   const sidebarWorkbench = desktopLayoutStyle === "workbench";
   const sidebarCreation = desktopLayoutStyle === "creation";
   const windowsFramelessChrome = desktopPlatform === "windows";
@@ -90,7 +93,7 @@ export function useAppShellStores() {
     remoteHosts, remoteStatuses, requestRemoteExplorer,
     desktopPlatform, mainWindowMaximised,
     preferences,
-    managementActive, desktopLayoutStyle, sidebarWorkbench, sidebarCreation,
+    managementActive, desktopLayoutStyle, singleSurfaceLayout, sidebarWorkbench, sidebarCreation,
     windowsFramelessChrome, terminalResizing,
   };
 }

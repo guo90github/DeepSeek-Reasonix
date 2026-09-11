@@ -30,7 +30,7 @@ export type ComposerRouterInput = {
     setClearContextPending(pending: boolean): void;
     clearWorkspaceConflict(): void;
     setWorkspaceConflict(value: { state: "local"; ownerTabId: string; ownerTitle: string; ownerWork: MockWorkView; canReveal: true; canCreateWorktree: true } | null): void;
-    setPendingClose(value: { tabId: string; work: MockWorkView; stopping: boolean } | null): void;
+    setPendingClose(value: { tabIds: string[]; work: MockWorkView; stopping: boolean } | null): void;
     submitComposerTurn(tabId: string, display: string, submit?: string, structured?: StructuredInvocationSubmit): Promise<void>;
     steerForTab(tabId: string, text: string): Promise<void>;
     isRemoteTab(tabId: string): boolean;
@@ -111,7 +111,7 @@ export function useComposerRouter(input: ComposerRouterInput) {
           canCreateWorktree: true,
         });
       } else if (decisionMock === "close_active") {
-        ports.setPendingClose({ tabId: sourceTabId, work: mockWork, stopping: false });
+        ports.setPendingClose({ tabIds: [sourceTabId], work: mockWork, stopping: false });
       } else {
         ports.setClearContextPending(true);
       }

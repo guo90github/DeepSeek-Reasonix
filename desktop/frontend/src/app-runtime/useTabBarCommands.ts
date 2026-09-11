@@ -24,6 +24,7 @@ export type TabBarCommandsInput = {
   clearWorkspaceConflict(): void;
   ports: {
     closeTab(id: string, policy: TabClosePolicy): Promise<boolean>;
+    closeTabs(ids: string[], keepTabId: string | undefined, policy: TabClosePolicy): Promise<boolean>;
     reorderTabs(ids: string[]): Promise<void>;
     switchTab(id: string, tab?: TabMeta, seq?: number): Promise<unknown>;
     switchRemoteTab(tab: TabMeta, seq?: number): Promise<unknown>;
@@ -40,6 +41,13 @@ export type TabBarCommandsInput = {
   };
 };
 
+export type PendingClose = {
+  tabIds: string[];
+  work: ActiveWorkView;
+  stopping: boolean;
+  keepTabId?: string;
+};
+
 /**
  * Owns the tab close command and prompt, the background-runtime reveals and the
  * delivery-worktree continuation. Tab close prompts and reveal navigation share
@@ -48,7 +56,7 @@ export type TabBarCommandsInput = {
  */
 export function useTabBarCommands(input: TabBarCommandsInput) {
   const { activeTabId, t, showToast, ports } = input;
-  const [pendingClose, setPendingClose] = useState<{ tabId: string; work: ActiveWorkView; stopping: boolean } | null>(null);
+  const [pendingClose, setPendingClose] = useState<PendingClose | null>(null);
   const setTransientOverlayDismissSignal = useOverlayStore((state) => state.setTransientOverlayDismissSignal);
 
   const closeTransientOverlays = useCommittedCommand(() => {
@@ -85,31 +93,38 @@ export function useTabBarCommands(input: TabBarCommandsInput) {
     }
   });
 
-  const finishTabClose = useCommittedCommand(async (
-    id: string,
+  // One close command for one or many tabs: a batch rewrites one navigation
+  // intent and keeps one tab alive, so "close others" cannot race itself the
+  // way N per-tab closes did.
+  const finishTabsClose = useCommittedCommand(async (
+    tabIds: string[],
+    keepTabId: string | undefined,
     policy: TabClosePolicy,
   ): Promise<boolean> => {
+    const closing = tabIds.filter((id) => id && id !== keepTabId);
+    if (closing.length === 0) return true;
     closeTransientOverlays();
-    const closed = await ports.closeTab(id, policy);
+    const closed = await ports.closeTabs(closing, keepTabId, policy);
     if (!closed) {
       showToast(t("runtime.closeFailed"), "error");
       return false;
     }
     input.setComposerProfilesByTab((current) => {
-      if (!(id in current)) return current;
       const next = { ...current };
-      delete next[id];
-      return next;
+      let changed = false;
+      for (const id of closing) {
+        if (!(id in next)) continue;
+        delete next[id];
+        changed = true;
+      }
+      return changed ? next : current;
     });
     input.setTabMetas((current) => {
-      if (current.length <= 1) return current;
-      const closingIndex = current.findIndex((tab) => tab.id === id);
-      if (closingIndex < 0) return current;
-      const closingTab = current[closingIndex];
-      const remaining = current.filter((tab) => tab.id !== id);
-      if (!closingTab.active && closingTab.id !== activeTabId) return remaining;
-      const nextIndex = Math.min(closingIndex, remaining.length - 1);
-      const nextActiveId = remaining[nextIndex]?.id;
+      const remaining = current.filter((tab) => !closing.includes(tab.id));
+      if (remaining.length === current.length || remaining.length === 0) return current;
+      const nextActiveId = keepTabId && remaining.some((tab) => tab.id === keepTabId)
+        ? keepTabId
+        : remaining.find((tab) => tab.active)?.id ?? remaining[remaining.length - 1]?.id;
       return remaining.map((tab) => ({ ...tab, active: tab.id === nextActiveId }));
     });
     await ports.refreshTabMetas(undefined, { afterMutation: true });
@@ -118,26 +133,56 @@ export function useTabBarCommands(input: TabBarCommandsInput) {
     return true;
   });
 
+  const finishTabClose = useCommittedCommand(async (
+    id: string,
+    policy: TabClosePolicy,
+  ): Promise<boolean> => finishTabsClose([id], undefined, policy));
+
   const handleTabClose = useCommittedCommand(async (id: string) => {
     try {
       const work = await app.ActiveWorkForTab(id);
       if (work.running || work.pendingPrompt || work.jobs.length > 0) {
-        setPendingClose({ tabId: id, work, stopping: false });
+        setPendingClose({ tabIds: [id], work, stopping: false });
         return;
       }
     } catch {
       // CloseTabWithPolicy re-checks the controller state atomically.
     }
-    await finishTabClose(id, "stop_and_close");
+    await finishTabsClose([id], undefined, "stop_and_close");
+  });
+
+  const handleTabsClose = useCommittedCommand(async (tabIds: string[], keepTabId?: string): Promise<void> => {
+    const closing = tabIds.filter((id) => id && id !== keepTabId);
+    if (closing.length === 0) return;
+    try {
+      const works = await Promise.all(closing.map((id) => app.ActiveWorkForTab(id)));
+      if (works.some((work) => work.running || work.pendingPrompt || work.jobs.length > 0)) {
+        setPendingClose({
+          tabIds: closing,
+          keepTabId,
+          stopping: false,
+          work: {
+            running: works.some((work) => work.running),
+            pendingPrompt: works.some((work) => work.pendingPrompt),
+            cancellable: works.some((work) => work.cancellable),
+            jobs: works.flatMap((work) => work.jobs),
+          },
+        });
+        return;
+      }
+    } catch {
+      // CloseTabWithPolicy re-checks the controller state atomically per tab.
+    }
+    await finishTabsClose(closing, keepTabId, "stop_and_close");
   });
 
   const resolvePendingClose = useCommittedCommand(async (policy: TabClosePolicy) => {
     const request = pendingClose;
     if (!request || request.stopping) return;
     if (policy === "stop_and_close") setPendingClose({ ...request, stopping: true });
-    const closed = await finishTabClose(request.tabId, policy);
+    const closed = await finishTabsClose(request.tabIds, request.keepTabId, policy);
     if (closed) setPendingClose(null);
-    else setPendingClose((current) => current?.tabId === request.tabId ? { ...current, stopping: false } : current);
+    else setPendingClose((current) => current && current.tabIds.join("\u0000") === request.tabIds.join("\u0000") ? { ...current, stopping: false } : current);
   });
 
   const revealWorkspaceWriter = useCommittedCommand(async () => {
@@ -190,7 +235,9 @@ export function useTabBarCommands(input: TabBarCommandsInput) {
     setPendingClose,
     revealBackgroundRuntime,
     finishTabClose,
+    finishTabsClose,
     handleTabClose,
+    handleTabsClose,
     resolvePendingClose,
     revealWorkspaceWriter,
     continueInDeliveryWorktree,

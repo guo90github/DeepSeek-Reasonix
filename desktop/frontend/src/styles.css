@@ -29755,6 +29755,40 @@ body > .mermaid-diagram--fullscreen {
   background: color-mix(in srgb, var(--err) 10%, transparent);
 }
 
+/* Session-tree rows hold one geometry in every layout: the time column is a
+   fixed track so "7 分钟" cannot wrap, and the chips keep the row in a line. */
+.project-tree .project-tree__topic-side {
+  --sidebar-topic-time-col: 64px;
+  flex: 0 0 var(--sidebar-topic-time-col);
+  width: var(--sidebar-topic-time-col);
+  min-width: var(--sidebar-topic-time-col);
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.project-tree .project-tree__topic-time {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Chip surfaces tint from their own icon colour (accent pin, err archive), so
+   the tree reads as part of the theme instead of neutral gray boxes. */
+.project-tree .project-tree__topic-action {
+  border-color: color-mix(in srgb, currentColor 22%, transparent);
+  background: color-mix(in srgb, currentColor 9%, var(--bg-elev));
+}
+
+.project-tree .project-tree__topic-action:hover {
+  border-color: color-mix(in srgb, currentColor 38%, transparent);
+  background: color-mix(in srgb, currentColor 15%, var(--bg-elev));
+}
+
 .sidebar--workbench .project-tree__topic-action:disabled,
 .sidebar--workbench .project-tree__topic-action:disabled:hover
 {
@@ -30806,6 +30840,24 @@ body > .mermaid-diagram--fullscreen {
   max-width: none;
   margin-inline: 0;
   flex: 0 0 auto;
+}
+
+/* The hero stack is rendered wherever an empty session's composer is, but its
+   column lived under .app--creation/.app--workbench: elsewhere the headline
+   stretched to the pane edge while the composer stayed in its --maxw column. */
+.composer-decision-host--creation-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(14px, 2.2vh, 22px);
+  width: min(100%, var(--maxw));
+  max-width: var(--maxw);
+  margin-inline: auto;
+}
+
+.composer-decision-host--creation-hero .welcome-creation__headline {
+  width: 100%;
+  margin: 0;
 }
 
 .app--creation .composer-wrap {
@@ -39364,4 +39416,106 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
 .tab-overview__actions button:disabled {
   color: var(--fg-faint);
   cursor: default;
+}
+
+/* Session tab strip restored into the topic bar (the browser-like row of open
+   sessions). Its container, tab and status-dot rules went missing in the shell
+   migration; the label, badge and close rules above survived it. */
+.topicbar__tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  --reasonix-draggable: no-drag;
+}
+
+/* The bar's identity block stops growing once the strip can take the space. */
+.topicbar__identity:has(~ .topicbar__tabs) {
+  flex: 0 1 auto;
+}
+
+.tabbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.tabbar__tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabbar__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tabbar__tab {
+  position: relative;
+  flex: 0 1 190px;
+  min-width: 92px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--fg-dim);
+  cursor: pointer;
+  --reasonix-draggable: no-drag;
+}
+
+.tabbar__tab:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+  color: var(--fg);
+}
+
+.tabbar__tab--active {
+  background: var(--bg-elev-2, var(--bg-elev));
+  border-color: var(--border-soft, var(--border));
+  color: var(--fg);
+}
+
+.tabbar__tab--dragging {
+  opacity: 0.5;
+}
+
+.tabbar__tab--drop-before {
+  box-shadow: inset 2px 0 0 var(--fg-dim);
+}
+
+.tabbar__tab--drop-after {
+  box-shadow: inset -2px 0 0 var(--fg-dim);
+}
+
+.tabbar__file-icon {
+  flex: 0 0 auto;
+}
+
+/* The dot marks a session that owns a live turn. Idle tabs keep it still: only
+   --running breathes, so a finished turn never looks busy. */
+.tabbar__status {
+  flex: 0 0 7px;
+  width: 7px;
+  min-width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--project-accent, var(--accent));
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--project-accent, var(--accent)) 0%, transparent);
+  transition: box-shadow var(--dur-fast) ease, background var(--dur-fast) ease;
+}
+
+.tabbar__tab--active .tabbar__status {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--project-accent, var(--accent)) 18%, transparent);
+}
+
+.tabbar__status--running {
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--project-accent, var(--accent)) 24%, transparent);
+  animation: tab-status-breathe-running 1.8s ease-in-out infinite;
 }

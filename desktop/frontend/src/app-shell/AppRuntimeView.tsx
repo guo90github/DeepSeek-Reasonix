@@ -24,6 +24,7 @@ import { TopicbarRegion } from "./TopicbarRegion";
 import { buildTopicbarView, TopicbarActionsStack } from "./TopicbarActionsStack";
 import { DockToggleButton } from "./DockToggleButton";
 import { LauncherToggleButton } from "./LauncherToggleButton";
+import { TabBar } from "../components/TabBar";
 import { SessionStatusBanners } from "./SessionStatusBanners";
 import { ChatPaneRegion } from "./ChatPaneRegion";
 import { noticePreviewMockEnabled } from "./NoticePreviewPanel";
@@ -107,7 +108,9 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
   const runtimeTransitioning = core.surface.transitioning;
   const browserPreviewChrome = navigation.browserPreviewChrome;
 
-  const workbenchChromeHidden = sidebarWorkbench;
+  // Split needs the same chrome as the workbench: the topic bar hosts the
+  // sidebar toggle, because the sidebar's own toggle only exists in creation.
+  const workbenchChromeHidden = sidebarWorkbench || shell.preferences.desktopLayoutStyle === "split";
   const sidebarClassName = [
     "sidebar",
     shell.sidebarCollapsed ? "sidebar--collapsed" : "",
@@ -246,8 +249,6 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           },
         })} />
 
-        {sidebarWorkbench && <div className="app__dock-toggle" inert={shell.managementActive}><DockToggleButton renderable={surfaceWorkspacePanelRenderable} t={t} onToggle={session.workspacePanelCommands.toggleWorkspacePanel} /></div>}
-
         <section className={`chat-pane${splitSurface ? " chat-pane--split" : ""}${session.transcript.emptyHero ? " chat-pane--creation-empty" : ""}`}>
           <TopicbarRegion view={buildTopicbarView({
             t, locale, activeTab, cwd: state.meta?.cwd, imDetail: sidebarImDetailConnection, imTopicSources: shell.preferences.imTopicSources,
@@ -260,6 +261,17 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             setTitleDraft: navigation.projectTopicCommands.setTopicTitleDraft, commitRename: navigation.projectTopicCommands.commitActiveTopicRename, cancelRename: navigation.projectTopicCommands.cancelActiveTopicRename,
             startRename: navigation.projectTopicCommands.startActiveTopicRename, openWorktree: navigation.worktreeMergeCommands.openWorktreeMerge,
           }}>
+            <div className="topicbar__tabs">
+              <TabBar
+                tabs={session.sessionTabs.tabs}
+                activeTabId={session.sessionTabs.activeTabId}
+                onTabChange={session.sessionTabs.onTabChange}
+                onTabClose={session.sessionTabs.onTabClose}
+                onTabsClose={session.sessionTabs.onTabsClose}
+                onTabsReorder={session.sessionTabs.onTabsReorder}
+                onNewTab={() => void navigationCommands.handleNewTab()}
+              />
+            </div>
             <TopicbarActionsStack
               t={t}
               paletteShortcut={navigation.commandPaletteShortcut}

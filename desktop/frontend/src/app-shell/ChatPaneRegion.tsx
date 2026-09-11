@@ -81,7 +81,21 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
     || rewind.stateActive || rewind.committing || state.running
     || state.messageAction != null || state.approval != null || state.ask != null
     || transcript.clearContextPending || transitioning;
-  if (props.splitMode && !props.imDetail && !props.remote && !noticePreviewMockEnabled()) {
+  const noticePreview = noticePreviewMockEnabled();
+  // An unloaded transcript is the same user-visible state in both layouts; the
+  // split branch used to render bare panes with no loading surface and no way
+  // to retry, so a refused or failed history load was indistinguishable.
+  const recoveringEmpty = !transitioning && transcript.availability.kind !== "ready" && transcript.items.length === 0
+    && !state.live?.text && !state.live?.reasoning;
+  if (props.splitMode && !props.imDetail && !props.remote && !noticePreview) {
+    if (recoveringEmpty) {
+      return (
+        <>
+        <SessionRecoveryBanner key={transcript.tabId} availability={transcript.availability} onRetry={props.onRetryHistory} />
+        <main className="main"><SessionRecoveryPlaceholder availability={transcript.availability} /></main>
+        </>
+      );
+    }
     return (
       <main className="main main--split">
         <Suspense fallback={null}>
@@ -109,13 +123,10 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
       </main>
     );
   }
-  const noticePreview = noticePreviewMockEnabled();
   if (props.remote && !(props.imDetail && !transitioning) && !noticePreview) {
     return <Suspense fallback={null}><RemoteSessionSurface tab={props.remote.tab} session={props.remote.session}
       surfaceCommitToken={transcript.surfaceCommitToken} onSurfacePaintReady={commands.onSurfacePaintReady} /></Suspense>;
   }
-  const recoveringEmpty = !transitioning && transcript.availability.kind !== "ready" && transcript.items.length === 0
-    && !state.live?.text && !state.live?.reasoning;
   return (
     <>
     {!transitioning && !props.imDetail && !noticePreview && <SessionRecoveryBanner key={transcript.tabId}

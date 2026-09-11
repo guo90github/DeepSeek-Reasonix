@@ -48,7 +48,7 @@ import { applyHydrateErrorState, hydratePlaceholderItems as resolveHydratePlaceh
 import { isHostRecoveryGuidance } from "./hostRecoverySteer";
 import { activeTabHydrationPlan, canAdoptUnboundLiveSurface, duplicateLiveItemIds, hasCachedLiveTurn, hasReusableCachedTranscript, hydratedHistoryApplyMode, sameSessionHydrateIdentity, sameSessionPlaceholderItems, shouldPreferResidentHistory, type HydrateSurfacePolicy } from "./hydrateHistoryApply";
 import { hydrateIdentityCurrent } from "./sessionIdentity";
-import { historyPageRequestBudget } from "./historyPaging";
+import { HISTORY_OLDER_STALL_MS, historyPageRequestBudget, shouldReleaseStalledOlder } from "./historyPaging";
 import { createUniqueItemIDAllocator } from "./historyItemIds";
 import { withRemoteProviderUnreachable, withRemoteTurnInterrupted } from "./remoteTurnState";
 import type { NavigationResult, SurfaceDataCommit, SurfaceDataOutcome } from "./navigationSurfaceTransition";
@@ -2634,7 +2634,13 @@ export function useController() {
   }, []);
   const requireRegisteredNavigationIntent = useCallback(async (seq: number): Promise<void> => {
     const token = await registeredNavigationIntent(seq);
-    if (!token) throw new Error("navigation intent registration failed");
+    if (!token) {
+      // An evicted registration means a newer navigation took over, which the
+      // callers settle quietly; only a still-current navigation without a token
+      // is a real registration failure.
+      const reason = isNavigationIntentCurrent(seq) ? "navigation intent registration failed" : "navigation intent was superseded";
+      throw new Error(reason);
+    }
     if (!isNavigationIntentCurrent(seq)) throw new Error("navigation intent was superseded");
   }, [isNavigationIntentCurrent, registeredNavigationIntent]);
   const navigationCompletionCurrent = useCallback((seq: number, kind: string, tabId: string): boolean => {
@@ -3238,14 +3244,22 @@ export function useController() {
 
   const loadOlderHistory = useCallback(async (tabId?: string, targetTurn?: number, trigger: HistoryLoadTrigger = "retry"): Promise<boolean> => {
     const targetTabId = tabId || activeTabIdRef.current;
-    if (!targetTabId) return false;
+    if (!targetTabId) {
+      addBreadcrumb("tab.hydrate", `history older refused trigger=${trigger}: no target tab`);
+      return false;
+    }
     // The first-open backfill can race the controller build; waiting keeps the
     // fetch from landing pre-ready and coming back superseded. A startupErr is
     // not terminal — the hydrate-retry waiter gives a deferred startup rebuild
     // time to land instead of replaying against a healing tab.
     await waitForTabHydrateReadyRef.current(targetTabId);
     const state = statesRef.current.get(targetTabId);
-    if (!state?.historyHasOlder || state.historyOlderLoading || state.running) return false;
+    if (!state?.historyHasOlder || state.historyOlderLoading || state.running) {
+      // A refusal leaves no loading state and no error behind, so without this
+      // trace a pane that never re-arms is indistinguishable from one waiting.
+      addBreadcrumb("tab.hydrate", `history older refused ${targetTabId} trigger=${trigger} known=${Boolean(state)} hasOlder=${Boolean(state?.historyHasOlder)} loading=${Boolean(state?.historyOlderLoading)} running=${Boolean(state?.running)}`);
+      return false;
+    }
     const sessionPath = state.meta?.sessionPath ?? "";
     // Meta and history both carry the session identity; prefer the newer so a
     // settled reload adopted into historyRevision is not rejected because the
@@ -3273,6 +3287,15 @@ export function useController() {
     });
     ensureTranscriptSubscription(targetTabId);
     dispatchTo(targetTabId, { type: "history_older_start" });
+    // A request that never settles must not latch the loading surface: that flag
+    // is the pane's backfill guard, so a latch parks it on "loading" forever.
+    // Release this request's own generation once it is clearly stalled.
+    const stallTimer = window.setTimeout(() => {
+      const stalled = statesRef.current.get(targetTabId);
+      if (!shouldReleaseStalledOlder(requestSeq, historyOlderSeq.current.get(targetTabId), Boolean(stalled?.historyOlderLoading))) return;
+      dispatchTo(targetTabId, { type: "history_older_error" });
+      addBreadcrumb("tab.hydrate", `history older stalled ${targetTabId} trigger=${trigger} released after ${HISTORY_OLDER_STALL_MS}ms`);
+    }, HISTORY_OLDER_STALL_MS);
     const startedAt = Date.now();
     try {
       const result = await getTranscriptStore().loadOlder(targetTabId, sessionPath, pageBudget);
@@ -3363,6 +3386,8 @@ export function useController() {
       dispatchTo(targetTabId, { type: "history_older_error", error: errorMessage(err) });
       addBreadcrumb("tab.hydrate", `history older failed ${targetTabId}: ${errorMessage(err)}`);
       return false;
+    } finally {
+      window.clearTimeout(stallTimer);
     }
   }, [dispatchTo, ensureTranscriptSubscription]);
 
@@ -5227,6 +5252,41 @@ export function useController() {
     }
   }, [activeTabId, beginActiveNavigation, bump, disposeComposerProfileState, invalidateProviderStateForTab, notifyLiveListeners, releaseTranscriptState, requireRegisteredNavigationIntent, syncActiveTabFromBackend]);
 
+  const closeTabs = useCallback(async (
+    tabIds: string[],
+    keepTabId?: string,
+    policy: "keep_running" | "stop_and_close" = "keep_running",
+  ): Promise<boolean> => {
+    const targets = tabIds.filter((id) => id && id !== keepTabId);
+    if (targets.length === 0) return true;
+    // One intent covers the batch: the tabs are removed in a single fenced pass
+    // instead of N navigations racing each other for the registration slot.
+    const navigationSeq = targets.includes(activeTabIdRef.current ?? "") ? beginActiveNavigation() : undefined;
+    let allClosed = true;
+    try {
+      if (navigationSeq !== undefined) await requireRegisteredNavigationIntent(navigationSeq);
+      for (const tabId of targets) {
+        try {
+          await app.CloseTabWithPolicy(tabId, policy);
+        } catch {
+          allClosed = false;
+          continue;
+        }
+        invalidateProviderStateForTab(tabId);
+        disposeComposerProfileState(tabId);
+        statesRef.current.delete(tabId);
+        releaseTranscriptState(tabId);
+        notifyLiveListeners(tabId);
+      }
+      bump();
+      if (keepTabId) await switchTab(keepTabId, undefined, navigationSeq);
+      else if (navigationSeq !== undefined) await syncActiveTabFromBackend(false);
+      return allClosed;
+    } catch {
+      return false;
+    }
+  }, [beginActiveNavigation, bump, disposeComposerProfileState, invalidateProviderStateForTab, notifyLiveListeners, releaseTranscriptState, requireRegisteredNavigationIntent, switchTab, syncActiveTabFromBackend]);
+
   const reorderTabs = useCallback(async (tabIds: string[]) => {
     try {
       await app.ReorderTabs(tabIds);
@@ -5249,7 +5309,7 @@ export function useController() {
     requestHistoryFullContent,
     refreshMeta, pickWorkspace, switchWorkspace, compact, rewind, rewindForTab, rewindForTabDetailed, undoRewindForTab, setModel, setModelForTab, setEffort, setEffortForTab, cancelJob,
     fetchMemory, remember, forget, saveDoc,
-    switchTab, switchRemoteTab, openProjectTab, openGlobalTab, openTopicSession, ensureBlankTab, activateTopic, ensureBlankSurface, createIsolatedWorktree, commitSingleSurfaceNavigation, closeTab, reorderTabs,
+    switchTab, switchRemoteTab, openProjectTab, openGlobalTab, openTopicSession, ensureBlankTab, activateTopic, ensureBlankSurface, createIsolatedWorktree, commitSingleSurfaceNavigation, closeTab, closeTabs, reorderTabs,
     // Invalidate in-flight navigation completions (activateTopic's stale
     // guard) from outside the hook. The App-level navigation queue must call
     // this at ENQUEUE time: a queued click does not run — and so does not

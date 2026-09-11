@@ -167,13 +167,13 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     listSessions, openChannelSession, resumeSession,
   } = runtime.sessionActions;
   const {
-    switchTab, switchRemoteTab, closeTab, reorderTabs, createIsolatedWorktree,
+    switchTab, switchRemoteTab, closeTab, closeTabs, reorderTabs, createIsolatedWorktree,
     noteNavigationIntent, registeredNavigationIntent, isNavigationIntentCurrent, reassertVisibleTabAfterStaleNavigation,
-    commitSingleSurfaceNavigation, activateTopic,
-    ensureBlankSurface,
+    commitSingleSurfaceNavigation, openTopicSession, openGlobalTab, openProjectTab, activateTopic,
+    ensureBlankSurface, ensureBlankTab,
   } = runtime.navigation;
   const {
-    setTransientOverlayDismissSignal, managementActive, desktopLayoutStyle,
+    setTransientOverlayDismissSignal, managementActive, desktopLayoutStyle, singleSurfaceLayout,
     windowsFramelessChrome, rightDockMode,
     workspacePanelOpen, workspacePanelMaximized, liveTerminalHeight, setLiveWorkspacePanelRenderWidth,
     setRightDockTreeWidth, terminalPanelOpen, setSettingsTarget, enterConversation,
@@ -325,6 +325,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     clearWorkspaceConflict: () => setWorkspaceConflict(null),
     ports: {
       closeTab,
+      closeTabs,
       reorderTabs,
       switchTab,
       switchRemoteTab,
@@ -674,9 +675,9 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
 
   const { openAutomationTopic, topicAccepted } = useAutomationNavigation({ noteIntent: noteNavigationIntent,
     enqueue: useCommittedCommand((intent, seq) => enqueueNavigationWithIntent(intent, seq)) });  const { enqueueNavigation, enqueueNavigationWithIntent, openRemoteProject } = useDesktopNavigation({
-    visible: { tabId: activeTabId ?? "", sessionKey: activeSessionIdentity },
-    ports: { isNavigationIntentCurrent, activateTopic,
-      ensureBlankSurface, createIsolatedWorktree, openChannelSession, resumeSession,
+    visible: { tabId: activeTabId ?? "", sessionKey: activeSessionIdentity }, singleSurface: singleSurfaceLayout,
+    ports: { isNavigationIntentCurrent, activateTopic, openTopicSession, openGlobalTab, openProjectTab,
+      ensureBlankSurface, ensureBlankTab, createIsolatedWorktree, openChannelSession, resumeSession,
       registeredNavigationIntent, switchRemoteTab, openRemoteProject: desktopBridge.openRemoteProjectTab,
       listTabs: desktopBridge.listTabs, applyTabs: setTabMetas, seedTab: seedActiveTabMeta, listSessions, topicAccepted },
     setTabRevealSignal, setTranscriptRevealSignal, setProjectRevision, setHistory: setHistView, t, showToast,
@@ -724,6 +725,20 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     sessionHasContent,
     conversationView,
     visibleRuntimeState,
+    // The session tab strip's projection: the ordered open tabs plus the
+    // switch/close/reorder commands and close policy the pre-merge chrome used.
+    sessionTabs: {
+      tabs: visibleTabs,
+      activeTabId: visibleTabId,
+      onTabChange: (tabId: string) => void switchTab(tabId),
+      onTabClose: (tabId: string) => void tabBarCommands.handleTabClose(tabId),
+      onTabsClose: (tabIds: string[], nextActiveTabId?: string) => {
+        // One batched command: the whole close set plus the surviving tab share
+        // a single navigation intent, so nothing can evict a peer's registration.
+        void tabBarCommands.handleTabsClose(tabIds, nextActiveTabId).catch(() => {});
+      },
+      onTabsReorder: (tabIds: string[]) => void reorderTabs(tabIds),
+    },
     sidebarImDetailConnection,
     surfaceWorkspacePanelRenderable,
     surfaceWorkspacePanelGridOpen,

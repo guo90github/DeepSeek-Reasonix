@@ -2,7 +2,7 @@ import { asArray } from "./array";
 import { getLocale, type DictKey, type Translator } from "./i18n";
 import type { ProjectNode, ProjectTopicStatus } from "./types";
 
-export type ProjectTreeVariant = "workbench" | "creation";
+export type ProjectTreeVariant = "classic" | "workbench" | "creation";
 export type WorkbenchOrganizeMode = "project" | "recent" | "time";
 export type WorkbenchSortMode = "created" | "updated";
 

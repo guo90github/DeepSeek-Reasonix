@@ -119,12 +119,21 @@ func (a *App) SetDesktopTerminalTheme(theme string) error {
 // SetDesktopLayoutStyle updates only the desktop layout style. It does not
 // rebuild the active controller and must stay out of provider-visible requests.
 func (a *App) SetDesktopLayoutStyle(style string) error {
+	normalized := ""
 	if err := a.applyConfigOnly(func(c *config.Config) error {
-		return c.SetDesktopLayoutStyle(style)
+		if err := c.SetDesktopLayoutStyle(style); err != nil {
+			return err
+		}
+		normalized = c.DesktopLayoutStyle()
+		return nil
 	}); err != nil {
 		return err
 	}
-	return a.applySingleSurfaceTabPolicy()
+	// Switching to split must not prune the sessions split exists to list.
+	if singleSurfaceLayoutStyle(normalized) {
+		return a.applySingleSurfaceTabPolicy()
+	}
+	return nil
 }
 
 // SetDesktopCheckUpdates updates only the desktop startup update-check

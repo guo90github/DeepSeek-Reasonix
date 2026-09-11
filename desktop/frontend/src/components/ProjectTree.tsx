@@ -203,7 +203,7 @@ export function ProjectTree({
   activeSessionPath,
   activeRemote,
   imTopicSources = {},
-  variant = "workbench",
+  variant = "classic",
   onOpenTopic,
   onAddProject,
   onCreateTopic,

@@ -252,8 +252,8 @@ ok(
 );
 
 ok(
-  /workbenchChromeHidden\s*=\s*sidebarWorkbench/.test(appViewSource),
-  "workbench chrome is hidden for every desktop platform",
+  /workbenchChromeHidden\s*=\s*sidebarWorkbench \|\| shell\.preferences\.desktopLayoutStyle === "split"/.test(appViewSource),
+  "workbench and split chrome is hidden for every desktop platform",
 );
 
 ok(
@@ -526,6 +526,20 @@ ok(
 ok(
   /handleChromeTitlebarDoubleClick[\s\S]{0,700}?closest\("button, input, textarea, select, a, \[role='button'\], \[role='tab'\], \.windows-window-controls"\)/.test(chromeCommandsSource),
   "title-bar double click still ignores interactive controls",
+);
+
+// The third layout (split) is neither workbench nor creation: without its own
+// tree variant and app class, the surviving .app--classic rules lose their
+// emitter and the sidebar silently loses its row actions.
+const chromeRegionSource = readFileSync(resolve(testDir, "../app-shell/chromeRegionBuilders.ts"), "utf8");
+ok(
+  /sidebarWorkbench \? "workbench" : shell\.sidebarCreation \? "creation" : "classic"/.test(chromeRegionSource),
+  "the sidebar keeps a third tree variant for layouts that are neither workbench nor creation",
+);
+ok(
+  /!input\.workbench && !input\.creation \? "app--classic" : ""/.test(chromeRegionSource) &&
+    /\.app--classic \.project-tree__topic-actions/.test(stylesSource),
+  "that layout class is emitted and still consumed by the sidebar action rules",
 );
 
 console.log(`\n${passed} passed, ${failed} failed`);
