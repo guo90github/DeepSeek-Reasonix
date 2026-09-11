@@ -57,6 +57,8 @@ export async function executeDesktopNavigation(input: DesktopNavigationCapture, 
     checkpoint();
     ports.applyTabs(tabs);
   };
+  // Split lists every open session, so it must add or reuse a surface; the
+  // one-surface styles replace the single surface they show.
   const openTopic = (scope: string, workspace: string, topic: string, path?: string) => singleSurface
     ? ports.activateTopic(scope, workspace, topic, path || "", seq)
     : path ? ports.openTopicSession(scope, workspace, topic, path, seq)

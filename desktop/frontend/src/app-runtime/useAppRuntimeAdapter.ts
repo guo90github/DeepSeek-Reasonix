@@ -79,6 +79,7 @@ export function useAppRuntimeAdapter() {
       openGlobalTab: controller.openGlobalTab,
       closeTab: controller.closeTab,
       reorderTabs: controller.reorderTabs,
+      closeTabs: controller.closeTabs,
       openTopicSession: controller.openTopicSession,
       activateTopic: controller.activateTopic,
       noteNavigationIntent: controller.noteNavigationIntent,

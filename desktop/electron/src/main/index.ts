@@ -10,7 +10,7 @@ import { GrantRegistry } from "./browser/grants.js";
 import { buildBrowserHostCalls } from "./browser/hostCalls.js";
 import { browserLayoutInDIP } from "./browser/layout.js";
 import { BrowserSurfaceManager } from "./browser/surfaceManager.js";
-import { shellBuildIdentity } from "./buildIdentity.js";
+import { loadBuildIdentity } from "./buildIdentity.js";
 import { emptyContract, loadContract, type LoadedContract } from "./contract.js";
 import { DialogHost } from "./dialogs.js";
 import { renderFailurePage, type ShellAction } from "./failurePage.js";
@@ -223,12 +223,6 @@ function bootstrap(dataHome: string): void {
     browser: buildBrowserHostCalls({ surfaces: browser, grants, documents, actions, downloads }),
   });
 
-  const shellBuild = shellBuildIdentity({
-    packaged: app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    fallbackVersion: app.getVersion(),
-    env: process.env,
-  });
   const service = new ServiceSupervisor(
     {
       binary: serviceBinary,
@@ -243,9 +237,7 @@ function bootstrap(dataHome: string): void {
     {
       hello: async (client) => validateHelloResult(await client.request("desktop/hello", buildHelloParams({
         contractDigest: contract.digest,
-        version: shellBuild.version,
-        channel: shellBuild.channel,
-        commit: shellBuild.commit,
+        ...loadBuildIdentity(app.isPackaged, process.resourcesPath, process.env),
         hostVersion: process.versions.electron,
         chromeVersion: process.versions.chrome,
         platform: process.platform,

@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:020908423c406127caea191ebd43914525c35eefe953d2e82e52a1e12a45380b";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:040fefef076bd6aee1e5f20982dfcc3f505b3bf235b794e6df6fa0f608926561";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -174,10 +174,15 @@ export const DESKTOP_COMMANDS = [
   "GetTask",
   "GetTaskCatalogStatus",
   "GetThemeExperience",
+  "GetToolRecoveryForTab",
   "GetTopicSummary",
   "GetWorktreeStatus",
   "GitBranches",
+  "GitBranchesForTab",
   "GitCheckout",
+  "GitCheckoutForTab",
+  "GitCreateBranch",
+  "GitCreateBranchForTab",
   "HeartbeatGenerateID",
   "HeartbeatListTasks",
   "HeartbeatReloadConfig",
@@ -370,6 +375,7 @@ export const DESKTOP_COMMANDS = [
   "ResolveRecoveryTab",
   "ResolveRecoveryTabForTurn",
   "ResolveRemoteTabPlanDecision",
+  "ResolveToolRecoveryForTab",
   "ResolveWorkspacePathForTab",
   "RestartApplication",
   "RestoreArchivedMemory",
@@ -587,6 +593,7 @@ export const DESKTOP_COMMANDS = [
   "WorkspaceConflictForTab",
   "WorkspaceGitCommitDetail",
   "WorkspaceGitHistory",
+  "WorkspaceGitStatsForTab",
   "WorkspaceRevisionForTab",
   "WorkspaceTurnChangeDetail",
   "WorkspaceTurnChanges",
@@ -629,6 +636,14 @@ export const DESKTOP_EVENTS = [
 export type DesktopCommandName = (typeof DESKTOP_COMMANDS)[number];
 
 export type DesktopEventName = (typeof DESKTOP_EVENTS)[number];
+
+export interface ToolRecoveryStatistics {
+  unknown: number;
+  confirmed: number;
+  retried: number;
+  rejected: number;
+  blocked: number;
+}
 
 export interface CostQuote {
   original: Money;
@@ -871,6 +886,25 @@ export interface ProviderProtocolEndpoint {
   responsesMode?: string;
 }
 
+export interface ToolRecoveryRequest {
+  sessionPath: string;
+  runtimeEpoch: string;
+  revision: string;
+  attemptId: string;
+  inspectionId: string;
+  action: string;
+}
+
+export interface ToolRecoverySnapshot {
+  silent: boolean;
+  statistics: ToolRecoveryStatistics;
+  sessionPath: string;
+  runtimeEpoch: string;
+  revision: string;
+  calls: ToolCallRecord[];
+  retryEnabled: boolean;
+}
+
 export interface ToolResultData {
   args: string;
   output: string;
@@ -907,6 +941,11 @@ export interface ReasoningAuditTotals {
 }
 
 export interface RecoveryStatus {
+  state?: string;
+  call_id?: string;
+  attempt_id?: string;
+  requires_user_decision?: boolean;
+  read_only?: boolean;
   phase?: string;
   reason?: string;
   next_attempt_at?: number;
@@ -1279,6 +1318,7 @@ export interface StreamAttempt {
 }
 
 export interface Tool {
+  runState?: string;
   diagnostic?: unknown;
   verifying?: boolean;
   id?: string;
@@ -3857,6 +3897,9 @@ export interface WorkspaceChangesView {
   gitAvailable: boolean;
   gitErr?: string;
   gitBranch?: string;
+  added?: number;
+  removed?: number;
+  incomplete?: boolean;
 }
 
 export interface WorkspaceConflictView {
@@ -3924,6 +3967,16 @@ export interface CompatibilityIssue {
   capability: string;
   path?: string;
   reason: string;
+}
+
+export interface ActionIdentity {
+  session_id?: string;
+  turn_id?: string;
+  attempt_id?: string;
+  call_id?: string;
+  canonical_tool?: string;
+  argument_digest?: string;
+  resource_scope?: string;
 }
 
 export interface CompletedRead {
@@ -4017,6 +4070,24 @@ export interface ServerSearchCall {
 export interface ServerSearchHit {
   title?: string;
   url?: string;
+}
+
+export interface ToolCallRecord {
+  identity: ActionIdentity;
+  arguments?: unknown;
+  state: string;
+  read_only: boolean;
+  idempotency_key?: string;
+  started_at?: number;
+  finished_at?: number;
+  result_digest?: string;
+  effect_summary?: string;
+  resolution?: string;
+  resolved_at?: number;
+  resolution_source?: string;
+  inspection_id?: string;
+  inspection_state?: string;
+  superseded_by?: string;
 }
 
 export interface ToolExecution {
@@ -4414,10 +4485,15 @@ export interface GeneratedDesktopCommands {
   GetTask(arg0: string): Promise<TaskSnapshot | null>;
   GetTaskCatalogStatus(): Promise<taskcatalog_Status>;
   GetThemeExperience(): Promise<ThemeExperienceView>;
+  GetToolRecoveryForTab(arg0: string): Promise<ToolRecoverySnapshot>;
   GetTopicSummary(arg0: ProjectTopicKey): Promise<ProjectNode>;
   GetWorktreeStatus(arg0: string): Promise<MergeInspection>;
   GitBranches(): Promise<string[]>;
+  GitBranchesForTab(arg0: string, arg1: string): Promise<string[]>;
   GitCheckout(arg0: string): Promise<void>;
+  GitCheckoutForTab(arg0: string, arg1: string, arg2: string): Promise<void>;
+  GitCreateBranch(arg0: string): Promise<void>;
+  GitCreateBranchForTab(arg0: string, arg1: string, arg2: string): Promise<void>;
   HeartbeatGenerateID(): Promise<string>;
   HeartbeatListTasks(): Promise<HeartbeatTask[]>;
   HeartbeatReloadConfig(): Promise<HeartbeatConfigView>;
@@ -4610,6 +4686,7 @@ export interface GeneratedDesktopCommands {
   ResolveRecoveryTab(arg0: string, arg1: string, arg2: string, arg3: string): Promise<void>;
   ResolveRecoveryTabForTurn(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: string): Promise<void>;
   ResolveRemoteTabPlanDecision(arg0: string, arg1: string, arg2: string, arg3: string): Promise<void>;
+  ResolveToolRecoveryForTab(arg0: string, arg1: ToolRecoveryRequest): Promise<ToolRecoverySnapshot>;
   ResolveWorkspacePathForTab(arg0: string, arg1: string): Promise<string>;
   RestartApplication(): Promise<void>;
   RestoreArchivedMemory(arg0: string): Promise<MemoryFact>;
@@ -4827,6 +4904,7 @@ export interface GeneratedDesktopCommands {
   WorkspaceConflictForTab(arg0: string): Promise<WorkspaceConflictView>;
   WorkspaceGitCommitDetail(arg0: string, arg1: string, arg2: string): Promise<GitCommitDetailView>;
   WorkspaceGitHistory(arg0: string, arg1: string): Promise<GitCommitView[]>;
+  WorkspaceGitStatsForTab(arg0: string, arg1: string): Promise<WorkspaceChangesView>;
   WorkspaceRevisionForTab(arg0: string): Promise<WorkspaceRevisionView>;
   WorkspaceTurnChangeDetail(arg0: string, arg1: string, arg2: number, arg3: string, arg4: string): Promise<TurnFile | null>;
   WorkspaceTurnChanges(arg0: string, arg1: string, arg2: number, arg3: string): Promise<TurnChanges | null>;

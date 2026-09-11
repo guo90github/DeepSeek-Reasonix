@@ -129,6 +129,7 @@ func (a *App) SetDesktopLayoutStyle(style string) error {
 	}); err != nil {
 		return err
 	}
+	// Switching to split must not prune the sessions split exists to list.
 	if singleSurfaceLayoutStyle(normalized) {
 		return a.applySingleSurfaceTabPolicy()
 	}

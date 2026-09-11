@@ -198,11 +198,12 @@ export function ConversationPane({
   }, [running]);
 
   // Backfill the full session on mount so both panes start at the real first
-  // turn instead of mid-conversation (the backend only pages the tail).
+  // turn instead of mid-conversation (the backend only pages the tail). The
+  // controller refuses while the turn runs, so a settled run must re-arm this.
   useEffect(() => {
-    if (hydrating || !hasOlderHistory || loadingOlderHistory || olderHistoryError) return;
+    if (hydrating || !hasOlderHistory || loadingOlderHistory || olderHistoryError || running) return;
     onLoadOlderHistory?.();
-  }, [hasOlderHistory, hydrating, loadingOlderHistory, olderHistoryError, onLoadOlderHistory]);
+  }, [hasOlderHistory, hydrating, loadingOlderHistory, olderHistoryError, onLoadOlderHistory, running]);
 
   const olderHeader = hasOlderHistory || loadingOlderHistory || olderHistoryError ? (
     <div className="conversation-pane__older">

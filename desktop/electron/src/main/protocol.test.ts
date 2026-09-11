@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, test } from "node:test";
-import { isForwardedPath, resolveDistRoot, routeAppRequest } from "./protocol.js";
+import { isForwardedPath, registerAppProtocol, resolveDistRoot, routeAppRequest } from "./protocol.js";
 
 let dist = "";
 const isFile = (path: string) => {
@@ -78,4 +78,32 @@ test("the dist root honours the override, then packaging layout", () => {
   assert.equal(resolveDistRoot({ env: { REASONIX_FRONTEND_DIST: "/tmp/dist" }, appPath: "/app/electron", resourcesPath: "/res", packaged: true }), "/tmp/dist");
   assert.equal(resolveDistRoot({ env: {}, appPath: "/app/electron", resourcesPath: "/res", packaged: false }), "/app/frontend/dist");
   assert.equal(resolveDistRoot({ env: {}, appPath: "/app/electron", resourcesPath: "/res", packaged: true }), "/res/app");
+});
+
+// Chromium refuses `new Profiler(...)` (desktop/frontend/src/lib/crash.ts) unless
+// the document response itself carries this policy, so the app document is the
+// only response that must have it.
+test("the app document opts into the JS Self-Profiling document policy", async () => {
+  let handler: ((request: Request) => Promise<Response> | Response) | null = null;
+  registerAppProtocol({
+    protocol: {
+      handle: (_scheme, next) => {
+        handler = next;
+      },
+    },
+    fetch: async () => new Response("", { status: 500 }),
+    distRoot: dist,
+    resources: () => null,
+    log: { info: () => {}, warn: () => {}, error: () => {} },
+  });
+  assert.ok(handler, "the scheme handler was registered");
+  const serve = (url: string) => Promise.resolve(handler!(new Request(url)));
+
+  const document = await serve("reasonix://app/index.html");
+  assert.equal(document.status, 200);
+  assert.equal(document.headers.get("document-policy"), "js-profiling");
+  assert.equal(document.headers.get("content-type"), "text/html; charset=utf-8");
+
+  const script = await serve("reasonix://app/assets/app.js");
+  assert.equal(script.headers.get("document-policy"), null);
 });

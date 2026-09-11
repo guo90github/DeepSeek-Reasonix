@@ -2,7 +2,7 @@
 
 import { currentTurnWaitMs, foregroundRunningFromRuntimeMeta, historyMessagesToItems, initialState, localizedBackendNoticeText, localizedNoticeText, metaFromTab, reducer, sameMeta, type Item } from "../lib/useController";
 import { effortSwitchNoticeText, modelSwitchNoticeText } from "../lib/controllerSwitchNotices";
-import { historyPageRequestBudget, historyTurnsToLoad } from "../lib/historyPaging";
+import { HISTORY_OLDER_STALL_MS, historyPageRequestBudget, historyTurnsToLoad, shouldReleaseStalledOlder } from "../lib/historyPaging";
 import { shouldReconcileStaleTurn } from "../lib/useStaleTurnWatchdog";
 import { parseTodos } from "../lib/tools";
 import { resolveTodoPanelTodos } from "../lib/todoVisibility";
@@ -285,6 +285,11 @@ console.log("\nuse controller meta");
   eq(historyTurnsToLoad(2, 61), 60, "ordinary automatic history loading keeps the standard page size");
   eq(JSON.stringify(historyPageRequestBudget(941, 1_000, 1)), JSON.stringify({ turns: 500, entries: 1000 }), "a distant jump uses the backend's bounded entry capacity");
   eq(JSON.stringify(historyPageRequestBudget(2, 61)), JSON.stringify({ turns: 60 }), "ordinary history loading keeps the default entry and byte budgets");
+  eq(shouldReleaseStalledOlder(3, 3, true), true, "a stalled request that still owns the tab's generation releases the loading surface");
+  eq(shouldReleaseStalledOlder(3, 4, true), false, "a superseded request never releases the surface the newer request owns");
+  eq(shouldReleaseStalledOlder(3, 3, false), false, "a settled request leaves the surface alone");
+  eq(shouldReleaseStalledOlder(3, undefined, true), false, "a request whose tab generation was dropped releases nothing");
+  ok(HISTORY_OLDER_STALL_MS > 0 && HISTORY_OLDER_STALL_MS <= 60_000, "the stalled-request release deadline stays bounded");
 
   let s = reducer(initialState, {
     type: "event",

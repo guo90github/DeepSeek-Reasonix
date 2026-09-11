@@ -167,14 +167,14 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     listSessions, openChannelSession, resumeSession,
   } = runtime.sessionActions;
   const {
-    switchTab, switchRemoteTab, closeTab, reorderTabs, createIsolatedWorktree,
+    switchTab, switchRemoteTab, closeTab, closeTabs, reorderTabs, createIsolatedWorktree,
     noteNavigationIntent, registeredNavigationIntent, isNavigationIntentCurrent, reassertVisibleTabAfterStaleNavigation,
     commitSingleSurfaceNavigation, openTopicSession, openGlobalTab, openProjectTab, activateTopic,
     ensureBlankSurface, ensureBlankTab,
   } = runtime.navigation;
   const {
-    setTransientOverlayDismissSignal, managementActive, desktopLayoutStyle,
-    singleSurfaceLayout, windowsFramelessChrome, rightDockMode,
+    setTransientOverlayDismissSignal, managementActive, desktopLayoutStyle, singleSurfaceLayout,
+    windowsFramelessChrome, rightDockMode,
     workspacePanelOpen, workspacePanelMaximized, liveTerminalHeight, setLiveWorkspacePanelRenderWidth,
     setRightDockTreeWidth, terminalPanelOpen, setSettingsTarget, enterConversation,
   } = shell;
@@ -325,6 +325,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     clearWorkspaceConflict: () => setWorkspaceConflict(null),
     ports: {
       closeTab,
+      closeTabs,
       reorderTabs,
       switchTab,
       switchRemoteTab,
@@ -592,6 +593,8 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     creation: desktopLayoutStyle === "creation", visible: surfaceWorkspacePanelRenderable,
     closeOverlays: closeTransientOverlays, clearLiveWidth: setLiveWorkspacePanelRenderWidth,
     availableWidth: workspacePanelAvailableWidth, clampTreeWidth: rightDockTreeWidthClamp, setTreeWidth: setRightDockTreeWidth,
+    gridOpen: surfaceWorkspacePanelGridOpen,
+    t,
   });
   const { openRightDockMode } = workspacePanelCommands;
 
@@ -643,9 +646,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     transitioning: runtimeTransitioning,
     navigationDataReady: navigationTargetDataReady,
     preserved: preservedTranscriptSurface,
-    singleSurface: singleSurfaceLayout,
     controllerReady,
-    heroLayout: desktopLayoutStyle === "creation" || desktopLayoutStyle === "workbench",
     availability,
     sessionActivity: Boolean(conversationView.runtime.running || conversationView.runtime.pendingPrompt
       || conversationView.runtime.approval || conversationView.runtime.ask || conversationView.runtime.extensionForm
@@ -724,6 +725,20 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     sessionHasContent,
     conversationView,
     visibleRuntimeState,
+    // The session tab strip's projection: the ordered open tabs plus the
+    // switch/close/reorder commands and close policy the pre-merge chrome used.
+    sessionTabs: {
+      tabs: visibleTabs,
+      activeTabId: visibleTabId,
+      onTabChange: (tabId: string) => void switchTab(tabId),
+      onTabClose: (tabId: string) => void tabBarCommands.handleTabClose(tabId),
+      onTabsClose: (tabIds: string[], nextActiveTabId?: string) => {
+        // One batched command: the whole close set plus the surviving tab share
+        // a single navigation intent, so nothing can evict a peer's registration.
+        void tabBarCommands.handleTabsClose(tabIds, nextActiveTabId).catch(() => {});
+      },
+      onTabsReorder: (tabIds: string[]) => void reorderTabs(tabIds),
+    },
     sidebarImDetailConnection,
     surfaceWorkspacePanelRenderable,
     surfaceWorkspacePanelGridOpen,

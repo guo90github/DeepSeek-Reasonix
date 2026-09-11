@@ -141,6 +141,11 @@ export function registerAppProtocol(deps: AppProtocolDeps): void {
       }
     }
     const body = Readable.toWeb(createReadStream(route.path)) as unknown as ReadableStream;
-    return new Response(body, { status: 200, headers: { "content-type": route.mime, "cache-control": "no-cache" } });
+    const headers: Record<string, string> = { "content-type": route.mime, "cache-control": "no-cache" };
+    // Chromium denies the JS Self-Profiling API unless the document opts in, and
+    // the frontend profiler samples stacks for long-task reports. Subresources
+    // inherit the document's policy, so only the HTML response needs the header.
+    if (route.mime.startsWith("text/html")) headers["document-policy"] = "js-profiling";
+    return new Response(body, { status: 200, headers });
   });
 }

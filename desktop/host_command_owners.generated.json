@@ -2403,6 +2403,20 @@
       "inputs": []
     }
   },
+  "GetToolRecoveryForTab": {
+    "domain": "desktop/tool_recovery.go",
+    "owner": "App.GetToolRecoveryForTab",
+    "sources": [
+      "desktop/tool_recovery.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GetToolRecoveryForTab",
+      "inputs": [
+        "tabID"
+      ]
+    }
+  },
   "GetTopicSummary": {
     "domain": "desktop/session_catalog_runtime.go",
     "owner": "App.GetTopicSummary",
@@ -2443,6 +2457,21 @@
       "inputs": []
     }
   },
+  "GitBranchesForTab": {
+    "domain": "desktop/workspace_git_branches.go",
+    "owner": "App.GitBranchesForTab",
+    "sources": [
+      "desktop/workspace_git_branches.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GitBranchesForTab",
+      "inputs": [
+        "tabID",
+        "workspaceRoot"
+      ]
+    }
+  },
   "GitCheckout": {
     "domain": "desktop/workspace_changes.go",
     "owner": "App.GitCheckout",
@@ -2454,6 +2483,52 @@
       "resolver": "App.GitCheckout",
       "inputs": [
         "branch"
+      ]
+    }
+  },
+  "GitCheckoutForTab": {
+    "domain": "desktop/workspace_git_branches.go",
+    "owner": "App.GitCheckoutForTab",
+    "sources": [
+      "desktop/workspace_git_branches.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GitCheckoutForTab",
+      "inputs": [
+        "tabID",
+        "workspaceRoot",
+        "branch"
+      ]
+    }
+  },
+  "GitCreateBranch": {
+    "domain": "desktop/workspace_changes.go",
+    "owner": "App.GitCreateBranch",
+    "sources": [
+      "desktop/workspace_changes.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GitCreateBranch",
+      "inputs": [
+        "name"
+      ]
+    }
+  },
+  "GitCreateBranchForTab": {
+    "domain": "desktop/workspace_git_branches.go",
+    "owner": "App.GitCreateBranchForTab",
+    "sources": [
+      "desktop/workspace_git_branches.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GitCreateBranchForTab",
+      "inputs": [
+        "tabID",
+        "workspaceRoot",
+        "name"
       ]
     }
   },
@@ -5168,6 +5243,21 @@
         "callID",
         "action",
         "feedback"
+      ]
+    }
+  },
+  "ResolveToolRecoveryForTab": {
+    "domain": "desktop/tool_recovery.go",
+    "owner": "App.ResolveToolRecoveryForTab",
+    "sources": [
+      "desktop/tool_recovery.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ResolveToolRecoveryForTab",
+      "inputs": [
+        "tabID",
+        "req"
       ]
     }
   },
@@ -8357,6 +8447,21 @@
       "inputs": [
         "tabID",
         "path"
+      ]
+    }
+  },
+  "WorkspaceGitStatsForTab": {
+    "domain": "desktop/workspace_git_branches.go",
+    "owner": "App.WorkspaceGitStatsForTab",
+    "sources": [
+      "desktop/workspace_git_branches.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.WorkspaceGitStatsForTab",
+      "inputs": [
+        "tabID",
+        "workspaceRoot"
       ]
     }
   },

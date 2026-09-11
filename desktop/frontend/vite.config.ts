@@ -189,6 +189,9 @@ export default defineConfig({
     host: "127.0.0.1",
     port: devPort,
     strictPort: true,
+    // The packaged shell sets this on the app document (electron/main/protocol.ts);
+    // dev loads the same frontend straight from Vite and needs it too.
+    headers: { "Document-Policy": "js-profiling" },
     fs: {
       // Browser-dev theme mocks use the same embedded source assets as the
       // desktop build. Keep the allow-list narrow while retaining Vite's

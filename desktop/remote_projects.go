@@ -309,11 +309,11 @@ func (a *App) commitRemoteTabOpenRegistration(registration *remoteTabOpenRegistr
 // CLI and can take minutes, so the surface follows progress through
 // remote-tab:{id}:state events instead of this promise.
 func (a *App) OpenRemoteProjectTab(hostID, workspace string, opts RemoteTabOpenOptions) (TabMeta, error) {
+	// Split reuses or adds this remote surface without collapsing the tabs the
+	// user already has open; the single-surface styles keep exactly one.
 	singleSurface := a.singleSurfaceLayoutEnabled()
-	if singleSurface {
-		a.singleSurfaceMu.Lock()
-		defer a.singleSurfaceMu.Unlock()
-	}
+	a.singleSurfaceMu.Lock()
+	defer a.singleSurfaceMu.Unlock()
 	a.tabSelectionMu.Lock()
 	defer a.tabSelectionMu.Unlock()
 
@@ -370,8 +370,7 @@ func (a *App) OpenRemoteProjectTab(hostID, workspace string, opts RemoteTabOpenO
 			return TabMeta{}, fmt.Errorf("remote tab %q closed while opening", registration.reuseID)
 		}
 		if singleSurface {
-			_, err = a.keepOnlyRemoteVisibleTab(registration.reuseID)
-			if err != nil {
+			if _, err = a.keepOnlyRemoteVisibleTab(registration.reuseID); err != nil {
 				return TabMeta{}, err
 			}
 		}

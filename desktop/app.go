@@ -715,6 +715,9 @@ func (a *App) restoreOrBuildTabs() {
 		}
 		a.setDesktopLocale(i18n.DetectLanguage(lang))
 	}
+	// Split restores every open session onto the shell's tab strip; the
+	// single-surface styles keep one, and a config that failed to load takes
+	// the safe single-surface path.
 	if cfgErr != nil || singleSurfaceLayoutStyle(startupCfg.DesktopLayoutStyle()) {
 		f = singleSurfaceTabsFile(f)
 	}
@@ -5041,6 +5044,8 @@ func (a *App) SwitchWorkspace(dir string) (string, error) {
 	return meta.WorkspaceRoot, nil
 }
 
+// singleSurfaceLayoutEnabled reports whether the active layout shows one
+// surface at a time; split keeps every open session as its own tab.
 func (a *App) singleSurfaceLayoutEnabled() bool {
 	cfg, _, err := a.loadDesktopUserConfigForView()
 	if err != nil {
@@ -10025,6 +10030,9 @@ type WorkspaceChangesView struct {
 	GitAvailable bool                  `json:"gitAvailable"`
 	GitErr       string                `json:"gitErr,omitempty"`
 	GitBranch    string                `json:"gitBranch,omitempty"`
+	Added        int                   `json:"added,omitempty"`
+	Removed      int                   `json:"removed,omitempty"`
+	Incomplete   bool                  `json:"incomplete,omitempty"`
 }
 
 type WorkspaceChangeDetailView struct {

@@ -13,6 +13,8 @@ type desktopRemoteTabEntry struct {
 	SessionReset bool   `json:"sessionReset,omitempty"`
 }
 
+// split lists every open session on the shell's tab strip, so the one-surface
+// tab policy applies to workbench and creation only.
 func singleSurfaceLayoutStyle(style string) bool {
 	switch strings.ToLower(strings.TrimSpace(style)) {
 	case "workbench", "creation":

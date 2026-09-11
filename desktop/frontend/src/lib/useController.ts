@@ -11,6 +11,7 @@ import { addBreadcrumb } from "./breadcrumbs";
 import { app, onEvent, onReady, onRuntimeRebuilt, onTabMeta, onTopicActivation } from "./bridge";
 import { startControllerEventRecovery } from "./controllerEventRecovery";
 import { metaFromTab } from "./controllerTabMeta";
+import { tokensFromQuarters, unbilledOutputTokens } from "./turnMetrics";
 export { metaFromTab } from "./controllerTabMeta";
 import { invalidateCache } from "./composerHistory";
 import { formatInboxCancelError } from "./inboxError";
@@ -47,7 +48,7 @@ import { applyHydrateErrorState, hydratePlaceholderItems as resolveHydratePlaceh
 import { isHostRecoveryGuidance } from "./hostRecoverySteer";
 import { activeTabHydrationPlan, canAdoptUnboundLiveSurface, duplicateLiveItemIds, hasCachedLiveTurn, hasReusableCachedTranscript, hydratedHistoryApplyMode, sameSessionHydrateIdentity, sameSessionPlaceholderItems, shouldPreferResidentHistory, type HydrateSurfacePolicy } from "./hydrateHistoryApply";
 import { hydrateIdentityCurrent } from "./sessionIdentity";
-import { historyPageRequestBudget } from "./historyPaging";
+import { HISTORY_OLDER_STALL_MS, historyPageRequestBudget, shouldReleaseStalledOlder } from "./historyPaging";
 import { createUniqueItemIDAllocator } from "./historyItemIds";
 import { withRemoteProviderUnreachable, withRemoteTurnInterrupted } from "./remoteTurnState";
 import type { NavigationResult, SurfaceDataCommit, SurfaceDataOutcome } from "./navigationSurfaceTransition";
@@ -1177,8 +1178,11 @@ function endPromptWait(s: State, now = Date.now()): State {
   };
 }
 
+// An MCP interaction is a user wait like any other prompt: closing the interval
+// while one is outstanding would drop that wait from turnWaitAccumMs entirely,
+// because the later answer's endPromptWait finds no open interval to close.
 function endPromptWaitIfIdle(s: State, now = Date.now()): State {
-  if (s.approval || s.ask) return s;
+  if (s.approval || s.ask || s.mcpInteraction) return s;
   return endPromptWait(s, now);
 }
 
@@ -1223,11 +1227,11 @@ function endTurnModelActivity(s: State, now = Date.now(), stashForUsage = false)
 function snapshotCompletedTurnTelemetry(s: State, now = Date.now()): State {
   if (!s.turnStartAt || s.turnDoneAt > 0) return s;
   const settled = endPromptWait(endTurnModelActivity(s, now), now);
-  const liveChars = (settled.live?.text.length ?? 0) + (settled.live?.reasoning.length ?? 0);
-  const inFlightChars = settled.turnOutputTokens > 0
-    ? Math.max(0, liveChars - settled.turnOutputCharsAtUsage) + settled.turnArgChars
-    : settled.turnOutputChars + settled.turnArgChars;
-  const estimatedInFlightTokens = Math.round(inFlightChars / 4);
+  // `turnOutputChars` is a bare count with no buffer to weight, so the rolled
+  // back-attempt branch stays ASCII-priced.
+  const estimatedInFlightTokens = settled.turnOutputTokens > 0
+    ? unbilledOutputTokens(settled.live, settled.turnOutputCharsAtUsage, settled.turnArgChars)
+    : tokensFromQuarters(settled.turnOutputChars + settled.turnArgChars);
   return {
     ...settled,
     turnDoneAt: now,
@@ -2014,7 +2018,7 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
         }];
       } else if (e.outcome === "completion_uncertain") {
         items = [...finalized, { kind: "notice", id: `e${s.seq}`, level: "info", title: t("notice.completionUncertainTitle"), text: t("notice.completionUncertainBody") }];
-      } else if (e.status === "interrupted") {
+      } else if (e.status === "interrupted" || e.status === "recovery_required") {
         const interruptItems: Item[] = [{
           kind: "notice",
           id: `e${s.seq}`,
@@ -2397,7 +2401,7 @@ export function reducer(s: State, a: Action): State {
     }
     case "local_notice": return { ...s, running: a.preserveRuntime ? s.running : false, turnActive: a.preserveRuntime ? s.turnActive : false, seq: s.seq + 1, items: [...s.items, { kind: "notice", id: `n${s.seq}`, level: a.level, text: a.text }] };
     case "clearApproval": {
-      const next = { ...s, approval: undefined, pendingPrompt: Boolean(s.ask), resolvedPromptId: s.approval?.id ?? s.resolvedPromptId };
+      const next = { ...s, approval: undefined, pendingPrompt: Boolean(s.ask || s.mcpInteraction), resolvedPromptId: s.approval?.id ?? s.resolvedPromptId };
       return endPromptWaitIfIdle(next);
     }
     case "clearAsk": {
@@ -2433,12 +2437,12 @@ export function reducer(s: State, a: Action): State {
     // drain result must also belong to this controller's prompt-id epoch.
     case "approval_drained": {
       if (s.promptEpoch !== a.epoch || !s.approval || !a.ids.includes(s.approval.id)) return s;
-      const next = { ...s, approval: undefined, pendingPrompt: Boolean(s.ask), resolvedPromptId: s.approval.id };
+      const next = { ...s, approval: undefined, pendingPrompt: Boolean(s.ask || s.mcpInteraction), resolvedPromptId: s.approval.id };
       return endPromptWaitIfIdle(next);
     }
     case "ask_submit_succeeded": {
       if (s.promptEpoch !== a.epoch || s.ask?.id !== a.id) return s;
-      const next = { ...s, ask: undefined, pendingPrompt: Boolean(s.approval), resolvedPromptId: a.id };
+      const next = { ...s, ask: undefined, pendingPrompt: Boolean(s.approval || s.mcpInteraction), resolvedPromptId: a.id };
       return endPromptWaitIfIdle(next);
     }
     // The optimistic clearApproval/clearAsk tombstone was wrong: the backend
@@ -2630,7 +2634,13 @@ export function useController() {
   }, []);
   const requireRegisteredNavigationIntent = useCallback(async (seq: number): Promise<void> => {
     const token = await registeredNavigationIntent(seq);
-    if (!token) throw new Error("navigation intent registration failed");
+    if (!token) {
+      // An evicted registration means a newer navigation took over, which the
+      // callers settle quietly; only a still-current navigation without a token
+      // is a real registration failure.
+      const reason = isNavigationIntentCurrent(seq) ? "navigation intent registration failed" : "navigation intent was superseded";
+      throw new Error(reason);
+    }
     if (!isNavigationIntentCurrent(seq)) throw new Error("navigation intent was superseded");
   }, [isNavigationIntentCurrent, registeredNavigationIntent]);
   const navigationCompletionCurrent = useCallback((seq: number, kind: string, tabId: string): boolean => {
@@ -3234,14 +3244,22 @@ export function useController() {
 
   const loadOlderHistory = useCallback(async (tabId?: string, targetTurn?: number, trigger: HistoryLoadTrigger = "retry"): Promise<boolean> => {
     const targetTabId = tabId || activeTabIdRef.current;
-    if (!targetTabId) return false;
+    if (!targetTabId) {
+      addBreadcrumb("tab.hydrate", `history older refused trigger=${trigger}: no target tab`);
+      return false;
+    }
     // The first-open backfill can race the controller build; waiting keeps the
     // fetch from landing pre-ready and coming back superseded. A startupErr is
     // not terminal — the hydrate-retry waiter gives a deferred startup rebuild
     // time to land instead of replaying against a healing tab.
     await waitForTabHydrateReadyRef.current(targetTabId);
     const state = statesRef.current.get(targetTabId);
-    if (!state?.historyHasOlder || state.historyOlderLoading || state.running) return false;
+    if (!state?.historyHasOlder || state.historyOlderLoading || state.running) {
+      // A refusal leaves no loading state and no error behind, so without this
+      // trace a pane that never re-arms is indistinguishable from one waiting.
+      addBreadcrumb("tab.hydrate", `history older refused ${targetTabId} trigger=${trigger} known=${Boolean(state)} hasOlder=${Boolean(state?.historyHasOlder)} loading=${Boolean(state?.historyOlderLoading)} running=${Boolean(state?.running)}`);
+      return false;
+    }
     const sessionPath = state.meta?.sessionPath ?? "";
     // Meta and history both carry the session identity; prefer the newer so a
     // settled reload adopted into historyRevision is not rejected because the
@@ -3269,6 +3287,15 @@ export function useController() {
     });
     ensureTranscriptSubscription(targetTabId);
     dispatchTo(targetTabId, { type: "history_older_start" });
+    // A request that never settles must not latch the loading surface: that flag
+    // is the pane's backfill guard, so a latch parks it on "loading" forever.
+    // Release this request's own generation once it is clearly stalled.
+    const stallTimer = window.setTimeout(() => {
+      const stalled = statesRef.current.get(targetTabId);
+      if (!shouldReleaseStalledOlder(requestSeq, historyOlderSeq.current.get(targetTabId), Boolean(stalled?.historyOlderLoading))) return;
+      dispatchTo(targetTabId, { type: "history_older_error" });
+      addBreadcrumb("tab.hydrate", `history older stalled ${targetTabId} trigger=${trigger} released after ${HISTORY_OLDER_STALL_MS}ms`);
+    }, HISTORY_OLDER_STALL_MS);
     const startedAt = Date.now();
     try {
       const result = await getTranscriptStore().loadOlder(targetTabId, sessionPath, pageBudget);
@@ -3359,6 +3386,8 @@ export function useController() {
       dispatchTo(targetTabId, { type: "history_older_error", error: errorMessage(err) });
       addBreadcrumb("tab.hydrate", `history older failed ${targetTabId}: ${errorMessage(err)}`);
       return false;
+    } finally {
+      window.clearTimeout(stallTimer);
     }
   }, [dispatchTo, ensureTranscriptSubscription]);
 
@@ -5223,6 +5252,41 @@ export function useController() {
     }
   }, [activeTabId, beginActiveNavigation, bump, disposeComposerProfileState, invalidateProviderStateForTab, notifyLiveListeners, releaseTranscriptState, requireRegisteredNavigationIntent, syncActiveTabFromBackend]);
 
+  const closeTabs = useCallback(async (
+    tabIds: string[],
+    keepTabId?: string,
+    policy: "keep_running" | "stop_and_close" = "keep_running",
+  ): Promise<boolean> => {
+    const targets = tabIds.filter((id) => id && id !== keepTabId);
+    if (targets.length === 0) return true;
+    // One intent covers the batch: the tabs are removed in a single fenced pass
+    // instead of N navigations racing each other for the registration slot.
+    const navigationSeq = targets.includes(activeTabIdRef.current ?? "") ? beginActiveNavigation() : undefined;
+    let allClosed = true;
+    try {
+      if (navigationSeq !== undefined) await requireRegisteredNavigationIntent(navigationSeq);
+      for (const tabId of targets) {
+        try {
+          await app.CloseTabWithPolicy(tabId, policy);
+        } catch {
+          allClosed = false;
+          continue;
+        }
+        invalidateProviderStateForTab(tabId);
+        disposeComposerProfileState(tabId);
+        statesRef.current.delete(tabId);
+        releaseTranscriptState(tabId);
+        notifyLiveListeners(tabId);
+      }
+      bump();
+      if (keepTabId) await switchTab(keepTabId, undefined, navigationSeq);
+      else if (navigationSeq !== undefined) await syncActiveTabFromBackend(false);
+      return allClosed;
+    } catch {
+      return false;
+    }
+  }, [beginActiveNavigation, bump, disposeComposerProfileState, invalidateProviderStateForTab, notifyLiveListeners, releaseTranscriptState, requireRegisteredNavigationIntent, switchTab, syncActiveTabFromBackend]);
+
   const reorderTabs = useCallback(async (tabIds: string[]) => {
     try {
       await app.ReorderTabs(tabIds);
@@ -5245,7 +5309,7 @@ export function useController() {
     requestHistoryFullContent,
     refreshMeta, pickWorkspace, switchWorkspace, compact, rewind, rewindForTab, rewindForTabDetailed, undoRewindForTab, setModel, setModelForTab, setEffort, setEffortForTab, cancelJob,
     fetchMemory, remember, forget, saveDoc,
-    switchTab, switchRemoteTab, openProjectTab, openGlobalTab, openTopicSession, ensureBlankTab, activateTopic, ensureBlankSurface, createIsolatedWorktree, commitSingleSurfaceNavigation, closeTab, reorderTabs,
+    switchTab, switchRemoteTab, openProjectTab, openGlobalTab, openTopicSession, ensureBlankTab, activateTopic, ensureBlankSurface, createIsolatedWorktree, commitSingleSurfaceNavigation, closeTab, closeTabs, reorderTabs,
     // Invalidate in-flight navigation completions (activateTopic's stale
     // guard) from outside the hook. The App-level navigation queue must call
     // this at ENQUEUE time: a queued click does not run — and so does not

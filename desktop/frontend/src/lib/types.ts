@@ -22,6 +22,7 @@ export type EventKind =
   | "text"
   | "message"
   | "tool_dispatch"
+  | "tool_started"
   | "tool_result"
   | "tool_result_preview"
   | "turn_status"
@@ -50,7 +51,7 @@ export type EventKind =
   | "read_status"
   | "provider_unreachable";
 export type StreamAttemptAction = "begin" | "discard" | "commit";
-export type TurnStatus = "queued" | "in_progress" | "waiting_user" | "cancelling" | "completed" | "interrupted" | "failed" | "protocol_failed";
+export type TurnStatus = "queued" | "in_progress" | "waiting_user" | "cancelling" | "completed" | "interrupted" | "failed" | "protocol_failed" | "recovery_required";
 export interface TurnEventEnvelope {
   turnId: string;
   seq: number;
@@ -1239,6 +1240,9 @@ export interface WorkspaceChangesView {
   gitAvailable: boolean;
   gitErr?: string;
   gitBranch?: string;
+  added?: number;
+  removed?: number;
+  incomplete?: boolean;
 }
 
 export interface WorkspaceChangeDetailView {
@@ -2273,7 +2277,7 @@ export type { ModelSettingsChange, ModelSettingsResult } from "./modelSettingsTy
 export interface DesktopStartupSettingsView {
   bot: BotSettingsView;
   desktopLanguage: string; // "" | "en" | "zh"; empty = auto
-  desktopLayoutStyle: string; // "classic" | "workbench"
+  desktopLayoutStyle: string; // "workbench" | "creation"
   desktopTheme: string; // "auto" | "dark" | "light"
   desktopThemeStyle: string;
   desktopTerminalTheme: string; // "auto" follows app | "dark" | "light"
