@@ -4458,6 +4458,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/tool_recovery.go",
+      "name": "GetToolRecoveryForTab",
+      "owner": "App.GetToolRecoveryForTab",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "control.ToolRecoverySnapshot"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.GetToolRecoveryForTab"
+      },
+      "sources": [
+        "desktop/tool_recovery.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/session_catalog_runtime.go",
       "name": "GetTopicSummary",
       "owner": "App.GetTopicSummary",
@@ -4533,6 +4559,38 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/workspace_git_branches.go",
+      "name": "GitBranchesForTab",
+      "owner": "App.GitBranchesForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "elem": {
+          "kind": "string"
+        },
+        "kind": "array"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "workspaceRoot"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.GitBranchesForTab"
+      },
+      "sources": [
+        "desktop/workspace_git_branches.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/workspace_changes.go",
       "name": "GitCheckout",
       "owner": "App.GitCheckout",
@@ -4551,6 +4609,88 @@
       },
       "sources": [
         "desktop/workspace_changes.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/workspace_git_branches.go",
+      "name": "GitCheckoutForTab",
+      "owner": "App.GitCheckoutForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "workspaceRoot",
+          "branch"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.GitCheckoutForTab"
+      },
+      "sources": [
+        "desktop/workspace_git_branches.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/workspace_changes.go",
+      "name": "GitCreateBranch",
+      "owner": "App.GitCreateBranch",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "name"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.GitCreateBranch"
+      },
+      "sources": [
+        "desktop/workspace_changes.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/workspace_git_branches.go",
+      "name": "GitCreateBranchForTab",
+      "owner": "App.GitCreateBranchForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "workspaceRoot",
+          "name"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.GitCreateBranchForTab"
+      },
+      "sources": [
+        "desktop/workspace_git_branches.go"
       ]
     },
     {
@@ -9538,6 +9678,37 @@
       },
       "sources": [
         "desktop/remote_tab.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/tool_recovery.go",
+      "name": "ResolveToolRecoveryForTab",
+      "owner": "App.ResolveToolRecoveryForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "object",
+          "ref": "control.ToolRecoveryRequest"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "control.ToolRecoverySnapshot"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "req"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ResolveToolRecoveryForTab"
+      },
+      "sources": [
+        "desktop/tool_recovery.go"
       ]
     },
     {
@@ -15311,6 +15482,36 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/workspace_git_branches.go",
+      "name": "WorkspaceGitStatsForTab",
+      "owner": "App.WorkspaceGitStatsForTab",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.WorkspaceChangesView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "workspaceRoot"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.WorkspaceGitStatsForTab"
+      },
+      "sources": [
+        "desktop/workspace_git_branches.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/workspace_watch.go",
       "name": "WorkspaceRevisionForTab",
       "owner": "App.WorkspaceRevisionForTab",
@@ -15520,6 +15721,40 @@
   ],
   "protocolVersion": 1,
   "types": {
+    "agent.ToolRecoveryStatistics": {
+      "fields": [
+        {
+          "name": "unknown",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "confirmed",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "retried",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "rejected",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "blocked",
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
     "billing.CostQuote": {
       "fields": [
         {
@@ -16786,6 +17021,97 @@
         }
       ]
     },
+    "control.ToolRecoveryRequest": {
+      "fields": [
+        {
+          "name": "sessionPath",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "runtimeEpoch",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "revision",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "attemptId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "inspectionId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "action",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "control.ToolRecoverySnapshot": {
+      "fields": [
+        {
+          "name": "silent",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "statistics",
+          "type": {
+            "kind": "object",
+            "ref": "agent.ToolRecoveryStatistics"
+          }
+        },
+        {
+          "name": "sessionPath",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "runtimeEpoch",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "revision",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "calls",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "provider.ToolCallRecord"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "retryEnabled",
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ]
+    },
     "control.ToolResultData": {
       "fields": [
         {
@@ -16961,6 +17287,41 @@
     },
     "event.RecoveryStatus": {
       "fields": [
+        {
+          "name": "state",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "call_id",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "attempt_id",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "requires_user_decision",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "read_only",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
         {
           "name": "phase",
           "optional": true,
@@ -19074,6 +19435,13 @@
     },
     "eventwire.Tool": {
       "fields": [
+        {
+          "name": "runState",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
         {
           "name": "diagnostic",
           "optional": true,
@@ -33021,6 +33389,27 @@
           "type": {
             "kind": "string"
           }
+        },
+        {
+          "name": "added",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "removed",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "incomplete",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
         }
       ]
     },
@@ -33328,6 +33717,59 @@
         },
         {
           "name": "reason",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "provider.ActionIdentity": {
+      "fields": [
+        {
+          "name": "session_id",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "turn_id",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "attempt_id",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "call_id",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "canonical_tool",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "argument_digest",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "resource_scope",
+          "optional": true,
           "type": {
             "kind": "string"
           }
@@ -33792,6 +34234,113 @@
         },
         {
           "name": "url",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "provider.ToolCallRecord": {
+      "fields": [
+        {
+          "name": "identity",
+          "type": {
+            "kind": "object",
+            "ref": "provider.ActionIdentity"
+          }
+        },
+        {
+          "name": "arguments",
+          "optional": true,
+          "type": {
+            "kind": "any"
+          }
+        },
+        {
+          "name": "state",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "read_only",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "idempotency_key",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "started_at",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "finished_at",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "result_digest",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "effect_summary",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "resolution",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "resolved_at",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "resolution_source",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "inspection_id",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "inspection_state",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "superseded_by",
           "optional": true,
           "type": {
             "kind": "string"

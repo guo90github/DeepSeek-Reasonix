@@ -245,11 +245,11 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) (runErr err
 			a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg})
 		}
 
-		// Commit boundary: only a clean terminal attempt reaches here.
-		// Keep reasoning_content on the assistant turn for display and session
-		// archive. Most OpenAI-compatible backends do not replay it; providers
-		// with an explicit round-trip contract retain the raw provider text.
+		// Commit clean terminal attempts, preserving provider reasoning contracts.
 		calls = a.withPreviewFileDiffs(ctx, calls)
+		if err := assignRecoveryCallIDs(calls); err != nil {
+			return err
+		}
 		a.sess.conversation.Add(provider.Message{
 			Role:               provider.RoleAssistant,
 			Content:            text,
@@ -417,12 +417,18 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 			event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessErrored, false))
 			a.pending.finalReadinessRecovery = true
 			a.persistFinalReadinessRecovery(readiness.missingIDs())
+			gaps := a.readinessOperationGaps()
+			reason := readiness.reason
+			if named := describeReadinessGaps(gaps); named != "" {
+				reason += "; " + named
+			}
 			return false, &FinalReadinessError{
 				Attempts:          1,
-				Reason:            readiness.reason,
+				Reason:            reason,
 				Missing:           readiness.missingIDs(),
 				ContinuationClass: readiness.continuationClass(),
 				ProgressKey:       readiness.progressSignature(),
+				Operations:        gaps,
 			}
 		}
 		event.RecordReadinessAudit(a.svc.sink, readiness.audit(evidence.ReadinessAllowed, a.turn.readinessRecovered))

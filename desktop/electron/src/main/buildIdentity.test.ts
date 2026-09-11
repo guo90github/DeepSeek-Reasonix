@@ -1,50 +1,41 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { test } from "node:test";
-import { shellBuildIdentity } from "./buildIdentity.js";
+import { test, type TestContext } from "node:test";
+import { loadBuildIdentity } from "./buildIdentity.js";
+import { buildHelloParams } from "./handshake.js";
 
-const resources = () => mkdtempSync(join(tmpdir(), "reasonix-build-identity-"));
+function resources(t: TestContext, content?: unknown): string {
+  const dir = mkdtempSync(join(tmpdir(), "reasonix-identity-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  if (content !== undefined) writeFileSync(join(dir, "build.json"), JSON.stringify(content));
+  return dir;
+}
 
-test("packaged shell reports the build.json identity the service compares", () => {
-  const root = resources();
-  writeFileSync(
-    join(root, "build.json"),
-    JSON.stringify({ schemaVersion: 1, version: "v0.0.0-dev", channel: "stable", commit: "e68d3e5b4fd7" }),
-  );
-  assert.deepEqual(shellBuildIdentity({ packaged: true, resourcesPath: root, fallbackVersion: "0.0.0" }), {
-    version: "v0.0.0-dev",
-    channel: "stable",
-    commit: "e68d3e5b4fd7",
+for (const version of ["v1.38.5", "v1.38.6-rc.1", "v0.0.0-ci"]) {
+  test(`packaged hello preserves the complete ${version} identity without environment overrides`, (t) => {
+    const build = { version, channel: "canary", commit: "abc123def456" };
+    const dir = resources(t, { schemaVersion: 1, ...build, electron: "44.2.0", platform: "windows/amd64" });
+    const identity = loadBuildIdentity(true, dir, { REASONIX_CHANNEL: "wrong", REASONIX_COMMIT: "wrong" });
+    const hello = buildHelloParams({ ...identity, contractDigest: "sha256:fixture", hostVersion: "44.2.0", chromeVersion: "152", platform: "win32", arch: "x64", home: dir, dev: false });
+    assert.deepEqual(hello.build, build);
+    assert.equal(hello.instance.dev, false);
   });
+}
+
+test("unpackaged development needs no manifest", () => {
+  assert.deepEqual(loadBuildIdentity(false, "unused", {}), { version: "dev", channel: "dev", commit: "dev" });
+  assert.deepEqual(loadBuildIdentity(false, "unused", { REASONIX_CHANNEL: "canary", REASONIX_COMMIT: "local" }), { version: "dev", channel: "canary", commit: "local" });
 });
 
-test("packaged shell without build.json keeps its own version instead of claiming dev", () => {
-  const root = resources();
-  assert.deepEqual(shellBuildIdentity({ packaged: true, resourcesPath: root, fallbackVersion: "0.0.0" }), {
-    version: "0.0.0",
-    channel: "dev",
-    commit: "dev",
-  });
-});
-
-test("packaged shell ignores malformed build.json fields", () => {
-  const root = resources();
-  writeFileSync(join(root, "build.json"), JSON.stringify({ version: 7, channel: "", commit: "abc" }));
-  assert.deepEqual(shellBuildIdentity({ packaged: true, resourcesPath: root, fallbackVersion: "0.0.0" }), {
-    version: "0.0.0",
-    channel: "dev",
-    commit: "abc",
-  });
-});
-
-test("unpackaged shell stays dev and honours the environment overrides", () => {
-  const identity = shellBuildIdentity({
-    packaged: false,
-    resourcesPath: "/nonexistent",
-    fallbackVersion: "0.0.0",
-    env: { REASONIX_CHANNEL: "preview", REASONIX_COMMIT: "abc123" },
-  });
-  assert.deepEqual(identity, { version: "dev", channel: "preview", commit: "abc123" });
+test("missing or invalid packaged metadata cannot silently fall back to dev", (t) => {
+  const good = { schemaVersion: 1, version: "v1.38.5", channel: "stable", commit: "abc123" };
+  assert.throws(() => loadBuildIdentity(true, resources(t), {}), /ENOENT/);
+  for (const bad of [null, [], {}, { ...good, schemaVersion: 2 }, { ...good, version: "dev" }, { ...good, version: "1.38.5" }, { ...good, version: "v1.38.5 " }, { ...good, channel: "" }, { ...good, commit: " " }]) {
+    assert.throws(() => loadBuildIdentity(true, resources(t, bad), {}), /build/);
+  }
+  const dir = resources(t);
+  writeFileSync(join(dir, "build.json"), "{");
+  assert.throws(() => loadBuildIdentity(true, dir, {}), SyntaxError);
 });

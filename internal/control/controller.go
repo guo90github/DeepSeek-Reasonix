@@ -1190,6 +1190,7 @@ func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnComplet
 	}
 	done.Receipt = bindCompletionLogSources(done.Receipt, c.History())
 	done = c.applyTurnDoneProtocol(done, cancelRequested)
+	c.applyToolRecoveryTurnStatus(&done, completion)
 	var readErr *agent.IncompleteReadError
 	if errors.As(err, &readErr) {
 		done.ReadPause = readErr.Pause
@@ -4062,7 +4063,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 			continue
 		}
 		if m.Role == provider.RoleAssistant {
-			recordInterruptedAssistantRecovery(recovery, msgs, i)
+			recordInterruptedAssistantRecovery(recovery, msgs, i, c.ledgerTailEvidence())
 		}
 		if end, ok := completeToolTurnEnd(msgs, i); ok && c.executor.CanReplayAssistantMessage(m) {
 			next = append(next, msgs[i:end]...)
@@ -4099,6 +4100,7 @@ func (c *Controller) stripCancelledVisibleTurnMessagesAfterWithFallbackAt(idx in
 		})
 		localIndexes = append(localIndexes, len(next)-1)
 	}
+	c.applyLedgerRecoveryFacts(recovery)
 	next[localIndexes[len(localIndexes)-1]].InterruptedTurn = recovery
 	c.replaceSessionAfterCancel(next)
 }
