@@ -172,7 +172,7 @@ export interface SegmentModel {
 
 export interface TurnModel {
   user: UserItem | undefined;
-  /** Question-navigator turn number (undefined for the prelude). */
+  /** Session-absolute 0-based question ordinal (undefined for the prelude). */
   turn: number | undefined;
   /** Running and the last turn — its final segment stays open and ticks. */
   isActive: boolean;
@@ -229,16 +229,25 @@ export function buildTurnModels(
   live: TranscriptLiveFlags = NO_LIVE,
   running = false,
   hideReasoning = false,
+  turnBase = 0,
 ): TurnModel[] {
   const turns: TurnModel[] = [];
   let currentUser: UserItem | undefined;
   let currentItems: Item[] = [];
-  let turn = 0;
+  // Ordinals are session-absolute: a windowed (paged) list must not renumber
+  // from 1, or the badge names a turn the user never had.
+  let turn = turnBase;
   const flush = () => {
     if (!currentUser && currentItems.length === 0) return;
+    // historyTurn is the persisted 1-based question coordinate; turnBase only
+    // seeds questions that lack it (live tail, window without history metadata).
+    const ordinal = currentUser
+      ? (currentUser.historyTurn && currentUser.historyTurn > 0 ? currentUser.historyTurn - 1 : turn)
+      : undefined;
+    if (ordinal !== undefined) turn = Math.max(turn, ordinal + 1);
     turns.push({
       user: currentUser,
-      turn: currentUser ? turn++ : undefined,
+      turn: ordinal,
       isActive: false,
       turnItems: currentItems,
       segments: [],

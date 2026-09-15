@@ -16,8 +16,8 @@ function eq<T>(a: T, b: T, label: string) {
   }
 }
 
-function user(id: string, text: string): Item {
-  return { kind: "user", id, text, submissionId: `s-${id}`, createdAt: 1000 };
+function user(id: string, text: string, historyTurn?: number): Item {
+  return { kind: "user", id, text, submissionId: `s-${id}`, createdAt: 1000, historyTurn };
 }
 
 function answer(id: string, text: string, reasoning = ""): Item {
@@ -143,6 +143,46 @@ console.log("pane turn default open");
   const runningConv = conversationPaneTurns(runningModels);
   eq(paneTurnDefaultOpen(runningConv[1].isActive, runningConv[1].key, runningConv[1].key), true, "active running turn stays open");
   eq(paneTurnDefaultOpen(runningConv[0].isActive, runningConv[0].key, runningConv[1].key), false, "older turn stays collapsed while running");
+}
+
+// ── Session-absolute question ordinals ───────────────────────────────────────
+// Regression: the panes numbered questions by their position inside the loaded
+// window, so a paged session (older history not backfilled yet) labelled its
+// first visible question "1" — the badge named a turn the user never had. The
+// ordinal must come from the session, not from the window.
+console.log("pane question ordinals");
+{
+  const windowItems: Item[] = [
+    user("w1", "第三十一问", 31),
+    answer("wa1", "回答"),
+    user("w2", "第三十二问", 32),
+    answer("wa2", "回答"),
+  ];
+  const windowed = conversationPaneTurns(buildTurnModels(windowItems, NO_LIVE, false, false, 30));
+  eq(windowed[0].turn, 30, "a paged window's first question keeps its session ordinal");
+  eq((windowed[0].turn ?? -1) + 1, 31, "the badge names the session question, not window position 1");
+  eq(windowed[1].turn, 31, "later window questions keep counting from the session");
+
+  // historyTurn is the persisted 1-based coordinate: it outranks the window
+  // base, so even a window cut mid-turn numbers exactly.
+  const persisted = conversationPaneTurns(buildTurnModels([user("p1", "问题", 41), answer("pa1", "回答")], NO_LIVE, false, false, 0));
+  eq(persisted[0].turn, 40, "a persisted historyTurn supplies the ordinal without a base");
+
+  // A live prompt has no persisted coordinate yet: it continues the sequence
+  // instead of restarting at the window base.
+  const liveTail = conversationPaneTurns(buildTurnModels([
+    user("p1", "问题", 41), answer("pa1", "回答"), user("p2", "新问题"), answer("pa2", "新回答"),
+  ], NO_LIVE, true, false, 0));
+  eq(liveTail[1].turn, 41, "a live prompt without historyTurn continues the sequence");
+
+  // Backfilling older history must not renumber what is already on screen.
+  const backfilled = conversationPaneTurns(buildTurnModels([
+    user("h1", "第一问", 1), answer("ha1", "回答"), ...windowItems,
+  ], NO_LIVE, false, false, 0));
+  const byId = new Map(backfilled.map((turn) => [turn.user?.id ?? "", turn.turn]));
+  eq(byId.get("w1"), windowed[0].turn, "a question keeps its ordinal after older history lands");
+  eq(byId.get("w2"), windowed[1].turn, "the tail question keeps its ordinal after older history lands");
+  eq(byId.get("h1"), 0, "the prepended question takes the first ordinal");
 }
 
 if (failed > 0) {

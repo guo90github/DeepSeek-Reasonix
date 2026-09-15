@@ -137,6 +137,7 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
             onAcceptDelivery={commands.onAcceptDelivery}
             onOpenChanges={commands.onOpenChanges}
             onOpenVerification={commands.onOpenVerification}
+            turnBase={state.historyStartTurn > 0 ? state.historyStartTurn - 1 : 0}
           />
         </Suspense>
       </main>

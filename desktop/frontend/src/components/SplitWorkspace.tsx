@@ -77,6 +77,7 @@ export function SplitWorkspace({
   onOpenChanges,
   onOpenVerification,
   onPrompt,
+  turnBase = 0,
 }: {
   items: readonly Item[];
   live?: LiveStream;
@@ -96,6 +97,8 @@ export function SplitWorkspace({
   onOpenChanges?: () => void;
   onOpenVerification?: (summary: WireCompletionSummary) => void;
   onPrompt?: (text: string) => void;
+  /** 0-based ordinal of the window's first question (paged transcripts). */
+  turnBase?: number;
 }) {
   const t = useT();
   const liveStream = useSyncExternalStore(
@@ -119,7 +122,7 @@ export function SplitWorkspace({
     };
   }, [liveStream]);
 
-  const models = useMemo(() => buildTurnModels(items, liveFlags, running, false), [items, liveFlags, running]);
+  const models = useMemo(() => buildTurnModels(items, liveFlags, running, false, turnBase), [items, liveFlags, running, turnBase]);
   const conversationTurns = useMemo(() => conversationPaneTurns(models), [models]);
   const processTurns = useMemo(() => processPaneTurns(models, liveFlags), [models, liveFlags]);
 
