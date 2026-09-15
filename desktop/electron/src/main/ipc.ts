@@ -23,6 +23,8 @@ export interface RendererWindowApi {
   isMaximised(): boolean;
   close(): void;
   bounds(): WindowBounds;
+  beginMove(x: number, y: number): void;
+  endMove(): void;
   setTheme(theme: WindowTheme): void;
   setBackgroundColour(r: number, g: number, b: number, a: number): void;
   getAppZoom(): Promise<number>;
@@ -129,6 +131,13 @@ export function registerRendererIpc(deps: RendererIpcDeps): void {
   handle(IPC.windowIsMaximised, () => deps.window.isMaximised());
   handle(IPC.windowClose, () => deps.window.close());
   handle(IPC.windowGetBounds, () => deps.window.bounds());
+  handle(IPC.windowBeginMove, (x, y) => {
+    if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) {
+      throw new Error("window move needs finite coordinates");
+    }
+    deps.window.beginMove(x, y);
+  });
+  handle(IPC.windowEndMove, () => deps.window.endMove());
   handle(IPC.windowSetTheme, (theme) => deps.window.setTheme(theme === "light" || theme === "dark" ? theme : "system"));
   handle(IPC.windowSetBackground, (r, g, b, a) => deps.window.setBackgroundColour(finite(r), finite(g), finite(b), finite(a, 255)));
   handle(IPC.appZoomGet, () => deps.window.getAppZoom());

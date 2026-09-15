@@ -197,6 +197,8 @@ contextBridge.exposeInMainWorld("reasonixDesktop", {
       setTheme: (theme: WindowTheme) => fire(IPC.windowSetTheme, theme),
       setBackgroundColour: (r: number, g: number, b: number, a: number) => fire(IPC.windowSetBackground, r, g, b, a),
       getBounds: () => call(IPC.windowGetBounds),
+      beginMove: (x: number, y: number) => call(IPC.windowBeginMove, x, y).then(() => undefined),
+      endMove: () => call(IPC.windowEndMove).then(() => undefined),
       isMaximised: () => call(IPC.windowIsMaximised).then((value) => value === true),
       minimise: () => fire(IPC.windowMinimise),
       toggleMaximise: () => fire(IPC.windowToggleMaximise),

@@ -29,7 +29,7 @@ import { useActiveTabMirrorCommit } from "./activeTabMirror";
 import { useInvocationMetadata } from "./useInvocationMetadata";
 import { useFooterHeightLifecycle } from "./useFooterHeightLifecycle";
 import { useNativeSettingsEvent } from "./useNativeSettingsEvent";
-import { useWindowsMaximisedSync } from "./useNativeWindowController";
+import { useFramelessBarDrag, useWindowsMaximisedSync } from "./useNativeWindowController";
 import { useShellGeometry } from "./useShellGeometry";
 import { useTopicSummary } from "./useTopicSummary";
 import { useComposerProfileProjection } from "./useComposerProfileProjection";
@@ -203,6 +203,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     setInsertTarget: setWorkspaceInsertTarget, replaceComposerInsert,
   } = insertCommands;
   useWindowsMaximisedSync(windowsFramelessChrome);
+  useFramelessBarDrag(windowsFramelessChrome);
   const clearCommands = useSessionClearCommands({
     activeTabId,
     activeSessionIdentity,

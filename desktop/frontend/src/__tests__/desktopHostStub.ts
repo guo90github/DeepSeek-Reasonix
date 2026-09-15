@@ -75,6 +75,8 @@ export function installDesktopHostStub(commands: object, options: DesktopHostStu
         setTheme: () => {},
         setBackgroundColour: () => {},
         getBounds: () => Promise.resolve({ x: 0, y: 0, width: 1280, height: 800, maximised: false }),
+        beginMove: () => Promise.resolve(),
+        endMove: () => Promise.resolve(),
         isMaximised: () => Promise.resolve(false),
         minimise: () => {},
         toggleMaximise: () => {},

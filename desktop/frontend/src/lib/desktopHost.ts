@@ -40,6 +40,8 @@ export interface ReasonixDesktopHost {
       setTheme(theme: WindowTheme): void;
       setBackgroundColour(r: number, g: number, b: number, a: number): void;
       getBounds(): Promise<WindowBounds>;
+      beginMove(x: number, y: number): Promise<void>;
+      endMove(): Promise<void>;
       isMaximised(): Promise<boolean>;
       minimise(): void;
       toggleMaximise(): void;
@@ -72,6 +74,8 @@ export interface DesktopHost {
     setWindowTheme(theme: WindowTheme): void;
     setWindowBackground(r: number, g: number, b: number, a: number): void;
     getWindowBounds(): Promise<WindowBounds> | undefined;
+    beginWindowMove?(x: number, y: number): Promise<void>;
+    endWindowMove?(): Promise<void>;
     getAppZoom(): Promise<number>;
     setAppZoom(factor: number): Promise<number>;
     resetAppZoom(): Promise<number>;
@@ -167,6 +171,8 @@ const electronHostFrom = (host: ReasonixDesktopHost): DesktopHost => {
       setWindowTheme: (theme) => host.native.window.setTheme(theme),
       setWindowBackground: (r, g, b, a) => host.native.window.setBackgroundColour(r, g, b, a),
       getWindowBounds: () => host.native.window.getBounds(),
+      beginWindowMove: (x, y) => host.native.window.beginMove(x, y),
+      endWindowMove: () => host.native.window.endMove(),
       getAppZoom: () => host.native.window.getAppZoom(),
       setAppZoom: (factor) => host.native.window.setAppZoom(factor),
     resetAppZoom: () => host.native.window.resetAppZoom(),

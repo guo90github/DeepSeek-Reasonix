@@ -1,10 +1,11 @@
-import { BrowserWindow, nativeTheme, type WebContents, type WebFrameMain } from "electron";
+import { BrowserWindow, nativeTheme, screen, type WebContents, type WebFrameMain } from "electron";
 import type { EventFrame, WindowBounds, WindowTheme } from "../shared/ipc.js";
 import { IPC } from "../shared/ipc.js";
 import { shellActionFromURL, type ShellAction } from "./failurePage.js";
 import type { HelloWindow } from "./handshake.js";
 import { errorText, type Logger } from "./log.js";
 import { APP_ORIGIN } from "./protocol.js";
+import { WindowMover } from "./windowMove.js";
 import { AppZoomStore } from "./zoomStore.js";
 
 export const DEFAULT_GEOMETRY: HelloWindow = { width: 1280, height: 820, minWidth: 760, minHeight: 480, frameless: false, zoomFactor: 1 };
@@ -36,6 +37,7 @@ export class MainWindow {
   private closing = false;
   private closeAllowed = false;
   private readonly appOrigin: string;
+  private readonly mover: WindowMover;
 
   constructor(private readonly deps: MainWindowDeps) {
     let origin = APP_ORIGIN;
@@ -45,6 +47,19 @@ export class MainWindow {
       // A malformed dev URL fails at load time with a logged error.
     }
     this.appOrigin = origin === "null" ? APP_ORIGIN : origin;
+    this.mover = new WindowMover(
+      {
+        cursorPoint: () => screen.getCursorScreenPoint(),
+        bounds: () => this.bounds(),
+        isMaximised: () => this.isMaximised(),
+        unmaximise: () => this.unmaximise(),
+        setPosition: (x, y) => this.setPosition(x, y),
+      },
+      (ms, tick) => {
+        const id = setInterval(tick, ms);
+        return () => clearInterval(id);
+      },
+    );
   }
 
   get browserWindow(): BrowserWindow | null {
@@ -107,6 +122,7 @@ export class MainWindow {
       void this.requestClose();
     });
     win.on("closed", () => {
+      this.mover.end();
       this.win = null;
     });
   }
@@ -228,6 +244,15 @@ export class MainWindow {
 
   setPosition(x: number, y: number): void {
     this.browserWindow?.setPosition(Math.round(x), Math.round(y));
+  }
+
+  beginMove(grabX: number, grabY: number): void {
+    if (!this.browserWindow) return;
+    this.mover.begin({ x: grabX, y: grabY });
+  }
+
+  endMove(): void {
+    this.mover.end();
   }
 
   setTitle(title: string): void {

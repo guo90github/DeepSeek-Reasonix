@@ -12,6 +12,8 @@ export const IPC = {
   windowIsMaximised: "reasonix:native:window-is-maximised",
   windowClose: "reasonix:native:window-close",
   windowGetBounds: "reasonix:native:window-get-bounds",
+  windowBeginMove: "reasonix:native:window-begin-move",
+  windowEndMove: "reasonix:native:window-end-move",
   windowSetTheme: "reasonix:native:window-set-theme",
   windowSetBackground: "reasonix:native:window-set-background",
   appZoomGet: "reasonix:native:app-zoom-get",

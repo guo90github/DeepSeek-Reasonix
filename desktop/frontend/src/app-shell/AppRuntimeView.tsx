@@ -139,6 +139,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
   const shellClassNames = buildAppShellClassNames({
     platform: shell.desktopPlatform,
     windowsFrameless: windowsFramelessChrome,
+    mainWindowMaximised,
     browserPreview: browserPreviewChrome,
     workbench: sidebarWorkbench,
     creation: sidebarCreation,

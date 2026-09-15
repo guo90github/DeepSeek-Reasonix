@@ -22793,6 +22793,19 @@ body > .mermaid-diagram--fullscreen {
   align-items: center;
   gap: 6px;
   position: relative;
+  /* Bar surface too; every control in this row opts out on its own. */
+  --reasonix-draggable: drag;
+}
+
+/* Inherits the actions row's drag region, but its rows are clickable. */
+.taskmonitor-popover {
+  --reasonix-draggable: no-drag;
+}
+
+/* A maximised frameless window gets no native caption drag on Windows and the
+   press never reaches the page either, so the shell drives the move instead. */
+.app--windows-frameless.app--maximised .topicbar,
+:root[data-window-drag="js"] .topicbar {
   --reasonix-draggable: no-drag;
 }
 
@@ -39430,7 +39443,8 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   min-width: 0;
   display: flex;
   align-items: center;
-  --reasonix-draggable: no-drag;
+  /* The strip is bar surface: a no-drag container here consumes the whole box. */
+  --reasonix-draggable: drag;
 }
 
 /* The bar's identity block stops growing once the strip can take the space. */

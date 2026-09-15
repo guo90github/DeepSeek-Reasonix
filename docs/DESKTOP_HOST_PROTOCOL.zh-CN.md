@@ -210,6 +210,8 @@ interface ReasonixDesktopHost {
       setTheme(theme: "system" | "light" | "dark"): void;
       setBackgroundColour(r: number, g: number, b: number, a: number): void;
       getBounds(): Promise<{ x: number; y: number; width: number; height: number; maximised: boolean }>;
+      beginMove(x: number, y: number): Promise<void>;   // 外壳驱动的窗口移动
+      endMove(): Promise<void>;
       isMaximised(): Promise<boolean>;
       minimise(): void; toggleMaximise(): void; close(): void;
     };

@@ -32,6 +32,7 @@ test("trusted toolbar takeover bypasses input suppression immediately, fences ac
     window: { isTrustedSender: (sender, frame) => sender === trustedSender && frame === trustedFrame,
       minimise() {}, toggleMaximise() {}, isMaximised: () => false, close() {},
       bounds: () => ({ x: 0, y: 0, width: 1, height: 1, maximised: false }), setTheme() {}, setBackgroundColour() {},
+      beginMove() {}, endMove() {},
       getAppZoom: async () => 1, setAppZoom: async () => 1, resetAppZoom: async () => 1 },
     invoke: async () => undefined, serviceState: () => ({ phase: "ready", generation: "g" }),
     clipboard: { writeText() {}, readText: () => "" }, openExternal: async () => {}, log: silentLog,
