@@ -57,6 +57,10 @@ function ConversationTurnCard({
   // clickable header — its body renders directly instead.
   const showHeader = paneTurnShowsHeader(turn);
   const bodyVisible = open || !showHeader;
+  // A headerless turn with nothing to show — a paged prelude whose items are all
+  // process material — must not leave an unlabeled blank shell in this column.
+  // The turn keeps its slot in the pane data, so index alignment is untouched.
+  if (!showHeader && !turn.hasShownContent) return null;
   return (
     <article className={[
       "conversation-pane__turn",

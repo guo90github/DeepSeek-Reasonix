@@ -6,7 +6,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { paneTurnDefaultOpen, processPaneTurnShowsHeader, type ProcessPaneTurn } from "../lib/transcriptPanes";
+import { paneTurnDefaultOpen, processPaneTurnHasBody, processPaneTurnShowsHeader, type ProcessPaneTurn } from "../lib/transcriptPanes";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { InlineAssistantReasoning } from "./InlineAssistantReasoning";
@@ -41,6 +41,9 @@ function ProcessTurnCard({
   // clickable header — its body renders directly instead.
   const showHeader = processPaneTurnShowsHeader(turn);
   const bodyVisible = open || !showHeader;
+  // A headerless turn with no process items must not leave a blank area in this
+  // column; it keeps its slot in the pane data, so index alignment is untouched.
+  if (!showHeader && !processPaneTurnHasBody(turn)) return null;
   return (
     <article className={["process-pane__turn", bodyVisible ? "process-pane__turn--open" : "process-pane__turn--collapsed", mirrorActive ? "process-pane__turn--mirror" : ""].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
       {showHeader && (

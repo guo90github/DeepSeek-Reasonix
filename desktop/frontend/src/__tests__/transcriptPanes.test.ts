@@ -1,7 +1,7 @@
 // Run: tsx src/__tests__/transcriptPanes.test.ts
 
 import { buildTurnModels, NO_LIVE, type Item, type TranscriptLiveFlags } from "../lib/transcriptRows";
-import { conversationPaneTurns, paneTurnDefaultOpen, paneTurnShowsHeader, processPaneTurnShowsHeader, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
+import { conversationPaneTurns, paneTurnDefaultOpen, paneTurnShowsHeader, processPaneTurnHasBody, processPaneTurnShowsHeader, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
 
 let passed = 0;
 let failed = 0;
@@ -88,6 +88,22 @@ eq(paneTurnShowsHeader(conversation[0]), true, "a numbered turn keeps its header
 eq(processPaneTurnShowsHeader(preludeProcess[0]), false, "a numberless prelude paints no clickable header in the process pane either");
 eq(processPaneTurnShowsHeader(processTurns[0]), true, "a numbered process turn keeps its header");
 eq(preludeProcess[0].segments[0].items.length, 1, "the headerless prelude still renders its process content directly");
+
+// A prelude whose items are all process material has nothing to paint in the
+// conversation column: rendering it anyway left an unlabeled blank shell there.
+// The card is skipped, while the process column — which is where that content
+// belongs — keeps painting it.
+const processOnlyModels = buildTurnModels([
+  answer("pa0", "", "上一回合的思考"),
+  tool("pt0", "read_file"),
+], NO_LIVE, false, false);
+const processOnlyConversation = conversationPaneTurns(processOnlyModels);
+const processOnlyProcess = processPaneTurns(processOnlyModels);
+eq(processOnlyConversation[0].turn, undefined, "the process-only prelude stays numberless");
+eq(processOnlyConversation[0].hasShownContent, false, "a process-only prelude has nothing to show in the conversation column");
+eq(processPaneTurnHasBody(processOnlyProcess[0]), true, "the same prelude still has its process content in the process column");
+eq(preludeConversation[0].hasShownContent, true, "a prelude that carries an answer still shows it in the conversation column");
+eq(processPaneTurnHasBody(preludeProcess[0]), true, "a prelude with process content is not skipped in the process column");
 
 // A bare recovery notice yields a turn with no shown content but stays present.
 const recoveryModels = buildTurnModels([{ kind: "notice", id: "n0", level: "info", text: "恢复通知" }], NO_LIVE, false, false);

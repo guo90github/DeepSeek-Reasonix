@@ -67,6 +67,12 @@ export function processPaneTurnShowsHeader(turn: Pick<ProcessPaneTurn, "turn" | 
   return turn.turn !== undefined || turn.question !== "";
 }
 
+/** Whether a process-column card has anything to paint in its body. A headerless
+ * turn without process items would otherwise leave a blank area in that column. */
+export function processPaneTurnHasBody(turn: Pick<ProcessPaneTurn, "segments">): boolean {
+  return turn.segments.some((segment) => segment.items.length > 0);
+}
+
 // Mirror of transcriptRows.foldDisplayItems for the pane model: assistant
 // items reach the pane stripped to their reasoning (answer text renders in the
 // conversation pane), parented/plan-bookkeeping tools never surface. The live
