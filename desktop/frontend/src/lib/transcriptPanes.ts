@@ -60,6 +60,13 @@ export function paneTurnShowsHeader(turn: Pick<ConversationPaneTurn, "turn" | "u
   return turn.turn !== undefined || (turn.user?.text ?? "") !== "";
 }
 
+/** Same rule for the process column, which carries the question text instead of
+ * the user item: a numberless turn with no question is a paging/placeholder row,
+ * and an unconditional header there paints a blank, clickable strip. */
+export function processPaneTurnShowsHeader(turn: Pick<ProcessPaneTurn, "turn" | "question">): boolean {
+  return turn.turn !== undefined || turn.question !== "";
+}
+
 // Mirror of transcriptRows.foldDisplayItems for the pane model: assistant
 // items reach the pane stripped to their reasoning (answer text renders in the
 // conversation pane), parented/plan-bookkeeping tools never surface. The live

@@ -1,7 +1,7 @@
 // Run: tsx src/__tests__/transcriptPanes.test.ts
 
 import { buildTurnModels, NO_LIVE, type Item, type TranscriptLiveFlags } from "../lib/transcriptRows";
-import { conversationPaneTurns, paneTurnDefaultOpen, paneTurnShowsHeader, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
+import { conversationPaneTurns, paneTurnDefaultOpen, paneTurnShowsHeader, processPaneTurnShowsHeader, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
 
 let passed = 0;
 let failed = 0;
@@ -81,6 +81,13 @@ eq(turnHasShownContent(preludeModels[0]), true, "answer turn shows content");
 // must skip the interactive header and paint the body directly instead.
 eq(paneTurnShowsHeader(preludeConversation[0]), false, "a numberless prelude turn paints no header");
 eq(paneTurnShowsHeader(conversation[0]), true, "a numbered turn keeps its header");
+// The process column had no such gate: its header was unconditional, so the same
+// numberless prelude painted a blank, clickable strip there (clicking toggled
+// nothing the user could see). The rule now applies to both columns, and the
+// prelude's body — its only content — renders directly.
+eq(processPaneTurnShowsHeader(preludeProcess[0]), false, "a numberless prelude paints no clickable header in the process pane either");
+eq(processPaneTurnShowsHeader(processTurns[0]), true, "a numbered process turn keeps its header");
+eq(preludeProcess[0].segments[0].items.length, 1, "the headerless prelude still renders its process content directly");
 
 // A bare recovery notice yields a turn with no shown content but stays present.
 const recoveryModels = buildTurnModels([{ kind: "notice", id: "n0", level: "info", text: "恢复通知" }], NO_LIVE, false, false);

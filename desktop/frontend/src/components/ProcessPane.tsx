@@ -6,7 +6,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { paneTurnDefaultOpen, type ProcessPaneTurn } from "../lib/transcriptPanes";
+import { paneTurnDefaultOpen, processPaneTurnShowsHeader, type ProcessPaneTurn } from "../lib/transcriptPanes";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { InlineAssistantReasoning } from "./InlineAssistantReasoning";
@@ -36,18 +36,25 @@ function ProcessTurnCard({
   onPointerLeave?: () => void;
   tabId?: string;
 }) {
+  // A numberless turn carries no question (paging/placeholder rows). It keeps its
+  // slot so the panes stay index-aligned, but it must not paint a blank,
+  // clickable header — its body renders directly instead.
+  const showHeader = processPaneTurnShowsHeader(turn);
+  const bodyVisible = open || !showHeader;
   return (
-    <article className={["process-pane__turn", open ? "process-pane__turn--open" : "process-pane__turn--collapsed", mirrorActive ? "process-pane__turn--mirror" : ""].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
-      <header className="process-pane__turn-head" role="button" tabIndex={0} aria-expanded={open} onClick={onToggle} onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onToggle();
-        }
-      }}>
-        {turn.turn !== undefined && <TurnBadge turn={turn.turn} />}
-        <span className="process-pane__turn-question" title={turn.question}>{turn.question}</span>
-      </header>
-      {open && (
+    <article className={["process-pane__turn", bodyVisible ? "process-pane__turn--open" : "process-pane__turn--collapsed", mirrorActive ? "process-pane__turn--mirror" : ""].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
+      {showHeader && (
+        <header className="process-pane__turn-head" role="button" tabIndex={0} aria-expanded={open} onClick={onToggle} onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            onToggle();
+          }
+        }}>
+          {turn.turn !== undefined && <TurnBadge turn={turn.turn} />}
+          <span className="process-pane__turn-question" title={turn.question}>{turn.question}</span>
+        </header>
+      )}
+      {bodyVisible && (
         <div className="process-pane__turn-body">
           {turn.segments.map((segment) => (
             <div className="process-pane__segment" key={segment.key}>
