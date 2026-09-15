@@ -73,6 +73,7 @@ func Spawn(ctx context.Context, spec Spec) (*Process, error) {
 		Name: spec.Name, Root: spec.Root, Addr: spec.Addr, TokenFile: spec.TokenFile,
 		SessionPath: spec.SessionPath, StartedAt: time.Now().UTC(), State: StateRunning,
 	}
+	rec.Argv = argv
 	cmd := proc.CommandContext(ctx, argv[0], argv[1:]...)
 	proc.HideWindow(cmd)
 	cmd.Dir = spec.Root
@@ -128,9 +129,18 @@ func (p *Process) Stop() {
 	} else {
 		proc.KillTree(p.cmd)
 	}
-	if p.log != nil {
-		_ = p.log.Close()
+	p.closeLog()
+}
+
+// closeLog releases the child's log handle. Stop closes it on the normal path;
+// a child that died on its own is replaced without Stop, so the manager has to
+// hand the handle back explicitly.
+func (p *Process) closeLog() {
+	if p == nil || p.log == nil {
+		return
 	}
+	_ = p.log.Close()
+	p.log = nil
 }
 
 // openLogFile gives the child a place to leave evidence; a failed open is not

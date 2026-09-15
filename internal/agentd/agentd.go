@@ -43,6 +43,7 @@ type Record struct {
 	StartedAt   time.Time `json:"startedAt"`
 	LastHealthy time.Time `json:"lastHealthy,omitempty"`
 	State       State     `json:"state"`
+	Argv        []string  `json:"argv,omitempty"` // as launched, so a restart repeats it
 }
 
 // URL is the loopback base a coordinator posts to.
