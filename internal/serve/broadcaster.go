@@ -115,7 +115,11 @@ func (b *Broadcaster) SessionCostQuoteFor(path string) billing.CostQuote {
 func (b *Broadcaster) ledgerLocked(path string) *billing.Ledger {
 	if path == "" {
 		path = b.current
-	} else {
+	}
+	// Writes key off the raw path and /status reads a canonical one, so on Windows
+	// the two never matched and every session quote came back "no_usage" while
+	// the desktop's own cost bar still showed a number.
+	if path != "" {
 		path = agent.CanonicalSessionPath(path)
 	}
 	ledger := b.ledgers[path]
@@ -322,6 +326,18 @@ func (b *Broadcaster) EmitWire(wired eventwire.Event) {
 		if err != nil {
 			return
 		}
+	}
+	// The embedded host (desktop/serve_embed.go) pushes frames only through here,
+	// so without this /status reports "no_usage" for every session while the
+	// desktop's own telemetry shows the real cost (wire "usage" = event.Usage).
+	if wired.Kind == "usage" && wired.Usage != nil && wired.Usage.CostQuote != nil {
+		b.ledgerLocked(wired.SessionPath).Add(*wired.Usage.CostQuote, billing.UsageTokens{
+			PromptTokens:     wired.Usage.PromptTokens,
+			CompletionTokens: wired.Usage.CompletionTokens,
+			CacheHitTokens:   wired.Usage.CacheHitTokens,
+			CacheMissTokens:  wired.Usage.CacheMissTokens,
+			Estimated:        wired.Usage.Estimated,
+		}, time.Now().UTC())
 	}
 	for ch := range b.subs {
 		enqueueSubscriberWireFrame(ch, data, wired.Kind)

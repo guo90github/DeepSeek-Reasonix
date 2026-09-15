@@ -1482,6 +1482,9 @@ func (s *tabEventSink) Emit(e event.Event) {
 		m.forwardEvent(e)
 	}
 	if app != nil {
+		app.mirrorEventToEmbeddedServe(tabID, e)
+	}
+	if app != nil {
 		if status, update := topicActivityStatusFromEvent(e); update {
 			changed := app.setTabActivityStatus(tabID, status)
 			if changed || isBackgroundJobLifecycleNotice(e) {

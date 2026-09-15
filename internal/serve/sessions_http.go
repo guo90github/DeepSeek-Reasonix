@@ -24,15 +24,28 @@ type sessionListEntry struct {
 // sessions lists saved sessions with event-log-aware titles and turn counts.
 func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 	ctrl := s.ctl()
+	// An embedded host already indexes its sessions; a nil list falls back to
+	// the directory walk below.
+	if lister := s.sessionListerFunc(); lister != nil {
+		if rows := lister(); rows != nil {
+			out := make([]sessionListEntry, 0, len(rows))
+			for _, row := range rows {
+				out = append(out, sessionListEntry(row))
+			}
+			writeJSON(w, out)
+			return
+		}
+	}
 	dir := ctrl.SessionDir()
 	if dir == "" {
 		writeJSON(w, []any{})
 		return
 	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		writeJSON(w, []any{})
-		return
+	// ?all=1 lists every project's sessions: a remote client has no filesystem of
+	// its own, so the foreground project directory alone looks like "one project".
+	dirs := []string{dir}
+	if r.URL.Query().Get("all") == "1" {
+		dirs = allProjectSessionDirs()
 	}
 	current := agent.CanonicalSessionPath(ctrl.SessionPath())
 	running := map[string]bool{}
@@ -41,37 +54,43 @@ func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 		running[filepath.Clean(path)] = controllerHasActiveRuntimeWork(detached.ctrl)
 	}
 	s.detachedMu.Unlock()
-	out := make([]sessionListEntry, 0, len(entries))
-	for _, entry := range entries {
-		if entry.IsDir() || !store.IsSessionTranscriptName(entry.Name()) {
+	out := make([]sessionListEntry, 0, 64)
+	for _, dir := range dirs {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
 			continue
 		}
-		path := agent.CanonicalSessionPath(filepath.Join(dir, entry.Name()))
-		if agent.IsCleanupPending(path) {
-			continue
+		for _, entry := range entries {
+			if entry.IsDir() || !store.IsSessionTranscriptName(entry.Name()) {
+				continue
+			}
+			path := agent.CanonicalSessionPath(filepath.Join(dir, entry.Name()))
+			if agent.IsCleanupPending(path) {
+				continue
+			}
+			mtime := agent.SessionContentModTime(path)
+			cleanPath := agent.CanonicalSessionPath(path)
+			row := sessionListEntry{
+				Name:       strings.TrimSuffix(entry.Name(), ".jsonl"),
+				Path:       path,
+				Current:    cleanPath == current,
+				Running:    running[cleanPath],
+				TakenOver:  s.sessionMirrored(cleanPath) || leaseHeldByForeignRuntime(cleanPath),
+				MtimeMilli: mtime.UnixMilli(),
+			}
+			if row.Current {
+				row.Running = controllerHasActiveRuntimeWork(ctrl) && !row.TakenOver
+			}
+			first, turns, cached := agent.SessionPreviewCached(path)
+			if !cached {
+				first, turns = agent.SessionPreview(path)
+			}
+			if turns > 0 {
+				row.Turns = turns
+				row.Title = s.sessionTitle(r.Context(), entry.Name(), first, mtime.UnixNano())
+			}
+			out = append(out, row)
 		}
-		mtime := agent.SessionContentModTime(path)
-		cleanPath := agent.CanonicalSessionPath(path)
-		row := sessionListEntry{
-			Name:       strings.TrimSuffix(entry.Name(), ".jsonl"),
-			Path:       path,
-			Current:    cleanPath == current,
-			Running:    running[cleanPath],
-			TakenOver:  s.sessionMirrored(cleanPath) || leaseHeldByForeignRuntime(cleanPath),
-			MtimeMilli: mtime.UnixMilli(),
-		}
-		if row.Current {
-			row.Running = controllerHasActiveRuntimeWork(ctrl) && !row.TakenOver
-		}
-		first, turns, cached := agent.SessionPreviewCached(path)
-		if !cached {
-			first, turns = agent.SessionPreview(path)
-		}
-		if turns > 0 {
-			row.Turns = turns
-			row.Title = s.sessionTitle(r.Context(), entry.Name(), first, mtime.UnixNano())
-		}
-		out = append(out, row)
 	}
 	for i, j := 0, len(out)-1; i < j; i, j = i+1, j-1 {
 		out[i], out[j] = out[j], out[i]

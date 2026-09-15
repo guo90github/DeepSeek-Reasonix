@@ -518,6 +518,7 @@ func (a *App) startup(ctx context.Context) {
 	// After restoreOrBuildTabs is launched: the GC's first sweep waits on
 	// tabsRestored so it never observes the pre-restore empty tab map.
 	a.startRecoveryGC()
+	a.goSafe("startEmbeddedServe", a.startEmbeddedServe)
 }
 
 func (a *App) beforeClose(ctx context.Context) bool {

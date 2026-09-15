@@ -101,6 +101,18 @@ type Server struct {
 	// and mirrors the writer's frames, but holds no write authority.
 	mirrorMu sync.Mutex
 	mirrored map[string]mirroredSession
+	// foreground resolves the controller an embedded host's live tab owns, per
+	// request: Serve's own ctrl is bound once, a window's active tab is not.
+	foreground func() (control.SessionAPI, bool)
+	// sessionActivator owns /resume for embedded hosts that hold every session.
+	sessionActivator func(path string) error
+	// sessionLister answers /sessions from an embedded host's own index.
+	sessionLister func() []SessionInfo
+	// submitDelegate routes /submit through an embedded host's composer path.
+	submitDelegate func(input string) error
+	// submitDelegateFor is the session-aware form: a wake addresses the session
+	// it belongs to (X-Reasonix-Session-Path) instead of the foreground tab.
+	submitDelegateFor func(sessionPath, input string) error
 }
 
 // SetControllerBuildOptions records the process-local options used to build
@@ -145,8 +157,16 @@ func New(ctrl control.SessionAPI, bc *Broadcaster, serveCfg config.ServeConfig) 
 // the field directly, because switchModel replaces it under the write lock.
 func (s *Server) ctl() control.SessionAPI {
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.ctrl
+	provider, ctrl := s.foreground, s.ctrl
+	s.mu.RUnlock()
+	// Resolved outside s.mu: the host's resolver takes its own locks, and
+	// holding both in this order would make every host call a deadlock risk.
+	if provider != nil {
+		if live, ok := provider(); ok && live != nil {
+			return live
+		}
+	}
+	return ctrl
 }
 
 // resumeBindHookForTest, when set, runs inside /resume's critical sequence
@@ -745,37 +765,8 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	if body.Action != "" {
 		trimmed = ""
 	}
-	if strings.HasPrefix(trimmed, "!") {
-		http.Error(w, "shell commands are unavailable over HTTP", http.StatusForbidden)
+	if s.handleSubmitCommand(w, r, trimmed) {
 		return
-	}
-	// Session rotations must complete while bindMu is held. Controller.Submit
-	// dispatches these verbs asynchronously, which would let a following model,
-	// resume, or extension command cross the rotation generation boundary.
-	switch trimmed {
-	case "/new":
-		s.newSessionFromSubmit(w, r)
-		return
-	case "/clear":
-		s.clearSessionFromSubmit(w, r)
-		return
-	}
-	// Intercept /model <ref> for runtime model switching (the controller's
-	// Submit path only lists models — switching is frontend-specific).
-	if s.submitModelCommand(w, r, trimmed) {
-		return
-	}
-	// Intercept /effort <level> for reasoning effort switching.
-	if strings.HasPrefix(trimmed, "/effort ") {
-		level := strings.TrimSpace(strings.TrimPrefix(trimmed, "/effort"))
-		if level != "" {
-			if err := s.switchEffortExpected(r.Context(), level, r.Header.Get(expectedSessionPathHeader)); err != nil {
-				http.Error(w, err.Error(), runtimeSwitchErrorStatus(err))
-				return
-			}
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
 	}
 	// Serialize turn admission with controller-generation rebuilds. Admission
 	// marks an ordinary turn running synchronously, so a reload that follows
@@ -784,6 +775,11 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 	// request could otherwise start on cur after reload's initial busy check.
 	s.bindMu.Lock()
 	if !s.admitModelSettingsRunLocked(w, r) {
+		s.bindMu.Unlock()
+		return
+	}
+	target, ok := s.activateSubmitTarget(w, r)
+	if !ok {
 		s.bindMu.Unlock()
 		return
 	}
@@ -809,7 +805,19 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	submitWithAction(ctrl, body.Input, body.Format, body.Action, body.RecoveryID)
+	if body.Action == "" && body.Format == "" {
+		handled, err := s.submitViaHost(target, body.Input)
+		if handled && err != nil {
+			s.bindMu.Unlock()
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		if !handled {
+			submitWithAction(ctrl, body.Input, body.Format, body.Action, body.RecoveryID)
+		}
+	} else {
+		submitWithAction(ctrl, body.Input, body.Format, body.Action, body.RecoveryID)
+	}
 	if isServeManagementCommand(trimmed) && !ctrl.Running() && !ctrl.RuntimeStatus().PendingPrompt {
 		// Management notices/status are successful non-turn operations.
 		s.bindMu.Unlock()
@@ -874,6 +882,13 @@ func (s *Server) history(w http.ResponseWriter, r *http.Request) {
 		if path, msgs, ok := s.externalReadView(raw); ok {
 			writeJSONCached(w, r, historyMessages(msgs))
 			_ = path
+			return
+		}
+		// A session that is neither mirrored nor foreign-held is the common case,
+		// and falling through answered with the *foreground* session's history:
+		// a remote client asking for A saw B. Read the requested transcript.
+		if msgs, ok := s.readAnySession(raw); ok {
+			writeJSONCached(w, r, historyMessages(msgs))
 			return
 		}
 	}
@@ -1112,88 +1127,6 @@ func (s *Server) goal(w http.ResponseWriter, r *http.Request) {
 	s.ctl().SetPlanMode(false)
 	s.ctl().SetGoal(goal)
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// resume loads a previous session from a JSONL file.
-func (s *Server) resume(w http.ResponseWriter, r *http.Request) {
-	var body struct {
-		Path string `json:"path"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.Path == "" {
-		http.Error(w, "missing path", http.StatusBadRequest)
-		return
-	}
-	realPath, err := s.resolveSessionPath(body.Path)
-	if err != nil {
-		http.Error(w, err.Error(), resolveSessionPathStatus(err))
-		return
-	}
-	// A mirrored session belongs to a local runtime; switching the foreground
-	// onto it would render Serve's frozen in-memory copy and silently strand
-	// the writer. Instead of refusing the attach, mount the client as a
-	// read-only spectator: Serve does NOT take ownership, the remote tab
-	// renders the file-backed /history?session view, /status?session reports
-	// takenOver, and reclaim returns the session through POST /reclaim. This
-	// keeps every client version (no special attach branch) working.
-	// Covers both mirrored sessions (adopted/handed off) and sessions merely
-	// held by another local process (e.g. a .9 desktop tab without adopt).
-	if s.sessionMirrored(realPath) || leaseHeldByForeignRuntime(realPath) {
-		w.Header().Set(sessionPathHeader, agent.CanonicalSessionPath(realPath))
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	// Serialize with /new, /fork, and switchModel so the controller and lease
-	// cannot land on different sessions. Validate first to avoid slow holders.
-	s.bindMu.Lock()
-	defer s.bindMu.Unlock()
-	s.resumeSession(w, r, realPath)
-}
-
-// resolveSessionPathStatus keeps resume's historical status codes for the
-// shared validation helper.
-func resolveSessionPathStatus(err error) int {
-	if err != nil && err.Error() == "path outside session dir" {
-		return http.StatusForbidden
-	}
-	return http.StatusBadRequest
-}
-
-// resumeSession moves the foreground to realPath. Callers hold bindMu.
-func (s *Server) resumeSession(w http.ResponseWriter, r *http.Request, realPath string) {
-	cur := s.ctl()
-	if s.resumeActiveSession(w, r, cur, realPath) {
-		return
-	}
-	// Snapshot the current session before switching away — while this process
-	// still holds its lease (skipped when a local writer owns it).
-	s.snapshotForeground(cur)
-	// Refuse to bind a session another runtime is writing (a desktop window,
-	// another CLI); on success the lease now guards the resume target.
-	if s.leases != nil {
-		if err := s.leases.Rebind(realPath); err != nil {
-			if errors.Is(err, agent.ErrSessionLeaseHeld) {
-				http.Error(w, sessionInUseError(err), http.StatusConflict)
-			} else {
-				http.Error(w, "session lease: "+err.Error(), http.StatusInternalServerError)
-			}
-			return
-		}
-	}
-	loaded, err := agent.LoadSession(realPath)
-	if err != nil {
-		// The lease already moved to the target; re-point it at the session the
-		// controller still owns (best-effort).
-		_ = s.rebindSessionLease(cur.SessionPath())
-		http.Error(w, "load session: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if !s.commitLoadedResume(w, cur, loaded, realPath) {
-		return
-	}
-	s.bc.ResetSessionPath(realPath)
-	s.announceSessionChanged(realPath, false)
-	w.WriteHeader(http.StatusNoContent)
-	s.replayPendingPromptsBroadcast()
 }
 
 // forget deletes a saved memory by name.
