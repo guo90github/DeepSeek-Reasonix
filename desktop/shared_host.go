@@ -132,6 +132,9 @@ func (a *App) acquireSharedHost(root string) *plugin.Host {
 	if !a.mcpAppsSandboxAvailable() {
 		host = plugin.NewHostWithProfile(plugin.HostProfileInteractive)
 	}
+	// Children of this root must learn which serve endpoint and session own
+	// them, so a remote wake can address that session instead of the active tab.
+	host.SetProcessEnvProvider(func() map[string]string { return a.hostProcessEnvForRoot(root) })
 	a.sharedHosts[root] = &sharedPluginHost{host: host, refs: 1}
 	slog.Debug("shared host acquired (new)", "root", root)
 	return host

@@ -196,6 +196,10 @@ type Host struct {
 	// creation; cache identity and the capability matrix derive from it.
 	profile HostProfile
 
+	// processEnv resolves the host-owned env every stdio spawn inherits. Set it
+	// before the first connect (like profile), so spawns read it unlocked.
+	processEnv func() map[string]string
+
 	// appInstances is the bounded MCP Apps instance registry, built with the
 	// Host and never nil.
 	appInstances *appInstanceRegistry
@@ -1284,7 +1288,7 @@ func (h *Host) addConnectedWithLifecycle(lifeCtx, callCtx context.Context, s Spe
 	}
 	h.mu.RUnlock()
 
-	c, err := start(lifeCtx, callCtx, s, h.profile)
+	c, err := start(withHostProcessEnv(lifeCtx, h.processEnvValues()), callCtx, s, h.profile)
 	if err != nil {
 		return nil, err
 	}

@@ -57,7 +57,7 @@ func newStdioTransport(ctx context.Context, s Spec) (*stdioTransport, error) {
 			releaseSlot()
 		}
 	}()
-	env := mergeEnv(secrets.ProcessEnv(), s.Env)
+	env := childEnv(ctx, s)
 	exe, env, err := resolveStdioExecutable(ctx, s, env)
 	if err != nil {
 		return nil, err

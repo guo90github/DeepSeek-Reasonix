@@ -288,3 +288,55 @@ func loadOrCreateServeToken() (string, error) {
 	}
 	return token, nil
 }
+
+// hostProcessEnvForRoot tells a workspace's MCP children which serve endpoint
+// and session own them. Without it a remote wake can only address whichever
+// tab happens to be foreground, never the workspace that asked.
+func (a *App) hostProcessEnvForRoot(root string) map[string]string {
+	host := embeddedServeState.Load()
+	if host == nil {
+		return nil
+	}
+	env := map[string]string{
+		"REASONIX_SERVE_URL":        embeddedServeURL(host),
+		"REASONIX_SERVE_TOKEN_FILE": serveTokenPath(),
+	}
+	if path := a.sessionPathForRoot(root); path != "" {
+		env["REASONIX_SESSION_PATH"] = path
+	}
+	return env
+}
+
+// embeddedServeURL is the loopback form of the window's serve address: the
+// listener binds the wildcard so a phone can reach it, while a child running on
+// this machine wants 127.0.0.1.
+func embeddedServeURL(host *embeddedServe) string {
+	_, port, err := net.SplitHostPort(host.addr)
+	if err != nil {
+		return "http://" + embeddedServeAddr
+	}
+	return "http://" + net.JoinHostPort("127.0.0.1", port)
+}
+
+// sessionPathForRoot names the session a workspace's MCP child belongs to: the
+// active tab's when that tab is in the root, else the last tab the window holds
+// for it. Tabs of one root share a plugin host, hence one child and one name.
+func (a *App) sessionPathForRoot(root string) string {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	fallback := ""
+	for _, tab := range a.tabs {
+		if tab == nil || tab.ReadOnly || tab.WorkspaceRoot != root {
+			continue
+		}
+		path := strings.TrimSpace(tab.currentSessionPath())
+		if path == "" {
+			continue
+		}
+		if tab.ID == a.activeTabID {
+			return agent.CanonicalSessionPath(path)
+		}
+		fallback = path
+	}
+	return agent.CanonicalSessionPath(fallback)
+}
