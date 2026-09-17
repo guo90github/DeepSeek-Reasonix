@@ -18,8 +18,11 @@ func TestNormalizeNullRedirects(t *testing.T) {
 		{"x > nul", bash, "x >/dev/null"},
 		{"x >nul", "$null", "x >$null"},
 		{"probe &>nul", bash, "probe &>/dev/null"},
-		{"probe &>/dev/null", "$null", "probe &>$null"},
+		{"probe &>/dev/null", "$null", "probe *>$null"},
 		{"probe &>>$null", bash, "probe &>>/dev/null"},
+		{"probe &>nul", "$null", "probe *>$null"},
+		{"probe &>>NUL", "$null", "probe *>>$null"},
+		{"probe &> log.txt", "$null", "probe &> log.txt"},
 		// Not a nul redirect — leave untouched.
 		{"echo nul", bash, "echo nul"},
 		{"grep nul file.txt", bash, "grep nul file.txt"},
@@ -57,7 +60,7 @@ func TestArgvNormalizesNullRedirects(t *testing.T) {
 		t.Errorf("bash argv command = %q, want nul rewritten to /dev/null", last)
 	}
 	psArgv := Shell{Kind: ShellPowerShell, Path: "powershell"}.argv("echo hi 2>/dev/null")
-	if last := psArgv[len(psArgv)-1]; last != psUTF8Prologue+"echo hi 2>$null" {
-		t.Errorf("powershell argv command = %q, want /dev/null rewritten to $null", last)
+	if last, want := psArgv[len(psArgv)-1], psCapturePrologue+psUTF8Prologue+"echo hi 2>$null"+psExitTrailer; last != want {
+		t.Errorf("powershell argv command = %q, want %q", last, want)
 	}
 }

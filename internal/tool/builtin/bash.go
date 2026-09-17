@@ -116,7 +116,7 @@ func (b bash) Description() string {
 		return fmt.Sprintf("Execute a command in the shell and return combined stdout/stderr. "+
 			"NOTE: bash is not available on this host — commands run under %s, so write PowerShell, not bash:\n"+
 			"  - chaining: %s\n"+
-			"  - redirect/vars: $null not /dev/null; $env:VAR not $VAR; '2>$null' drops stderr.\n"+
+			psShellTraps+
 			"  - file ops: Get-ChildItem (ls), Get-Content (cat), Remove-Item -Recurse -Force (rm -rf), Copy-Item (cp), Select-String (grep).\n"+
 			"  - no head/tail/which/touch: use Select-Object -First/-Last N, (Get-Command x).Source, New-Item.\n"+
 			"  - multi-line text to a native exe (e.g. git commit -m): use a single-quoted here-string @'...'@ (closing '@ at column 0)."+
@@ -288,7 +288,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	mergeRunInto(ex, runEx)
 	ex.DurationMs = time.Since(start).Milliseconds()
 	return tool.DetailedResult{
-		Output:    b.appendWriteHints(ctx, out, err, p, wrapped),
+		Output:    appendPowerShellGlobHint(b.appendWriteHints(ctx, out, err, p, wrapped), sh),
 		Execution: ex,
 	}, err
 }

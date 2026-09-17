@@ -26,6 +26,27 @@ func PowerShellUTF8Script(command string) string {
 	return psUTF8Prologue + command
 }
 
+// psCapturePrologue pins the two PowerShell 5.1 text defaults that mangle
+// content: Get-Content decodes UTF-8-without-BOM as ANSI (CJK mojibake) and
+// Out-File writes UTF-16LE for '>'. Set-Content keeps its ANSI default: utf8
+// there prepends a BOM that breaks byte-exact consumers.
+const psCapturePrologue = "$PSDefaultParameterValues['Get-Content:Encoding']='utf8';" +
+	"$PSDefaultParameterValues['Out-File:Encoding']='utf8';"
+
+// psExitTrailer reports the command's real failure code: Windows PowerShell
+// flattens every nonzero native exit to 1, so 'rg' no-match and 'rg' error (2)
+// become indistinguishable and 'cmd /c exit 3' reads as 1. $? is read first
+// because the assignment itself resets it.
+const psExitTrailer = "\n$__ok=$?;$__rc=$LASTEXITCODE;" +
+	"if($__ok){exit 0};if($__rc -and $__rc -ne 0){exit $__rc};exit 1"
+
+// powerShellCaptureScript is the model-facing script. Hook scripts keep
+// PowerShellUTF8Script: their exit codes drive hook failure handling, so their
+// process status must stay exactly what PowerShell reports.
+func powerShellCaptureScript(command string) string {
+	return psCapturePrologue + PowerShellUTF8Script(command) + psExitTrailer
+}
+
 // ShellKind is the interpreter a shell command runs under.
 type ShellKind int
 
@@ -437,7 +458,12 @@ func consumeNullRedirect(s string, start int, sink string) (string, int, bool) {
 	if !ok {
 		return "", start, false
 	}
-	return s[start:opEnd] + sink, next, true
+	op := s[start:opEnd]
+	if sink == "$null" && op[0] == '&' {
+		// PowerShell has no '&>' redirect; its all-stream operator is '*>'.
+		op = "*" + op[1:]
+	}
+	return op + sink, next, true
 }
 
 func consumeNullSink(s string, i int) (int, bool) {
@@ -473,7 +499,7 @@ func (s Shell) argv(command string) []string {
 		path = s.Kind.String()
 	}
 	if s.Kind == ShellPowerShell {
-		return []string{path, "-NoProfile", "-NonInteractive", "-Command", PowerShellUTF8Script(normalizeNullRedirects(command, "$null"))}
+		return []string{path, "-NoProfile", "-NonInteractive", "-Command", powerShellCaptureScript(normalizeNullRedirects(command, "$null"))}
 	}
 	return []string{path, "-c", normalizeNullRedirects(command, "/dev/null")}
 }
