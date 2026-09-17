@@ -817,7 +817,21 @@ export class TranscriptStore {
     // latch older than the window as dead, supersede it, and page again.
     const OLDER_INFLIGHT_STALL_MS = 3_000;
     const stalled = session.olderInFlight && Date.now() - (session.olderInFlightAt ?? 0) > OLDER_INFLIGHT_STALL_MS;
-    if (!session.hasOlder || !session.nextCursor || (session.olderInFlight && !stalled)) return undefined;
+    if (session.olderInFlight && !stalled) {
+      noteHistoryPage({ entries: 0, inlineBytes: 0, durationMs: 0, stale: false, source: "parked:in-flight" });
+      return undefined;
+    }
+    if (!session.hasOlder || !session.nextCursor) {
+      // A window can arrive without a cursor (a rewritten or projection-primed
+      // session), and then every request reported "nothing older" while the
+      // caller kept offering older history: re-prime once to learn the newest
+      // page's cursor, page from it, and settle the caller on the fresh
+      // projection when there is genuinely nothing older.
+      noteHistoryPage({ entries: 0, inlineBytes: 0, durationMs: 0, stale: false, source: `parked:${session.hasOlder ? "no-cursor" : "no-older"}` });
+      const projection = await this.loadLatest(tabId, sessionPath, options);
+      if (!projection) return undefined;
+      if (!session.hasOlder || !session.nextCursor) return { ...projection, kind: "reload", prependItems: [], removeIds: [] };
+    }
     if (stalled) session.generation += 1;
     session.olderInFlight = true;
     session.olderInFlightAt = Date.now();

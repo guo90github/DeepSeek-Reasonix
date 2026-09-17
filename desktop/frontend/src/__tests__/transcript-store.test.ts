@@ -385,6 +385,31 @@ console.log("\ntranscript store");
   hung.resolve({ entries: [], nextCursor: "", hasOlder: false, totalTurns: 0, startTurn: 0, endTurn: 0, stale: false, revision: backend.revision, revisionKnown: true, digest: backend.digest });
 }
 
+// ── a cursor-less window boots its cursor instead of "nothing older" ────────
+{
+  const messages: HistoryMessage[] = [];
+  for (let i = 1; i <= 40; i += 1) {
+    messages.push({ role: "user", content: `q${i}` });
+    messages.push({ role: "assistant", content: `a${i}` });
+  }
+  const backend = new FakeBackend(messages);
+  const realSlice = backend.HistorySliceForTab.bind(backend);
+  let newestCalls = 0;
+  backend.HistorySliceForTab = async (tabID, req) => {
+    const slice = await realSlice(tabID, req);
+    if (req.cursor) return slice;
+    newestCalls += 1;
+    // The first newest page advertises older turns but hands out no cursor.
+    return newestCalls === 1 ? { ...slice, hasOlder: true, nextCursor: "" } : slice;
+  };
+  const store = new TranscriptStore(backend);
+  await store.loadLatest("tab-cursor", "/s/cursor.jsonl", { turns: 12 });
+  const older = await store.loadOlder("tab-cursor", "/s/cursor.jsonl", { turns: 12 });
+  eq(older?.kind, "prepend", "a cursor-less window re-primes and then pages older history");
+  ok((older?.prependItems.length ?? 0) > 0, "the bootstrapped page carries older rows");
+  eq(newestCalls, 2, "the bootstrap re-primes the newest page exactly once");
+}
+
 // ── append (live tail) ──────────────────────────────────────────────────────
 {
   const messages: HistoryMessage[] = [
