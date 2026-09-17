@@ -89,6 +89,15 @@ func (a *Agent) hasIncompleteCanonicalCriteria() bool {
 	return len(a.sess.todoState) > 0 && len(evidence.IncompleteTodos(a.sess.todoState)) > 0
 }
 
+// hasCanonicalPlan reports whether this session has a canonical checklist at
+// all. A completed list is still the plan that produced the current work, so
+// continuing it must not cost a round trip to re-plan the same change.
+func (a *Agent) hasCanonicalPlan() bool {
+	a.sess.todoMu.Lock()
+	defer a.sess.todoMu.Unlock()
+	return len(a.sess.todoState) > 0
+}
+
 // recordTodoState logs the host-advanced list as a synthetic todo_write receipt
 // so the per-turn final gate (which reads the ledger's latest todo_write) sees
 // the advance — the model no longer has to re-send a todo_write to mark the

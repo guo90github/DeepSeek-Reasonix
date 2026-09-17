@@ -106,13 +106,15 @@ func (a *Agent) pipelineDecision(plan *toolCallPlan) runtimepolicy.GuardDecision
 	plan.profile = profile
 	plan.effects = profile.ToolEffects()
 	return a.turn.engine.BeforeTool(runtimepolicy.CallContext{
-		ToolName:       plan.evidenceName,
-		Args:           plan.evidenceArgs,
-		Profile:        profile,
-		PlanReadOnly:   a.planMode.Load() || a.turn.constraints.PlanModeReadOnly,
-		Interactive:    a.hasInteractiveAsk(),
-		HasTodo:        a.hasActiveCanonicalTodo() || a.turn.deliveryCriteriaEstablished,
-		HasCriteria:    a.turn.deliveryCriteriaEstablished,
+		ToolName:     plan.evidenceName,
+		Args:         plan.evidenceArgs,
+		Profile:      profile,
+		PlanReadOnly: a.planMode.Load() || a.turn.constraints.PlanModeReadOnly,
+		Interactive:  a.hasInteractiveAsk(),
+		// A canonical checklist outlives its completion: the plan that produced
+		// the current work still satisfies a later multi-file write.
+		HasTodo:        a.hasActiveCanonicalTodo() || a.hasCanonicalPlan() || a.turn.deliveryCriteriaEstablished,
+		HasCriteria:    a.hasCanonicalPlan() || a.turn.deliveryCriteriaEstablished,
 		Verification:   plan.evidenceName == "bash" && evidence.IsVerificationCommand(bashCommandFromArgs(plan.evidenceArgs)),
 		TestsForbidden: a.turn.constraints.ForbidTests,
 		WorkspaceRoot:  a.writeWorkspaceRoot,

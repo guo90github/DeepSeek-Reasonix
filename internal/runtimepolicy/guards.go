@@ -129,7 +129,8 @@ func (g ContractPreconditionGuard) BeforeTool(ctx CallContext) GuardDecision {
 		Action:        GuardDeny,
 		Preconditions: missing,
 		Reasons:       []taskcontract.ReasonCode{taskcontract.ReasonFirstWriter},
-		Message:       "blocked: establish a concrete todo and acceptance criteria before this class of write",
+		Message: "blocked: establish a concrete todo and acceptance criteria before this class of write — " +
+			"call todo_write with an in_progress item that states the criterion (e.g. \"accept [c1]: <what must be true>\"), then repeat this call",
 	}
 }
 func (ContractPreconditionGuard) AfterTool(ResultContext) []evidence.Receipt { return nil }
