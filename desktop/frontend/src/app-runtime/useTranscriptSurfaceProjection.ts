@@ -28,7 +28,9 @@ export type TranscriptSurfaceProjectionInput = {
   commitPaint: NavigationSurfaceApi["commitPaint"];
   commitSingleSurface: (tabId: string) => void;
   ports: {
-    loadOlderHistory(tabId: string, targetTurn: number | undefined, trigger: HistoryLoadTrigger): Promise<boolean>;
+    // Undefined pages whichever tab is active when the command runs: a committed
+    // surface can outlive the tab it was built for.
+    loadOlderHistory(tabId: string | undefined, targetTurn: number | undefined, trigger: HistoryLoadTrigger): Promise<boolean>;
     commitThenSend(tabId: string, text: string): Promise<void>;
   };
 };
@@ -56,7 +58,11 @@ export function useTranscriptSurfaceProjection(input: TranscriptSurfaceProjectio
     !input.hydratePlaceholderActive;
   const transcriptItems = input.hydratePlaceholderActive ? input.hydratePlaceholderItems! : input.items;
   const handleLoadOlderHistory = useCommittedCommand((targetTurn?: number, trigger: HistoryLoadTrigger = "retry") => {
-    return activeTabId ? ports.loadOlderHistory(activeTabId, targetTurn, trigger) : Promise.resolve(false);
+    // The tab is resolved when the command runs, not when the surface committed:
+    // a retained surface's captured id can be a tab nobody is looking at, and
+    // paging it refuses silently against that tab's own loading flag while the
+    // visible column waits for pages that were never requested.
+    return ports.loadOlderHistory(undefined, targetTurn, trigger);
   });
 
   // Display items: backend history is authoritative after immediate commit.
