@@ -347,6 +347,44 @@ console.log("\ntranscript store");
   ok(canonEqual(older?.items ?? [], singleShot), "merged projection equals single-shot conversion");
 }
 
+// ── a wedged older-page request must not latch the tab out of paging ────────
+{
+  const messages: HistoryMessage[] = [];
+  for (let i = 1; i <= 40; i += 1) {
+    messages.push({ role: "user", content: `q${i}` });
+    messages.push({ role: "assistant", content: `a${i}` });
+  }
+  const backend = new FakeBackend(messages);
+  const realSlice = backend.HistorySliceForTab.bind(backend);
+  let cursorCalls = 0;
+  const hung = deferred<HistorySlice>();
+  backend.HistorySliceForTab = async (tabID, req) => {
+    if (!req.cursor) return realSlice(tabID, req);
+    cursorCalls += 1;
+    if (cursorCalls === 1) return hung.promise; // the first older page never settles
+    return realSlice(tabID, req);
+  };
+  const store = new TranscriptStore(backend);
+  await store.loadLatest("tab-wedge", "/s/wedge.jsonl", { turns: 12 });
+
+  // Not awaited: the point is that this request never settles.
+  void store.loadOlder("tab-wedge", "/s/wedge.jsonl", { turns: 12 });
+  const whileLatched = await store.loadOlder("tab-wedge", "/s/wedge.jsonl", { turns: 12 });
+  eq(whileLatched, undefined, "a latched older request still refuses a second one");
+  eq(cursorCalls, 1, "the refusal never reaches the backend");
+
+  const realNow = Date.now;
+  Date.now = () => realNow() + 5_000;
+  try {
+    const older = await store.loadOlder("tab-wedge", "/s/wedge.jsonl", { turns: 12 });
+    eq(older?.kind, "prepend", "past the stall window the wedged latch is superseded and the page loads");
+    eq(cursorCalls, 2, "the stalled attempt reached the backend again");
+  } finally {
+    Date.now = realNow;
+  }
+  hung.resolve({ entries: [], nextCursor: "", hasOlder: false, totalTurns: 0, startTurn: 0, endTurn: 0, stale: false, revision: backend.revision, revisionKnown: true, digest: backend.digest });
+}
+
 // ── append (live tail) ──────────────────────────────────────────────────────
 {
   const messages: HistoryMessage[] = [

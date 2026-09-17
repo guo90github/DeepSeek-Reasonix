@@ -150,6 +150,9 @@ interface SessionTranscript {
   generation: number;
   bodyBytes: number;
   olderInFlight: boolean;
+  /** When the in-flight older-page request started. A promise that never
+   * settles must not latch this tab out of history paging forever. */
+  olderInFlightAt?: number;
   pendingContent: Map<string, { generation: number; promise: Promise<string | undefined> }>;
 }
 
@@ -807,8 +810,17 @@ export class TranscriptStore {
       const projection = await this.loadLatest(tabId, sessionPath, options);
       return projection ? { ...projection, kind: "reload", prependItems: [], removeIds: [] } : undefined;
     }
-    if (!session.hasOlder || !session.nextCursor || session.olderInFlight) return undefined;
+    // A request whose promise never settled would otherwise latch this tab out
+    // of history paging for good: every later attempt returns undefined without
+    // a loading state or an error, which is indistinguishable from "nothing
+    // older exists". A real page answers in well under a second, so treat a
+    // latch older than the window as dead, supersede it, and page again.
+    const OLDER_INFLIGHT_STALL_MS = 3_000;
+    const stalled = session.olderInFlight && Date.now() - (session.olderInFlightAt ?? 0) > OLDER_INFLIGHT_STALL_MS;
+    if (!session.hasOlder || !session.nextCursor || (session.olderInFlight && !stalled)) return undefined;
+    if (stalled) session.generation += 1;
     session.olderInFlight = true;
+    session.olderInFlightAt = Date.now();
     const generation = session.generation;
     try {
       const slice = await this.fetchSlice(tabId, { cursor: session.nextCursor, ...options });

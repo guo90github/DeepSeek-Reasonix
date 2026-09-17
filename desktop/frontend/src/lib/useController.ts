@@ -3297,6 +3297,9 @@ export function useController() {
       if (!shouldReleaseStalledOlder(requestSeq, historyOlderSeq.current.get(targetTabId), Boolean(stalled?.historyOlderLoading))) return;
       dispatchTo(targetTabId, { type: "history_older_error" });
       addBreadcrumb("tab.hydrate", `history older stalled ${targetTabId} trigger=${trigger} released after ${HISTORY_OLDER_STALL_MS}ms`);
+      // Releasing the flag alone leaves nobody asking: the caller's own retries
+      // are long spent by then, so re-arm once the surface is settled.
+      window.setTimeout(() => { void loadOlderHistory(targetTabId, undefined, "retry"); }, 0);
     }, HISTORY_OLDER_STALL_MS);
     const startedAt = Date.now();
     try {
