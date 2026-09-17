@@ -219,11 +219,11 @@ export function ConversationPane({
   }, [running]);
 
   // Backfill the full session on mount so both panes start at the real first
-  // turn instead of mid-conversation (the backend only pages the tail). The
-  // controller refuses while the turn runs, so a settled run must re-arm this.
-  // A request that overlaps hydration, gets superseded, or comes back with
-  // nothing moves none of the guard's inputs, so a single shot parked the pane
-  // on a truncated window until the view remounted; retry a few times instead.
+  // turn instead of mid-conversation (the backend only pages the tail). A
+  // request that overlaps hydration, gets superseded, or comes back with
+  // nothing moves none of the guard's inputs, so a bounded burst parked the
+  // pane on a truncated window for good. Ask quickly a few times, then keep a
+  // slow pace going: the guard closing (no older turns left) is the stop.
   useEffect(() => {
     if (hydrating || !hasOlderHistory || loadingOlderHistory || olderHistoryError || running) return;
     let cancelled = false;
@@ -233,7 +233,7 @@ export function ConversationPane({
       if (cancelled) return;
       attempts += 1;
       void onLoadOlderHistory?.();
-      if (attempts < BACKFILL_MAX_ATTEMPTS) timer = window.setTimeout(request, BACKFILL_RETRY_MS);
+      timer = window.setTimeout(request, attempts < BACKFILL_MAX_ATTEMPTS ? BACKFILL_RETRY_MS : 5_000);
     };
     request();
     return () => {
@@ -242,18 +242,21 @@ export function ConversationPane({
     };
   }, [hasOlderHistory, hydrating, loadingOlderHistory, olderHistoryError, onLoadOlderHistory, running]);
 
-  // The header renders only when it has something to say. Keying it on
-  // hasOlderHistory alone painted an empty, padded strip above the first turn
-  // for the whole time older pages were merely *available*, not loading.
-  const olderHeader = loadingOlderHistory || olderHistoryError ? (
+  // The header carries every older-history state: loading, a failure with its
+  // retry, and — while the window is truncated with nothing in flight — a manual
+  // load, so a stall the automatic path cannot resolve stays one click away
+  // instead of unreachable.
+  const olderHeader = loadingOlderHistory || olderHistoryError || hasOlderHistory ? (
     <div className="conversation-pane__older">
       {loadingOlderHistory ? (
         <span>{t("common.loading")}</span>
-      ) : (
+      ) : olderHistoryError ? (
         <>
           <span>{olderHistoryError}</span>
           <button type="button" className="btn btn--small" onClick={() => onLoadOlderHistory?.()}>{t("common.retry")}</button>
         </>
+      ) : (
+        <button type="button" className="btn btn--small" onClick={() => onLoadOlderHistory?.()}>{t("history.older")}</button>
       )}
     </div>
   ) : null;

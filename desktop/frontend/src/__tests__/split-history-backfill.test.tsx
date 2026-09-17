@@ -55,11 +55,14 @@ try {
   await paintPane(false);
   assert.ok(calls.includes(false), "the split pane re-arms the older-history backfill once the run settles");
 
-  // 1b. Older pages are available but no request is in flight and no error is
-  // recorded: the header must not render an empty strip that pads the pane and
-  // reads as an empty control above the first turn.
-  assert.equal(document.querySelector(".conversation-pane__older"), null,
-    "an idle older-history header renders nothing and takes no layout space");
+  // 1b. Older pages are available with no request in flight and no error: the
+  // header offers the manual load instead of padding the pane with an empty
+  // strip, so a stall the automatic path cannot resolve stays one click away.
+  const olderStrip = document.querySelector(".conversation-pane__older");
+  assert.ok(olderStrip, "an idle truncated window keeps a reachable older-history control");
+  const beforeManual = calls.length;
+  await act(async () => olderStrip!.querySelector<HTMLButtonElement>("button")!.click());
+  assert.ok(calls.length > beforeManual, "the manual older-history control reaches the pane's loader");
   await act(async () => paneRoot.unmount());
 
   // 1c. A request that moves none of the guard's inputs — refused, superseded or
