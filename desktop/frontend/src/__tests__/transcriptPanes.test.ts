@@ -1,7 +1,7 @@
 // Run: tsx src/__tests__/transcriptPanes.test.ts
 
 import { buildTurnModels, NO_LIVE, type Item, type TranscriptLiveFlags } from "../lib/transcriptRows";
-import { conversationPaneTurns, paneTurnDefaultOpen, paneTurnShowsHeader, processPaneTurnHasBody, processPaneTurnShowsHeader, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
+import { conversationPaneTurnIsBlank, conversationPaneTurns, paneTurnDefaultOpen, paneTurnShowsHeader, processPaneTurnHasBody, processPaneTurnIsBlank, processPaneTurnShowsHeader, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
 
 let passed = 0;
 let failed = 0;
@@ -104,6 +104,14 @@ eq(processOnlyConversation[0].hasShownContent, false, "a process-only prelude ha
 eq(processPaneTurnHasBody(processOnlyProcess[0]), true, "the same prelude still has its process content in the process column");
 eq(preludeConversation[0].hasShownContent, true, "a prelude that carries an answer still shows it in the conversation column");
 eq(processPaneTurnHasBody(preludeProcess[0]), true, "a prelude with process content is not skipped in the process column");
+
+// A turn that paints nothing must mount no element at all: Virtuoso measures
+// every rendered row through its default div, and a zero-height one is reported
+// as "Zero-sized element" on every measurement pass.
+eq(conversationPaneTurnIsBlank(processOnlyConversation[0]), true, "a process-only prelude mounts no element in the conversation pane");
+eq(conversationPaneTurnIsBlank(preludeConversation[0]), false, "a prelude that carries an answer keeps its conversation element");
+eq(processPaneTurnIsBlank(processOnlyProcess[0]), false, "the process column still mounts that prelude");
+eq(processPaneTurnIsBlank(preludeProcess[0]), false, "a prelude with process content keeps its process element");
 
 // A bare recovery notice yields a turn with no shown content but stays present.
 const recoveryModels = buildTurnModels([{ kind: "notice", id: "n0", level: "info", text: "恢复通知" }], NO_LIVE, false, false);

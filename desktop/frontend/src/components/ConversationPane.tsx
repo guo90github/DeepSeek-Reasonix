@@ -5,13 +5,13 @@
 // so markdown and live streaming behave identically to the single column.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
+import { Virtuoso, type ItemProps, type VirtuosoHandle } from "react-virtuoso";
 import { useT } from "../lib/i18n";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { isSteerNoticeText } from "../lib/useController";
 import type { WireCompletionSummary } from "../lib/types";
-import { paneTurnDefaultOpen, paneTurnShowsHeader, type ConversationPaneTurn } from "../lib/transcriptPanes";
+import { conversationPaneTurnIsBlank, paneTurnDefaultOpen, paneTurnShowsHeader, type ConversationPaneTurn } from "../lib/transcriptPanes";
 import { UserMessage } from "./Message";
 import { LiveAssistantMessage } from "./TranscriptVirtuosoParts";
 import { NoticeCard, SteerCard } from "./TranscriptCards";
@@ -19,6 +19,20 @@ import { ExtensionCard } from "./ExtensionCard";
 import { LiveAwaitElapsed } from "./LiveAwaitElapsed";
 import { TurnBadge } from "./ProcessPane";
 import "./conversationPane.css";
+
+// Older-history backfill: one immediate request plus bounded retries. The retry
+// only matters when the guard cannot move on its own (a refused, superseded or
+// empty page); a real page flips hasOlderHistory/loading and re-arms the effect.
+const BACKFILL_RETRY_MS = 1200;
+const BACKFILL_MAX_ATTEMPTS = 4;
+
+// Virtuoso logs "Zero-sized element" for every rendered row it measures at 0,
+// so a blank turn gets a 1px empty row. Mounting no element at all is worse: an
+// unmeasured index falls back to the probe height, i.e. a whole phantom row.
+export function ConversationPaneItem({ item, children, style, ...props }: ItemProps<ConversationPaneTurn>) {
+  if (conversationPaneTurnIsBlank(item)) return <div {...props} style={{ ...style, minHeight: 1 }} aria-hidden="true" />;
+  return <div {...props} style={style}>{children}</div>;
+}
 
 function ConversationTurnCard({
   turn,
@@ -57,10 +71,6 @@ function ConversationTurnCard({
   // clickable header — its body renders directly instead.
   const showHeader = paneTurnShowsHeader(turn);
   const bodyVisible = open || !showHeader;
-  // A headerless turn with nothing to show — a paged prelude whose items are all
-  // process material — must not leave an unlabeled blank shell in this column.
-  // The turn keeps its slot in the pane data, so index alignment is untouched.
-  if (!showHeader && !turn.hasShownContent) return null;
   return (
     <article className={[
       "conversation-pane__turn",
@@ -211,9 +221,25 @@ export function ConversationPane({
   // Backfill the full session on mount so both panes start at the real first
   // turn instead of mid-conversation (the backend only pages the tail). The
   // controller refuses while the turn runs, so a settled run must re-arm this.
+  // A request that overlaps hydration, gets superseded, or comes back with
+  // nothing moves none of the guard's inputs, so a single shot parked the pane
+  // on a truncated window until the view remounted; retry a few times instead.
   useEffect(() => {
     if (hydrating || !hasOlderHistory || loadingOlderHistory || olderHistoryError || running) return;
-    onLoadOlderHistory?.();
+    let cancelled = false;
+    let attempts = 0;
+    let timer: number | null = null;
+    const request = () => {
+      if (cancelled) return;
+      attempts += 1;
+      void onLoadOlderHistory?.();
+      if (attempts < BACKFILL_MAX_ATTEMPTS) timer = window.setTimeout(request, BACKFILL_RETRY_MS);
+    };
+    request();
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearTimeout(timer);
+    };
   }, [hasOlderHistory, hydrating, loadingOlderHistory, olderHistoryError, onLoadOlderHistory, running]);
 
   // The header renders only when it has something to say. Keying it on
@@ -250,6 +276,7 @@ export function ConversationPane({
   ), [hoveredIndex, newestKey, onAcceptDelivery, onDeliveryContinue, onHoverIndex, onOpenChanges, onOpenVerification, onPrompt, overrides, running, toggle]);
 
   const listComponents = useMemo(() => ({
+    Item: ConversationPaneItem,
     Header: () => olderHeader,
     Footer: () => <div className="conversation-pane__spacer" style={footerHeight > 0 ? { height: footerHeight } : undefined} />,
   }), [footerHeight, olderHeader]);

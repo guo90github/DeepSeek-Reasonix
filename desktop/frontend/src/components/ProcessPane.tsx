@@ -5,8 +5,8 @@
 // column's process folds.
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type Ref } from "react";
-import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
-import { paneTurnDefaultOpen, processPaneTurnHasBody, processPaneTurnShowsHeader, type ProcessPaneTurn } from "../lib/transcriptPanes";
+import { Virtuoso, type Components, type ItemProps, type VirtuosoHandle } from "react-virtuoso";
+import { paneTurnDefaultOpen, processPaneTurnIsBlank, processPaneTurnShowsHeader, type ProcessPaneTurn } from "../lib/transcriptPanes";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { InlineAssistantReasoning } from "./InlineAssistantReasoning";
@@ -18,6 +18,16 @@ const AuditInlineCard = lazy(() => import("./AuditInlineCard").then((module) => 
 export function TurnBadge({ turn }: { turn: number }) {
   return <span className="turn-badge" aria-hidden="true">{turn + 1}</span>;
 }
+
+// Virtuoso logs "Zero-sized element" for every rendered row it measures at 0,
+// so a blank turn gets a 1px empty row. Mounting no element at all is worse: an
+// unmeasured index falls back to the probe height, i.e. a whole phantom row.
+export function ProcessPaneItem({ item, children, style, ...props }: ItemProps<ProcessPaneTurn>) {
+  if (processPaneTurnIsBlank(item)) return <div {...props} style={{ ...style, minHeight: 1 }} aria-hidden="true" />;
+  return <div {...props} style={style}>{children}</div>;
+}
+
+const PROCESS_PANE_COMPONENTS: Components<ProcessPaneTurn> = { Item: ProcessPaneItem };
 
 function ProcessTurnCard({
   turn,
@@ -41,9 +51,6 @@ function ProcessTurnCard({
   // clickable header — its body renders directly instead.
   const showHeader = processPaneTurnShowsHeader(turn);
   const bodyVisible = open || !showHeader;
-  // A headerless turn with no process items must not leave a blank area in this
-  // column; it keeps its slot in the pane data, so index alignment is untouched.
-  if (!showHeader && !processPaneTurnHasBody(turn)) return null;
   return (
     <article className={["process-pane__turn", bodyVisible ? "process-pane__turn--open" : "process-pane__turn--collapsed", mirrorActive ? "process-pane__turn--mirror" : ""].filter(Boolean).join(" ")} data-turn={turn.turn ?? ""} data-turn-key={turn.key} onPointerEnter={onPointerEnter} onPointerLeave={onPointerLeave}>
       {showHeader && (
@@ -199,6 +206,7 @@ export function ProcessPane({
       data={turns}
       computeItemKey={(_index, turn) => turn.key}
       itemContent={itemContent}
+      components={PROCESS_PANE_COMPONENTS}
       firstItemIndex={firstItemIndex}
       increaseViewportBy={{ top: 320, bottom: 320 }}
       totalListHeightChanged={reaim}

@@ -73,6 +73,20 @@ export function processPaneTurnHasBody(turn: Pick<ProcessPaneTurn, "segments">):
   return turn.segments.some((segment) => segment.items.length > 0);
 }
 
+/** Whether the conversation-column card paints nothing at all: no header
+ * (numberless, no prompt) and no answer. The pane renders no element for such a
+ * turn — Virtuoso mounts a wrapper div for every row it renders, and a
+ * zero-height one is reported as "Zero-sized element" on every measurement
+ * pass. The slot stays in the pane data, so index alignment is untouched. */
+export function conversationPaneTurnIsBlank(turn: Pick<ConversationPaneTurn, "turn" | "user" | "hasShownContent">): boolean {
+  return !paneTurnShowsHeader(turn) && !turn.hasShownContent;
+}
+
+/** The same for the process column, which carries the question instead. */
+export function processPaneTurnIsBlank(turn: Pick<ProcessPaneTurn, "turn" | "question" | "segments">): boolean {
+  return !processPaneTurnShowsHeader(turn) && !processPaneTurnHasBody(turn);
+}
+
 // Mirror of transcriptRows.foldDisplayItems for the pane model: assistant
 // items reach the pane stripped to their reasoning (answer text renders in the
 // conversation pane), parented/plan-bookkeeping tools never surface. The live

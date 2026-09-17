@@ -62,6 +62,19 @@ try {
     "an idle older-history header renders nothing and takes no layout space");
   await act(async () => paneRoot.unmount());
 
+  // 1c. A request that moves none of the guard's inputs — refused, superseded or
+  // an empty page — must be retried: the pane used to sit on the truncated
+  // window until the user remounted the view.
+  const retryRoot = createRoot(document.getElementById("root")!);
+  let noopCalls = 0;
+  const noopLoader = () => { noopCalls += 1; return Promise.resolve(false); };
+  await act(async () => retryRoot.render(<LocaleProvider><ConversationPane turns={paneTurns as never} tabId="tab-a" running={false}
+    footerHeight={0} hasOlderHistory loadingOlderHistory={false} onLoadOlderHistory={noopLoader} hydrating={false} /></LocaleProvider>));
+  assert.equal(noopCalls, 1, "the first backfill request is immediate");
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 1400)); });
+  assert.ok(noopCalls >= 2, `a no-op backfill is retried instead of parking the pane (calls=${noopCalls})`);
+  await act(async () => retryRoot.unmount());
+
   // 2. Split mode must surface history recovery instead of an empty pane.
   const splitRoot = createRoot(document.getElementById("split")!);
   let retries = 0;
