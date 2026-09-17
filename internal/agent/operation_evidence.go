@@ -118,7 +118,7 @@ func (a *Agent) checkOperationEvidence(ctx context.Context, call provider.ToolCa
 	if len(observations) == 0 {
 		check.Reason = "no_eligible_read"
 		check.Missing = info.Ranges
-		check.Recovery = noReadRecovery(a.task.ledger, info.Path)
+		check.Recovery = noReadRecovery(a.task.ledger, info.Path) + a.citedReadHint(call, check.Target, boundary)
 		return check
 	}
 	if satisfied, missing := evidenceCoversTarget(observations, info); satisfied {
@@ -128,9 +128,10 @@ func (a *Agent) checkOperationEvidence(ctx context.Context, call provider.ToolCa
 		check.Missing = missing
 	}
 	check.Reason = "stale_or_partial_evidence"
-	check.Recovery = missingRangeRecovery(info, check.Missing)
+	check.Recovery = missingRangeRecovery(info, check.Missing) + a.citedReadHint(call, check.Target, boundary)
 	if info.WholeFile {
-		check.Recovery = "use read_file with intent=full and complete its pages before retrying the overwrite"
+		check.Recovery = "use read_file with intent=full and complete its pages before retrying the overwrite" +
+			a.citedReadHint(call, check.Target, boundary)
 	}
 	return check
 }
@@ -162,6 +163,21 @@ func missingRangeRecovery(info tool.EvidenceTargetInfo, missing []tool.ReadRange
 		return fmt.Sprintf("%s: %s (first of %d ranges)", recovery, call, len(missing))
 	}
 	return fmt.Sprintf("%s: %s", recovery, call)
+}
+
+// citedReadHint names a read handle the model already saw whose window still
+// covers what this write replaces: citing it is exact, so the write proceeds
+// without a second read. Only handles the model was shown are offered.
+func (a *Agent) citedReadHint(call provider.ToolCall, info tool.EvidenceTargetInfo, boundary uint64) string {
+	if a == nil || a.task.ledger == nil || info.Path == "" {
+		return ""
+	}
+	for _, token := range a.task.ledger.SeenReadTokens(info.Path, boundary, 4) {
+		if a.resolveCitedSourceToken(evidenceCheck{}, info, token).Satisfied {
+			return fmt.Sprintf("; or cite source_token=%q — the read you already saw still covers the lines this write replaces", token)
+		}
+	}
+	return ""
 }
 
 // eligibleObservations returns the model-visible windows for path recorded

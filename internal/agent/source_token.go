@@ -25,11 +25,21 @@ func citedSourceToken(arguments string) string {
 	return strings.TrimSpace(p.SourceToken)
 }
 
-// checkCitedSourceToken resolves the cited read and decides whether it proves
-// the exact content this write replaces. A token that names another file, an
-// older version, or an incomplete window is rejected once with the concrete
-// recovery — re-read the target — instead of an open invitation to retry.
+// checkCitedSourceToken resolves the cited read and, when it proves the content
+// this write replaces, records the handle against the operation.
 func (a *Agent) checkCitedSourceToken(call provider.ToolCall, check evidenceCheck, info tool.EvidenceTargetInfo, token string) evidenceCheck {
+	out := a.resolveCitedSourceToken(check, info, token)
+	if out.Satisfied {
+		a.operations().NoteSourceToken(evidence.OperationID(call.Name, json.RawMessage(call.Arguments)), token)
+	}
+	return out
+}
+
+// resolveCitedSourceToken decides whether a cited handle proves the exact
+// content this write replaces, without recording anything: a recovery hint
+// probes candidates before it advises one. A token that names another file, an
+// older version, or an incomplete window is rejected with concrete recovery.
+func (a *Agent) resolveCitedSourceToken(check evidenceCheck, info tool.EvidenceTargetInfo, token string) evidenceCheck {
 	canonical := filepath.Clean(info.Path)
 	observations := slices.DeleteFunc(a.task.ledger.SourceToken(token), func(o evidence.TextObservation) bool {
 		return filepath.Clean(o.Path) != canonical
@@ -52,7 +62,6 @@ func (a *Agent) checkCitedSourceToken(call provider.ToolCall, check evidenceChec
 	}
 	if satisfied, missing := evidenceCoversTarget(observations, info); satisfied {
 		check.Satisfied = true
-		a.operations().NoteSourceToken(evidence.OperationID(call.Name, json.RawMessage(call.Arguments)), token)
 		return check
 	} else {
 		check.Missing = missing

@@ -14,6 +14,8 @@ func TestShellCommandIsReadOnlyDiagnosis(t *testing.T) {
 	}{
 		{"proven read-only listing", "bash", `{"command":"ls -la"}`, true},
 		{"proven read-only search", "bash", `{"command":"grep -r foo ."}`, true},
+		{"proven read-only ripgrep", "bash", `{"command":"rg -n foo internal/agent"}`, true},
+		{"powershell read-only inspection", "bash", `{"command":"Get-ChildItem -Path ."}`, true},
 		{"proven read-only git status", "bash", `{"command":"git status --short"}`, true},
 		{"verification still waits", "bash", `{"command":"go test ./..."}`, false},
 		{"writer is not diagnosis", "bash", `{"command":"rm -rf build"}`, false},
