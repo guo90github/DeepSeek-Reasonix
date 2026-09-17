@@ -182,6 +182,9 @@ func (a *Agent) applyMutationDependencyBarrier(plan *toolCallPlan) (toolOutcome,
 	if !plan.effects.StateMutation && !verification {
 		return toolOutcome{}, false
 	}
+	if shellCommandIsReadOnlyDiagnosis(plan.evidenceName, string(plan.evidenceArgs)) {
+		return toolOutcome{}, false
+	}
 	msg := cause.message()
 	var ex *tool.ShellExecution
 	// Structured shell metadata only for bash cards; other tools keep plain text.

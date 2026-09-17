@@ -78,6 +78,52 @@ func validateCitedReceiptsForOperation(ctx context.Context, cited []evidence.Rec
 	return nil
 }
 
+// citedOperation adopts the operation every cited receipt covers when the caller
+// omitted it: a mutation and its attached verification name different operations
+// of their own, so coverage decides, and a set no one operation covers still fails.
+func citedOperation(ctx context.Context, cited []evidence.ReceiptRef, operationID string) (string, error) {
+	operationID = strings.TrimSpace(operationID)
+	ledger, ok := evidence.FromContext(ctx)
+	if !ok || len(cited) == 0 || operationID != "" {
+		return operationID, nil
+	}
+	candidates := make([]string, 0, len(cited))
+	for _, ref := range cited {
+		if op := strings.TrimSpace(ref.OperationID); op != "" && !slices.Contains(candidates, op) {
+			candidates = append(candidates, op)
+		}
+	}
+	if len(candidates) == 0 {
+		return "", nil // legacy receipts carry no operation to adopt
+	}
+	adopted := ""
+	for _, candidate := range candidates {
+		if !citedCoversOperation(ledger, cited, candidate) {
+			continue
+		}
+		if adopted != "" {
+			return "", citedReceiptMismatchError(ledger, cited[0].ID, "",
+				fmt.Sprintf("covers more than one operation (%q and %q); cite receipts from one change", adopted, candidate))
+		}
+		adopted = candidate
+	}
+	if adopted == "" {
+		return "", citedReceiptMismatchError(ledger, cited[0].ID, "", "is not covered by any single operation; cite receipts from one change")
+	}
+	return adopted, nil
+}
+
+func citedCoversOperation(ledger *evidence.Ledger, cited []evidence.ReceiptRef, operationID string) bool {
+	for _, ref := range cited {
+		if !ledger.ReceiptCoversOperation(ref.ID, operationID) {
+			return false
+		}
+	}
+	return true
+}
+
+// citedReceiptMismatchError reports a citation the host cannot attach to the
+// change being signed off.
 func citedReceiptMismatchError(ledger *evidence.Ledger, receiptID, operationID, why string) error {
 	available := availableReceiptIDsForOperation(ledger, operationID)
 	d := tool.OperationDiagnostic{

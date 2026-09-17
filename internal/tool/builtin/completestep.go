@@ -75,7 +75,7 @@ func (completeStep) Schema() json.RawMessage {
     }
   },
   "receipt_ids":{"type":"array","items":{"type":"string"},"description":"PREFERRED proof: the host receipt ids printed after the tool calls that did the work (e.g. \"r_1a2b3c4d\"). Citing an id is exact — the host issued it — so shell prefixes, quoting, argument order, and working directory never matter. Use these instead of retyping a command."},
-  "operation_id":{"type":"string","description":"The host operation whose receipts are being cited. Required when citing runtime-issued receipts so evidence from another change cannot satisfy this step."},
+  "operation_id":{"type":"string","description":"Optional: the host adopts the operation the cited receipts belong to, so pass this only to pin a different one. Cite receipts from a single change; mixing receipts from two operations is rejected."},
   "notes":{"type":"string","description":"Optional caveats, follow-ups, or anything deferred."}
 },
 "required":["result"]
@@ -116,7 +116,11 @@ func (completeStep) Execute(ctx context.Context, args json.RawMessage) (string, 
 	if err != nil {
 		return "", err
 	}
-	if err := validateCitedReceiptsForOperation(ctx, cited, p.OperationID); err != nil {
+	operationID, err := citedOperation(ctx, cited, p.OperationID)
+	if err != nil {
+		return "", err
+	}
+	if err := validateCitedReceiptsForOperation(ctx, cited, operationID); err != nil {
 		return "", err
 	}
 	step := completeStepIdentity(p.StepID, p.Step, p.StepIndex)
@@ -158,7 +162,7 @@ func (completeStep) Execute(ctx context.Context, args json.RawMessage) (string, 
 		}
 		gaps, hasTodo = append(gaps, err.Error()), false
 	}
-	tally, err := verifyStepEvidence(ctx, p.Evidence, cited, p.OperationID)
+	tally, err := verifyStepEvidence(ctx, p.Evidence, cited, operationID)
 	if err != nil {
 		if strict {
 			if hasTodo && todoMatch.Status == "in_progress" {

@@ -456,7 +456,13 @@ func batchCallStaticallySkippable(a *Agent, call provider.ToolCall) bool {
 	readOnly := t.ReadOnly()
 	isVerification := call.Name == "bash" && evidence.IsVerificationCommand(bashCommandFromArgs(json.RawMessage(call.Arguments)))
 	if isVerification {
+		// A check after a failed change proves nothing, so it stays skipped.
 		return true
+	}
+	if shellCommandIsReadOnlyDiagnosis(call.Name, call.Arguments) {
+		// Proven read-only outranks the conservative classification: diagnosis
+		// of the failure is exactly what the next call should be able to do.
+		return false
 	}
 	return evidence.ClassifyToolCall(call.Name, json.RawMessage(call.Arguments), readOnly).StateMutation
 }

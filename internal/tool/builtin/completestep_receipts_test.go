@@ -177,18 +177,38 @@ func TestCompleteStepRejectsUnrelatedReceiptEvenWhenAnotherCitationCoversOperati
 	}
 }
 
-func TestCompleteStepRequiresOperationIDForRuntimeReceipt(t *testing.T) {
+func TestCompleteStepDerivesOperationFromRuntimeReceipt(t *testing.T) {
 	ledger := evidence.NewLedger()
 	id := recordReceiptID(t, ledger, evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./...", OperationID: "op_verify"})
 	ctx := evidence.WithLedger(context.Background(), ledger)
 
-	_, err := completeStep{}.Execute(ctx, json.RawMessage(`{
+	// The model is never shown the operation handle, so the host adopts the one
+	// its cited receipt belongs to instead of demanding it back.
+	out, err := completeStep{}.Execute(ctx, json.RawMessage(`{
 		"step":"x","result":"y",
 		"receipt_ids":["`+id+`"],
 		"evidence":[{"kind":"verification","summary":"claimed"}]}`))
+	if err != nil {
+		t.Fatalf("a runtime receipt must carry its own operation: %v", err)
+	}
+	if !strings.Contains(out, "host-verified 1") {
+		t.Fatalf("the derived operation should still verify the evidence, got %q", out)
+	}
+}
+
+func TestCompleteStepRejectsReceiptsFromDifferentOperations(t *testing.T) {
+	ledger := evidence.NewLedger()
+	first := recordReceiptID(t, ledger, evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./one", OperationID: "op_one"})
+	second := recordReceiptID(t, ledger, evidence.Receipt{ToolName: "bash", Success: true, Command: "go test ./two", OperationID: "op_two"})
+	ctx := evidence.WithLedger(context.Background(), ledger)
+
+	_, err := completeStep{}.Execute(ctx, json.RawMessage(`{
+		"step":"x","result":"y",
+		"receipt_ids":["`+first+`","`+second+`"],
+		"evidence":[{"kind":"verification","summary":"claimed"}]}`))
 	var operationErr *tool.OperationError
 	if !errors.As(err, &operationErr) || operationErr.Diagnostic.Code != tool.VerificationReceiptMismatch {
-		t.Fatalf("runtime receipt without operation_id should be rejected structurally, got %v", err)
+		t.Fatalf("citations spanning two changes must still be rejected, got %v", err)
 	}
 }
 

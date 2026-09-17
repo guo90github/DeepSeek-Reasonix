@@ -118,7 +118,7 @@ func (a *Agent) checkOperationEvidence(ctx context.Context, call provider.ToolCa
 	if len(observations) == 0 {
 		check.Reason = "no_eligible_read"
 		check.Missing = info.Ranges
-		check.Recovery = fmt.Sprintf("read %s in a previous provider round, then retry; reads from the same batch do not count", info.Path)
+		check.Recovery = noReadRecovery(a.task.ledger, info.Path)
 		return check
 	}
 	if satisfied, missing := evidenceCoversTarget(observations, info); satisfied {
@@ -128,11 +128,40 @@ func (a *Agent) checkOperationEvidence(ctx context.Context, call provider.ToolCa
 		check.Missing = missing
 	}
 	check.Reason = "stale_or_partial_evidence"
-	check.Recovery = fmt.Sprintf("re-read the missing lines of %s, then retry", info.Path)
+	check.Recovery = missingRangeRecovery(info, check.Missing)
 	if info.WholeFile {
 		check.Recovery = "use read_file with intent=full and complete its pages before retrying the overwrite"
 	}
 	return check
+}
+
+// noReadRecovery names the one action the gate will accept. A write earlier in
+// this turn retires every read of the file, so the model reads it again — or
+// folds several changes into one multi_edit call instead of editing twice.
+func noReadRecovery(ledger *evidence.Ledger, path string) string {
+	base := fmt.Sprintf("read %s in a previous provider round, then retry; reads from the same batch do not count", path)
+	if ledger == nil {
+		return base
+	}
+	if _, written := ledger.LatestSuccessfulWriteIndex([]string{path}); written {
+		return fmt.Sprintf("%s (already written this turn, which retired those reads: combine the changes into one multi_edit call, or read %s again and retry)", base, path)
+	}
+	return base
+}
+
+// missingRangeRecovery hands over the exact read that closes the gap: a
+// description the model has to translate into offsets is what made a second
+// attempt fail again.
+func missingRangeRecovery(info tool.EvidenceTargetInfo, missing []tool.ReadRange) string {
+	recovery := fmt.Sprintf("re-read the missing lines of %s, then retry", info.Path)
+	if len(missing) == 0 {
+		return recovery
+	}
+	call := fmt.Sprintf("read_file path=%q offset=%d limit=%d", info.Path, missing[0].Start, missing[0].Lines())
+	if len(missing) > 1 {
+		return fmt.Sprintf("%s: %s (first of %d ranges)", recovery, call, len(missing))
+	}
+	return fmt.Sprintf("%s: %s", recovery, call)
 }
 
 // eligibleObservations returns the model-visible windows for path recorded
@@ -372,6 +401,21 @@ func (a *Agent) blockUndeclaredWriter(ctx context.Context, plan *toolCallPlan, c
 		msg += "\n" + recovery
 	}
 	return toolOutcome{output: msg, blocked: true, errMsg: firstLine(msg), diagnostic: d}, true
+}
+
+// shellCommandIsReadOnlyDiagnosis reports a shell command the host can prove
+// read-only. Such a command cannot depend on the change that just failed, so the
+// batch barrier runs it instead of costing the model a round trip for diagnosis.
+func shellCommandIsReadOnlyDiagnosis(name, args string) bool {
+	if name != "bash" && name != "shell" {
+		return false
+	}
+	command := bashCommandFromArgs(json.RawMessage(args))
+	if command == "" || evidence.IsVerificationCommand(command) {
+		return false
+	}
+	effect := shellsafe.ClassifyBash(command)
+	return effect.Certainty == shellsafe.EffectKnown && effect.Writes == 0
 }
 
 // narrowToDeclaredShellWrites drops requirements a statically analyzable shell
