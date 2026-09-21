@@ -63,7 +63,7 @@ function issueCount(totals: ReasoningAuditTotals, key: FindingType): number {
 }
 
 // AuditSection is a reusable collapsed block (header + chevron + optional body).
-function AuditSection({
+export function AuditSection({
   title,
   open,
   onToggle,

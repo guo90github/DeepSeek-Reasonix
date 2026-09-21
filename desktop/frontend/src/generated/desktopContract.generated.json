@@ -1106,6 +1106,36 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/session_audit.go",
+      "name": "AuditSession",
+      "owner": "App.AuditSession",
+      "params": [
+        {
+          "elem": {
+            "kind": "object",
+            "ref": "control.SessionAuditTurn"
+          },
+          "kind": "array"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "control.SessionAuditTotals"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "turns"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.AuditSession"
+      },
+      "sources": [
+        "desktop/session_audit.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/reasoning_audit.go",
       "name": "AuditTurn",
       "owner": "App.AuditTurn",
@@ -15713,6 +15743,8 @@
     "session:active-version-changed",
     "session:recovered",
     "session:recovery-failed",
+    "sessionaudit:done",
+    "sessionaudit:event",
     "tab:meta",
     "terminal:exit",
     "terminal:output",
@@ -17017,6 +17049,229 @@
           "optional": true,
           "type": {
             "kind": "string"
+          }
+        }
+      ]
+    },
+    "control.SessionAuditIssue": {
+      "fields": [
+        {
+          "name": "type",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "turns",
+          "type": {
+            "elem": {
+              "kind": "integer"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "note",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "quote",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "control.SessionAuditTotals": {
+      "fields": [
+        {
+          "name": "audited",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "elapsedMs",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "score",
+          "type": {
+            "kind": "number"
+          }
+        },
+        {
+          "name": "trend",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "explanation",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "issues",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "control.SessionAuditIssue"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "turns",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "control.SessionAuditTurnResult"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "turnCount",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "segmentCount",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "evalTokens",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "evalCost",
+          "type": {
+            "kind": "number"
+          }
+        }
+      ]
+    },
+    "control.SessionAuditTurn": {
+      "fields": [
+        {
+          "name": "turn",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "prompt",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reasoning",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "control.SessionAuditTurnResult": {
+      "fields": [
+        {
+          "name": "turn",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "score",
+          "type": {
+            "kind": "number"
+          }
+        },
+        {
+          "name": "contradiction",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "factualError",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "invalidInference",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "redundancy",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "instructionDrift",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "omission",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "issues",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "conclusion",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "priorConflict",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "explanation",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "findings",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "event.AuditFinding"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "truncated",
+          "type": {
+            "kind": "boolean"
           }
         }
       ]

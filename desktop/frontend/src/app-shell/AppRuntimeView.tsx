@@ -25,6 +25,7 @@ import { buildTopicbarView, TopicbarActionsStack } from "./TopicbarActionsStack"
 import { DockToggleButton } from "./DockToggleButton";
 import { LauncherToggleButton } from "./LauncherToggleButton";
 import { TabBar } from "../components/TabBar";
+import { SessionAuditLauncher } from "../components/SessionAuditLauncher";
 import { SessionStatusBanners } from "./SessionStatusBanners";
 import { ChatPaneRegion } from "./ChatPaneRegion";
 import { noticePreviewMockEnabled } from "./NoticePreviewPanel";
@@ -271,6 +272,14 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 onTabsClose={session.sessionTabs.onTabsClose}
                 onTabsReorder={session.sessionTabs.onTabsReorder}
                 onNewTab={() => void navigationCommands.handleNewTab()}
+                sessionAudit={(
+                  <SessionAuditLauncher
+                    tabId={activeTabId}
+                    items={session.transcript.visibleTranscriptItems ?? []}
+                    turnBase={state.historyStartTurn > 0 ? state.historyStartTurn - 1 : 0}
+                    enabled={!core.remoteSurfaceActive && (!session.transcript.visibleTranscriptTabId || session.transcript.visibleTranscriptTabId === activeTabId)}
+                  />
+                )}
               />
             </div>
             <TopicbarActionsStack

@@ -1,6 +1,6 @@
 // TabBar renders the browser-like workspace tab strip. Each tab represents one
 // open project/global topic, so switching tabs switches the active conversation.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { DragEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from "react";
 import { FileText, Plus, Search, X } from "lucide-react";
 import { normalizeCollaborationMode, normalizeMode, normalizeToolApprovalMode, type Mode, type TabMeta } from "../lib/types";
@@ -17,6 +17,8 @@ interface TabBarProps {
   onTabsClose: (tabIds: string[], nextActiveTabId?: string) => void;
   onTabsReorder: (tabIds: string[]) => void;
   onNewTab: () => void;
+  /** Rendered immediately after the new-session button (the session-audit trigger). */
+  sessionAudit?: ReactNode;
   onOpenPalette?: () => void;
   commandCompact?: boolean;
   revealActiveSignal?: number;
@@ -46,7 +48,7 @@ function tabMode(tab: TabMeta): Mode {
   return normalizeMode(tab.mode);
 }
 
-export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose, onTabsReorder, onNewTab, onOpenPalette, commandCompact = false, revealActiveSignal = 0 }: TabBarProps) {
+export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose, onTabsReorder, onNewTab, sessionAudit, onOpenPalette, commandCompact = false, revealActiveSignal = 0 }: TabBarProps) {
   const t = useT();
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; side: DropSide } | null>(null);
@@ -270,11 +272,12 @@ export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose
           );
         })}
       </div>
-      <Tooltip label={t("tabBar.newSession")}>
+      <Tooltip label={t("tabBar.newSession")} className="tabbar__icon-trigger">
         <button className="tabbar__new" type="button" aria-label={t("tabBar.newSession")} onClick={onNewTab}>
           <Plus size={13} />
         </button>
       </Tooltip>
+      {sessionAudit}
       {onOpenPalette && <span className="tabbar__spacer" aria-hidden="true" />}
       {onOpenPalette && (
         <button

@@ -69,6 +69,37 @@ evaluator **绝不在会话模型上运行**。它使用独立的 `audit_model` 
 以及前端 bundle 门禁 ratchet（`check-bundle-budget.mjs`）。规范偏离的完整清单见
 `PR_DESCRIPTION.md`。
 
+## 整会话审计（多轮）
+
+会话栏（新建会话按钮右侧紧邻位置）另有一个入口，把**当前会话已加载的全部轮次**作为一次运行来审计。
+与单轮审计一样：用户手动触发、一次性、不落盘，用 `audit_model` 跑，绝不进入会话历史或
+provider 可见前缀。
+
+范围：前端转录当前持有的轮次（桌面端的已加载窗口）。没有思考链的轮次会被跳过；
+远端 surface 的轮次不属于本机会话，因此该入口在远端 surface 下保持禁用。
+
+分两趟，因为单次调用必须把每条思考链截断到失去意义：
+
+1. **分段逐轮评分** — 轮次按顺序切成最多 8 段（每段 ≤8 轮）。每段一次
+   `audit_segment_prompt.md` 调用，用与单轮审计完全相同的六类与公式给每轮打分
+   （因此分数与单轮审计可比），并额外返回该轮的*结论*以及可直接指认的、与更早轮次的冲突。
+2. **跨轮会审** — 一次 `audit_session_prompt.md` 调用，输入只有逐轮的结构化结果
+   （数字、结论、被引用的原文片段，绝不含思考原文），产出跨轮矛盾、跨轮偏航、重复死路、
+   未兑现承诺、错误传播，以及会话总评与趋势。
+
+逐轮保真度受 `agent.audit_max_chars` 与单次调用输入预算（`sessionAuditCallInputChars`）双重约束：
+会话越长，每轮可用额度越小，而不是撑爆一次调用；整体调用数上界为
+`sessionAuditMaxSegments` + 1。
+
+- **`internal/control/analyze_session_reasoning.go`** — `Controller.AuditSessionReasoning`
+  （规划 → 分段调用 → 会审调用 → `SessionAuditTotals`），以及用于步骤进度的 `SessionAuditEvent`。
+- **提示词** — `audit_segment_prompt.md` 与 `audit_session_prompt.md`，与单轮提示词一同 embed。
+- **`desktop/session_audit.go`** — `App.AuditSession`（绑定），逐步流式发
+  `sessionaudit:event`，结束时发 `sessionaudit:done` 携带判定结果。
+- **前端** — `components/SessionAuditLauncher.tsx`（会话栏入口）、
+  `components/SessionAuditModal.tsx`（进度、会话总评、跨轮问题、逐轮表、以及确切的请求/输出）、
+  `lib/sessionAuditTurns.ts`（转录 → 审计负载）。
+
 ## 已知缺口
 
 - **boot-level effect test** 尚未补充——REASONIX.md 要求性能特性在 `internal/boot`

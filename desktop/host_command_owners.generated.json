@@ -565,6 +565,20 @@
       ]
     }
   },
+  "AuditSession": {
+    "domain": "desktop/session_audit.go",
+    "owner": "App.AuditSession",
+    "sources": [
+      "desktop/session_audit.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.AuditSession",
+      "inputs": [
+        "turns"
+      ]
+    }
+  },
   "AuditTurn": {
     "domain": "desktop/reasoning_audit.go",
     "owner": "App.AuditTurn",

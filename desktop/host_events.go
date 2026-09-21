@@ -30,6 +30,8 @@ var hostEventNames = []string{
 	"session:active-version-changed",
 	"session:recovered",
 	"session:recovery-failed",
+	"sessionaudit:done",
+	"sessionaudit:event",
 	"tab:meta",
 	"terminal:exit",
 	"terminal:output",

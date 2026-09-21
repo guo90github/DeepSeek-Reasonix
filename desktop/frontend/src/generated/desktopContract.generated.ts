@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:040fefef076bd6aee1e5f20982dfcc3f505b3bf235b794e6df6fa0f608926561";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:1f6b022ba27212423f876423697b4ddb68ef5b56d926f3cd0e66d8dbb44600df";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -43,6 +43,7 @@ export const DESKTOP_COMMANDS = [
   "ApproveTabForTurn",
   "AttachDropped",
   "AttachmentDataURL",
+  "AuditSession",
   "AuditTurn",
   "AuthenticateMCPServer",
   "AuthorizeAndConnectMCPServer",
@@ -626,6 +627,8 @@ export const DESKTOP_EVENTS = [
   "session:active-version-changed",
   "session:recovered",
   "session:recovery-failed",
+  "sessionaudit:done",
+  "sessionaudit:event",
   "tab:meta",
   "terminal:exit",
   "terminal:output",
@@ -884,6 +887,50 @@ export interface ProviderProtocolEndpoint {
   checkedOn: string;
   authHeader?: boolean;
   responsesMode?: string;
+}
+
+export interface SessionAuditIssue {
+  type: string;
+  turns: number[];
+  note: string;
+  quote: string;
+}
+
+export interface SessionAuditTotals {
+  audited: boolean;
+  elapsedMs: number;
+  score: number;
+  trend: string;
+  explanation: string;
+  issues: SessionAuditIssue[];
+  turns: SessionAuditTurnResult[];
+  turnCount: number;
+  segmentCount: number;
+  evalTokens: number;
+  evalCost: number;
+}
+
+export interface SessionAuditTurn {
+  turn: number;
+  prompt: string;
+  reasoning: string;
+}
+
+export interface SessionAuditTurnResult {
+  turn: number;
+  score: number;
+  contradiction: number;
+  factualError: number;
+  invalidInference: number;
+  redundancy: number;
+  instructionDrift: number;
+  omission: number;
+  issues: number;
+  conclusion: string;
+  priorConflict: string;
+  explanation: string;
+  findings: AuditFinding[];
+  truncated: boolean;
 }
 
 export interface ToolRecoveryRequest {
@@ -4354,6 +4401,7 @@ export interface GeneratedDesktopCommands {
   ApproveTabForTurn(arg0: string, arg1: string, arg2: string, arg3: string, arg4: boolean, arg5: boolean, arg6: boolean): Promise<void>;
   AttachDropped(arg0: string): Promise<DroppedItem>;
   AttachmentDataURL(arg0: string): Promise<string>;
+  AuditSession(arg0: SessionAuditTurn[]): Promise<SessionAuditTotals>;
   AuditTurn(arg0: string, arg1: string): Promise<ReasoningAuditTotals>;
   AuthenticateMCPServer(arg0: string): Promise<void>;
   AuthorizeAndConnectMCPServer(arg0: string): Promise<void>;

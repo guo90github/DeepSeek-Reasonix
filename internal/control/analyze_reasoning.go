@@ -103,42 +103,12 @@ func (c *Controller) AuditStream(
 	start := time.Now()
 	requestCtx, cancel := context.WithTimeout(ctx, reasoningAuditTimeout)
 	defer cancel()
-	stream, err := p.Stream(requestCtx, provider.Request{
-		Messages: []provider.Message{
-			{Role: provider.RoleSystem, Content: systemPrompt},
-			{Role: provider.RoleUser, Content: reasoning},
-		},
-		Temperature:    provider.TemperaturePtr(0),
-		MaxTokens:      reasoningAuditMaxTokens,
-		EffortOverride: auditRequestEffort(effort),
-	})
+	res, err := runAuditCall(requestCtx, p, systemPrompt, reasoning, reasoningAuditMaxTokens, auditRequestEffort(effort), onReasoning, onText)
 	if err != nil {
 		return zero, fmt.Errorf("reasoning audit: %w", err)
 	}
-	var out strings.Builder
-	var usage *provider.Usage
-	for chunk := range stream {
-		switch chunk.Type {
-		case provider.ChunkText:
-			out.WriteString(chunk.Text)
-			if onText != nil {
-				onText(chunk.Text)
-			}
-		case provider.ChunkReasoning:
-			if onReasoning != nil {
-				onReasoning(chunk.Text)
-			}
-		case provider.ChunkUsage:
-			if chunk.Usage != nil {
-				usage = chunk.Usage
-			}
-		case provider.ChunkError:
-			if chunk.Err != nil {
-				return zero, fmt.Errorf("reasoning audit: %w", chunk.Err)
-			}
-		}
-	}
 	elapsed := time.Since(start).Milliseconds()
+	usage := res.usage
 
 	var verdict struct {
 		Score            float64              `json:"score"`
@@ -152,7 +122,7 @@ func (c *Controller) AuditStream(
 		Explanation      string               `json:"explanation"`
 		Findings         []event.AuditFinding `json:"findings"`
 	}
-	if err := json.Unmarshal([]byte(out.String()), &verdict); err != nil {
+	if err := json.Unmarshal([]byte(res.text), &verdict); err != nil {
 		return zero, fmt.Errorf("reasoning audit: decode verdict: %w", err)
 	}
 	if verdict.Score < 0 || verdict.Score > 1 {
@@ -189,6 +159,63 @@ func (c *Controller) AuditStream(
 		}
 	}
 	return totals, nil
+}
+
+// auditCallResult is one evaluator completion: the assembled verdict text plus
+// the provider usage when the endpoint reported it.
+type auditCallResult struct {
+	text  string
+	usage *provider.Usage
+}
+
+// runAuditCall issues exactly one evaluator completion at temperature 0 and
+// assembles the verdict text, forwarding deltas to the stream callbacks. The
+// caller owns the deadline, the token ceiling, and the effort mapping, so the
+// single-turn audit and the session audit can differ in all three.
+func runAuditCall(
+	ctx context.Context,
+	p provider.Provider,
+	systemPrompt, input string,
+	maxTokens int,
+	effort string,
+	onReasoning, onText func(string),
+) (auditCallResult, error) {
+	stream, err := p.Stream(ctx, provider.Request{
+		Messages: []provider.Message{
+			{Role: provider.RoleSystem, Content: systemPrompt},
+			{Role: provider.RoleUser, Content: input},
+		},
+		Temperature:    provider.TemperaturePtr(0),
+		MaxTokens:      maxTokens,
+		EffortOverride: effort,
+	})
+	if err != nil {
+		return auditCallResult{}, err
+	}
+	var out strings.Builder
+	var usage *provider.Usage
+	for chunk := range stream {
+		switch chunk.Type {
+		case provider.ChunkText:
+			out.WriteString(chunk.Text)
+			if onText != nil {
+				onText(chunk.Text)
+			}
+		case provider.ChunkReasoning:
+			if onReasoning != nil {
+				onReasoning(chunk.Text)
+			}
+		case provider.ChunkUsage:
+			if chunk.Usage != nil {
+				usage = chunk.Usage
+			}
+		case provider.ChunkError:
+			if chunk.Err != nil {
+				return auditCallResult{}, chunk.Err
+			}
+		}
+	}
+	return auditCallResult{text: out.String(), usage: usage}, nil
 }
 
 // auditRequestEffort maps the configured audit reasoning-depth to the provider's

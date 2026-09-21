@@ -82,6 +82,49 @@ This feature was landed with a budget carry-forward: repolint `-update`
 gate ratchets in `check-bundle-budget.mjs`. See `PR_DESCRIPTION.md` for the full
 accounting of spec deviations.
 
+## Whole-session audit (multi-turn)
+
+The session tab strip carries a second trigger, immediately after the
+new-session button, that audits **every loaded turn of the active session as one
+run**. It is user-triggered, one-shot, and never persisted; like the per-turn
+audit it runs on `audit_model` and never touches the session history or the
+provider-visible prefix.
+
+Scope: the turns the transcript currently holds (the desktop's loaded window).
+Turns without a reasoning chain are skipped, and a remote surface's turns are
+not this host's session, so the trigger stays disabled there.
+
+Two passes, because one call would have to truncate every chain into
+uselessness:
+
+1. **Per-segment scoring** — the turns are split into at most 8 consecutive
+   groups (≤8 turns each). Each group is one `audit_segment_prompt.md` call that
+   scores every turn with the same six classes and formula as the single-turn
+   audit (so the scores stay comparable) and additionally returns each turn's
+   *conclusion* plus any conflict directly identifiable against an earlier turn.
+2. **Cross-turn review** — one `audit_session_prompt.md` call receives only the
+   structured per-turn results (numbers, conclusions, quoted excerpts — never the
+   reasoning text) and reports cross-turn contradictions, cross-turn drift,
+   repeated dead ends, unmet commitments, and error propagation, plus a session
+   score and a trend.
+
+Per-turn fidelity is bounded by `agent.audit_max_chars` and by a per-call input
+budget (`sessionAuditCallInputChars`): a longer session gets a smaller per-turn
+allowance rather than overflowing one call, and the run is capped at
+`sessionAuditMaxSegments` + 1 calls.
+
+- **`internal/control/analyze_session_reasoning.go`** —
+  `Controller.AuditSessionReasoning` (plan → segment calls → review call →
+  `SessionAuditTotals`) with `SessionAuditEvent` for step progress.
+- **Prompts** — `audit_segment_prompt.md` and `audit_session_prompt.md`, embedded
+  beside the per-turn one.
+- **`desktop/session_audit.go`** — `App.AuditSession` (bound), streaming
+  `sessionaudit:event` per step and `sessionaudit:done` with the verdict.
+- **Frontend** — `components/SessionAuditLauncher.tsx` (the tab-strip trigger),
+  `components/SessionAuditModal.tsx` (progress, session verdict, cross-turn
+  issues, per-turn table, and the exact requests/outputs), and
+  `lib/sessionAuditTurns.ts` (transcript → audit payload).
+
 ## Known gaps
 
 - **Boot-level effect test** not yet added — REASONIX.md requires performance

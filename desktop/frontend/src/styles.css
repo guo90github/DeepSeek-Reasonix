@@ -23642,6 +23642,92 @@ body > .mermaid-diagram--fullscreen {
   color: var(--text-3);
   font-size: 11px;
 }
+/* Session audit: the cross-turn issue list and the per-turn score table. */
+.session-audit__subtitle {
+  margin: 12px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.session-audit__issues,
+.session-audit__turns {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.session-audit__issue {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--bg);
+  border-left: 3px solid var(--warning, #e8a33d);
+  font-size: 11px;
+}
+.session-audit__issue-turns {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-3);
+}
+.session-audit__issue-note {
+  color: var(--text-2);
+  word-break: break-word;
+}
+.session-audit__turn {
+  padding: 6px 9px;
+  border-radius: 6px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 11px;
+}
+.session-audit__turn-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.session-audit__turn-no {
+  flex: none;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.session-audit__turn-score {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--fg);
+}
+.session-audit__turn-score.is-low {
+  color: var(--danger, #e5484d);
+}
+.session-audit__turn-issues {
+  flex: none;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+}
+.session-audit__turn-conclusion {
+  margin: 4px 0 0;
+  color: var(--text-2);
+}
+.session-audit__turn-label {
+  margin-right: 6px;
+  color: var(--text-3);
+}
+.session-audit__turn-explanation {
+  margin: 2px 0 0;
+  color: var(--text-3);
+}
+.session-audit__stage + .session-audit__stage {
+  margin-top: 10px;
+}
+.tabbar__audit:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .audit-issues {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -23791,6 +23877,12 @@ body > .mermaid-diagram--fullscreen {
   border-radius: 7px;
   background: transparent;
   color: var(--fg-dim);
+}
+
+/* The tooltip wrapper is the strip's flex item: without this it shrinks to a
+   sliver in a cramped strip and the 30px icons overflow into each other. */
+.tabbar__icon-trigger {
+  flex: 0 0 auto;
 }
 
 .tabbar__new:hover {

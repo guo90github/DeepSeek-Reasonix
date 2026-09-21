@@ -31,6 +31,7 @@ import type { ToolRecoveryBindings } from "./toolRecovery";
 import type { ScrollDiagnosticBindings } from "./scrollDiagnosticBridge";
 import { makeMockMCPAppBindings, type MCPAppBindings } from "./mcpAppBridge";
 import { makeMockPinnedContextBindings, type PinnedContextBindings } from "./pinnedContextBridge";
+import { makeMockSessionAuditBinding } from "./sessionAuditMock";
 import { createDesktopPreferencesMock } from "./desktopPreferencesMock";
 import type {
   TurnChanges,
@@ -639,6 +640,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   PickThemeBackground(): Promise<string>;
   SetDesktopLayoutStyle(style: string): Promise<void>;
   OptimizePrompt(text: string): Promise<string>;
+  AuditSession(turns: import("../generated/desktopContract.generated").SessionAuditTurn[]): Promise<import("../generated/desktopContract.generated").SessionAuditTotals>;
   AuditTurn(reasoning: string, customSystemPrompt: string): Promise<import("../generated/desktopContract.generated").ReasoningAuditTotals>;
   SetAuditModel(name: string): Promise<void>;
   SetAuditThreshold(threshold: number): Promise<void>;
@@ -2391,6 +2393,7 @@ function makeMockApp(): AppBindings {
   return {
     ...makeMockSessionCatalogBindings(cloneProjectTree),
     ...makeMockBlankProjectBindings(),
+    ...makeMockSessionAuditBinding(),
     async AuditTurn(_reasoning: string, _customSystemPrompt: string) {
       throw new Error("AuditTurn unavailable in mock");
     },
