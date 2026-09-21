@@ -77,6 +77,19 @@ assert.match(
   "the toggle's pressed state mirrors the card's actual visibility",
 );
 
-passed += 5; // the five assert.* checks above
+// The toggle is mounted in both layouts, so the split branch must render the
+// card it toggles — otherwise the button is a dead control there.
+const regionSource = readFileSync(resolve(testDir, "../app-shell/ChatPaneRegion.tsx"), "utf8");
+const splitBranch = regionSource.slice(
+  regionSource.indexOf('className="main main--split"'),
+  regionSource.indexOf("if (props.remote"),
+);
+assert.match(
+  splitBranch,
+  /\{props\.launcher\}/,
+  "the split branch renders the launcher card as well",
+);
+
+passed += 6; // the six assert.* checks above
 process.stdout.write(`launcher card state: ${passed} checks passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

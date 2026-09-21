@@ -38641,8 +38641,9 @@ body > .mermaid-diagram--fullscreen {
    footer, every child resolves its own centering against the same content
    box as the history rows. Higher specificity than the themed .footer
    shorthand rules, which would otherwise reset padding-right; creation-hero
-   layout centers itself and is excluded. */
-html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--workspace-open) .footer {
+   layout centers itself and is excluded. Split is excluded too: there the card
+   overlays the process pane instead of reserving space in the chat column. */
+html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--workspace-open):not(:has(.chat-pane--split)) .footer {
   padding-right: calc(240px + var(--transcript-inline-pad, 16px));
 }
 

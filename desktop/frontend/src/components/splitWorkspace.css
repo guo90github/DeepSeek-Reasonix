@@ -31,6 +31,25 @@
   display: contents;
 }
 
+/* The floating dock launcher card has no in-flow slot here (the panes own row
+   2), so the host floats it over the process pane's top-right corner. The host
+   spans the surface out of flow — never a fourth grid item — and its width is
+   what the card measures to decide whether it still fits. */
+.chat-pane--split .split-launcher-host {
+  position: absolute;
+  inset: var(--topicbar-height) 0 0 0;
+  z-index: var(--z-local-popover);
+  pointer-events: none;
+}
+
+.chat-pane--split .split-launcher-host .dock-launcher {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+  pointer-events: auto;
+}
+
 .conversation-pane {
   grid-row: 2;
   grid-column: 1;
@@ -468,6 +487,12 @@
   .split-workspace__process-toggle--active {
     border-color: var(--accent);
     color: var(--accent);
+  }
+
+  /* The drawer toggle owns this corner in narrow mode, so the launcher card
+     clears it instead of covering it. */
+  .chat-pane--split .split-launcher-host .dock-launcher {
+    top: 44px;
   }
 }
 

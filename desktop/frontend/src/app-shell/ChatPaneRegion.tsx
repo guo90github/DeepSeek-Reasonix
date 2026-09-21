@@ -52,7 +52,8 @@ export type ChatPaneRegionProps = {
     onOpenSession: (connection: SidebarImConnection) => void;
   } | null;
   remote: { tab: TabMeta; session: RemoteSessionApi } | undefined;
-  /** Floating dock launcher card, mounted over the transcript's right edge. */
+  /** Floating dock launcher card: in flow at the transcript's right edge in
+   *  the single-column layout, an overlay over the process pane in split. */
   launcher?: ReactNode;
   transcript: ChatPaneTranscriptInput;
   onRetryHistory: () => Promise<unknown>;
@@ -140,6 +141,7 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
             turnBase={state.historyStartTurn > 0 ? state.historyStartTurn - 1 : 0}
           />
         </Suspense>
+        {props.launcher ? <div className="split-launcher-host">{props.launcher}</div> : null}
       </main>
     );
   }
