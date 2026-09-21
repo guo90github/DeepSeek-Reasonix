@@ -94,19 +94,10 @@ function formatToolDuration(ms?: number): string {
   return `${Math.round(ms)} ms`;
 }
 
-function shellDisplayName(execution?: { shell?: string; shellVersion?: string }): string {
-  switch (execution?.shell) {
-    case "git-bash":
-      return "Git Bash";
-    case "powershell":
-      return "Windows PowerShell";
-    case "pwsh":
-      return "PowerShell 7+";
-    case "bash":
-      return "bash";
-    default:
-      return execution?.shell || "bash";
-  }
+// The card label never names the interpreter: a "Git Bash" header reads as a git
+// operation that never ran. The interpreter stays in the execution metadata.
+function shellDisplayName(_execution?: { shell?: string; shellVersion?: string }): string {
+  return "shell";
 }
 
 function shellSettledSummary(

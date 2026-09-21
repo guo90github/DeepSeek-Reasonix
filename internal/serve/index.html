@@ -1263,11 +1263,8 @@ function renderToolDispatch(tool) {
   toolCards[tool.id]=card;scrollDown();
 }
 function shellDisplayName(ex){
-  if(!ex||!ex.shell)return 'bash';
-  if(ex.shell==='git-bash')return 'Git Bash';
-  if(ex.shell==='powershell')return 'Windows PowerShell';
-  if(ex.shell==='pwsh')return 'PowerShell 7+';
-  return ex.shell;
+  // The label never names the interpreter: "Git Bash" reads as a git operation.
+  return 'shell';
 }
 function showSearchHistoryNotice(name,output){
  if(name!=='web_search'||!output)return;

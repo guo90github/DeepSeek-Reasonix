@@ -34,7 +34,7 @@ func TestTextSinkReproducesInlineOutput(t *testing.T) {
 		"  · 1200 tok · in 1000 (900 cached / 100 new) · out 200\n" + // usage
 		"  -> read_file {\"path\":\"a\"}\n" + // tool dispatch
 		// successful read_file result is silent
-		"  ⊘ bash blocked by permission policy\n" + // blocked result
+		"  ⊘ shell blocked by permission policy\n" + // blocked result
 		"  · tool output truncated: 5 of 100 bytes elided\n" + // info notice
 		"  ! response truncated: hit max output tokens\n" // warn notice
 

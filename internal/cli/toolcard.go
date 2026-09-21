@@ -137,11 +137,11 @@ func toolDisplayName(name string) string {
 	return name
 }
 
-// shellToolDisplayName prefers the actual interpreter label when structured
-// execution metadata is present (Git Bash / Windows PowerShell / PowerShell 7+).
-func shellToolDisplayName(name string, ex *event.ShellExecution) string {
-	if name == "bash" && ex != nil && ex.Shell != "" {
-		return shellrun.DisplayName(&tool.ShellExecution{Shell: ex.Shell, ShellVersion: ex.ShellVersion})
+// shellToolDisplayName labels every shell card with the shared one-word label,
+// so the header never names the interpreter that happened to run the command.
+func shellToolDisplayName(name string) string {
+	if name == "bash" {
+		return shellrun.DisplayName()
 	}
 	return toolDisplayName(name)
 }

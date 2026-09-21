@@ -25,26 +25,11 @@ func DescriptorFromShell(sh sandbox.Shell) *tool.ShellExecution {
 	return ex
 }
 
-// DisplayName returns the human-facing shell label for cards and CLI lines.
-func DisplayName(ex *tool.ShellExecution) string {
-	if ex == nil {
-		return "bash"
-	}
-	switch ex.Shell {
-	case tool.ShellNameGitBash:
-		return "Git Bash"
-	case tool.ShellNamePowerShell:
-		return "Windows PowerShell"
-	case tool.ShellNamePwsh:
-		return "PowerShell 7+"
-	case tool.ShellNameBash:
-		return "bash"
-	default:
-		if ex.Shell != "" {
-			return ex.Shell
-		}
-		return "bash"
-	}
+// DisplayName returns the label a shell invocation shows in cards and CLI lines.
+// It is interpreter-independent on purpose: the interpreter stays in execution
+// metadata, so no header can be read as a command that never ran.
+func DisplayName() string {
+	return tool.ShellDisplayLabel
 }
 
 // classifyShell maps a resolved Shell to contract names.

@@ -83,6 +83,11 @@ const (
 	ShellNamePwsh       = "pwsh"
 )
 
+// ShellDisplayLabel is the one-word label every shell invocation shows in cards
+// and CLI lines. The resolved interpreter stays out of it: a "Git Bash" header
+// reads as a git operation that never ran.
+const ShellDisplayLabel = "shell"
+
 // PowerShell version labels.
 const (
 	ShellVersionPS51 = "5.1"

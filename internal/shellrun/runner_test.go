@@ -85,15 +85,19 @@ func TestDescriptorFromShell(t *testing.T) {
 	}
 }
 
-func TestDisplayName(t *testing.T) {
-	if got := DisplayName(DescriptorFromShell(sandbox.Shell{Kind: sandbox.ShellPowerShell, Path: "powershell"})); got != "Windows PowerShell" {
-		t.Fatalf("got %q", got)
-	}
-	if got := DisplayName(DescriptorFromShell(sandbox.Shell{Kind: sandbox.ShellPowerShell, Path: "pwsh"})); got != "PowerShell 7+" {
-		t.Fatalf("got %q", got)
-	}
-	if got := DisplayName(DescriptorFromShell(sandbox.Shell{Kind: sandbox.ShellBash, Path: `C:\Program Files\Git\bin\bash.exe`})); got != "Git Bash" {
-		t.Fatalf("got %q", got)
+// Every interpreter shows one label: naming the resolved binary in a card
+// header is what made a "Git Bash" call read as a git operation.
+func TestDisplayNameIsInterpreterIndependent(t *testing.T) {
+	for _, sh := range []sandbox.Shell{
+		{Kind: sandbox.ShellPowerShell, Path: "powershell"},
+		{Kind: sandbox.ShellPowerShell, Path: "pwsh"},
+		{Kind: sandbox.ShellBash, Path: `C:\Program Files\Git\bin\bash.exe`},
+		{Kind: sandbox.ShellBash, Path: "/bin/bash"},
+	} {
+		if got := DisplayName(); got != "shell" {
+			t.Fatalf("DisplayName() for %+v = %q, want shell", sh, got)
+		}
+		_ = DescriptorFromShell(sh)
 	}
 }
 

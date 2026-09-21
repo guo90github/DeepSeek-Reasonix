@@ -167,7 +167,7 @@ console.log("\ntool card shell execution");
 
   const ui = await renderCard(item!);
   const name = document.querySelector(".tool__name")?.textContent ?? "";
-  ok(name.includes("Windows PowerShell"), `live path: card shows Windows PowerShell (got ${JSON.stringify(name)})`);
+  ok(name === "shell", `live path: card shows the shared shell label (got ${JSON.stringify(name)})`);
   const duration = document.querySelector(".tool__duration")?.textContent ?? "";
   ok(duration.includes("exit 1") || duration.includes("execution"), `live path: summary shows exit/phase (got ${JSON.stringify(duration)})`);
   const risk = document.body.textContent ?? "";
@@ -258,7 +258,7 @@ console.log("\ntool card shell execution");
 
   const ui = await renderCard(items[0]!);
   const name = document.querySelector(".tool__name")?.textContent ?? "";
-  ok(name === "bash" || name.includes("bash"), `history path: shell name bash (got ${JSON.stringify(name)})`);
+  ok(name === "shell", `history path: shell label (got ${JSON.stringify(name)})`);
   const body = document.body.textContent ?? "";
   ok(
     body.includes("did not run") || body.includes("not run") || body.includes("未执行") || body.includes("命令未执行"),
@@ -303,8 +303,8 @@ console.log("\ntool card shell execution");
   eq(item?.execution?.exitCode, 1, "archive path: exitCode survives archive");
 
   const ui = await renderCard(item!);
-  ok((document.querySelector(".tool__name")?.textContent ?? "").includes("Windows PowerShell"),
-    "archive path: card still shows Windows PowerShell without re-fetch");
+  ok((document.querySelector(".tool__name")?.textContent ?? "") === "shell",
+    "archive path: card still shows the shell label without re-fetch");
   ok((document.body.textContent ?? "").includes("partially modified") || (document.body.textContent ?? "").includes("部分"),
     "archive path: partial risk still visible when execution retained");
   await ui.cleanup();
@@ -363,7 +363,7 @@ installDesktopHostStub(({
     });
 
     const name = document.querySelector(".tool__name")?.textContent ?? "";
-    ok(name.includes("Windows PowerShell"), `archive rehydrate: shell name after expand (got ${JSON.stringify(name)})`);
+    ok(name === "shell", `archive rehydrate: shell label after expand (got ${JSON.stringify(name)})`);
     const duration = document.querySelector(".tool__duration")?.textContent ?? "";
     ok(
       duration.includes("exit 1") || duration.includes("execution"),
@@ -393,7 +393,7 @@ installDesktopHostStub(({
     isShell: true,
   };
   const ui = await renderCard(plain);
-  ok(document.querySelector(".tool__name")?.textContent === "bash", "nil execution falls back to bash label");
+  ok(document.querySelector(".tool__name")?.textContent === "shell", "nil execution still shows the shell label");
   ok(!document.querySelector("[data-shell]") || document.querySelector("[data-shell]")?.getAttribute("data-shell") === "bash",
     "nil execution still renders shell card without throwing");
   await ui.cleanup();
