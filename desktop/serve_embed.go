@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -292,26 +293,42 @@ func loadOrCreateServeToken() (string, error) {
 // hostProcessEnvForRoot tells a workspace's MCP children which serve endpoint
 // and session own them. Without it a remote wake can only address whichever
 // tab happens to be foreground, never the workspace that asked.
+//
+// The values must not depend on the listener being up. Children spawn while
+// tabs build, and startup starts the listener only after a foreground tab is
+// ready — a child born in that window keeps the missing env for its whole life
+// (plugin.Host resolves the provider once per spawn, and one root reuses one
+// child). A remote wake then reaches serve through the client's own defaults
+// and lands in the foreground tab, silently.
 func (a *App) hostProcessEnvForRoot(root string) map[string]string {
-	host := embeddedServeState.Load()
-	if host == nil {
-		return nil
-	}
 	env := map[string]string{
-		"REASONIX_SERVE_URL":        embeddedServeURL(host),
+		"REASONIX_SERVE_URL":        embeddedServeURL(nil),
 		"REASONIX_SERVE_TOKEN_FILE": serveTokenPath(),
 	}
-	if path := a.sessionPathForRoot(root); path != "" {
-		env["REASONIX_SESSION_PATH"] = path
+	if host := embeddedServeState.Load(); host != nil {
+		env["REASONIX_SERVE_URL"] = embeddedServeURL(host)
 	}
+	path := a.sessionPathForRoot(root)
+	if path == "" {
+		slog.Warn("host process env: no session path for root; a remote wake for it will land in the foreground tab", "root", root)
+		return env
+	}
+	env["REASONIX_SESSION_PATH"] = path
 	return env
 }
 
 // embeddedServeURL is the loopback form of the window's serve address: the
 // listener binds the wildcard so a phone can reach it, while a child running on
-// this machine wants 127.0.0.1.
+// this machine wants 127.0.0.1. A nil host means the listener is not up yet.
 func embeddedServeURL(host *embeddedServe) string {
-	_, port, err := net.SplitHostPort(host.addr)
+	if host == nil {
+		return loopbackServeURL(embeddedServeAddr)
+	}
+	return loopbackServeURL(host.addr)
+}
+
+func loopbackServeURL(addr string) string {
+	_, port, err := net.SplitHostPort(addr)
 	if err != nil {
 		return "http://" + embeddedServeAddr
 	}
@@ -319,24 +336,64 @@ func embeddedServeURL(host *embeddedServe) string {
 }
 
 // sessionPathForRoot names the session a workspace's MCP child belongs to: the
-// active tab's when that tab is in the root, else the last tab the window holds
-// for it. Tabs of one root share a plugin host, hence one child and one name.
+// active tab's when that tab is in the root, else the newest tab the window
+// holds for it. Tabs of one root share a plugin host, hence one child and one
+// name.
+//
+// The scan follows tabOrder rather than ranging the tab map: this pick decides
+// which session a remote wake addresses, and "whichever tab the range happened
+// to end on" is not a rule anyone can rely on.
 func (a *App) sessionPathForRoot(root string) string {
 	a.mu.RLock()
 	defer a.mu.RUnlock()
-	fallback := ""
-	for _, tab := range a.tabs {
-		if tab == nil || tab.ReadOnly || tab.WorkspaceRoot != root {
+	active, newest := "", ""
+	for _, id := range a.tabIDsInWindowOrder() {
+		tab := a.tabs[id]
+		if !tabMatchesRoot(tab, root) {
 			continue
 		}
 		path := strings.TrimSpace(tab.currentSessionPath())
 		if path == "" {
 			continue
 		}
+		newest = path
 		if tab.ID == a.activeTabID {
-			return agent.CanonicalSessionPath(path)
+			active = path
 		}
-		fallback = path
 	}
-	return agent.CanonicalSessionPath(fallback)
+	if active != "" {
+		return agent.CanonicalSessionPath(active)
+	}
+	return agent.CanonicalSessionPath(newest)
+}
+
+// tabMatchesRoot compares a tab against a shared-host key: the key global tabs
+// carry is not their (empty) WorkspaceRoot, and a project root can differ from
+// the tab's spelling, so neither side survives a bare string compare.
+func tabMatchesRoot(tab *WorkspaceTab, root string) bool {
+	if tab == nil || tab.ReadOnly {
+		return false
+	}
+	if root == globalSharedHostKey {
+		return strings.TrimSpace(tab.WorkspaceRoot) == ""
+	}
+	return sameProjectRoot(tab.WorkspaceRoot, root)
+}
+
+// tabIDsInWindowOrder lists the window's tabs in tabOrder, then any tab the
+// order has not published yet (sorted), so the scan above stays deterministic.
+func (a *App) tabIDsInWindowOrder() []string {
+	ordered := append([]string(nil), a.tabOrder...)
+	seen := make(map[string]struct{}, len(ordered))
+	for _, id := range ordered {
+		seen[id] = struct{}{}
+	}
+	rest := make([]string, 0, len(a.tabs))
+	for id := range a.tabs {
+		if _, ok := seen[id]; !ok {
+			rest = append(rest, id)
+		}
+	}
+	slices.Sort(rest)
+	return append(ordered, rest...)
 }

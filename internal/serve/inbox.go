@@ -3,6 +3,7 @@ package serve
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -82,6 +83,12 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 	intent := sessioninbox.IntentFollowup
 	if strings.EqualFold(body.Intent, "steer") {
 		intent = sessioninbox.IntentSteer
+	}
+	// A blind steer is a remote wake that lands in the foreground session and
+	// still answers 202, so the caller cannot tell it from an addressed one.
+	// Only steers warn: a blind follow-up is ordinary for browser clients.
+	if intent == sessioninbox.IntentSteer && strings.TrimSpace(r.Header.Get(sessionPathHeader)) == "" {
+		slog.Warn("inbox: steer without a session path; it lands in the foreground session", "source", "http")
 	}
 	api := s.inboxAPI()
 	if ensurer, ok := any(api).(interface{ EnsureSessionPath() }); ok {

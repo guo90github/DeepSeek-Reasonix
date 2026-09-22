@@ -3732,7 +3732,7 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	// off-lock boot.Build below must read a locked snapshot, not the live tab.
 	rootKey := tabWorkspaceRoot
 	if rootKey == "" {
-		rootKey = "__global__" // stable key for global workspace tabs
+		rootKey = globalSharedHostKey // stable key for global workspace tabs
 	}
 	a.mu.Lock()
 	if a.tabBuildSupersededLocked(tab, buildGeneration) {

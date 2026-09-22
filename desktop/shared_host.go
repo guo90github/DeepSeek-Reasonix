@@ -12,6 +12,12 @@ import (
 	"reasonix/internal/proc"
 )
 
+// globalSharedHostKey keys the shared plugin host of tabs that have no project
+// root (the global workspace). It is a key, never a path: resolving it against a
+// tab root matches nothing, which is how global sessions silently lost their
+// session identity to a remote wake.
+const globalSharedHostKey = "__global__"
+
 // bumpExtensionGeneration records that plugin/MCP configuration changed while
 // controller builds may still be running off the lifecycle lock. In-flight
 // builds that finish with a stale generation must not publish.
