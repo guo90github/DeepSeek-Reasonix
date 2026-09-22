@@ -326,7 +326,12 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	c.mu.Lock()
 	plan := c.sessionSettings.planMode
 	c.mu.Unlock()
+	// An ordinary foreground turn is the only place an unsupervised list can
+	// hang: the goal and plan paths settle their own lists below.
 	if !plan {
+		if !turn.synthetic {
+			c.settleUnsupervisedTodos(startMessages)
+		}
 		return nil
 	}
 	proposal := lastAssistantText(c.History())

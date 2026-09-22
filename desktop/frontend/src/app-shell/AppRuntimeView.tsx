@@ -162,6 +162,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
     running: visibleRuntimeState.running,
     pendingPrompt: visibleRuntimeState.pendingPrompt,
     continueReady: Boolean(activeTabId && !activeTab?.readOnly && (core.remoteSurfaceActive ? core.remoteComposerReady : controllerReady)),
+    todosSupervised: session.todoPanel.todosSupervised,
     onContinue: session.todoPanel.handleTodoContinue,
     onDismiss: session.todoPanel.dismissTodos,
   });

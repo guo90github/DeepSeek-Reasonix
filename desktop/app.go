@@ -6535,6 +6535,9 @@ type Meta struct {
 	GoalRuntime *GoalRuntimeView `json:"goalRuntime,omitempty"`
 	// Nil means no authoritative snapshot; non-nil empty means clear the panel.
 	CanonicalTodos *[]evidence.TodoItem `json:"canonicalTodos,omitempty"`
+	// TodosSupervised rides with CanonicalTodos: absent means the list is the
+	// model's own note, so a frontend may label and dismiss it as such.
+	TodosSupervised bool `json:"todosSupervised,omitempty"`
 	// Closed completed todo fingerprints from this session and its lineage.
 	DismissedTodoBatches []string `json:"dismissedTodoBatches,omitempty"`
 	// PinnedFiles holds metadata about standing pinned context files for this tab.
@@ -6668,6 +6671,7 @@ func (a *App) MetaForTab(tabID string) Meta {
 		GoalStatus:            goalStatus,
 		GoalRuntime:           goalRuntimeViewFromController(snap.ctrl),
 		CanonicalTodos:        ctrlTodos(snap.ctrl),
+		TodosSupervised:       snap.ctrl != nil && snap.ctrl.TodosSupervised(),
 		DismissedTodoBatches:  a.dismissedTodoBatchesForSession(sessionPath),
 		PinnedFiles:           buildPinnedContext(snap.workspaceRoot, tab.GetPinnedFiles()).Infos,
 	}

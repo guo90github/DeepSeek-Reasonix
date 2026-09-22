@@ -43,6 +43,7 @@ export function buildFooterTodo(input: {
   running: boolean;
   pendingPrompt: boolean;
   continueReady: boolean;
+  todosSupervised: boolean;
   onContinue: TodoProps["onContinue"];
   onDismiss: TodoProps["onDismiss"];
 }): DecisionFooterRegionProps["todo"] {
@@ -54,6 +55,7 @@ export function buildFooterTodo(input: {
       todos: input.todos,
       running: input.running,
       pendingPrompt: input.pendingPrompt,
+      todosSupervised: input.todosSupervised,
       onContinue: input.continueReady ? input.onContinue : undefined,
       onDismiss: input.onDismiss,
     },

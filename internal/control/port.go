@@ -232,6 +232,10 @@ type Status interface {
 	Balance(ctx context.Context) (*billing.Balance, error)
 	Jobs() []jobs.View
 	Todos() []evidence.TodoItem
+	// TodosSupervised reports whether an unfinished item in Todos is a
+	// commitment the host enforces (an active goal or plan mode) rather than the
+	// model's own note. Frontends label the panel and may let a note be dismissed.
+	TodosSupervised() bool
 	// BoundShell reports the interpreter this controller generation bound at
 	// build time, so hosts can distinguish the live session's shell from what
 	// a reload would resolve now.

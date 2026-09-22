@@ -713,7 +713,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     sessionUndo: {
       rewindState, rewindCommitting, rewindSignal, handleSessionRevertCommitted, handleMessageAction, handleUndoRewind, handleEditPrompt,
     },
-    todoPanel: { showTodos, scopedTodoBatch, todos, dismissTodos, handleTodoContinue },
+    todoPanel: { showTodos, scopedTodoBatch, todos, todosSupervised: todoPanelCommands.todosSupervised, dismissTodos, handleTodoContinue },
     delivery: { handleDeliveryContinue },
     transcript: {
       transcriptHydrating, emptyHero, availability,

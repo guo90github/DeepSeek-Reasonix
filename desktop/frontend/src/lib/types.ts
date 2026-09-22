@@ -1078,7 +1078,7 @@ export interface Meta extends RemoteSessionMetaFields {
   goal?: string;
   goalStatus?: GoalStatus;
   goalRuntime?: GoalRuntime;
-  canonicalTodos?: Todo[]; dismissedTodoBatches?: string[]; pinnedFiles?: PinnedFileInfo[];
+  canonicalTodos?: Todo[]; dismissedTodoBatches?: string[]; pinnedFiles?: PinnedFileInfo[]; todosSupervised?: boolean;
 }
 export type CollaborationMode = "normal" | "plan" | "goal";
 export type ToolApprovalMode = "ask" | "auto" | "yolo";

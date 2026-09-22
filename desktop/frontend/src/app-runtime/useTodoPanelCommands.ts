@@ -27,6 +27,7 @@ export type TodoPanelCommandsInput = {
     sessionPath?: string;
     eventChannel?: string;
     dismissedTodoBatches?: string[];
+    todosSupervised?: boolean;
   } | undefined | null;
   activeTab: TabMeta | undefined;
   activeTabId: string | undefined;
@@ -48,15 +49,15 @@ export type TodoPanelCommandsInput = {
  * projection, session-scoped dismissal persistence and the dismiss/continue
  * commands. The live task list comes from the most recent successful
  * top-level todo_write result; failed or still-running attempts do not
- * advance the canonical panel state. Incomplete lists are always shown so a
- * stale local dismissal cannot hide work that still blocks final readiness;
- * every new list starts collapsed while its header keeps showing live
- * progress and the current task. Live completion briefly shows 3/3 before
- * retirement; restored completed lists stay in transcript only. The
- * dismissal key is still based on stable todo content/state so history
- * reloads do not resurrect the same finished list. The status-agnostic batch
- * key prevents false new batches; dismissal remains session-scoped and
- * sidecar-persisted.
+ * advance the canonical panel state. An incomplete list the host enforces
+ * stays pinned, so a stale dismissal cannot hide work that still blocks final
+ * readiness; a note the model left behind may be dismissed. New lists start
+ * collapsed while the header keeps showing live progress and the current
+ * task. Live completion briefly shows 3/3 before retirement; restored
+ * completed lists stay in transcript only. The dismissal key stays based on
+ * stable todo content/state so history reloads do not resurrect a finished
+ * list, and the status-agnostic batch key prevents false new batches;
+ * dismissal is session-scoped and sidecar-persisted.
  */
 export function useTodoPanelCommands(input: TodoPanelCommandsInput) {
   const { items, activeTab, activeTabId, remote, t, ports } = input;
@@ -71,6 +72,7 @@ export function useTodoPanelCommands(input: TodoPanelCommandsInput) {
   }, [items]);
   const todoItem = todoEntry?.item ?? null;
   const metaTodos = remote ? undefined : input.meta?.canonicalTodos;
+  const todosSupervised = input.meta?.todosSupervised === true;
   const todos = useMemo(
     () => resolveTodoPanelTodos(metaTodos, todoItem ? parseTodos(todoItem.args) : undefined),
     [metaTodos, todoItem],
@@ -88,7 +90,7 @@ export function useTodoPanelCommands(input: TodoPanelCommandsInput) {
   );
   const scopedTodoKey = useMemo(() => scopedTodoDismissalKey(todoScope, todoKey), [todoKey, todoScope]);
   const scopedTodoBatch = useMemo(() => scopedTodoBatchKey(todoScope, todoBatch), [todoBatch, todoScope]);
-  const showTodos = shouldShowTodoPanel(todoKey, dismissedTodo, todos, { batchKey: todoBatch, batches: !remote && input.meta?.sessionPath === activeTab?.sessionPath ? input.meta?.dismissedTodoBatches : undefined });
+  const showTodos = shouldShowTodoPanel(todoKey, dismissedTodo, todos, { batchKey: todoBatch, batches: !remote && input.meta?.sessionPath === activeTab?.sessionPath ? input.meta?.dismissedTodoBatches : undefined }, todosSupervised);
   const dismissTodos = useCommittedCommand(() => {
     if (!scopedTodoKey) return;
     setDismissedTodoKeys((current) => {
@@ -121,5 +123,5 @@ export function useTodoPanelCommands(input: TodoPanelCommandsInput) {
     void ports.sendToTab(targetTabId, prompt);
   });
 
-  return { showTodos, scopedTodoBatch, todos, dismissTodos, handleTodoContinue };
+  return { showTodos, scopedTodoBatch, todos, todosSupervised, dismissTodos, handleTodoContinue };
 }

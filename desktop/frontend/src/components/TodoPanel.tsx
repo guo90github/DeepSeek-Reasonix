@@ -52,6 +52,7 @@ export function TodoPanel({
   pendingPrompt,
   onContinue,
   onDismiss,
+  todosSupervised = true,
 }: {
   stateKey: string;
   todos: Todo[];
@@ -59,6 +60,9 @@ export function TodoPanel({
   pendingPrompt: boolean;
   onContinue?: () => void;
   onDismiss: () => void;
+  // Absent keeps unmigrated callers pinned: only a list the host does not
+  // enforce may be closed while it is still unfinished.
+  todosSupervised?: boolean;
 }) {
   const t = useT();
   const currentRef = useRef<HTMLLIElement | null>(null);
@@ -66,6 +70,10 @@ export function TodoPanel({
   const done = todos.filter((t) => t.status === "completed").length;
   const current = todos.find((t) => t.status === "in_progress");
   const allDone = todos.length > 0 && done === todos.length;
+  // A note the host does not enforce may be closed while unfinished; a promise
+  // the host enforces keeps the pinned close action until every item is done.
+  const closeAction = allDone || !todosSupervised ? onDismiss : undefined;
+  const continueAction = !allDone && current && !running && !pendingPrompt ? onContinue : undefined;
   const summary = current?.activeForm || current?.content || todos[todos.length - 1]?.content || "";
   const [open, setOpen] = useState(() => loadOpenState(stateKey, shouldOpenTodoPanelByDefault()));
   // Phase rows expand by default; collapse state is per-batch (keyed by group
@@ -95,14 +103,19 @@ export function TodoPanel({
         saveOpenState(stateKey, next);
         return next;
       })}
-      headerActions={allDone ? (
-        <PromptHeaderAction onClick={onDismiss}>
-          {t("common.close")}
-        </PromptHeaderAction>
-      ) : current && !running && !pendingPrompt && onContinue ? (
-        <PromptHeaderAction onClick={onContinue}>
-          {t("todo.continue")}
-        </PromptHeaderAction>
+      headerActions={closeAction || continueAction ? (
+        <>
+          {continueAction && (
+            <PromptHeaderAction onClick={continueAction}>
+              {t("todo.continue")}
+            </PromptHeaderAction>
+          )}
+          {closeAction && (
+            <PromptHeaderAction onClick={closeAction}>
+              {t("common.close")}
+            </PromptHeaderAction>
+          )}
+        </>
       ) : undefined}
     >
       {open && (

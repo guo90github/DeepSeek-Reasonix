@@ -26130,6 +26130,13 @@
           }
         },
         {
+          "name": "todosSupervised",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
           "name": "dismissedTodoBatches",
           "optional": true,
           "type": {

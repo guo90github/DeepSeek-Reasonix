@@ -208,6 +208,56 @@ async function testAllDoneAutoCollapses() {
   await check("list unmounts when collapsed", () => Promise.resolve(q(".todobar__list") === null));
 }
 
+const unfinished = [
+  { content: "Inspect", status: "in_progress" },
+  { content: "Ship", status: "pending" },
+];
+
+async function renderUnfinished(extra: { todosSupervised: boolean; onContinue?: () => void; onDismiss?: () => void }) {
+  localStorage.clear();
+  activeHost = document.createElement("div");
+  document.body.appendChild(activeHost);
+  activeRoot = createRoot(activeHost);
+  await act(async () => {
+    activeRoot?.render(
+      <LocaleProvider>
+        <TodoPanel stateKey="test-batch" todos={unfinished} {...extra} onDismiss={extra.onDismiss ?? (() => {})} />
+      </LocaleProvider>,
+    );
+    await flush();
+  });
+}
+
+function headerButtons(): Element[] {
+  return qa(".prompt-shelf__header-button");
+}
+
+async function testUnsupervisedListOffersClose() {
+  let dismissed = 0;
+  let continued = 0;
+  await renderUnfinished({ todosSupervised: false, onContinue: () => { continued += 1; }, onDismiss: () => { dismissed += 1; } });
+  await check("an unfinished note offers close alongside continue", () => Promise.resolve(headerButtons().length === 2));
+  await clickElement(headerButtons().at(-1) ?? null);
+  await check("the note close action dismisses the batch", () => Promise.resolve(dismissed === 1 && continued === 0));
+}
+
+async function testUnsupervisedListClosesWithoutContinue() {
+  let dismissed = 0;
+  await renderUnfinished({ todosSupervised: false, onDismiss: () => { dismissed += 1; } });
+  await check("an unfinished note with no continue still offers close", () => Promise.resolve(headerButtons().length === 1));
+  await clickElement(headerButtons()[0] ?? null);
+  await check("the lone note action dismisses the batch", () => Promise.resolve(dismissed === 1));
+}
+
+async function testSupervisedListKeepsContinueOnly() {
+  let dismissed = 0;
+  let continued = 0;
+  await renderUnfinished({ todosSupervised: true, onContinue: () => { continued += 1; }, onDismiss: () => { dismissed += 1; } });
+  await check("a commitment keeps a single continue action", () => Promise.resolve(headerButtons().length === 1));
+  await clickElement(headerButtons()[0] ?? null);
+  await check("continue never dismisses a commitment", () => Promise.resolve(continued === 1 && dismissed === 0));
+}
+
 async function main() {
   await testFlatListRendersLegacyDom();
   await cleanup();
@@ -220,6 +270,12 @@ async function main() {
   await testChevronCollapsesSublistOnly();
   await cleanup();
   await testAllDoneAutoCollapses();
+  await cleanup();
+  await testUnsupervisedListOffersClose();
+  await cleanup();
+  await testUnsupervisedListClosesWithoutContinue();
+  await cleanup();
+  await testSupervisedListKeepsContinueOnly();
   await cleanup();
 
   process.stdout.write(`\nTodoPanel: ${passed} passed, ${failed} failed\n`);

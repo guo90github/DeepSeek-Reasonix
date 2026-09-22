@@ -120,15 +120,15 @@ func (c *Controller) settleAbortedPlanTodos() {
 	if len(todos) == 0 {
 		return
 	}
-	c.emitPlanTodoState(todos, "approved plan run ended before every step finished")
+	c.emitTodoState("plan-run", todos, "approved plan run ended before every step finished")
 }
 
-func (c *Controller) emitPlanTodoState(todos []evidence.TodoItem, output string) {
+func (c *Controller) emitTodoState(id string, todos []evidence.TodoItem, output string) {
 	args, err := json.Marshal(map[string]any{"todos": todos})
 	if err != nil {
 		return
 	}
-	t := event.Tool{ID: "plan-run", Name: "todo_write", Args: string(args), ReadOnly: true}
+	t := event.Tool{ID: id, Name: "todo_write", Args: string(args), ReadOnly: true}
 	c.sink.Emit(event.Event{Kind: event.ToolDispatch, Tool: t})
 	t.Output = output
 	c.sink.Emit(event.Event{Kind: event.ToolResult, Tool: t})

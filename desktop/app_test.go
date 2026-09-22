@@ -48,12 +48,15 @@ import (
 
 type todoMetaController struct {
 	stubSessionAPI
-	todos []evidence.TodoItem
+	todos      []evidence.TodoItem
+	supervised bool
 }
 
 func (c *todoMetaController) Todos() []evidence.TodoItem {
 	return append([]evidence.TodoItem(nil), c.todos...)
 }
+
+func (c *todoMetaController) TodosSupervised() bool { return c.supervised }
 
 func TestCanonicalTodosMetaWireContract(t *testing.T) {
 	if got := ctrlTodos(nil); got != nil {

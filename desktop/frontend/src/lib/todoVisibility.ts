@@ -168,9 +168,13 @@ export function shouldShowTodoPanel(
   dismissedTodoKey: string | null,
   todos: Todo[],
   persisted?: { batchKey?: string | null; batches?: readonly string[] | null },
+  readinessBlocking = true,
 ): boolean {
   if (!todoKey || todos.length === 0) return false;
-  if (hasIncompleteTodos(todos)) return true;
+  // An unfinished item the host enforces must stay visible: hiding it would hide
+  // work that still blocks final readiness. A note the model left behind has no
+  // such duty, so the user may dismiss it like any other batch.
+  if (hasIncompleteTodos(todos) && readinessBlocking) return true;
   if (todoKey === dismissedTodoKey) return false;
   const batchKey = String(persisted?.batchKey ?? "").trim();
   if (batchKey && persisted?.batches?.includes(batchKey)) return false;

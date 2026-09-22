@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:1f6b022ba27212423f876423697b4ddb68ef5b56d926f3cd0e66d8dbb44600df";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:87e937a78bb4cdb289b3b96ac1ab126907909dcba368f19151bc39b589ad99d0";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -2555,6 +2555,7 @@ export interface Meta {
   goalStatus?: string;
   goalRuntime?: GoalRuntimeView | null;
   canonicalTodos?: TodoItem[] | null;
+  todosSupervised?: boolean;
   dismissedTodoBatches?: string[];
   pinnedFiles?: PinnedFileInfo[];
   remote?: RemoteTabRef | null;
