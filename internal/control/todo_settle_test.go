@@ -109,3 +109,19 @@ func TestSettleUnsupervisedTodosLeavesGoalListsAlone(t *testing.T) {
 		t.Errorf("a goal's list is settled by its own path, not here: %v", outputs)
 	}
 }
+
+func TestSettleUnsupervisedTodosLeavesDeliveryFloorListsAlone(t *testing.T) {
+	c, executor, events := settleTestController(t)
+	if err := c.SetQualityFloor(QualityFloorDelivery); err != nil {
+		t.Fatalf("SetQualityFloor: %v", err)
+	}
+	executor.ReplaceTodoState([]evidence.TodoItem{{Content: "delivery step", Status: "pending"}})
+
+	if !c.TodosSupervised() {
+		t.Fatal("the delivery floor must count as supervision: it arms the readiness gate")
+	}
+	c.settleUnsupervisedTodos(c.sessionMessageCount())
+	if outputs := todoWriteOutputs(*events); len(outputs) != 0 {
+		t.Errorf("the delivery floor's list is not a note: %v", outputs)
+	}
+}

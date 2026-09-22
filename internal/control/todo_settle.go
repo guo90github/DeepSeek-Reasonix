@@ -37,8 +37,9 @@ func (c *Controller) settleUnsupervisedTodos(startMessages int) {
 }
 
 // TodosSupervised reports whether an unfinished item is a commitment the host
-// enforces (an active goal or plan mode) rather than the model's own note. It
-// reads active() rather than deliveryScope(): frontends call this on the meta
+// enforces (an active goal, plan mode, or the delivery floor — the same clause
+// that arms the final-readiness gate) rather than the model's own note. It reads
+// active() rather than deliveryScope() because frontends call this on the meta
 // path, and a display read must not assign a goal scope id.
 func (c *Controller) TodosSupervised() bool {
 	if c.goals.active() {
@@ -46,5 +47,5 @@ func (c *Controller) TodosSupervised() bool {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return c.sessionSettings.planMode
+	return c.sessionSettings.planMode || c.sessionSettings.qualityFloor == QualityFloorDelivery
 }
