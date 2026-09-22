@@ -3683,6 +3683,10 @@ export function Composer({
   // while a decision surface owns the footer; without it the reservation would
   // hold a strip's height open with nothing to draw in it.
   const showRunStrip = Boolean((running && !suspendedByDecision) || retry || waitingPrompt || finishing || runtimeState.unknown || runtimeState.kind === "background_job" || runtimeState.kind === "cancelling");
+  // The strip's dot and the card's perimeter trace must agree about live work: a
+  // detached background job keeps the session busy with no turn to carry the
+  // trace, and the tab dot already breathes for it (tabs.go unions BackgroundJobs).
+  const liveWork = !finishing && !runtimeState.unknown && (running || runtimeState.kind === "background_job");
   const effectiveComposerHeight = composerHeight === null
     ? null
     : resolveComposerContentSizing({
@@ -4484,11 +4488,11 @@ export function Composer({
         <span>{t("runtime.unconfirmed")}</span>
       </div>}
       <div
-        className={`composer-card${composerHeight !== null || composerResizing ? " composer-card--resized" : ""}${composerAutoExpanded ? " composer-card--autosized" : ""}${composerAutoOverflow ? " composer-card--auto-overflow" : ""}${composerResizing ? " composer-card--resizing" : ""}${running && !finishing && !runtimeState.unknown ? (waitingPrompt ? " composer-card--waiting" : " composer-card--running") : ""}`}
+        className={`composer-card${composerHeight !== null || composerResizing ? " composer-card--resized" : ""}${composerAutoExpanded ? " composer-card--autosized" : ""}${composerAutoOverflow ? " composer-card--auto-overflow" : ""}${composerResizing ? " composer-card--resizing" : ""}${liveWork ? (waitingPrompt ? " composer-card--waiting" : " composer-card--running") : ""}`}
         ref={composerCardRef}
         style={composerCardStyle}
       >
-        {running && !waitingPrompt && !retry?.recovery?.waiting && (
+        {liveWork && !waitingPrompt && !retry?.recovery?.waiting && (
           <span className="composer-glowring" aria-hidden="true"><i /></span>
         )}
         <button

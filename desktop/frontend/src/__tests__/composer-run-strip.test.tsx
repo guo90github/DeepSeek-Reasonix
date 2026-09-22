@@ -16,6 +16,8 @@ import { createRoot } from "react-dom/client";
 import { Composer } from "../components/Composer";
 import { LocaleProvider } from "../lib/i18n";
 import { ToastProvider } from "../lib/toast";
+import { runtimeStateStore, type RuntimeProjection } from "../lib/runtimeStateStore";
+import { acceptRuntimeState } from "../lib/runtimeStateReducer";
 import type { CollaborationMode, ToolApprovalMode } from "../lib/types";
 
 let passed = 0;
@@ -749,6 +751,35 @@ console.log("\ncomposer run strip");
     await flushTimers();
   });
   eq(card.style.getPropertyValue("--composer-height"), "140px", "reset restores the 140px default after manual resizing");
+
+  await act(async () => {
+    root.unmount();
+  });
+  dom.window.close();
+}
+
+// A detached background job is live work with no turn behind it: the strip and
+// the card's perimeter trace must light together, the way the tab dot already
+// does for a session whose jobs outlive their turn.
+{
+  const dom = installDom();
+  const snapshot: RuntimeProjection = { epoch: "background-job-test", revision: 1, topics: [], sessions: [{
+    tabId: "tab-bg", scope: "project", workspaceRoot: "/repo", topicId: "topic", sessionPath: "session-bg", sessionGeneration: 1,
+    open: true, remote: false, freshness: "synced", state: { schemaVersion: 1, runtimeEpoch: "controller", revision: 1,
+      phase: "idle", running: false, turnId: "turn", turnStatus: "completed", turnEventSeq: 3,
+      pendingPrompt: false, cancelRequested: false, cancellable: false, backgroundJobs: 1, activity: "" },
+  }] };
+  acceptRuntimeState(runtimeStateStore, snapshot, true);
+  const { root } = await renderComposer({ tabId: "tab-bg", inboxSessionPath: "session-bg" });
+
+  eq(document.querySelector(".composer-run-strip__text")?.textContent, "Background jobs running (1)",
+    "a detached background job owns the run strip");
+  eq(document.querySelector(".composer-run-strip__dot")?.getAttribute("aria-hidden"), "true",
+    "the strip marks the background job with its dot");
+  ok(document.querySelector(".composer-card--running") !== null,
+    "a background job keeps the card's running modifier");
+  eq(document.querySelector(".composer-glowring")?.getAttribute("aria-hidden"), "true",
+    "a background job mounts the same perimeter trace as model execution");
 
   await act(async () => {
     root.unmount();
