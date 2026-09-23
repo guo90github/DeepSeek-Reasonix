@@ -306,10 +306,21 @@ func (ag *authGate) handleTokenBootstrap(w http.ResponseWriter, r *http.Request)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// checkToken validates the token from a cookie or the legacy query parameter.
-// New links use a URL fragment and handleTokenBootstrap; query links remain
-// supported so previously shared URLs keep working.
+// checkToken validates the token from a cookie, the legacy query parameter, or
+// an Authorization: Bearer header. New links use a URL fragment and
+// handleTokenBootstrap; query links remain supported so previously shared URLs
+// keep working.
 func (ag *authGate) checkToken(w http.ResponseWriter, r *http.Request, next http.Handler) {
+	// A bearer credential is how a non-browser caller — the supervisor that
+	// manages this serve — authenticates: a cross-origin page cannot set
+	// Authorization without a preflight this server never answers.
+	if scheme, credential, ok := strings.Cut(r.Header.Get("Authorization"), " "); ok &&
+		strings.EqualFold(scheme, "Bearer") &&
+		subtle.ConstantTimeCompare([]byte(credential), []byte(ag.token)) == 1 {
+		next.ServeHTTP(w, r)
+		return
+	}
+
 	// 1. Check cookie first (fast path).
 	if c, err := r.Cookie(cookieToken); err == nil && strings.TrimSpace(c.Value) != "" {
 		if subtle.ConstantTimeCompare([]byte(c.Value), []byte(ag.token)) == 1 {
