@@ -4,7 +4,9 @@
 // single column renders; split dissolves that shell into the .chat-pane grid,
 // so a pending recovery was reachable only after switching layouts. The notice
 // also had no close control, and a plain refresh unmounted it — which re-opened
-// whatever the reader had just collapsed or closed.
+// whatever the reader had just collapsed or closed. Closing is now remembered
+// per session by the calls the notice names, so neither snapshot churn
+// (revision, runtime epoch) nor a remount brings the closed notice back.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import React, { act } from "react";
@@ -24,7 +26,7 @@ const stubMatchMedia = () => ({
   dispatchEvent: () => false,
 });
 
-const dom = new JSDOM("<div id='root'></div><div id='panel'></div><div id='action'></div>", { url: "http://localhost", pretendToBeVisual: true });
+const dom = new JSDOM("<div id='root'></div><div id='panel'></div><div id='remount'></div><div id='action'></div>", { url: "http://localhost", pretendToBeVisual: true });
 Object.assign(globalThis, {
   window: dom.window,
   document: dom.window.document,
@@ -124,28 +126,52 @@ try {
 
   await paintPanel(0);
   assert.ok(document.querySelector("#panel .tool-recovery-panel"), "the entry renders while a call needs resolution");
-  await act(async () => document.querySelector<HTMLButtonElement>("#panel .tool-recovery-panel__dismiss")!.click());
-  assert.equal(document.querySelector("#panel .tool-recovery-panel"), null, "关闭 closes the notice");
-  await paintPanel(1);
-  assert.ok(fetches >= 2, "an arriving item re-reads the recovery state");
-  assert.equal(document.querySelector("#panel .tool-recovery-panel"), null, "an arriving item does not reopen the closed notice");
 
-  // 3. A later interruption is not covered by the earlier dismissal: the closed
-  // notice identity carries the server revision, so rev-2 shows again.
-  snapshot = { ...pending, revision: "rev-2" };
-  await paintPanel(2);
-  assert.ok(document.querySelector("#panel .tool-recovery-panel"), "a later recovery notice is not silenced by the old dismissal");
-
-  // 4. Collapsing keeps the title in view; a refresh used to remount the panel
+  // 3. Collapsing keeps the title in view; a refresh used to remount the panel
   // open, so a collapse never stuck.
   const details = (): HTMLDetailsElement => document.querySelector("#panel .tool-recovery-panel > details")!;
   await act(async () => { details().open = false; details().dispatchEvent(new dom.window.Event("toggle", { bubbles: true })); });
   assert.equal(details().open, false, "the notice collapses");
-  await paintPanel(3);
+  await paintPanel(1);
   assert.equal(details().open, false, "a refresh keeps the collapsed notice collapsed");
+
+  // 4. Closing the notice must survive the items that keep arriving behind it:
+  // the panel used to blank itself on every refresh, with no close control.
+  await act(async () => document.querySelector<HTMLButtonElement>("#panel .tool-recovery-panel__dismiss")!.click());
+  assert.equal(document.querySelector("#panel .tool-recovery-panel"), null, "关闭 closes the notice");
+  await paintPanel(2);
+  assert.ok(fetches >= 3, "an arriving item re-reads the recovery state");
+  assert.equal(document.querySelector("#panel .tool-recovery-panel"), null, "an arriving item does not reopen the closed notice");
+
+  // 5. Snapshot churn is not a later interruption: the server revision hashes
+  // statistics and the runtime epoch, so a moved revision used to reopen the
+  // closed notice while the same call was still the only one pending.
+  snapshot = { ...pending, revision: "rev-2", runtimeEpoch: "epoch-2" };
+  await paintPanel(3);
+  assert.equal(document.querySelector("#panel .tool-recovery-panel"), null,
+    "a moved revision or runtime epoch does not reopen the closed notice");
   await act(async () => panelRoot.unmount());
 
-  // 5. A refresh landing mid-action must not leave the notice busy: the actions
+  // 6. The dismissal is remembered per session, not by component state: a
+  // remount (tab, layout or preview key) used to reopen the closed notice.
+  const remountRoot = createRoot(document.getElementById("remount")!);
+  const paintRemount = (refreshKey: number) => act(async () => remountRoot.render(
+    <LocaleProvider>
+      <ToolRecoveryPanel tabId="panel-tab" sessionKey="panel-tab" running={false} refreshKey={refreshKey}
+        bindings={bindings} onResume={noop} />
+    </LocaleProvider>,
+  ));
+  await paintRemount(0);
+  assert.equal(document.querySelector("#remount .tool-recovery-panel"), null,
+    "a remount of the same session keeps the closed notice closed");
+
+  // A newly interrupted call carries its own attempt id, so it is not covered.
+  snapshot = { ...pending, revision: "rev-3", calls: [pendingCall, { ...pendingCall, identity: { ...pendingCall.identity, attempt_id: "attempt-2" } }] };
+  await paintRemount(1);
+  assert.ok(document.querySelector("#remount .tool-recovery-panel"), "a newly interrupted call is not silenced by the old dismissal");
+  await act(async () => remountRoot.unmount());
+
+  // 7. A refresh landing mid-action must not leave the notice busy: the actions
   // would stay disabled with no way to reach the call again.
   let settle: ((value: ToolRecoverySnapshot) => void) | undefined;
   const actionBindings = {
@@ -169,7 +195,7 @@ try {
   assert.equal(inspectButton()!.disabled, false, "a refresh mid-action does not leave the notice stuck busy");
   await act(async () => actionRoot.unmount());
 
-  console.log("PASS split tool recovery: the entry mounts above both panes, closes, and stays closed");
+  console.log("PASS split tool recovery: the entry mounts above both panes, closes, and survives churn and remounts");
 } finally {
   host.uninstall();
   dom.window.close();

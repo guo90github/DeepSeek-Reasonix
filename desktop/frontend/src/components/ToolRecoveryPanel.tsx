@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
+import { readToolRecoveryDismissal, toolRecoveryNoticeKey, writeToolRecoveryDismissal } from "../lib/toolRecoveryDismissal";
 import type { RecoveryCall, ToolRecoveryBindings, ToolRecoveryRequest, ToolRecoverySnapshot } from "../lib/toolRecovery";
 import "./ToolRecoveryPanel.css";
 
@@ -15,9 +16,9 @@ export function ToolRecoveryPanel({ tabId, sessionKey, running, refreshKey, onRe
   const [error, setError] = useState("");
   const [resolved, setResolved] = useState(false);
   const [open, setOpen] = useState(true);
-  // Identity of the notice the user closed. A later notice carries a different
-  // session/revision, so an unresolved interruption is never hidden forever.
-  const [dismissed, setDismissed] = useState("");
+  // Per session, so a remount (tab, layout, preview key) does not reopen a
+  // closed notice. A newly interrupted call changes the identity and shows.
+  const [dismissed, setDismissed] = useState(() => readToolRecoveryDismissal(sessionKey));
   const structuralKey = `${tabId}\u0000${sessionKey}\u0000${running}`;
   const structuralRef = useRef(structuralKey);
   useEffect(() => {
@@ -65,7 +66,7 @@ export function ToolRecoveryPanel({ tabId, sessionKey, running, refreshKey, onRe
       setBusy(false);
     }
   };
-  const noticeKey = `${snapshot?.sessionPath ?? ""}\u0000${snapshot?.revision ?? ""}\u0000${error}`;
+  const noticeKey = toolRecoveryNoticeKey(snapshot?.sessionPath ?? "", snapshot?.calls ?? []);
   if (dismissed !== "" && dismissed === noticeKey) return null;
   if (!snapshot?.calls.length && !snapshot?.silent && !error && !resolved) return null;
   return <section className="notice-line notice-line--warn tool-recovery-panel" aria-label={t("toolRecovery.title")} aria-busy={busy}>
@@ -93,6 +94,6 @@ export function ToolRecoveryPanel({ tabId, sessionKey, running, refreshKey, onRe
     </div>
     </details>
     <button type="button" className="btn btn--ghost btn--small tool-recovery-panel__dismiss"
-      onClick={() => setDismissed(noticeKey)}>{t("common.close")}</button>
+      onClick={() => { writeToolRecoveryDismissal(sessionKey, noticeKey); setDismissed(noticeKey); }}>{t("common.close")}</button>
   </section>;
 }
