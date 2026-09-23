@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/control"
 	"reasonix/internal/sessioninbox"
 )
@@ -90,6 +91,18 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 	if intent == sessioninbox.IntentSteer && strings.TrimSpace(r.Header.Get(sessionPathHeader)) == "" {
 		slog.Warn("inbox: steer without a session path; it lands in the foreground session", "source", "http")
 	}
+	// A wake must not die on a stale address — the sending session captured this
+	// path at MCP spawn, so a window whose tabs moved on would answer 409
+	// forever. Only a steer degrades to the foreground; a follow-up is refused.
+	requested := agent.CanonicalSessionPath(strings.TrimSpace(r.Header.Get(sessionPathHeader)))
+	if err := s.activateAddressedSession(requested); err != nil {
+		if intent != sessioninbox.IntentSteer {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		slog.Warn("inbox: addressed session is not open here; the steer lands in the foreground session",
+			"err", err, "requested", requested)
+	}
 	api := s.inboxAPI()
 	if ensurer, ok := any(api).(interface{ EnsureSessionPath() }); ok {
 		ensurer.EnsureSessionPath()
@@ -117,6 +130,9 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 		writeInboxError(w, err)
 		return
 	}
+	// Where it really landed: a steer that fell back reports the foreground
+	// session here, so the sender can tell a blind delivery from the named one.
+	w.Header().Set(sessionPathHeader, agent.CanonicalSessionPath(s.ctl().SessionPath()))
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(rec)

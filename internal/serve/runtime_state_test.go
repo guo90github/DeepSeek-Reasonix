@@ -386,3 +386,65 @@ func TestRuntimeStateInboxReceiptRetainsRichFollowupAndSessionFence(t *testing.T
 		t.Fatalf("receipt lookup crossed session fence: status=%d", wrong.StatusCode)
 	}
 }
+
+// A remote wake names the session it belongs to in X-Reasonix-Session-Path.
+// POST /inbox/items answers 202 whether or not that address is honoured, so a
+// steer queued behind the wrong tab is invisible to whoever sent it.
+func TestInboxSteerRoutesToAddressedSession(t *testing.T) {
+	dir := t.TempDir()
+	foreground := runtimeStateServeController(t, dir, "foreground", nil)
+	runner := runtimeStateServeRunner{started: make(chan struct{})}
+	target := runtimeStateServeController(t, dir, "target", runner)
+	target.Send("hold addressed turn")
+	select {
+	case <-runner.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("addressed runner did not start")
+	}
+
+	server := New(foreground, nil, config.ServeConfig{})
+	activated := ""
+	server.SetSessionActivator(func(path string) error {
+		activated = agent.CanonicalSessionPath(path)
+		return nil
+	})
+	// The host's foreground resolver follows its active tab, so this mirrors the
+	// desktop: activating the addressed session moves the foreground onto it.
+	server.SetForegroundProvider(func() (control.SessionAPI, bool) {
+		if activated != "" {
+			return target, true
+		}
+		return foreground, true
+	})
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+
+	req, err := http.NewRequest(http.MethodPost, httpServer.URL+"/inbox/items",
+		strings.NewReader(`{"input":"room wake","intent":"steer"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(sessionPathHeader, target.SessionPath())
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("addressed steer status=%d, want 202", response.StatusCode)
+	}
+	var enqueued sessioninbox.InboxReceipt
+	if err := json.NewDecoder(response.Body).Decode(&enqueued); err != nil {
+		t.Fatal(err)
+	}
+	if want := agent.CanonicalSessionPath(target.SessionPath()); activated != want {
+		t.Fatalf("serve activated %q, want %q", activated, want)
+	}
+	if _, envelope, err := target.ReadInboxItem(enqueued.ItemID); err != nil || envelope.DisplayText != "room wake" {
+		t.Fatalf("addressed session did not receive the steer: envelope=%+v err=%v", envelope, err)
+	}
+	if _, _, err := foreground.ReadInboxItem(enqueued.ItemID); err == nil {
+		t.Fatal("addressed steer was also queued in the foreground session")
+	}
+}

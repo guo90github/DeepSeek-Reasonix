@@ -126,17 +126,23 @@ func (s *Server) sessionActivatorFunc() func(string) error {
 // a refusal is already written to w.
 func (s *Server) activateSubmitTarget(w http.ResponseWriter, r *http.Request) (string, bool) {
 	target := agent.CanonicalSessionPath(strings.TrimSpace(r.Header.Get(sessionPathHeader)))
-	if target == "" || agent.CanonicalSessionPath(strings.TrimSpace(s.ctl().SessionPath())) == target {
-		return target, true
-	}
-	activate := s.sessionActivatorFunc()
-	if activate == nil {
-		http.Error(w, "session is not the foreground one and this host cannot switch to it", http.StatusConflict)
-		return target, false
-	}
-	if err := activate(target); err != nil {
+	if err := s.activateAddressedSession(target); err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return target, false
 	}
 	return target, true
+}
+
+// activateAddressedSession activates an addressed session without writing a
+// response, so a caller that must not fail a delivery (a remote wake) can fall
+// back to the foreground instead of refusing it.
+func (s *Server) activateAddressedSession(target string) error {
+	if target == "" || agent.CanonicalSessionPath(strings.TrimSpace(s.ctl().SessionPath())) == target {
+		return nil
+	}
+	activate := s.sessionActivatorFunc()
+	if activate == nil {
+		return errors.New("session is not the foreground one and this host cannot switch to it")
+	}
+	return activate(target)
 }
