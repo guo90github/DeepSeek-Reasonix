@@ -763,11 +763,9 @@ func (a *Agent) closeSteerIntakeIfIdle() bool {
 	return true
 }
 
-// flushSteerQueue ends the turn's steer intake. Guidance that arrived too late
-// to be consumed is persisted for transcript visibility but marked local-only:
-// replaying it to the model on the next unrelated user turn can execute a stale
-// historical task (#7045). An explicit warning keeps the transcript honest
-// without presenting the text as successfully applied guidance (#6238).
+// flushSteerQueue ends the turn's steer intake. Local guidance that arrived too
+// late is persisted local-only: replaying it on the next unrelated turn can
+// execute a stale task (#7045). A durable item stays unconsumed instead.
 func (a *Agent) flushSteerQueue() {
 	a.steerMu.Lock()
 	pending := a.steerQueue
@@ -780,6 +778,10 @@ func (a *Agent) flushSteerQueue() {
 	a.steerMu.Unlock()
 	unapplied := false
 	for _, e := range pending {
+		if e.itemID != "" { // durable: the host re-queues it as its own turn
+			unapplied = true
+			continue
+		}
 		text := e.text
 		if e.load != nil {
 			if t, err := e.load(); errors.Is(err, ErrSteerWithdrawn) {

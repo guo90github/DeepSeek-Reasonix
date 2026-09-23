@@ -311,6 +311,13 @@ func (s *Store) MarkAcceptedSteerUncertain(id, reason string) error {
 	return s.transitionAcceptedSteer(id, StateUncertain, reason, false)
 }
 
+// RequeueAcceptedSteer puts an accepted steer the turn never applied back in the
+// queue. AckDequeue would delete it — an acknowledged wake that never runs —
+// while a queued item is dispatched as its own turn (NextQueued admits steer).
+func (s *Store) RequeueAcceptedSteer(id string) error {
+	return s.transitionAcceptedSteer(id, StateQueued, "", false)
+}
+
 func (s *Store) transitionAcceptedSteer(id string, target InboxState, blockReason string, consumedIdempotent bool) error {
 	if s == nil {
 		return ErrClosed

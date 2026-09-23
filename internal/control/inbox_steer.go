@@ -3,6 +3,7 @@ package control
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"reasonix/internal/agent"
@@ -199,4 +200,24 @@ func (c *Controller) trySteerInboxItem(id, expectedTurnID string) (sessioninbox.
 		Paused:      st.Snapshot().Paused,
 		Capacity:    cap,
 	}, nil
+}
+
+// requeueUnappliedSteer returns a steer the turn accepted but never applied to
+// the queue, reporting whether it did. Acknowledging it deletes the guidance —
+// an admitted wake that never runs — while a queued item is dispatched as its
+// own turn, which is what a caller that counted on a turn needs.
+func (c *Controller) requeueUnappliedSteer(id string) bool {
+	st, err := c.ensureInbox()
+	if err != nil {
+		return false
+	}
+	meta, _, err := st.ReadItem(id)
+	if err != nil || meta.State != sessioninbox.StateSteerAccepted {
+		return false
+	}
+	if err := st.RequeueAcceptedSteer(id); err != nil {
+		slog.Warn("controller: inbox steer requeue", "err", err, "id", id)
+		return false
+	}
+	return true
 }

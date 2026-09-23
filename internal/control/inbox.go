@@ -648,9 +648,8 @@ func (c *Controller) receiptForAdmissionResult(id string, st *sessioninbox.Store
 }
 
 // onInboxTurnDone acknowledges durable completion of every active inbox item
-// (running follow-up + all steers accepted this turn). Dispatch of the next
-// item is deferred until the finishing window closes so admission is not
-// rejected as busy.
+// (running follow-up + all steers accepted this turn; a steer the turn never
+// applied is re-queued rather than deleted). Dispatch waits for finishing.
 func (c *Controller) onInboxTurnDone() {
 	c.inbox.mu.Lock()
 	// Keep these IDs published as live ownership while SnapshotActivity runs.
@@ -687,7 +686,14 @@ func (c *Controller) onInboxTurnDone() {
 		beforeAck()
 	}
 	ackFailed := false
+	requeued := false
 	for _, id := range ids {
+		// A steer the turn never consumed is not complete: the loader is the only
+		// marker of consumption, so it goes back to the queue rather than the ack.
+		if c.requeueUnappliedSteer(id) {
+			requeued = true
+			continue
+		}
 		if err := st.AckDequeue(id); err != nil {
 			if errors.Is(err, sessioninbox.ErrNotFound) {
 				continue
@@ -696,6 +702,9 @@ func (c *Controller) onInboxTurnDone() {
 			_ = st.SetState(id, sessioninbox.StateUncertain, "turn completed but inbox acknowledgement failed")
 			ackFailed = true
 		}
+	}
+	if requeued {
+		c.maybeDispatchInbox() // the sync path (bot/ACP) finished already: nothing else kicks it
 	}
 	if ackFailed {
 		_ = st.SetPaused(true)
