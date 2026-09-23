@@ -14,16 +14,27 @@ export function ToolRecoveryPanel({ tabId, sessionKey, running, refreshKey, onRe
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [resolved, setResolved] = useState(false);
+  const [open, setOpen] = useState(true);
+  // Identity of the notice the user closed. A later notice carries a different
+  // session/revision, so an unresolved interruption is never hidden forever.
+  const [dismissed, setDismissed] = useState("");
+  const structuralKey = `${tabId}\u0000${sessionKey}\u0000${running}`;
+  const structuralRef = useRef(structuralKey);
   useEffect(() => {
+    // Only a different tab, session or run state resets the view. A plain
+    // refresh (more items arriving) used to unmount the panel on every item,
+    // which re-opened a collapsed or dismissed notice as often as it changed.
+    const structural = structuralRef.current !== structuralKey;
+    structuralRef.current = structuralKey;
     const own = ++generation.current;
-    setSnapshot(null); setError(""); setBusy(false); setResolved(false);
+    if (structural) { setSnapshot(null); setError(""); setBusy(false); setResolved(false); }
     if (!running && bindings.GetToolRecoveryForTab) {
       void bindings.GetToolRecoveryForTab(tabId).then(next => {
         if (generation.current === own) setSnapshot(next);
       }).catch(err => { if (generation.current === own) setError(String(err)); });
     }
     return () => { generation.current++; };
-  }, [bindings, tabId, sessionKey, running, refreshKey]);
+  }, [bindings, tabId, sessionKey, running, refreshKey, structuralKey]);
 
   const act = async (call: RecoveryCall, action: ToolRecoveryRequest["action"]) => {
     if (!snapshot || busy || running || !bindings.ResolveToolRecoveryForTab) return;
@@ -47,11 +58,18 @@ export function ToolRecoveryPanel({ tabId, sessionKey, running, refreshKey, onRe
           }
         } catch { /* Keep the original error and its action identity visible. */ }
       }
-    } finally { if (generation.current === own) setBusy(false); }
+    } finally {
+      // Never guarded by the fetch generation: a refresh that landed mid-action
+      // used to be the only thing that cleared this, so guarding it here would
+      // leave the panel permanently busy and its actions disabled.
+      setBusy(false);
+    }
   };
+  const noticeKey = `${snapshot?.sessionPath ?? ""}\u0000${snapshot?.revision ?? ""}\u0000${error}`;
+  if (dismissed !== "" && dismissed === noticeKey) return null;
   if (!snapshot?.calls.length && !snapshot?.silent && !error && !resolved) return null;
   return <section className="notice-line notice-line--warn tool-recovery-panel" aria-label={t("toolRecovery.title")} aria-busy={busy}>
-    <details open>
+    <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary className="notice-line__title">{t("toolRecovery.title")}</summary>
     <div className="notice-line__text">
       {error && <p role="alert">{error}</p>}
@@ -74,5 +92,7 @@ export function ToolRecoveryPanel({ tabId, sessionKey, running, refreshKey, onRe
       {(resolved || snapshot?.silent) && onResume && <button type="button" className="btn btn--small" disabled={busy || running} onClick={onResume}>{t("toolRecovery.resume")}</button>}
     </div>
     </details>
+    <button type="button" className="btn btn--ghost btn--small tool-recovery-panel__dismiss"
+      onClick={() => setDismissed(noticeKey)}>{t("common.close")}</button>
   </section>;
 }

@@ -31,6 +31,21 @@
   display: contents;
 }
 
+/* The tool-recovery entry has no pane of its own either: it rides out of flow
+   across both panes, full width under the topicbar, exactly as the single
+   column mounts it over the transcript instead of in the scrolling list. */
+.chat-pane--split .split-recovery-host {
+  position: absolute;
+  top: var(--topicbar-height);
+  inset-inline: 0;
+  z-index: var(--z-inline-sticky);
+}
+
+.chat-pane--split .split-recovery-host > .tool-recovery-panel {
+  position: static;
+  margin: 8px 12px 0;
+}
+
 /* The floating dock launcher card has no in-flow slot here (the panes own row
    2), so the host floats it over the process pane's top-right corner. The host
    spans the surface out of flow — never a fourth grid item — and its width is

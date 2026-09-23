@@ -12,6 +12,7 @@ import type { SessionAvailability } from "../lib/sessionAvailability";
 
 const RemoteSessionSurface = lazy(() => import("../components/RemoteSessionSurface").then((module) => ({ default: module.RemoteSessionSurface })));
 const SplitWorkspace = lazy(() => import("../components/SplitWorkspace").then((module) => ({ default: module.SplitWorkspace })));
+const ToolRecoveryPanel = lazy(() => import("../components/ToolRecoveryPanel").then((module) => ({ default: module.ToolRecoveryPanel })));
 const SidebarImConnectionDetail = lazy(() => import("./SidebarImConnectionDetail").then((module) => ({ default: module.SidebarImConnectionDetail })));
 
 export type ChatPaneTranscriptInput = {
@@ -118,6 +119,21 @@ export function ChatPaneRegion(props: ChatPaneRegionProps) {
     }
     return (
       <main className="main main--split">
+        {/* The pane grid dissolves <main>, so this host claims no grid cell: it
+            rides out of flow across both panes, the placement the transcript
+            shell gives the same entry in the single column. */}
+        {transcript.tabId && <Suspense fallback={null}>
+          <div className="split-recovery-host">
+            <ToolRecoveryPanel
+              key={transcript.geometrySessionKey ?? transcript.tabId}
+              tabId={transcript.tabId}
+              sessionKey={transcript.geometrySessionKey ?? `tab:${transcript.tabId}`}
+              running={state.running || rewind.committing}
+              refreshKey={transcript.items.length}
+              onResume={() => commands.onPrompt(t("toolRecovery.resumePrompt"))}
+            />
+          </div>
+        </Suspense>}
         <Suspense fallback={null}>
           <SplitWorkspace
             items={transcript.items}
