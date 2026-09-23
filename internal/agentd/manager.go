@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -21,6 +22,9 @@ const (
 	probeTimeout  = 5 * time.Second
 	launchWait    = 45 * time.Second
 	readyPoll     = 250 * time.Millisecond
+	// shutdownWait outlasts the serve's own drain (10s), so a retirement that
+	// does land is never cut short by the manager's own deadline.
+	shutdownWait = 20 * time.Second
 )
 
 // Manager owns the managed instances of one Reasonix home: it allocates their
@@ -36,23 +40,26 @@ type Manager struct {
 	client *http.Client
 	now    func() time.Time
 
-	// launchWait and backoff are the seams tests drive: the launch window a
-	// child gets to answer /status, and the delay between restart attempts.
-	launchWait time.Duration
-	backoff    func(int) time.Duration
+	// launchWait, shutdownWait and backoff are the seams tests drive: the window
+	// a child gets to answer /status, the window a retiring instance gets to
+	// exit on its own, and the delay between restart attempts.
+	launchWait   time.Duration
+	shutdownWait time.Duration
+	backoff      func(int) time.Duration
 }
 
 // NewManager manages the instances recorded under home.
 func NewManager(home string) *Manager {
 	return &Manager{
-		home:       home,
-		registry:   RegistryPath(home),
-		live:       map[string]*Process{},
-		watch:      map[string]*watchState{},
-		client:     &http.Client{Timeout: probeTimeout},
-		now:        func() time.Time { return time.Now().UTC() },
-		launchWait: launchWait,
-		backoff:    backoffDelay,
+		home:         home,
+		registry:     RegistryPath(home),
+		live:         map[string]*Process{},
+		watch:        map[string]*watchState{},
+		client:       &http.Client{Timeout: probeTimeout},
+		now:          func() time.Time { return time.Now().UTC() },
+		launchWait:   launchWait,
+		shutdownWait: shutdownWait,
+		backoff:      backoffDelay,
 	}
 }
 
@@ -70,9 +77,13 @@ func (m *Manager) Up(ctx context.Context, spec Spec) (Record, error) {
 		return Record{}, err
 	}
 	m.mu.Lock()
-	already := m.live[spec.Name] != nil
+	live := m.live[spec.Name]
+	retiring := live != nil && live.retiring
 	m.mu.Unlock()
-	if already {
+	switch {
+	case retiring:
+		return Record{}, fmt.Errorf("agentd: %s is being retired; retry once it stops", spec.Name)
+	case live != nil:
 		return Record{}, fmt.Errorf("agentd: %s is already managed by this process", spec.Name)
 	}
 	managed, err := Spawn(ctx, spec)
@@ -100,32 +111,68 @@ func (m *Manager) Up(ctx context.Context, spec Spec) (Record, error) {
 	return rec, nil
 }
 
-// Down stops one instance: the record goes first so a concurrent sweep cannot
-// restart what the caller is deliberately retiring, then the process tree dies.
+// Down stops one instance. The name stays managed until the retirement lands, so
+// a concurrent Up is told what is happening instead of racing the session lease;
+// the registry record leaves first, because a sweep restarts whatever its own
+// snapshot still lists.
 func (m *Manager) Down(name string) error {
 	m.mu.Lock()
 	managed := m.live[name]
-	delete(m.live, name)
-	delete(m.watch, name)
+	switch {
+	case managed == nil:
+	case managed.retiring:
+		// Another call is already retiring it; the stop it asked for is in flight.
+		m.mu.Unlock()
+		return nil
+	default:
+		managed.retiring = true
+	}
 	m.mu.Unlock()
+	releaseClaim := func() {
+		m.mu.Lock()
+		if claimed := m.live[name]; claimed != nil {
+			claimed.retiring = false
+		}
+		m.mu.Unlock()
+	}
 
 	reg, err := LoadRegistry(m.registry)
 	if err != nil {
+		releaseClaim()
 		return err
 	}
 	_, known := reg.Find(name)
 	if managed == nil && !known {
 		return fmt.Errorf("agentd: %s is not managed here", name)
 	}
-	if managed != nil {
-		managed.Stop()
-	}
 	pruned, _ := reg.Remove(name)
-	return SaveRegistry(m.registry, pruned)
+	saveErr := SaveRegistry(m.registry, pruned)
+	m.retire(managed)
+	m.mu.Lock()
+	delete(m.live, name)
+	delete(m.watch, name)
+	m.mu.Unlock()
+	return saveErr
 }
 
-// StopAll retires every instance this manager started, which is what a
-// supervising `agents up` does on Ctrl-C.
+// retire stops one instance in the order that loses no work: ask it to end its
+// turn and then itself, and kill the tree only when it does not go in time. A
+// serve killed mid-turn loses that turn; a serve that is asked writes it out.
+func (m *Manager) retire(managed *Process) {
+	if managed == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), m.shutdownWait)
+	defer cancel()
+	if err := managed.Retire(ctx, m.client); err != nil {
+		slog.Warn("agentd: retiring by request failed; killing the tree", "instance", managed.Record.Name, "err", err)
+		managed.Stop()
+	}
+}
+
+// StopAll kills every instance this manager started, which is what a
+// supervising `agents up` does on Ctrl-C: the supervisor is leaving, so its
+// kill-on-close job ends them anyway and draining would only stall the interrupt.
 func (m *Manager) StopAll() {
 	m.mu.Lock()
 	live := m.live

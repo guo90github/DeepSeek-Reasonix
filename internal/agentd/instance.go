@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"maps"
 	"net/http"
 	"os"
@@ -50,6 +51,13 @@ type Process struct {
 	cmd    *exec.Cmd
 	job    uintptr
 	log    *os.File
+	// exited closes when the child ends on its own, which is what a deliberate
+	// retirement waits for instead of killing the tree.
+	exited chan struct{}
+	// retiring is set under the manager's lock while a stop is in flight: a
+	// second Down joins it instead of retiring twice, and Up refuses instead of
+	// racing the session lease with a stop that has not landed yet.
+	retiring bool
 }
 
 // Spawn starts one serve process. It does not wait for health: the caller
@@ -90,21 +98,26 @@ func Spawn(ctx context.Context, spec Spec) (*Process, error) {
 		return nil, fmt.Errorf("agentd: start %s: %w", spec.Name, err)
 	}
 	rec.PID = cmd.Process.Pid
-	return &Process{Record: rec, cmd: cmd, job: job, log: logFile}, nil
+	exited := make(chan struct{})
+	// Reaping is owed whoever ends the child; it also releases a process handle
+	// that a retirement would otherwise leak.
+	go func() {
+		_ = cmd.Wait()
+		close(exited)
+	}()
+	return &Process{Record: rec, cmd: cmd, job: job, log: logFile, exited: exited}, nil
 }
 
 // Probe asks the instance's /status with the instance's own token: the same
 // credential a coordinator must present, so a probe proves that path too.
 func (p *Process) Probe(ctx context.Context, client *http.Client) error {
-	token, err := readToken(p.Record.TokenFile)
-	if err != nil {
-		return err
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, p.Record.URL()+"/status", nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	if err := p.authorize(req); err != nil {
+		return err
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -116,6 +129,59 @@ func (p *Process) Probe(ctx context.Context, client *http.Client) error {
 	return nil
 }
 
+// Retire stops the instance in the order that loses no work: end the running
+// turn, ask the serve to shut itself down, then wait for the child to exit. A
+// refused cancel is reported rather than fatal: ending this instance is still
+// the caller's intent, and only a refused shutdown falls back to the tree kill.
+func (p *Process) Retire(ctx context.Context, client *http.Client) error {
+	if err := p.command(ctx, client, "/cancel"); err != nil {
+		slog.Warn("agentd: cancel refused; retiring anyway", "instance", p.Record.Name, "err", err)
+	}
+	if err := p.command(ctx, client, "/shutdown"); err != nil {
+		return err
+	}
+	select {
+	case <-p.exited:
+		p.release()
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// command posts one authenticated command with the JSON body csrfGuard demands
+// on every POST. The bearer token is how a non-browser caller authenticates to
+// a token-mode serve, which hands no cookie to anyone.
+func (p *Process) command(ctx context.Context, client *http.Client, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.Record.URL()+path, strings.NewReader("{}"))
+	if err != nil {
+		return err
+	}
+	if err := p.authorize(req); err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return fmt.Errorf("agentd: %s %s returned %s", p.Record.Name, path, resp.Status)
+	}
+	return nil
+}
+
+// authorize attaches the token of the instance this call belongs to.
+func (p *Process) authorize(req *http.Request) error {
+	token, err := readToken(p.Record.TokenFile)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	return nil
+}
+
 // Stop kills the instance and its whole tree: a serve's MCP children must not
 // outlive it, and killing by process name would be unsafe under pid reuse.
 func (p *Process) Stop() {
@@ -123,11 +189,22 @@ func (p *Process) Stop() {
 		return
 	}
 	if p.job != 0 {
+		// KillTracked releases the job handle itself; releasing it twice could
+		// close whatever handle reused the value.
 		proc.KillTracked(p.cmd, p.job)
-		proc.FinishTracked(p.job)
 		p.job = 0
 	} else {
 		proc.KillTree(p.cmd)
+	}
+	p.closeLog()
+}
+
+// release retires a child that has already exited: closing the kill-on-close
+// job still fells the descendants it kept, so none outlives the instance.
+func (p *Process) release() {
+	if p.job != 0 {
+		proc.FinishTracked(p.job)
+		p.job = 0
 	}
 	p.closeLog()
 }

@@ -113,6 +113,10 @@ type Server struct {
 	// submitDelegateFor is the session-aware form: a wake addresses the session
 	// it belongs to (X-Reasonix-Session-Path) instead of the foreground tab.
 	submitDelegateFor func(sessionPath, input string) error
+	// shutdown retires the serve loop on request, so a supervisor can stop an
+	// instance without killing its tree mid-turn. Buffered: a repeated request
+	// must stay a no-op rather than close a channel twice.
+	shutdown chan struct{}
 }
 
 // SetControllerBuildOptions records the process-local options used to build
@@ -140,6 +144,7 @@ func New(ctrl control.SessionAPI, bc *Broadcaster, serveCfg config.ServeConfig) 
 		tags:        map[*control.Controller]*sessionTagSink{},
 		leaseOwners: map[*control.Controller]*control.SessionLeaseKeeper{},
 		mirrored:    map[string]mirroredSession{},
+		shutdown:    make(chan struct{}, 1),
 	}
 	bc.SetCurrentSession(agent.CanonicalSessionPath(ctrl.SessionPath()))
 	if cfg, err := config.Load(); err == nil {
@@ -637,7 +642,20 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /skills", s.skills)
 	mux.HandleFunc("GET /todos", s.todos)
 	mux.HandleFunc("POST /delete-session", s.deleteSession)
+	mux.HandleFunc("POST /shutdown", s.requestShutdown)
 	return logMiddleware(gzipMiddleware(s.auth.middleware(s.hostGuard(csrfGuard(mux)))))
+}
+
+// requestShutdown retires the serve loop on a coordinator's request: it is how
+// a managed instance stops without the supervisor killing its tree, so an
+// in-flight turn is never cut mid-write. Deliberately outside foregroundMutation
+// — a busy turn is exactly when this must still land.
+func (s *Server) requestShutdown(w http.ResponseWriter, _ *http.Request) {
+	select {
+	case s.shutdown <- struct{}{}:
+	default:
+	}
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (s *Server) reloadExtensionsHTTP(w http.ResponseWriter, r *http.Request) {
@@ -683,14 +701,9 @@ func (s *Server) RunGracefulListener(ctx context.Context, ln net.Listener) error
 	go func() {
 		errCh <- srv.Serve(ln)
 	}()
-	select {
-	case err := <-errCh:
-		if errors.Is(err, http.ErrServerClosed) {
-			return nil
-		}
-		return err
-	case <-ctx.Done():
-		slog.Info("serve: shutting down gracefully")
+	// drain stops accepting and waits out in-flight handlers; a signal and the
+	// child's own shutdown request share it, so both leave the same evidence.
+	drain := func() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(shutdownCtx); err != nil {
@@ -701,6 +714,19 @@ func (s *Server) RunGracefulListener(ctx context.Context, ln net.Listener) error
 			return nil
 		}
 		return err
+	}
+	select {
+	case err := <-errCh:
+		if errors.Is(err, http.ErrServerClosed) {
+			return nil
+		}
+		return err
+	case <-ctx.Done():
+		slog.Info("serve: shutting down gracefully", "cause", "signal")
+		return drain()
+	case <-s.shutdown:
+		slog.Info("serve: shutting down gracefully", "cause", "request")
+		return drain()
 	}
 }
 

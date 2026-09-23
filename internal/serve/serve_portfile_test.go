@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,6 +14,11 @@ import (
 )
 
 func newListenerTestServer(t *testing.T) *Server {
+	t.Helper()
+	return newListenerTestServerWithConfig(t, config.ServeConfig{})
+}
+
+func newListenerTestServerWithConfig(t *testing.T, cfg config.ServeConfig) *Server {
 	t.Helper()
 	// Server construction starts the process-wide usage projection, even with
 	// a mock controller. Fence it on both sides of this test's home override.
@@ -33,7 +39,7 @@ func newListenerTestServer(t *testing.T) *Server {
 		SessionDir: t.TempDir(),
 	})
 	t.Cleanup(func() { ctrl.Close() })
-	return New(ctrl, bc, config.ServeConfig{})
+	return New(ctrl, bc, cfg)
 }
 
 func waitForHTTP(t *testing.T, addr string) {
@@ -109,4 +115,62 @@ func TestRunGracefulStillListensFromAddr(t *testing.T) {
 	case <-time.After(15 * time.Second):
 		t.Fatal("RunGraceful did not return after ctx cancel")
 	}
+}
+
+// POST /shutdown is how a supervisor retires a managed instance: the serve loop
+// must end on its own — with the credential and content type the manager
+// actually sends — instead of the supervisor killing the tree mid-turn.
+func TestShutdownRequestEndsTheServeLoop(t *testing.T) {
+	srv := newListenerTestServerWithConfig(t, config.ServeConfig{AuthMode: "token", Token: "secret"})
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	addr := ln.Addr().String()
+	done := make(chan error, 1)
+	go func() { done <- srv.RunGracefulListener(t.Context(), ln) }()
+
+	waitForHTTP(t, addr)
+
+	if code := postShutdown(t, addr, ""); code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated POST /shutdown = %d, want 401", code)
+	}
+	select {
+	case err := <-done:
+		t.Fatalf("an unauthenticated request ended the loop: %v", err)
+	default:
+	}
+
+	if code := postShutdown(t, addr, "secret"); code != http.StatusAccepted {
+		t.Fatalf("POST /shutdown = %d, want 202", code)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunGracefulListener returned a shutdown error: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("POST /shutdown did not end the serve loop")
+	}
+}
+
+// postShutdown sends what a managed instance's supervisor sends, so the test
+// takes the same admission chain: bearer credential plus a JSON body.
+func postShutdown(t *testing.T, addr, token string) int {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, "http://"+addr+"/shutdown", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("POST /shutdown: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return resp.StatusCode
 }

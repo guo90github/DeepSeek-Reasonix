@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ func TestUpRefusesAHeldSession(t *testing.T) {
 	defer lease.Release()
 
 	manager := NewManager(home)
-	spec := helperSpec(t, home, "ws-held", "")
+	spec := serveSpec(t, home, "ws-held", "")
 	spec.SessionPath = sessionPath
 	if _, err := manager.Up(context.Background(), spec); err == nil {
 		t.Fatal("Up started a second writer for a session another lease holds")
@@ -54,7 +55,7 @@ func TestThreeInstancesStayIndependent(t *testing.T) {
 		if err != nil {
 			t.Skipf("no free port: %v", err)
 		}
-		if _, err := manager.Up(ctx, helperSpec(t, home, name, addr)); err != nil {
+		if _, err := manager.Up(ctx, serveSpec(t, home, name, addr)); err != nil {
 			t.Fatalf("Up(%s): %v", name, err)
 		}
 	}
@@ -94,7 +95,7 @@ func TestSweepOpensCircuitOnACrashLoop(t *testing.T) {
 	rec := Record{
 		Name: name, Root: home, Addr: addr, TokenFile: TokenPath(home, name),
 		State: StateStopped,
-		Argv:  []string{os.Args[0], "-test.run=TestHelperExitFast", "--", "--crash"},
+		Argv:  crashingArgv(),
 	}
 	if _, err := ensureToken(rec.TokenFile); err != nil {
 		t.Fatalf("ensureToken: %v", err)
@@ -118,4 +119,34 @@ func TestSweepOpensCircuitOnACrashLoop(t *testing.T) {
 	if got.State != StateCircuitOpen {
 		t.Fatalf("state = %s, want %s after %d failed attempts", got.State, StateCircuitOpen, crashLimit)
 	}
+}
+
+// TestRealServeRetiresOnRequest is the acceptance check for the whole managed
+// path against the binary a coordinator actually meets. It skips unless an
+// acceptance run names one, and it reads the child's own log because a killed
+// process leaves no line there: only a serve that retired on request reports it.
+func TestRealServeRetiresOnRequest(t *testing.T) {
+	if realServeBin() == "" {
+		t.Skip("run with -args --serve-bin <path to a built reasonix binary>")
+	}
+	home := t.TempDir()
+	addr, err := AllocateAddrIn(19130, 19160)
+	if err != nil {
+		t.Skipf("no free port: %v", err)
+	}
+	manager := NewManager(home)
+	if _, err := manager.Up(context.Background(), serveSpec(t, home, "ws-real", addr)); err != nil {
+		t.Fatalf("Up against the real serve: %v", err)
+	}
+	if err := manager.Down("ws-real"); err != nil {
+		t.Fatalf("Down: %v", err)
+	}
+	raw, err := os.ReadFile(LogPath(home, "ws-real"))
+	if err != nil {
+		t.Fatalf("the child left no log: %v", err)
+	}
+	if !strings.Contains(string(raw), "shutting down gracefully") || !strings.Contains(string(raw), "request") {
+		t.Fatalf("the instance did not retire on request; its log:\n%s", raw)
+	}
+	waitForNoListener(t, addr)
 }
