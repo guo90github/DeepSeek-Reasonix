@@ -32,6 +32,9 @@ mem.prof
 /desktop/frontend/sourcemaps/
 /desktop/electron/dist/
 
+# Android 遥控端 (android/) 不归本仓库管理，将迁往独立目录
+/android/
+
 # Environment / local config (reasonix.example.toml is the shared template)
 .env
 .env.local
