@@ -5,8 +5,9 @@
 // so a pending recovery was reachable only after switching layouts. The notice
 // also had no close control, and a plain refresh unmounted it — which re-opened
 // whatever the reader had just collapsed or closed. Closing is now remembered
-// per session by the calls the notice names, so neither snapshot churn
-// (revision, runtime epoch) nor a remount brings the closed notice back.
+// per session path by the calls the notice names, so neither snapshot churn
+// (revision, runtime epoch) nor a session switch — whose frontend session key
+// carries a load generation — brings the closed notice back.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import React, { act } from "react";
@@ -26,7 +27,7 @@ const stubMatchMedia = () => ({
   dispatchEvent: () => false,
 });
 
-const dom = new JSDOM("<div id='root'></div><div id='panel'></div><div id='remount'></div><div id='action'></div>", { url: "http://localhost", pretendToBeVisual: true });
+const dom = new JSDOM("<div id='root'></div><div id='panel'></div><div id='remount'></div><div id='switch'></div><div id='action'></div>", { url: "http://localhost", pretendToBeVisual: true });
 Object.assign(globalThis, {
   window: dom.window,
   document: dom.window.document,
@@ -152,30 +153,61 @@ try {
     "a moved revision or runtime epoch does not reopen the closed notice");
   await act(async () => panelRoot.unmount());
 
-  // 6. The dismissal is remembered per session, not by component state: a
-  // remount (tab, layout or preview key) used to reopen the closed notice.
-  const remountRoot = createRoot(document.getElementById("remount")!);
-  const paintRemount = (refreshKey: number) => act(async () => remountRoot.render(
-    <LocaleProvider>
-      <ToolRecoveryPanel tabId="panel-tab" sessionKey="panel-tab" running={false} refreshKey={refreshKey}
-        bindings={bindings} onResume={noop} />
-    </LocaleProvider>,
-  ));
-  await paintRemount(0);
-  assert.equal(document.querySelector("#remount .tool-recovery-panel"), null,
-    "a remount of the same session keeps the closed notice closed");
+  // 6. A session switch is the case this identity exists for. The panel's key
+  // is the frontend session key, which carries a load generation (and is a tab
+  // id for remote surfaces), so A -> B -> A comes back under a different key
+  // and the same session path. Closing must be remembered per session path.
+  const switchSessions: Record<string, ToolRecoverySnapshot> = {
+    A: { ...pending, sessionPath: "/session-a", revision: "rev-a" },
+    B: { ...pending, sessionPath: "/session-b", revision: "rev-b", calls: [{ ...pendingCall, identity: { ...pendingCall.identity, attempt_id: "attempt-b" } }] },
+  };
+  let currentSession = "A";
+  let loadGeneration = 0;
+  const switchBindings = { GetToolRecoveryForTab: async () => switchSessions[currentSession] };
+  const switchRoot = createRoot(document.getElementById("switch")!);
+  const paintSession = (name: "A" | "B") => {
+    currentSession = name;
+    loadGeneration += 1;
+    const sessionKey = `session\u0000/session-${name.toLowerCase()}\u0000${loadGeneration}`;
+    return act(async () => switchRoot.render(
+      <LocaleProvider>
+        <ToolRecoveryPanel key={sessionKey} tabId={`tab-${name}`} sessionKey={sessionKey} running={false} refreshKey={0}
+          bindings={switchBindings} onResume={noop} />
+      </LocaleProvider>,
+    ));
+  };
+  const switchNotice = () => document.querySelector("#switch .tool-recovery-panel");
+  const closeSwitchNotice = async () => act(async () => document.querySelector<HTMLButtonElement>("#switch .tool-recovery-panel__dismiss")!.click());
+
+  await paintSession("A");
+  assert.ok(switchNotice(), "session A surfaces its notice");
+  await closeSwitchNotice();
+  assert.equal(switchNotice(), null, "closing in session A hides it");
+
+  await paintSession("B");
+  assert.ok(switchNotice(), "session B has its own notice, not A's dismissal");
+  await closeSwitchNotice();
+  assert.equal(switchNotice(), null, "closing in session B hides it");
+
+  await paintSession("A");
+  assert.equal(switchNotice(), null, "returning to session A keeps its notice closed");
+  await paintSession("B");
+  assert.equal(switchNotice(), null, "session B's dismissal survives the round trip too");
 
   // A newly interrupted call carries its own attempt id, so it is not covered.
-  snapshot = { ...pending, revision: "rev-3", calls: [pendingCall, { ...pendingCall, identity: { ...pendingCall.identity, attempt_id: "attempt-2" } }] };
-  await paintRemount(1);
-  assert.ok(document.querySelector("#remount .tool-recovery-panel"), "a newly interrupted call is not silenced by the old dismissal");
-  await act(async () => remountRoot.unmount());
+  switchSessions.A = { ...switchSessions.A, calls: [pendingCall, { ...pendingCall, identity: { ...pendingCall.identity, attempt_id: "attempt-2" } }] };
+  await paintSession("A");
+  assert.ok(switchNotice(), "a newly interrupted call is not silenced by the old dismissal");
+  await act(async () => switchRoot.unmount());
 
   // 7. A refresh landing mid-action must not leave the notice busy: the actions
   // would stay disabled with no way to reach the call again.
   let settle: ((value: ToolRecoverySnapshot) => void) | undefined;
+  // Its own session path: dismissal is remembered per session path, so reusing
+  // the one closed in sections 4 and 5 would hide this notice on purpose.
+  const actionSnapshot = { ...pending, sessionPath: "/session-action", revision: "rev-9" };
   const actionBindings = {
-    GetToolRecoveryForTab: async (): Promise<ToolRecoverySnapshot> => ({ ...pending, revision: "rev-9" }),
+    GetToolRecoveryForTab: async (): Promise<ToolRecoverySnapshot> => actionSnapshot,
     ResolveToolRecoveryForTab: () => new Promise<ToolRecoverySnapshot>((resolve) => { settle = resolve; }),
   };
   const actionRoot = createRoot(document.getElementById("action")!);
@@ -191,7 +223,7 @@ try {
   await act(async () => inspectButton()!.click());
   assert.equal(inspectButton()!.disabled, true, "a running action disables its buttons");
   await paintActionPanel(1);
-  await act(async () => settle!({ ...pending, revision: "rev-10" }));
+  await act(async () => settle!({ ...actionSnapshot, revision: "rev-10" }));
   assert.equal(inspectButton()!.disabled, false, "a refresh mid-action does not leave the notice stuck busy");
   await act(async () => actionRoot.unmount());
 
