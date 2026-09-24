@@ -766,7 +766,8 @@ func (c *Controller) tryEnqueueAndSteerForTurn(turnID string, req InboxRequest) 
 	if errors.Is(err, sessioninbox.ErrPaused) {
 		rec.Disposition = sessioninbox.DispositionQueuedFollowup
 		rec.Paused = true
-		return rec, nil
+		rec.SteerRejected = sessioninbox.SteerRejectedInboxPaused
+		return c.withDispatchGate(rec), nil
 	}
 	if err != nil {
 		return rec, err
@@ -784,7 +785,7 @@ func (c *Controller) TryEnqueueFollowup(req InboxRequest) (sessioninbox.InboxRec
 	if !c.Running() {
 		c.maybeDispatchInbox()
 	}
-	return rec, nil
+	return c.withDispatchGate(rec), nil
 }
 
 func firstNonEmptyStr(vals ...string) string {

@@ -140,6 +140,70 @@ func (c *Controller) dispatchInboxOnce() inboxDispatchResult {
 	return inboxDispatchIdle
 }
 
+// inboxDispatchGate names the gate that currently holds queued work, checked in
+// the same order as dispatchInboxOnce so a receipt can say what it waits on
+// instead of only that it is queued.
+func (c *Controller) inboxDispatchGate() string {
+	if c.PendingPrompt() {
+		return sessioninbox.DispatchGateAwaitingAnswer
+	}
+	c.mu.Lock()
+	switch {
+	case c.closed:
+		c.mu.Unlock()
+		return sessioninbox.DispatchGateClosed
+	case c.rotating:
+		c.mu.Unlock()
+		return sessioninbox.DispatchGateRotating
+	case c.running:
+		c.mu.Unlock()
+		return sessioninbox.DispatchGateTurnRunning
+	case c.finishing:
+		c.mu.Unlock()
+		return sessioninbox.DispatchGateTurnFinishing
+	}
+	hostHook := c.modelSettings.beforeInboxDispatch != nil
+	c.mu.Unlock()
+	if c.SessionPath() == "" {
+		return sessioninbox.DispatchGateNoSessionPath
+	}
+	st, err := c.ensureInbox()
+	if err != nil {
+		return ""
+	}
+	snap := st.CachedSnapshot()
+	if snap.Paused {
+		return sessioninbox.DispatchGatePaused
+	}
+	if snap.Readonly {
+		return sessioninbox.DispatchGateReadonly
+	}
+	if hostHook {
+		// The host's publication hook owns the next kick; its answer is only
+		// visible to the dispatcher, never to the receipt.
+		return sessioninbox.DispatchGateHostDispatch
+	}
+	return ""
+}
+
+// withDispatchGate annotates a receipt whose item is still queued with the gate
+// holding it: the disposition only says "queued".
+func (c *Controller) withDispatchGate(rec sessioninbox.InboxReceipt) sessioninbox.InboxReceipt {
+	if rec.DispatchGate != "" || rec.ItemID == "" {
+		return rec
+	}
+	st, err := c.ensureInbox()
+	if err != nil {
+		return rec
+	}
+	meta, _, err := st.ReadItem(rec.ItemID)
+	if err != nil || (meta.State != sessioninbox.StateQueued && meta.State != sessioninbox.StateUncertain) {
+		return rec
+	}
+	rec.DispatchGate = c.inboxDispatchGate()
+	return rec
+}
+
 func (c *Controller) nextInboxDispatchItem() (sessioninbox.InboxItemMeta, bool, error) {
 	c.inbox.scanMu.Lock()
 	defer c.inbox.scanMu.Unlock()

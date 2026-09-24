@@ -51,6 +51,36 @@ const (
 	DispositionIdempotentHit    Disposition = "idempotent_hit"
 )
 
+// SteerRejected names why an intent=steer item missed the active turn. The
+// disposition only says the steer became a follow-up turn; without this the
+// caller cannot tell "no turn to steer" from "the turn refused the steer".
+const (
+	SteerRejectedNoRunningTurn = "no_running_turn"
+	SteerRejectedStaleTurn     = "stale_turn"
+	SteerRejectedNoExecutor    = "no_executor"
+	SteerRejectedTurnRefused   = "turn_refused_steer"
+	SteerRejectedImages        = "images_require_followup"
+	SteerRejectedClosed        = "closed"
+	SteerRejectedRotating      = "rotating"
+	SteerRejectedInboxPaused   = "inbox_paused"
+)
+
+// DispatchGate names the runtime gate that currently keeps a queued item from
+// being admitted as a turn, so a queued receipt can say what it waits on
+// instead of only that it waits. host_dispatch means the host's publication
+// hook owns the next kick and the controller cannot see its answer.
+const (
+	DispatchGateAwaitingAnswer = "awaiting_answer"
+	DispatchGateTurnRunning    = "turn_running"
+	DispatchGateTurnFinishing  = "turn_finishing"
+	DispatchGateRotating       = "rotating"
+	DispatchGateClosed         = "closed"
+	DispatchGateNoSessionPath  = "no_session_path"
+	DispatchGatePaused         = "paused"
+	DispatchGateReadonly       = "readonly"
+	DispatchGateHostDispatch   = "host_dispatch"
+)
+
 // Sentinel errors for capacity and validation.
 var (
 	ErrCapacityItems       = errors.New("session inbox item limit reached")
@@ -182,6 +212,10 @@ type InboxReceipt struct {
 	// carries both; a /inbox/receipt lookup reads the stored item instead.
 	SessionPath          string `json:"sessionPath,omitempty"`
 	RequestedSessionPath string `json:"requestedSessionPath,omitempty"`
+	// SteerRejected names why an intent=steer item missed the active turn.
+	SteerRejected string `json:"steerRejected,omitempty"`
+	// DispatchGate names the gate holding the item while it is still queued.
+	DispatchGate string `json:"dispatchGate,omitempty"`
 }
 
 // EnqueueRequest is the input for durable admission.

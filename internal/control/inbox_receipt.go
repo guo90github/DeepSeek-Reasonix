@@ -20,5 +20,10 @@ func (c *Controller) LookupInboxReceiptForSession(path, key string) (sessioninbo
 		return sessioninbox.InboxReceipt{}, false, ErrInboxSessionChanged
 	}
 	receipt, found := store.LookupReceipt(key)
-	return receipt, found, nil
+	if !found {
+		return receipt, false, nil
+	}
+	// A caller re-asking about a queued wake needs the current gate, not the
+	// one that happened to be closed when the receipt was written.
+	return c.withDispatchGate(receipt), true, nil
 }

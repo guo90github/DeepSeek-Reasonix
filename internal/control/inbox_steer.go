@@ -98,6 +98,36 @@ func (c *Controller) TrySteerInboxItemForTurn(turnID, id string) (sessioninbox.I
 	return c.trySteerInboxItem(id, turnID)
 }
 
+// steerRefusalLocked names the gate that keeps this steer out of the active
+// turn, checking the gates in the same order as the admission expression it
+// replaced. Its final case *is* that admission: call it at most once.
+func (c *Controller) steerRefusalLocked(expectedTurnID, id string, loader func() (string, error), hasImages bool) string {
+	switch {
+	case expectedTurnID != "" && !c.steerTurnMatchesLocked(expectedTurnID):
+		return sessioninbox.SteerRejectedStaleTurn
+	case c.closed:
+		return sessioninbox.SteerRejectedClosed
+	case c.rotating:
+		return sessioninbox.SteerRejectedRotating
+	case !c.running:
+		return sessioninbox.SteerRejectedNoRunningTurn
+	case c.executor == nil:
+		return sessioninbox.SteerRejectedNoExecutor
+	case hasImages:
+		return sessioninbox.SteerRejectedImages
+	case !c.executor.SteerItem(id, loader):
+		return sessioninbox.SteerRejectedTurnRefused
+	}
+	return ""
+}
+
+// steerTurnMatchesLocked reports whether the addressed turn is still the active
+// one. A session with no turn ledger can match no turn id.
+func (c *Controller) steerTurnMatchesLocked(expectedTurnID string) bool {
+	ledger := c.turnEventLedger()
+	return ledger != nil && ledger.ActiveTurnID() == expectedTurnID
+}
+
 func (c *Controller) trySteerInboxItem(id, expectedTurnID string) (sessioninbox.InboxReceipt, error) {
 	c.inbox.admissionMu.Lock()
 	dispatchAfterUnlock := false
@@ -159,14 +189,8 @@ func (c *Controller) trySteerInboxItem(id, expectedTurnID string) (sessioninbox.
 		}
 	}
 	c.mu.Lock()
-	turnMatches := true
-	if expectedTurnID != "" {
-		turnMatches = false
-		if ledger := c.turnEventLedger(); ledger != nil {
-			turnMatches = ledger.ActiveTurnID() == expectedTurnID
-		}
-	}
-	accepted := turnMatches && !c.closed && !c.rotating && c.running && c.executor != nil && len(env.FrozenImages) == 0 && c.executor.SteerItem(id, loader)
+	refusal := c.steerRefusalLocked(expectedTurnID, id, loader, len(env.FrozenImages) > 0)
+	accepted := refusal == ""
 	if accepted {
 		c.inbox.mu.Lock()
 		c.inbox.trackActive(id)
@@ -194,12 +218,13 @@ func (c *Controller) trySteerInboxItem(id, expectedTurnID string) (sessioninbox.
 	}
 	sessioninbox.NoteSteerRejected()
 	dispatchAfterUnlock = true
-	return sessioninbox.InboxReceipt{
-		ItemID:      id,
-		Disposition: sessioninbox.DispositionQueuedFollowup,
-		Paused:      st.Snapshot().Paused,
-		Capacity:    cap,
-	}, nil
+	return c.withDispatchGate(sessioninbox.InboxReceipt{
+		ItemID:        id,
+		Disposition:   sessioninbox.DispositionQueuedFollowup,
+		Paused:        st.Snapshot().Paused,
+		Capacity:      cap,
+		SteerRejected: refusal,
+	}), nil
 }
 
 // requeueUnappliedSteer returns a steer the turn accepted but never applied to
