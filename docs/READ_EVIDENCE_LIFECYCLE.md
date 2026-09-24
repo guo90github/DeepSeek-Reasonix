@@ -70,6 +70,10 @@ expire with the batch. Cleanup removes only the identical requirement key.
   check that identity again during execution. Unversioned bounded windows can
   prove individual ranges by current hashes, but cannot be stitched across
   versions or establish a full-file overwrite.
+- A completed write re-anchors that file's earlier windows through its own line
+  accounting: the lines it replaced stop being evidence and everything after
+  them moves by the recorded delta, so a second edit elsewhere in the same file
+  owes no second read. A whole-file or opaque write retires the windows instead.
 - Full-file replacement requires complete current evidence or the existing
   host-recorded rebuild authorization. Creation binds to confirmed absence;
   a file appearing between preflight and execution is not overwritten.

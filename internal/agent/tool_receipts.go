@@ -75,6 +75,7 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 		rec.OperationID = operationID
 		rec = a.task.ledger.Record(rec)
 		a.commitToolReceipt(rec)
+		a.rebaseWriteObservations(plan, rec, err)
 		a.recordOperationOutcome(plan, rec, err)
 		return rec
 	default:
@@ -87,6 +88,7 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 		rec.OperationID = operationID
 		rec = a.task.ledger.Record(rec)
 		a.commitToolReceipt(rec)
+		a.rebaseWriteObservations(plan, rec, err)
 		a.recordOperationOutcome(plan, rec, err)
 		if err == nil && call.Name == "todo_write" {
 			a.setTodoState(rec.Todos)

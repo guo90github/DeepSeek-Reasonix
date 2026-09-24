@@ -37,6 +37,7 @@ type evidenceBlockState struct {
 func cloneEvidenceTarget(t tool.EvidenceTargetInfo) tool.EvidenceTargetInfo {
 	t.Ranges = slices.Clone(t.Ranges)
 	t.Hashes = slices.Clone(t.Hashes)
+	t.LineSpans = slices.Clone(t.LineSpans)
 	return t
 }
 

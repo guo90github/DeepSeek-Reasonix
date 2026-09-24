@@ -3,6 +3,8 @@ package tool
 import (
 	"context"
 	"encoding/json"
+
+	"reasonix/internal/evidence"
 )
 
 // EvidenceTargetInfo is a writer's declaration of the content it is about to
@@ -25,6 +27,10 @@ type EvidenceTargetInfo struct {
 	WholeFile bool
 	Ranges    []ReadRange
 	Hashes    []string
+	// LineSpans is the writer's own line accounting for the change. The host
+	// uses it to keep the evidence a write leaves untouched; empty means the
+	// writer cannot express the change, so its reads retire whole-file.
+	LineSpans []evidence.WriteLineSpan
 }
 
 type expectedWriteSourceKey struct{}

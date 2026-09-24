@@ -28,6 +28,7 @@ func previewEvidence(change diff.Change, err error) (tool.EvidenceTargetInfo, er
 		info.WholeFile = true
 		return info, nil
 	}
+	info.LineSpans = writeLineSpans(change.OldText, change.NewText)
 	lines := strings.Split(strings.TrimSuffix(strings.ReplaceAll(change.OldText, "\r\n", "\n"), "\n"), "\n")
 	if change.OldText == "" {
 		return info, nil
