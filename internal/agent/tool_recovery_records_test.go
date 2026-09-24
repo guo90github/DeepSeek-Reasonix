@@ -69,3 +69,23 @@ func TestFinishToolRecoveryFailedWriterIsNotCompleted(t *testing.T) {
 		t.Fatalf("failed writer recovery = %+v", got)
 	}
 }
+
+// A canceled read-only call has no external effect to confirm, so it must never
+// reach the list the user is asked to verify. The `ask` tool's canceled result
+// ("ask: context canceled") is exactly this shape: the provider layer maps it to
+// an unknown run state, and it used to surface as an unverified banner entry.
+func TestReadOnlyInterruptedCallsNeverDemandVerification(t *testing.T) {
+	for _, state := range []provider.ToolRunState{provider.ToolRunStarted, provider.ToolRunRunning, provider.ToolRunUnknown} {
+		r := &provider.ToolCallRecord{
+			Identity: provider.ActionIdentity{AttemptID: "attempt-ask", CallID: "call-ask", CanonicalTool: "ask"},
+			State:    state, ReadOnly: true,
+		}
+		s := NewSession("")
+		s.Messages = []provider.Message{{Role: provider.RoleAssistant, ID: "turn-1", ToolCalls: []provider.ToolCall{{ID: "call-ask", Name: "ask", Arguments: `{"questions":[]}`, Recovery: r}}}}
+		a := New(nil, tool.NewRegistry(), s, Options{}, event.Discard)
+
+		if pending := a.PendingToolRecovery(); len(pending) != 0 {
+			t.Fatalf("state %q: an interrupted read-only call has no effect to confirm: %+v", state, pending)
+		}
+	}
+}

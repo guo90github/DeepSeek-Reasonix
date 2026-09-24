@@ -167,7 +167,14 @@ func unresolvedToolRecord(r provider.ToolCallRecord) bool {
 	if r.SupersededBy != "" {
 		return false
 	}
-	return r.State == provider.ToolRunStarted || r.State == provider.ToolRunRunning || r.State == provider.ToolRunUnknown || (r.State == provider.ToolRunFailed && !r.ReadOnly && r.EffectSummary == "effect_unknown")
+	// A tool that declares no side effects has no external effect to confirm, so
+	// an interrupted read-only call is settled rather than uncertain. Retention
+	// and the write barrier already trust the same declaration.
+	if r.ReadOnly {
+		return false
+	}
+	return r.State == provider.ToolRunStarted || r.State == provider.ToolRunRunning || r.State == provider.ToolRunUnknown ||
+		(r.State == provider.ToolRunFailed && r.EffectSummary == "effect_unknown")
 }
 
 // Rewriting model history cannot erase evidence of an unresolved external
