@@ -99,7 +99,13 @@ Diagnostics use `READ_PARTIAL`, `READ_CURSOR_INVALID`, `READ_SOURCE_CHANGED`,
 `READ_HARD_STOP`, `WRITE_EVIDENCE_MISSING`, `WRITE_EVIDENCE_STALE`,
 `WRITE_TARGET_ABSENT`, `WRITE_TARGET_AMBIGUOUS`, `VERIFICATION_RECEIPT_MISSING`,
 `VERIFICATION_RECEIPT_MISMATCH` and `OPERATION_NEEDS_USER`. They carry available path, operation,
-version/range and recovery information, never file content.
+version/range and recovery information, never file content. A stale `old_string`
+is answered in the tool result text, never in the diagnostic struct: the current
+text of the nearest matching window (bounded and numbered), the zero-based range
+to re-read, and the `reread_target` action, so one rejected edit costs one round
+instead of a whole-file re-read. An anchor that resembles nothing in the file
+gets no window — quoting an arbitrary region would invite an edit against the
+wrong block.
 
 A rejection is machine-executable rather than prose: it names the receipt IDs
 that exist, the closed set of actions the host accepts

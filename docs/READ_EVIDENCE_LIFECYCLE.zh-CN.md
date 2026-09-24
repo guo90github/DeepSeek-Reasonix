@@ -73,7 +73,10 @@
 `WRITE_TARGET_ABSENT`、`WRITE_TARGET_AMBIGUOUS`、`VERIFICATION_RECEIPT_MISSING`、
 `VERIFICATION_RECEIPT_MISMATCH` 与 `OPERATION_NEEDS_USER`，携带可得的路径、操作、
 版本/范围及恢复信息，不携带
-文件正文。
+文件正文。`old_string` 失配时，工具结果正文（而非诊断结构）回带最近匹配窗口的当前
+文本（有界、带行号）、要重读的 0 基范围与 `reread_target` 动作，一次被拒的编辑只花
+一轮，不必重读整个文件。锚点与文件中任何位置都不相似时不给窗口——随便引一段会诱使
+改错块。
 
 拒绝是机器可执行的，而不是自然语言建议：它会列出真实存在的回执 ID、宿主接受的
 封闭动作集合（`use_receipt:<id>`、`reread_target`、`run_verifier`、`mark_manual`、

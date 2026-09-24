@@ -178,6 +178,9 @@ func oldStringNotFoundError(path, oldString, content string) (err error) {
 		err = &tool.OperationError{Diagnostic: tool.OperationDiagnostic{Code: tool.WriteEvidenceStale, Path: path, Recovery: "re-read the target range, then retry with its current text"}, Cause: err}
 	}()
 	hint := oldStringNotFoundHint(oldString, content)
+	if report := staleAnchorReport(oldString, content); report != "" {
+		return fmt.Errorf("old_string not found in %s.%s%s", path, hint, report)
+	}
 	if line, text, ok := nearestContentLine(oldString, content); ok {
 		return fmt.Errorf("old_string not found in %s (nearest line %d: %q).%s", path, line, text, hint)
 	}
