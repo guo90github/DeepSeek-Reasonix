@@ -34,8 +34,8 @@ func TestIsolateUserStateRedirectsAndRestoresCallerEnvironment(t *testing.T) {
 	if isolateHome == "" || isolateHome == callerHome {
 		t.Fatalf("HOME = %q, want a disposable home distinct from caller %q", isolateHome, callerHome)
 	}
-	if rel, err := filepath.Rel(callerHome, isolateHome); err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
-		t.Fatalf("isolated home %q is not contained by caller home %q", isolateHome, callerHome)
+	if rel, err := filepath.Rel(os.TempDir(), isolateHome); err != nil || filepath.IsAbs(rel) || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		t.Fatalf("isolated home %q is not contained by the temp root %q", isolateHome, os.TempDir())
 	}
 	wantIsolatedEnvironment := map[string]string{
 		"HOME":            isolateHome,
