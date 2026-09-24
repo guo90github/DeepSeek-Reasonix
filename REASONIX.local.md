@@ -13,8 +13,12 @@
    cd C:\guosj\ai\deepseek-reasonix\DeepSeek-Reasonix
    $env:PATH = "C:\Program Files (x86)\NSIS;" + $env:PATH
    $env:REASONIX_SKIP_BUDGET = "1"
+   $env:DESKTOP_BUILD_SKIP_INSTALLER = "1"   # 只出便携 zip，跳过两趟 NSIS 与签名 payload（省 ~4 分钟）
+   $env:REASONIX_LOCAL_SKIP_CHECKS = "1"     # 跳过前端 eslint/tsc/契约检查，vite build 照跑（CI 仍拦）
    & "C:\soft\git\Git\bin\bash.exe" scripts/desktop-build.sh windows/amd64 <tag>
    ```
+   两个新开关都是 2026-09-24 加的仓库侧变量（默认关闭，发版与 CI 行为不变）；
+   取消 `DESKTOP_BUILD_SKIP_INSTALLER` 才会重新产出 installer 与 SignPath payload。
 3. **装免安装**（并列新增，绝不删旧版）：
    `Expand-Archive dist\Reasonix-windows-amd64.zip -DestinationPath C:\Users\guosj\Reasonix-portable -Force`
    （刷新根 launcher，并把 `current.json` 指向新 tag）
