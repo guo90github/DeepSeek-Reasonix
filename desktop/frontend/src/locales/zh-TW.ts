@@ -1067,6 +1067,7 @@ export const zhTW: Record<DictKey, string> = {
   "history.today": "今天",
   "history.yesterday": "昨天",
   "history.older": "更早",
+  "history.olderPaused": "本輪執行中已暫停載入更早歷史，執行結束後自動繼續。",
   "history.openSession": "開啟會話",
   "history.channel": "渠道",
   "history.channelReadOnly": "唯讀渠道",

@@ -342,7 +342,8 @@
   min-height: 8px;
 }
 
-.conversation-pane__older {
+.conversation-pane__older,
+.conversation-pane__hydrating {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -350,6 +351,28 @@
   padding: 10px var(--pane-inline-pad);
   font-size: var(--text-sm, 13px);
   color: var(--fg-dim, inherit);
+}
+
+.conversation-pane__older-paused {
+  color: var(--fg-faint, var(--fg-dim));
+}
+
+.conversation-pane__spinner {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  border: 2px solid color-mix(in srgb, var(--fg) 24%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: conversation-pane-spin 0.8s linear infinite;
+}
+
+@keyframes conversation-pane-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-pane__spinner { animation: none; }
 }
 
 .conversation-pane__empty-answer,

@@ -246,10 +246,21 @@ export function ConversationPane({
   // retry, and — while the window is truncated with nothing in flight — a manual
   // load, so a stall the automatic path cannot resolve stays one click away
   // instead of unreachable.
-  const olderHeader = loadingOlderHistory || olderHistoryError || hasOlderHistory ? (
+  //
+  // The controller refuses an older-page request while the turn runs and the
+  // refusal leaves no loading and no error behind, so during a run the header
+  // states the pause instead of painting a button that can only do nothing.
+  const olderLoadPaused = running && !loadingOlderHistory;
+  const olderControlsAvailable = Boolean(loadingOlderHistory || olderHistoryError || hasOlderHistory);
+  const olderHeader = olderControlsAvailable ? (
     <div className="conversation-pane__older">
       {loadingOlderHistory ? (
         <span>{t("common.loading")}</span>
+      ) : olderLoadPaused ? (
+        <>
+          {olderHistoryError ? <span>{olderHistoryError}</span> : null}
+          <span className="conversation-pane__older-paused">{t("history.olderPaused")}</span>
+        </>
       ) : olderHistoryError ? (
         <>
           <span>{olderHistoryError}</span>
@@ -258,6 +269,13 @@ export function ConversationPane({
       ) : (
         <button type="button" className="btn btn--small" onClick={() => onLoadOlderHistory?.()}>{t("history.older")}</button>
       )}
+    </div>
+  ) : hydrating ? (
+    // Split mode has no navigation mask, so a session load in flight used to be
+    // invisible here: a switch looked exactly like a session with no content.
+    <div className="conversation-pane__hydrating" role="status">
+      <span className="conversation-pane__spinner" aria-hidden="true" />
+      <span>{t("common.loading")}</span>
     </div>
   ) : null;
 

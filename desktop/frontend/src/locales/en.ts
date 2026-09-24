@@ -1419,6 +1419,7 @@ export const en = {
   "history.today": "Today",
   "history.yesterday": "Yesterday",
   "history.older": "Older",
+  "history.olderPaused": "Loading older history is paused while this turn runs; it resumes when the turn settles.",
   "history.openSession": "Open session",
   "history.channel": "Channel",
   "history.channelReadOnly": "Read-only channel",

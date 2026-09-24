@@ -1420,6 +1420,7 @@ export const zh: Record<DictKey, string> = {
   "history.today": "今天",
   "history.yesterday": "昨天",
   "history.older": "更早",
+  "history.olderPaused": "本轮运行中已暂停加载更早历史，运行结束后自动继续。",
   "history.openSession": "打开会话",
   "history.channel": "渠道",
   "history.channelReadOnly": "只读渠道",

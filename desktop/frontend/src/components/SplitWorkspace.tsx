@@ -17,6 +17,7 @@ import { conversationPaneTurns, processPaneTurns } from "../lib/transcriptPanes"
 import { resolveAutoSplitProcessWidth, snapSplitWidth, stepSplitWidth } from "../lib/splitDivider";
 import { attachPaneParallax } from "../lib/paneParallax";
 import { advanceSurfacePaintCommit, type SurfacePaintProgress } from "../lib/navigationSurfaceTransition";
+import { recordFrontendDiagnostic } from "../lib/frontendDiagnosticBridge";
 import type { ControllerLiveStore, Item, LiveStream } from "../lib/useController";
 import type { WireCompletionSummary } from "../lib/types";
 
@@ -270,12 +271,21 @@ export function SplitWorkspace({
 
   // Pin both panes to the newest turn once the lists are measurable. A single
   // scrollToIndex no-ops pre-measurement on heavy sessions, so retry briefly;
-  // any user scroll or click ends the loop.
-  const establishScheduledRef = useRef(false);
+  // any user scroll or click ends the loop. The anchor belongs to ONE session: a
+  // switch reuses this instance, so the latch is keyed by tab and the interaction
+  // flag is re-armed for the session that just became visible.
+  const establishScheduledRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (establishScheduledRef.current) return;
+    if (establishScheduledRef.current === tabId) return;
     if (conversationTurns.length === 0) return;
-    establishScheduledRef.current = true;
+    establishScheduledRef.current = tabId;
+    userInteractedRef.current = false;
+    // The anchor is otherwise silent: without this trace a pane that never
+    // re-pinned after a switch is indistinguishable from one already at the tail.
+    recordFrontendDiagnostic("navigation", "split.pane-anchor", {
+      totalRows: conversationTurns.length,
+      targetIndex: conversationTurns.length - 1,
+    });
     const lastIndex = conversationTurns.length - 1;
     let attempts = 0;
     const timer = window.setInterval(() => {
@@ -289,7 +299,7 @@ export function SplitWorkspace({
       if (attempts >= 20) window.clearInterval(timer);
     }, 120);
     return () => window.clearInterval(timer);
-  }, [conversationTurns.length]);
+  }, [conversationTurns.length, tabId]);
 
   const beginProcessResize = useCallback((event: ReactPointerEvent) => {
     setProcessWidthMode("manual");

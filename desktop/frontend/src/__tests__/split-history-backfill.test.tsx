@@ -105,7 +105,58 @@ try {
   assert.equal(retries, 1, "split recovery retry reaches the owning history command");
   await act(async () => splitRoot.unmount());
 
-  console.log("PASS split history: backfill re-arms after the run settles and recovery stays reachable");
+  // 1d. The controller refuses an older-page request while the turn runs, so a
+  // control offered there can only do nothing: the header must state the pause.
+  const pausedRoot = createRoot(document.getElementById("root")!);
+  let pausedCalls = 0;
+  await act(async () => pausedRoot.render(<LocaleProvider><ConversationPane turns={paneTurns as never} tabId="tab-a" running
+    footerHeight={0} hasOlderHistory loadingOlderHistory={false} hydrating={false}
+    onLoadOlderHistory={() => { pausedCalls += 1; return Promise.resolve(false); }} /></LocaleProvider>));
+  assert.ok(document.querySelector(".conversation-pane__older-paused"), "a run in flight states the older-history pause");
+  assert.equal(document.querySelector(".conversation-pane__older button"), null, "no older-history control is offered while the run refuses the request");
+  assert.equal(pausedCalls, 0, "the paused header issues no request the controller would refuse");
+  await act(async () => pausedRoot.unmount());
+
+  // 1e. Split mode has no navigation mask, so an in-flight session load must be
+  // visible in the pane itself — it used to look like a session with no content.
+  const hydratingRoot = createRoot(document.getElementById("root")!);
+  await act(async () => hydratingRoot.render(<LocaleProvider><ConversationPane turns={[] as never} tabId="tab-a" running={false}
+    footerHeight={0} hasOlderHistory={false} loadingOlderHistory={false} hydrating /></LocaleProvider>));
+  assert.ok(document.querySelector(".conversation-pane__hydrating"), "a session load in flight is visible in the split pane");
+  await act(async () => hydratingRoot.unmount());
+
+  // 3. The pane anchor belongs to one session: a switch reuses the split
+  // instance, and the one-shot latch left the new session's panes unpinned.
+  const { SplitWorkspace } = await import("../components/SplitWorkspace");
+  const { setFrontendDiagnosticSink } = await import("../lib/frontendDiagnosticBridge");
+  Object.assign(dom.window, {
+    matchMedia: () => ({ matches: false, media: "", onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false }),
+  });
+  Object.assign(globalThis, { MutationObserver: dom.window.MutationObserver });
+  const anchorProto = dom.window.HTMLElement.prototype as unknown as { scrollTo?: (...args: unknown[]) => void };
+  anchorProto.scrollTo ??= () => {};
+  const anchorRoot = createRoot(document.getElementById("split")!);
+  const anchors: number[] = [];
+  setFrontendDiagnosticSink((source, type, fields) => {
+    if (source === "navigation" && type === "split.pane-anchor") anchors.push(Number(fields.totalRows));
+  });
+  const anchorItems = [
+    { kind: "user", id: "a-u1", text: "first question", createdAt: 1000 },
+    { kind: "assistant", id: "a-a1", text: "first answer", reasoning: "", streaming: false },
+  ] as never;
+  const paintAnchor = (tabId: string) => act(async () => {
+    anchorRoot.render(<LocaleProvider><SplitWorkspace items={anchorItems} tabId={tabId} running={false} /></LocaleProvider>);
+  });
+  await paintAnchor("tab-a");
+  assert.deepEqual(anchors, [1], "the split panes pin to the newest turn for the session they mount with");
+  await paintAnchor("tab-a");
+  assert.deepEqual(anchors, [1], "re-rendering the same session does not re-pin the panes");
+  await paintAnchor("tab-b");
+  assert.deepEqual(anchors, [1, 1], "a session switch re-arms the pane anchor instead of trusting a one-shot latch");
+  await act(async () => anchorRoot.unmount());
+  setFrontendDiagnosticSink(() => {});
+
+  console.log("PASS split history: backfill re-arms after the run settles, recovery stays reachable, and a switch re-pins the panes");
 } finally {
   dom.window.close();
 }
