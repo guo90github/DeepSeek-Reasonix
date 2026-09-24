@@ -286,9 +286,17 @@ windows)
 	go build -trimpath -o "$windows_resource_tool" ./cmd/windows-resource
 
 	installer_dir="$ROOT/desktop/build/windows/installer"
-	guard_out="$installer_dir/$GUARDNAME.exe"
-	build_guard
-	stamp_windows_executable "$guard_out" "Reasonix Legacy Migrator" "$GUARDNAME" "$GUARDNAME.exe"
+	# Local-only knob: the portable archive is the only artifact a local build
+	# consumes, and the two installer passes plus the SignPath payload cost more
+	# than the rest of the script together. Release runs leave it off.
+	skip_installer="${DESKTOP_BUILD_SKIP_INSTALLER:-0}"
+	if [ "$skip_installer" = "1" ]; then
+		echo "==> skip NSIS installer and signing payload (DESKTOP_BUILD_SKIP_INSTALLER=1)"
+	else
+		guard_out="$installer_dir/$GUARDNAME.exe"
+		build_guard
+		stamp_windows_executable "$guard_out" "Reasonix Legacy Migrator" "$GUARDNAME" "$GUARDNAME.exe"
+	fi
 	launcher_out="$installer_dir/$LAUNCHERNAME.exe"
 	echo "==> go build Windows GUI thin launcher"
 	(cd "$ROOT" && GOOS=windows GOARCH="$arch" CGO_ENABLED=0 go build -trimpath \
@@ -317,17 +325,19 @@ windows)
 	rm -rf "$installer_dir/app"
 	cp -R "build/electron/${os}-${arch}/app" "$installer_dir/app"
 
-	# First NSIS pass: regenerate this release's uninstaller. A stale preserved
-	# uninstaller must never enter the signing payload.
-	rm -f "$installer_dir/reasonix-uninstall.exe"
-	find "$ROOT/desktop/build/bin" -maxdepth 1 -type f -name '*installer*.exe' -delete
-	arch_binary_define="ARG_REASONIX_AMD64_BINARY"
-	[ "$arch" = arm64 ] && arch_binary_define="ARG_REASONIX_ARM64_BINARY"
-	(
-		cd "$installer_dir"
-		makensis "-D${arch_binary_define}=$installer_dir/$BINNAME.exe" project.nsi
-	)
-	[ -s "$installer_dir/reasonix-uninstall.exe" ] || { echo "first NSIS pass did not produce reasonix-uninstall.exe" >&2; exit 1; }
+	if [ "$skip_installer" != "1" ]; then
+		# First NSIS pass: regenerate this release's uninstaller. A stale preserved
+		# uninstaller must never enter the signing payload.
+		rm -f "$installer_dir/reasonix-uninstall.exe"
+		find "$ROOT/desktop/build/bin" -maxdepth 1 -type f -name '*installer*.exe' -delete
+		arch_binary_define="ARG_REASONIX_AMD64_BINARY"
+		[ "$arch" = arm64 ] && arch_binary_define="ARG_REASONIX_ARM64_BINARY"
+		(
+			cd "$installer_dir"
+			makensis "-D${arch_binary_define}=$installer_dir/$BINNAME.exe" project.nsi
+		)
+		[ -s "$installer_dir/reasonix-uninstall.exe" ] || { echo "first NSIS pass did not produce reasonix-uninstall.exe" >&2; exit 1; }
+	fi
 
 	# Keep one canonical payload for SignPath: the flat Go executables plus the
 	# Electron app/ tree. The release workflow signs these files, then calls
@@ -336,14 +346,18 @@ windows)
 	payload_dir="$ROOT/desktop/build/windows/signing-payload"
 	rm -rf -- "$payload_dir"
 	mkdir -p "$payload_dir"
-	for name in "$BINNAME.exe" "$GUARDNAME.exe" "$LAUNCHERNAME.exe" "$UPDATE_HELPER" "$WINDOWS_CLINAME.exe" "reasonix-uninstall.exe"; do
+	payload_names=("$BINNAME.exe" "$LAUNCHERNAME.exe" "$UPDATE_HELPER" "$WINDOWS_CLINAME.exe")
+	[ "$skip_installer" = "1" ] || payload_names+=("$GUARDNAME.exe" "reasonix-uninstall.exe")
+	for name in "${payload_names[@]}"; do
 		cp "$installer_dir/$name" "$payload_dir/$name"
 	done
 	cp -R "$installer_dir/app" "$payload_dir/app"
-	# signing-files.txt enumerates every PE file (flat payload + app tree); the
-	# SignPath artifact configuration and the Authenticode verifier consume it.
-	node "$ROOT/desktop/packaging/signing-files.mjs" "$payload_dir"
-	VERSION="$VERSION" "$ROOT/scripts/package-windows-desktop.sh" "$arch" "$payload_dir"
+	if [ "$skip_installer" != "1" ]; then
+		# signing-files.txt enumerates every PE file (flat payload + app tree); the
+		# SignPath artifact configuration and the Authenticode verifier consume it.
+		node "$ROOT/desktop/packaging/signing-files.mjs" "$payload_dir"
+	fi
+	VERSION="$VERSION" DESKTOP_BUILD_SKIP_INSTALLER="$skip_installer" "$ROOT/scripts/package-windows-desktop.sh" "$arch" "$payload_dir"
 	;;
 linux)
 	service_out="$ROOT/desktop/build/bin/$BINNAME"

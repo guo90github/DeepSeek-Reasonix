@@ -6,6 +6,9 @@
 # after payload signing is what makes the installed executables signed too;
 # signing only the finished NSIS file signs the container, not the files that
 # Defender scans after installation.
+#
+# DESKTOP_BUILD_SKIP_INSTALLER=1 skips the installer half: a local build only
+# consumes the portable archive.
 set -euo pipefail
 
 arch="${1:?usage: package-windows-desktop.sh <amd64|arm64> <payload-dir>}"
@@ -18,6 +21,10 @@ amd64 | arm64) ;;
 	exit 1
 	;;
 esac
+
+# Local-only knob mirroring desktop-build.sh: produce the portable archive from
+# the payload without compiling the NSIS installer or the signing bundle.
+skip_installer="${DESKTOP_BUILD_SKIP_INSTALLER:-0}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DESKTOP="$ROOT/desktop"
@@ -39,12 +46,13 @@ PAYLOAD="$(cd "$payload_input" && pwd)"
 
 required_payload=(
 	"$BINNAME.exe"
-	"$GUARDNAME.exe"
 	"$LAUNCHERNAME.exe"
 	"$UPDATE_HELPER"
 	"$WINDOWS_CLINAME.exe"
-	"reasonix-uninstall.exe"
 )
+# Guard and the uninstaller exist for the installer payload only; the portable
+# archive carries neither.
+[ "$skip_installer" = "1" ] || required_payload+=("$GUARDNAME.exe" "reasonix-uninstall.exe")
 for name in "${required_payload[@]}"; do
 	[ -s "$PAYLOAD/$name" ] || { echo "Windows payload file is missing or empty: $name" >&2; exit 1; }
 done
@@ -55,11 +63,13 @@ payload_exe_count=$(find "$PAYLOAD" -maxdepth 1 -type f -iname '*.exe' | wc -l |
 	exit 1
 }
 
-# The Electron tree is part of the release unit; signing-files.txt (written by
-# desktop/packaging/signing-files.mjs) enumerates every PE file inside it, so
-# --check fails closed when the tree and the signing list drift apart.
-[ -s "$PAYLOAD/$SIGNING_LIST" ] || { echo "Windows payload signing list is missing: $SIGNING_LIST" >&2; exit 1; }
-node "$DESKTOP/packaging/signing-files.mjs" "$PAYLOAD" --check
+if [ "$skip_installer" != "1" ]; then
+	# The Electron tree is part of the release unit; signing-files.txt (written by
+	# desktop/packaging/signing-files.mjs) enumerates every PE file inside it, so
+	# --check fails closed when the tree and the signing list drift apart.
+	[ -s "$PAYLOAD/$SIGNING_LIST" ] || { echo "Windows payload signing list is missing: $SIGNING_LIST" >&2; exit 1; }
+	node "$DESKTOP/packaging/signing-files.mjs" "$PAYLOAD" --check
+fi
 
 manifest_present=0
 signature_present=0
@@ -74,52 +84,58 @@ if [ "${REASONIX_REQUIRE_PAYLOAD_MANIFEST:-0}" = "1" ] && [ "$manifest_present" 
 	exit 1
 fi
 
-# Replace every source consumed by project.nsi before compiling the installer.
-# Copying preserves the Authenticode certificate table returned by SignPath.
-cp "$PAYLOAD/$BINNAME.exe" "$INSTALLER_DIR/$BINNAME.exe"
-cp "$PAYLOAD/$GUARDNAME.exe" "$INSTALLER_DIR/$GUARDNAME.exe"
-cp "$PAYLOAD/$LAUNCHERNAME.exe" "$INSTALLER_DIR/$LAUNCHERNAME.exe"
-cp "$PAYLOAD/$UPDATE_HELPER" "$INSTALLER_DIR/$UPDATE_HELPER"
-cp "$PAYLOAD/$WINDOWS_CLINAME.exe" "$INSTALLER_DIR/$WINDOWS_CLINAME.exe"
-rm -rf -- "$INSTALLER_DIR/app"
-cp -R "$PAYLOAD/app" "$INSTALLER_DIR/app"
-rm -f -- "$INSTALLER_DIR/$PAYLOAD_MANIFEST" "$INSTALLER_DIR/$PAYLOAD_SIGNATURE"
-if [ "$manifest_present" = "1" ]; then
-	cp "$PAYLOAD/$PAYLOAD_MANIFEST" "$INSTALLER_DIR/$PAYLOAD_MANIFEST"
-	cp "$PAYLOAD/$PAYLOAD_SIGNATURE" "$INSTALLER_DIR/$PAYLOAD_SIGNATURE"
-fi
-
 [ -s "$INSTALLER_DIR/reasonix_project.nsh" ] || {
 	echo "reasonix_project.nsh is missing; run desktop/packaging/package.mjs first" >&2
 	exit 1
 }
 
-# Delete only generated installers so a stale first-pass package cannot be
-# mistaken for the rebuilt payload-signed installer.
-find "$BIN_DIR" -maxdepth 1 -type f -name '*installer*.exe' -delete
-binary_define="ARG_REASONIX_AMD64_BINARY"
-[ "$arch" = arm64 ] && binary_define="ARG_REASONIX_ARM64_BINARY"
-binary_path="$INSTALLER_DIR/$BINNAME.exe"
-uninstaller_path="$PAYLOAD/reasonix-uninstall.exe"
-if command -v cygpath >/dev/null 2>&1; then
-	binary_path="$(cygpath -w "$binary_path")"
-	uninstaller_path="$(cygpath -w "$uninstaller_path")"
-fi
-(
-	cd "$INSTALLER_DIR"
-	makensis \
-		"-D${binary_define}=${binary_path}" \
-		"-DARG_REASONIX_SIGNED_UNINSTALLER=${uninstaller_path}" \
-		project.nsi
-)
-
-installer=$(find "$BIN_DIR" -maxdepth 1 -type f -name '*installer*.exe' -print -quit)
-[ -n "$installer" ] && [ -s "$installer" ] || { echo "makensis did not produce a Windows installer" >&2; exit 1; }
-
 mkdir -p "$DIST"
 dist_installer="$DIST/${APPNAME}-windows-${arch}-installer.exe"
 dist_portable="$DIST/${APPNAME}-windows-${arch}.zip"
-cp "$installer" "$dist_installer"
+
+if [ "$skip_installer" != "1" ]; then
+	echo "==> rebuild NSIS installer from $PAYLOAD"
+	# Replace every source consumed by project.nsi before compiling the installer.
+	# Copying preserves the Authenticode certificate table returned by SignPath.
+	cp "$PAYLOAD/$BINNAME.exe" "$INSTALLER_DIR/$BINNAME.exe"
+	cp "$PAYLOAD/$GUARDNAME.exe" "$INSTALLER_DIR/$GUARDNAME.exe"
+	cp "$PAYLOAD/$LAUNCHERNAME.exe" "$INSTALLER_DIR/$LAUNCHERNAME.exe"
+	cp "$PAYLOAD/$UPDATE_HELPER" "$INSTALLER_DIR/$UPDATE_HELPER"
+	cp "$PAYLOAD/$WINDOWS_CLINAME.exe" "$INSTALLER_DIR/$WINDOWS_CLINAME.exe"
+	rm -rf -- "$INSTALLER_DIR/app"
+	cp -R "$PAYLOAD/app" "$INSTALLER_DIR/app"
+	rm -f -- "$INSTALLER_DIR/$PAYLOAD_MANIFEST" "$INSTALLER_DIR/$PAYLOAD_SIGNATURE"
+	if [ "$manifest_present" = "1" ]; then
+		cp "$PAYLOAD/$PAYLOAD_MANIFEST" "$INSTALLER_DIR/$PAYLOAD_MANIFEST"
+		cp "$PAYLOAD/$PAYLOAD_SIGNATURE" "$INSTALLER_DIR/$PAYLOAD_SIGNATURE"
+	fi
+
+	# Delete only generated installers so a stale first-pass package cannot be
+	# mistaken for the rebuilt payload-signed installer.
+	find "$BIN_DIR" -maxdepth 1 -type f -name '*installer*.exe' -delete
+	binary_define="ARG_REASONIX_AMD64_BINARY"
+	[ "$arch" = arm64 ] && binary_define="ARG_REASONIX_ARM64_BINARY"
+	binary_path="$INSTALLER_DIR/$BINNAME.exe"
+	uninstaller_path="$PAYLOAD/reasonix-uninstall.exe"
+	if command -v cygpath >/dev/null 2>&1; then
+		binary_path="$(cygpath -w "$binary_path")"
+		uninstaller_path="$(cygpath -w "$uninstaller_path")"
+	fi
+	(
+		cd "$INSTALLER_DIR"
+		makensis \
+			"-D${binary_define}=${binary_path}" \
+			"-DARG_REASONIX_SIGNED_UNINSTALLER=${uninstaller_path}" \
+			project.nsi
+	)
+
+	installer=$(find "$BIN_DIR" -maxdepth 1 -type f -name '*installer*.exe' -print -quit)
+	[ -n "$installer" ] && [ -s "$installer" ] || { echo "makensis did not produce a Windows installer" >&2; exit 1; }
+
+	cp "$installer" "$dist_installer"
+else
+	echo "==> skip NSIS installer (DESKTOP_BUILD_SKIP_INSTALLER=1)"
+fi
 
 portable_staging=$(mktemp -d)
 cleanup() {
@@ -160,7 +176,33 @@ cat >"$portable_staging/current.json" <<EOF
 EOF
 "$ROOT/scripts/verify-windows-portable.sh" "$portable_staging"
 
-if command -v powershell.exe >/dev/null 2>&1; then
+# Windows ships bsdtar (System32\tar.exe): at equal output size it writes this
+# tree about twice as fast as PowerShell's Compress-Archive.
+bsdtar_bin=""
+system_tar_win="${SYSTEMROOT:-C:\\Windows}\\System32\\tar.exe"
+if command -v cygpath >/dev/null 2>&1; then
+	system_tar="$(cygpath -u "$system_tar_win")"
+	if [ -x "$system_tar" ]; then
+		bsdtar_bin="$system_tar"
+	fi
+fi
+
+if [ -n "$bsdtar_bin" ]; then
+	dist_portable_arg="$dist_portable"
+	if command -v cygpath >/dev/null 2>&1; then
+		dist_portable_arg="$(cygpath -w "$dist_portable")"
+	fi
+	# Name the top-level entries explicitly so the archive layout matches the
+	# Compress-Archive form (no leading "./").
+	portable_members=()
+	while IFS= read -r member; do
+		portable_members+=("$member")
+	done < <(cd "$portable_staging" && ls -A)
+	(
+		cd "$portable_staging"
+		"$bsdtar_bin" -a -c -f "$dist_portable_arg" -- "${portable_members[@]}"
+	)
+elif command -v powershell.exe >/dev/null 2>&1; then
 	portable_staging_win="$portable_staging"
 	dist_portable_win="$dist_portable"
 	if command -v cygpath >/dev/null 2>&1; then
@@ -177,22 +219,26 @@ elif command -v zip >/dev/null 2>&1; then
 		zip -q -r "$dist_portable" .
 	)
 else
-	echo "neither powershell.exe nor zip is available to create the Windows portable archive" >&2
+	echo "no zip writer is available to create the Windows portable archive" >&2
 	exit 1
 fi
 
-# The second SignPath request signs the outer installer only after verifying
-# these already-signed payload files (flat executables plus the app/ tree).
-# Keeping one exact bundle makes the artifact configuration fail closed if a
-# required installed executable is missing.
-installer_bundle="$DESKTOP/build/windows/installer-signing-bundle"
-rm -rf -- "$installer_bundle"
-mkdir -p "$installer_bundle"
-cp "$dist_installer" "$installer_bundle/"
-for name in "${required_payload[@]}"; do
-	cp "$PAYLOAD/$name" "$installer_bundle/$name"
-done
-cp -R "$PAYLOAD/app" "$installer_bundle/app"
-cp "$PAYLOAD/$SIGNING_LIST" "$installer_bundle/$SIGNING_LIST"
+if [ "$skip_installer" != "1" ]; then
+	# The second SignPath request signs the outer installer only after verifying
+	# these already-signed payload files (flat executables plus the app/ tree).
+	# Keeping one exact bundle makes the artifact configuration fail closed if a
+	# required installed executable is missing.
+	installer_bundle="$DESKTOP/build/windows/installer-signing-bundle"
+	rm -rf -- "$installer_bundle"
+	mkdir -p "$installer_bundle"
+	cp "$dist_installer" "$installer_bundle/"
+	for name in "${required_payload[@]}"; do
+		cp "$PAYLOAD/$name" "$installer_bundle/$name"
+	done
+	cp -R "$PAYLOAD/app" "$installer_bundle/app"
+	cp "$PAYLOAD/$SIGNING_LIST" "$installer_bundle/$SIGNING_LIST"
 
-echo "==> rebuilt Windows $arch installer and portable archive from $PAYLOAD"
+	echo "==> rebuilt Windows $arch installer and portable archive from $PAYLOAD"
+else
+	echo "==> rebuilt Windows $arch portable archive from $PAYLOAD"
+fi
