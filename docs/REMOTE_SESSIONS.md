@@ -252,6 +252,29 @@ arguments match exactly; it never kills an unrelated process.
 same time are serialized by a remote file lock; the lock expires after 60
 seconds of inactivity.
 
+**Environment handed to MCP children**: a serve tells each stdio MCP server it
+spawns which endpoint and session own it, through `REASONIX_SERVE_URL`,
+`REASONIX_SERVE_TOKEN_FILE`, and `REASONIX_SESSION_PATH`. A remote wake — for
+example one coming from `chatting` — can then address the session that asked
+instead of whichever tab happens to be foreground. The desktop app has always
+installed these per workspace; a supervised or CLI-started `reasonix serve` /
+`reasonix web` now installs them too. Two boundaries are deliberate, and serve
+logs a warning when it cannot name either:
+
+- **The token must be file-backed.** Children read the file named by
+  `REASONIX_SERVE_TOKEN_FILE`. A serve that keeps its token in memory
+  (`--token` or an auto-generated one) has no file to hand out, so its children
+  cannot authenticate a wake — start it with `--token-file` to make it
+  wakeable, as this module's bootstrap already does.
+- **The session must be unambiguous.** `REASONIX_SESSION_PATH` is set only when
+  exactly one session belongs to that workspace root. With several sessions on
+  one root it is omitted on purpose: the wake then lands in the foreground
+  session, and its sender sees it was not addressed precisely rather than being
+  told a guess was exact.
+
+MCP servers reached over HTTP/SSE are not child processes and receive none of
+this environment.
+
 ## Remote session lifecycle
 
 - One serve carries one **foreground session**. Switching to another session

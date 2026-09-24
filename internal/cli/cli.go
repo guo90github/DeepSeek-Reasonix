@@ -276,6 +276,8 @@ type cliBuildOverrides struct {
 	// SessionTemp carries the previous Controller's private temporary directory
 	// manager across model/profile rebuilds so temporary files survive.
 	SessionTemp *sessiontemp.Manager
+	// MCPProcessEnv hands stdio MCP children the serve endpoint and session that own them.
+	MCPProcessEnv func(root string) map[string]string
 }
 
 // sessionTempFromCLIController returns the logical-session private temporary
@@ -313,6 +315,7 @@ func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey b
 		OnSessionRecovered:   overrides.OnSessionRecovered,
 		Ablation:             overrides.Ablation,
 		SessionTemp:          overrides.SessionTemp,
+		MCPProcessEnv:        overrides.MCPProcessEnv,
 	}
 	opts.MCPHostProfile = plugin.HostProfileForInteractive(overrides.InteractiveHost)
 	return opts
@@ -929,7 +932,8 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	// Keep the browser reachable when the selected provider has no saved key.
 	// The loopback-only provider setup surface stores the missing credential and
 	// rebuilds this controller in place before the normal web UI is exposed.
-	ctrl, serveBuildOpts, err := setupCLIMultiSessionProfile(ctx, *model, *maxSteps, deprecatedMode, sessionTag, leases)
+	mcpEnv := newServeMCPEnvState(*addr, *tokenFile) // children learn the endpoint and session that own them
+	ctrl, serveBuildOpts, err := setupCLIMultiSessionProfile(ctx, *model, *maxSteps, deprecatedMode, sessionTag, leases, mcpEnv)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)
 		return 1
@@ -951,11 +955,13 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 
 	srv := newCLIMultiSessionServer(ctrl, bc, sessionTag, serveCfg, leases, serveBuildOpts)
 	defer srv.Close()
+	mcpEnv.setServe(srv.SessionPathForRoot, srv.AuthMode() == "token")
 	return runServeFrontend(ctrl, srv, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,
 		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,
 		openBrowser: *openBrowser && !*noOpen,
 		hasSession:  *resume != "" || *sessionID != "",
+		onBound:     mcpEnv.setBoundAddr,
 	})
 }
 

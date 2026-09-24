@@ -7,6 +7,9 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -160,6 +163,45 @@ func (s *Server) tagFor(ctrl *control.Controller) *sessionTagSink {
 	s.tagsMu.Lock()
 	defer s.tagsMu.Unlock()
 	return s.tags[ctrl]
+}
+
+// SessionPathForRoot names the session whose MCP children belong to root, but
+// only when exactly one registered session matches: with several the address is
+// ambiguous, and an addressed remote wake must not be handed a guess.
+func (s *Server) SessionPathForRoot(root string) string {
+	root = strings.TrimSpace(root)
+	if s == nil || root == "" {
+		return ""
+	}
+	found := ""
+	s.tagsMu.Lock()
+	defer s.tagsMu.Unlock()
+	for ctrl, tag := range s.tags {
+		if ctrl == nil || tag == nil || !sameWorkspaceRoot(ctrl.WorkspaceRoot(), root) {
+			continue
+		}
+		path := tag.Path()
+		if path == "" {
+			continue
+		}
+		if found != "" && found != path {
+			return ""
+		}
+		found = path
+	}
+	return found
+}
+
+// sameWorkspaceRoot folds the path spellings one workspace root can arrive in.
+func sameWorkspaceRoot(a, b string) bool {
+	a, b = filepath.Clean(strings.TrimSpace(a)), filepath.Clean(strings.TrimSpace(b))
+	if a == "" || b == "" {
+		return a == b
+	}
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 func (s *Server) forgetSessionTag(ctrl *control.Controller) {

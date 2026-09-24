@@ -39,6 +39,9 @@ type serveFrontendOptions struct {
 	pidFile     string
 	openBrowser bool
 	hasSession  bool
+	// onBound reports the address the listener actually took. Nil is fine: the
+	// caller then keeps the address it asked for.
+	onBound func(addr string)
 }
 
 type serveFrontendResources struct {
@@ -111,6 +114,9 @@ func runServeFrontend(ctrl *control.Controller, srv *serve.Server, cfg config.Se
 		return 1
 	}
 	defer resources.release(false)
+	if opts.onBound != nil {
+		opts.onBound(resources.displayAddr)
+	}
 	srv.EnableProviderSetupForListener(resources.displayAddr)
 	reportServeFrontend(ctrl, srv, cfg, resources.displayAddr, opts)
 	startServeBalanceDiagnostics(ctrl)

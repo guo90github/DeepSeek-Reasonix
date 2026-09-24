@@ -159,6 +159,8 @@ type Options struct {
 	// MCPHostProfile is the capability surface for hosts Build creates;
 	// ignored when SharedHost is set (it fixed its own profile).
 	MCPHostProfile plugin.HostProfile
+	// MCPProcessEnv resolves the per-spawn env for stdio MCP children; nil keeps the previous behavior.
+	MCPProcessEnv func(root string) map[string]string
 	// CleanupPendingReconciler retries delayed physical cleanup for session
 	// artifacts left by a previous process. Nil uses the core physical-delete
 	// reconciler; frontends with different deletion semantics can override it.
@@ -742,7 +744,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// instead of one per tab). Otherwise construct a private host per controller.
 	pluginHost := opts.SharedHost
 	if pluginHost == nil {
-		pluginHost = plugin.NewHostWithProfile(opts.MCPHostProfile)
+		pluginHost = newMCPHost(opts, root)
 	}
 
 	// Enabled MCP servers enter the tool catalog at boot. Cached schemas
@@ -2096,6 +2098,20 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		ImplicitSkillInvocation: implicitSkillInvocation,
 	}
 	return finalizeBuildResult(&BuildResult{Controller: ctrl, Snapshot: snap, Runtime: runtimeSet, Owner: owner, Extensions: extensionMgr, Dispatcher: extensionDispatcher, ExtensionUI: extUIHub, ProviderResolver: providerResolver, BaseProviderResolver: baseResolver, Assembly: assembly}, !opts.deferPublish), nil
+}
+
+// newMCPHost builds a controller's private MCP host and installs the
+// frontend's per-spawn env resolver on it. A caller-supplied shared host keeps
+// the provider its owner installed, which is why this runs only when Build
+// received none.
+func newMCPHost(opts Options, root string) *plugin.Host {
+	host := plugin.NewHostWithProfile(opts.MCPHostProfile)
+	if opts.MCPProcessEnv != nil {
+		// Resolved once per spawn: a listener that binds after this build still
+		// reaches children born later.
+		host.SetProcessEnvProvider(func() map[string]string { return opts.MCPProcessEnv(root) })
+	}
+	return host
 }
 
 // effectivePlannerModel centralizes planner precedence. Every role setting

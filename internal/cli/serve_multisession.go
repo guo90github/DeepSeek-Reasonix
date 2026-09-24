@@ -26,7 +26,7 @@ func newServeBootstrap() (*serve.Broadcaster, *serve.SessionTagSink, *config.Con
 	return bc, serve.NewSessionTagSink(bc), cfg
 }
 
-func setupCLIMultiSessionProfile(ctx context.Context, model string, maxSteps int, preset string, tag *serve.SessionTagSink, leases *control.SessionLeaseKeeper) (*control.Controller, boot.Options, error) {
+func setupCLIMultiSessionProfile(ctx context.Context, model string, maxSteps int, preset string, tag *serve.SessionTagSink, leases *control.SessionLeaseKeeper, env *serveMCPEnvState) (*control.Controller, boot.Options, error) {
 	migrateMCPConfigForCLIWorkspace()
 	broker, err := serveBrowserBrokerFromEnv(os.Getenv)
 	if err != nil {
@@ -34,6 +34,7 @@ func setupCLIMultiSessionProfile(ctx context.Context, model string, maxSteps int
 	}
 	opts := cliProfileBuildOptions(model, maxSteps, false, tag, cliBuildOverrides{
 		Preset: preset, OnSessionRecovered: cliSessionRecoveredHandler(leases),
+		MCPProcessEnv: env.envForRoot,
 	})
 	if broker != nil {
 		// The initial controller's tools go through the session-scoped view;
