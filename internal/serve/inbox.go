@@ -85,27 +85,30 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 	if strings.EqualFold(body.Intent, "steer") {
 		intent = sessioninbox.IntentSteer
 	}
-	// A blind steer is a remote wake that lands in the foreground session and
-	// still answers 202, so the caller cannot tell it from an addressed one.
-	// Only steers warn: a blind follow-up is ordinary for browser clients.
-	if intent == sessioninbox.IntentSteer && strings.TrimSpace(r.Header.Get(sessionPathHeader)) == "" {
-		slog.Warn("inbox: steer without a session path; it lands in the foreground session", "source", "http")
-	}
-	// A wake must not die on a stale address — the sending session captured this
-	// path at MCP spawn, so a window whose tabs moved on would answer 409
-	// forever. Only a steer degrades to the foreground; a follow-up is refused.
+	// An addressed wake lands in the session it names or is refused. Answering
+	// 202 after landing in the foreground would hide a misdelivery from the
+	// sender; only a wake that named no session may use the foreground.
 	requested := agent.CanonicalSessionPath(strings.TrimSpace(r.Header.Get(sessionPathHeader)))
-	if err := s.activateAddressedSession(requested); err != nil {
-		if intent != sessioninbox.IntentSteer {
-			http.Error(w, err.Error(), http.StatusConflict)
+	if requested != "" {
+		if err := s.activateAddressedSession(requested); err != nil {
+			http.Error(w, "addressed session cannot receive this here: "+err.Error(), http.StatusConflict)
 			return
 		}
-		slog.Warn("inbox: addressed session is not open here; the steer lands in the foreground session",
-			"err", err, "requested", requested)
+	} else if intent == sessioninbox.IntentSteer {
+		slog.Warn("inbox: steer without a session path; it lands in the foreground session", "source", "http")
 	}
 	api := s.inboxAPI()
 	if ensurer, ok := any(api).(interface{ EnsureSessionPath() }); ok {
 		ensurer.EnsureSessionPath()
+	}
+	landed := agent.CanonicalSessionPath(strings.TrimSpace(s.ctl().SessionPath()))
+	if requested != "" && landed != requested {
+		// The address could not be honored even though activation reported
+		// success: refuse before admitting anything rather than deliver elsewhere.
+		slog.Warn("inbox: addressed session is not the delivery target; refusing instead of misdelivering",
+			"requested", requested, "landed", landed)
+		http.Error(w, "addressed session cannot receive this here", http.StatusConflict)
+		return
 	}
 	req := control.InboxRequest{
 		Intent:      intent,
@@ -130,9 +133,9 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 		writeInboxError(w, err)
 		return
 	}
-	// Where it really landed: a steer that fell back reports the foreground
-	// session here, so the sender can tell a blind delivery from the named one.
-	w.Header().Set(sessionPathHeader, agent.CanonicalSessionPath(s.ctl().SessionPath()))
+	rec.SessionPath = landed
+	rec.RequestedSessionPath = requested
+	w.Header().Set(sessionPathHeader, landed)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(rec)

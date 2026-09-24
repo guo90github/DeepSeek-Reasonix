@@ -258,19 +258,31 @@ spawns which endpoint and session own it, through `REASONIX_SERVE_URL`,
 example one coming from `chatting` — can then address the session that asked
 instead of whichever tab happens to be foreground. The desktop app has always
 installed these per workspace; a supervised or CLI-started `reasonix serve` /
-`reasonix web` now installs them too. Two boundaries are deliberate, and serve
-logs a warning when it cannot name either:
+`reasonix web` now installs them too. Serve logs a warning when it cannot name
+one of them:
 
 - **The token must be file-backed.** Children read the file named by
   `REASONIX_SERVE_TOKEN_FILE`. A serve that keeps its token in memory
   (`--token` or an auto-generated one) has no file to hand out, so its children
   cannot authenticate a wake — start it with `--token-file` to make it
   wakeable, as this module's bootstrap already does.
-- **The session must be unambiguous.** `REASONIX_SESSION_PATH` is set only when
-  exactly one session belongs to that workspace root. With several sessions on
-  one root it is omitted on purpose: the wake then lands in the foreground
-  session, and its sender sees it was not addressed precisely rather than being
-  told a guess was exact.
+- **`REASONIX_SESSION_PATH` names the session of the controller that owns the
+  child.** A private host (CLI `serve`, a supervised agent) belongs to one
+  controller, so the value is exactly that session. Desktop shares one host per
+  workspace root, where no single session is the answer: its children receive
+  the root's active tab as a default, and a server that must address the exact
+  session that asked reads the **caller session carried on every MCP call**
+  instead — `params._meta["reasonix/sessionPath"]`, set from the calling agent
+  (`internal/plugin/call_meta.go`).
+
+**Addressing is exact or refused.** `POST /inbox/items` carrying
+`X-Reasonix-Session-Path` is admitted into that session or answered `409`; it is
+never redirected into the foreground session, because a sender cannot tell the
+two apart from a `202`. A wake that names no session is a blind one, and the
+foreground session is then its target by contract. The `202` receipt states
+where the item went in its body (`sessionPath`, plus `requestedSessionPath` when
+the caller named one), so blind delivery and addressed delivery stay
+distinguishable.
 
 MCP servers reached over HTTP/SSE are not child processes and receive none of
 this environment.

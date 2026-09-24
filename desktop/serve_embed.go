@@ -294,12 +294,15 @@ func loadOrCreateServeToken() (string, error) {
 // and session own them. Without it a remote wake can only address whichever
 // tab happens to be foreground, never the workspace that asked.
 //
+// One root shares one child, so this session value is a default rather than an
+// identity: a server that must address the session that asked reads the caller
+// session on each call instead (internal/plugin call_meta.go).
+//
 // The values must not depend on the listener being up. Children spawn while
 // tabs build, and startup starts the listener only after a foreground tab is
 // ready — a child born in that window keeps the missing env for its whole life
 // (plugin.Host resolves the provider once per spawn, and one root reuses one
-// child). A remote wake then reaches serve through the client's own defaults
-// and lands in the foreground tab, silently.
+// child). A remote wake then names no session and lands in the foreground tab.
 func (a *App) hostProcessEnvForRoot(root string) map[string]string {
 	env := map[string]string{
 		"REASONIX_SERVE_URL":        embeddedServeURL(nil),
@@ -310,7 +313,7 @@ func (a *App) hostProcessEnvForRoot(root string) map[string]string {
 	}
 	path := a.sessionPathForRoot(root)
 	if path == "" {
-		slog.Warn("host process env: no session path for root; a remote wake for it will land in the foreground tab", "root", root)
+		slog.Warn("host process env: no session path for root; a child reading only this env names no session", "root", root)
 		return env
 	}
 	env["REASONIX_SESSION_PATH"] = path

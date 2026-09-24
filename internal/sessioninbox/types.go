@@ -177,6 +177,11 @@ type InboxReceipt struct {
 	Paused      bool        `json:"paused"`
 	Capacity    Capacity    `json:"capacity"`
 	Idempotent  bool        `json:"idempotent,omitempty"`
+	// SessionPath is where the item was admitted; RequestedSessionPath is the
+	// address the caller named, empty when none was named. The enqueue response
+	// carries both; a /inbox/receipt lookup reads the stored item instead.
+	SessionPath          string `json:"sessionPath,omitempty"`
+	RequestedSessionPath string `json:"requestedSessionPath,omitempty"`
 }
 
 // EnqueueRequest is the input for durable admission.

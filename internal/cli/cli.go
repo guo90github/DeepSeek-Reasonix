@@ -276,8 +276,9 @@ type cliBuildOverrides struct {
 	// SessionTemp carries the previous Controller's private temporary directory
 	// manager across model/profile rebuilds so temporary files survive.
 	SessionTemp *sessiontemp.Manager
-	// MCPProcessEnv hands stdio MCP children the serve endpoint and session that own them.
-	MCPProcessEnv func(root string) map[string]string
+	// MCPProcessEnv hands stdio MCP children the serve endpoint and the session
+	// of the controller whose private host spawns them.
+	MCPProcessEnv func(sessionPath string) map[string]string
 }
 
 // sessionTempFromCLIController returns the logical-session private temporary
@@ -955,7 +956,7 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 
 	srv := newCLIMultiSessionServer(ctrl, bc, sessionTag, serveCfg, leases, serveBuildOpts)
 	defer srv.Close()
-	mcpEnv.setServe(srv.SessionPathForRoot, srv.AuthMode() == "token")
+	mcpEnv.setTokenAuth(srv.AuthMode() == "token")
 	return runServeFrontend(ctrl, srv, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,
 		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,

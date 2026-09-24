@@ -94,3 +94,32 @@ func TestDispatchResolvedToolNeverRetriesCancellationOrAmbiguousDispatch(t *test
 }
 
 var _ tool.Tool = (*transientOnceTool)(nil)
+
+type callerSessionRecordingTool struct{ seen string }
+
+func (t *callerSessionRecordingTool) Name() string        { return "mcp__chatting__room_wait" }
+func (t *callerSessionRecordingTool) Description() string { return "" }
+func (t *callerSessionRecordingTool) Schema() json.RawMessage {
+	return json.RawMessage(`{"type":"object"}`)
+}
+func (t *callerSessionRecordingTool) ReadOnly() bool { return true }
+func (t *callerSessionRecordingTool) Execute(ctx context.Context, _ json.RawMessage) (string, error) {
+	t.seen = tool.CallerSessionPath(ctx)
+	return "ok", nil
+}
+
+// One MCP child serves every session of a plugin host, so the session it reports
+// must be the one whose agent is calling — not the host's default, which is a
+// tab choice, and not the foreground tab, which is a window choice.
+func TestDispatchResolvedToolMarksTheCallerSession(t *testing.T) {
+	a := &Agent{}
+	a.SetSessionPath("/sessions/room.jsonl")
+	target := &callerSessionRecordingTool{}
+	plan := &toolCallPlan{runTool: target, runArgs: json.RawMessage(`{}`), readOnly: true}
+	if _, _, _, err := a.dispatchResolvedTool(context.Background(), plan); err != nil {
+		t.Fatalf("dispatch: %v", err)
+	}
+	if target.seen != "/sessions/room.jsonl" {
+		t.Fatalf("tool saw caller session %q, want the agent's own session", target.seen)
+	}
+}

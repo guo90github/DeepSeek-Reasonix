@@ -228,16 +228,25 @@ fragment 中，不会随请求进入服务器日志；旧版 serve 自动回退 
 `REASONIX_SERVE_TOKEN_FILE`、`REASONIX_SESSION_PATH` 三件传递。远程唤醒
 （例如来自 `chatting` 的那种）因此可以精确投给发起方所在的那个会话，而不是
 恰好在前台的那个标签页。桌面端一直是按工作区注入；受托管或由 CLI 直接启动的
-`reasonix serve` / `reasonix web` 现在也会注入。两条边界是有意为之的，serve
-在无法给出某一项时会打一条警告：
+`reasonix serve` / `reasonix web` 现在也会注入。serve 在无法给出某一项时会打
+一条警告：
 
 - **token 必须落在文件里**：子进程读 `REASONIX_SERVE_TOKEN_FILE` 指名的文件。
   若 serve 的 token 只在内存中（`--token` 或自动生成），就没有文件可给，
   子进程无法为唤醒完成认证——用 `--token-file` 启动即可被唤醒（本模块的引导
   流程本来就是这么做的）。
-- **会话必须唯一**：只有该工作区根下**恰好一个**会话时才会给出
-  `REASONIX_SESSION_PATH`。同一根下存在多个会话时**故意不给**：唤醒会落到
-  前台会话，而发送方会看到这是"未精确投递"，而不是被告知一个猜出来的地址。
+- **`REASONIX_SESSION_PATH` 给的是"拥有这个子进程的控制器"的会话**。私有 host
+  （CLI `serve`、受托管 agent）只属于一个控制器，所以值就是那个会话本身；桌面端
+  每个工作区根共享一个 host，**没有哪一个会话是正确答案**——那里的子进程拿到的是
+  该根下活动标签页作为**默认值**，需要精确地址的服务端应当改读**每次 MCP 调用
+  携带的调用方会话**：`params._meta["reasonix/sessionPath"]`（由发起调用的 agent
+  写入，见 `internal/plugin/call_meta.go`）。
+
+**寻址要么精确、要么拒绝。** 带 `X-Reasonix-Session-Path` 的
+`POST /inbox/items` 只会投给那个会话，否则返回 `409`；绝不会被改投前台会话——
+发送方从 `202` 上分辨不出这两者。不带地址的唤醒属于"盲投"，此时前台会话按约定
+就是目标。`202` 回执在 **body** 里写明实际落点（`sessionPath`；调用方点了名时
+另有 `requestedSessionPath`），盲投与定点投递因此始终可区分。
 
 以 HTTP/SSE 接入的 MCP 服务器不是子进程，不会拿到这套环境。
 

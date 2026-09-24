@@ -18,45 +18,37 @@ func TestLoopbackServeURL(t *testing.T) {
 	}
 }
 
-func TestServeMCPEnvReportsWhatItCanName(t *testing.T) {
+func TestServeMCPEnvNamesTheOwningSession(t *testing.T) {
 	st := newServeMCPEnvState("0.0.0.0:8787", "")
-	if got := st.envForRoot("/w"); got["REASONIX_SERVE_URL"] != "http://127.0.0.1:8787" {
+	if got := st.envForSession("/sessions/w.jsonl"); got["REASONIX_SERVE_URL"] != "http://127.0.0.1:8787" {
 		t.Fatalf("serve URL = %q, want the loopback form", got["REASONIX_SERVE_URL"])
 	}
-	if _, ok := st.envForRoot("/w")["REASONIX_SESSION_PATH"]; ok {
-		t.Fatal("a state without a session lookup must not name a session")
+	if got := st.envForSession("/sessions/w.jsonl")["REASONIX_SESSION_PATH"]; got != "/sessions/w.jsonl" {
+		t.Fatalf("session path = %q, want the controller's own session", got)
 	}
-
-	st.setServe(func(root string) string {
-		if root == "/w" {
-			return "/sessions/w.jsonl"
-		}
-		return ""
-	}, false)
-	if got := st.envForRoot("/w")["REASONIX_SESSION_PATH"]; got != "/sessions/w.jsonl" {
-		t.Fatalf("session path = %q, want the single session of that root", got)
-	}
-	if _, ok := st.envForRoot("/other")["REASONIX_SESSION_PATH"]; ok {
-		t.Fatal("an ambiguous root must not be reported as a precise address")
+	// No session yet: naming none is honest, and Serve refuses an addressed wake
+	// it cannot place instead of dropping it into the foreground.
+	if _, ok := st.envForSession("")["REASONIX_SESSION_PATH"]; ok {
+		t.Fatal("a host with no session yet must not name one")
 	}
 
 	st.setBoundAddr("127.0.0.1:9123")
-	if got := st.envForRoot("/w")["REASONIX_SERVE_URL"]; got != "http://127.0.0.1:9123" {
+	if got := st.envForSession("/sessions/w.jsonl")["REASONIX_SERVE_URL"]; got != "http://127.0.0.1:9123" {
 		t.Fatalf("serve URL after binding = %q, want the bound address", got)
 	}
 }
 
 func TestServeMCPEnvNamesOnlyFileBackedTokens(t *testing.T) {
 	withFile := newServeMCPEnvState("127.0.0.1:8787", " /home/u/serve.token ")
-	if got := withFile.envForRoot("/w")["REASONIX_SERVE_TOKEN_FILE"]; got != "/home/u/serve.token" {
+	if got := withFile.envForSession("/sessions/w.jsonl")["REASONIX_SERVE_TOKEN_FILE"]; got != "/home/u/serve.token" {
 		t.Fatalf("token file = %q, want the trimmed --token-file path", got)
 	}
 
 	// Token auth without a file: the child cannot read the secret, so the
 	// environment must not pretend otherwise.
 	noFile := newServeMCPEnvState("127.0.0.1:8787", "")
-	noFile.setServe(nil, true)
-	if _, ok := noFile.envForRoot("/w")["REASONIX_SERVE_TOKEN_FILE"]; ok {
+	noFile.setTokenAuth(true)
+	if _, ok := noFile.envForSession("/sessions/w.jsonl")["REASONIX_SERVE_TOKEN_FILE"]; ok {
 		t.Fatal("a token held in memory must not be advertised as a file")
 	}
 }

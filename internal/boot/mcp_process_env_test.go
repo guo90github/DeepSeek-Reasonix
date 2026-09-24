@@ -13,25 +13,31 @@ import (
 	"reasonix/internal/plugin"
 )
 
-// TestBuildInstallsMCPProcessEnvForItsRoot asserts the effect at the boundary
-// that matters: the values a frontend resolves reach the stdio child's own
-// environment, and the provider is asked about this build's workspace root.
-func TestBuildInstallsMCPProcessEnvForItsRoot(t *testing.T) {
+// TestBuildResolvesMCPProcessEnvFromTheControllerSession asserts the effect at
+// the boundary that matters: the values a frontend resolves reach the stdio
+// child's own environment, and the resolver is asked about the controller's own
+// session — never the workspace root, which a shared host would have to guess from.
+func TestBuildResolvesMCPProcessEnvFromTheControllerSession(t *testing.T) {
 	isolateConfigHome(t)
 	workspace := robustTempDir(t)
 	t.Chdir(workspace)
 	out := filepath.Join(t.TempDir(), "child-env.txt")
 
-	var roots []string
+	var resolved []string
 	ctrl, err := Build(context.Background(), Options{
 		SessionDir: filepath.Join(t.TempDir(), "sessions"),
 		Sink:       event.Discard,
-		MCPProcessEnv: func(root string) map[string]string {
-			roots = append(roots, root)
-			return map[string]string{
-				"REASONIX_SERVE_URL":    "http://127.0.0.1:8787",
-				"REASONIX_SESSION_PATH": filepath.Join(root, "session.jsonl"),
+		MCPProcessEnv: func(sessionPath string) map[string]string {
+			resolved = append(resolved, sessionPath)
+			env := map[string]string{
+				"REASONIX_SERVE_URL": "http://127.0.0.1:8787",
+				// Proof of what the host decided, even while no session is pinned.
+				"REASONIX_RESOLVED_SESSION": sessionPath,
 			}
+			if strings.TrimSpace(sessionPath) != "" {
+				env["REASONIX_SESSION_PATH"] = sessionPath
+			}
+			return env
 		},
 		ExtraPlugins: []plugin.Spec{{
 			Name:    "env-probe",
@@ -52,8 +58,8 @@ func TestBuildInstallsMCPProcessEnvForItsRoot(t *testing.T) {
 			if !strings.Contains(env, "REASONIX_SERVE_URL=http://127.0.0.1:8787") {
 				t.Fatalf("child environment is missing the serve URL:\n%s", env)
 			}
-			if !strings.Contains(env, "REASONIX_SESSION_PATH=") {
-				t.Fatalf("child environment is missing the session path:\n%s", env)
+			if !strings.Contains(env, "REASONIX_RESOLVED_SESSION=") {
+				t.Fatalf("the child environment does not record the resolved session:\n%s", env)
 			}
 			break
 		}
@@ -63,15 +69,17 @@ func TestBuildInstallsMCPProcessEnvForItsRoot(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	if len(roots) == 0 {
+	if len(resolved) == 0 {
 		t.Fatal("MCPProcessEnv was never consulted for a stdio spawn")
 	}
-	for _, root := range roots {
-		if strings.TrimSpace(root) == "" {
-			t.Fatal("MCPProcessEnv was consulted with an empty root")
+	for _, path := range resolved {
+		if strings.TrimSpace(path) == "" {
+			// No session is pinned during Build; naming the root instead would be
+			// the misaddressing this test exists to prevent.
+			continue
 		}
-		if !sameDirectory(t, root, workspace) {
-			t.Fatalf("MCPProcessEnv root = %q, want the build's workspace %q", root, workspace)
+		if sameDirectory(t, path, workspace) {
+			t.Fatalf("MCPProcessEnv session = %q, want the controller's session, not the workspace root", path)
 		}
 	}
 }

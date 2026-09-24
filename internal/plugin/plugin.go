@@ -1852,10 +1852,14 @@ func (t *remoteTool) callRaw(ctx context.Context, args json.RawMessage) (json.Ra
 		}
 	}
 	tool.ObserveRemoteDispatch(ctx)
-	res, err := t.client.call(ctx, "tools/call", map[string]any{
+	params := map[string]any{
 		"name":      t.rawName,
 		"arguments": argMap,
-	})
+	}
+	if meta := callerSessionMeta(ctx); meta != nil {
+		params["_meta"] = meta
+	}
+	res, err := t.client.call(ctx, "tools/call", params)
 	if err != nil {
 		return nil, err
 	}

@@ -9,14 +9,13 @@ import (
 
 // serveMCPEnvState carries what a CLI-hosted Serve tells its MCP children: the
 // endpoint a remote wake should reach, the token file they can read, and the
-// session that owns them. Values resolve once per spawn, so a listener that
-// binds after the first controller still reaches children born later.
+// session that owns them. The session named is the controller's own, never the
+// workspace root's: a CLI host is private to one controller.
 type serveMCPEnvState struct {
 	mu         sync.RWMutex
 	url        string
 	tokenFile  string
 	tokenAuth  bool
-	sessions   func(root string) string
 	warnedKeys map[string]bool
 }
 
@@ -39,24 +38,25 @@ func (st *serveMCPEnvState) setBoundAddr(addr string) {
 	st.mu.Unlock()
 }
 
-// setServe wires the lookups that exist only once the Server is built.
-func (st *serveMCPEnvState) setServe(sessions func(root string) string, tokenAuth bool) {
+// setTokenAuth records whether the listener authenticates, which decides
+// whether a child without a token file is told it cannot wake anyone.
+func (st *serveMCPEnvState) setTokenAuth(tokenAuth bool) {
 	if st == nil {
 		return
 	}
 	st.mu.Lock()
-	st.sessions = sessions
 	st.tokenAuth = tokenAuth
 	st.mu.Unlock()
 }
 
-// envForRoot is the provider boot installs on the hosts it creates.
-func (st *serveMCPEnvState) envForRoot(root string) map[string]string {
+// envForSession is the provider boot installs on a private host: it names the
+// session of the controller that owns that host.
+func (st *serveMCPEnvState) envForSession(sessionPath string) map[string]string {
 	if st == nil {
 		return nil
 	}
 	st.mu.RLock()
-	url, tokenFile, tokenAuth, sessions := st.url, st.tokenFile, st.tokenAuth, st.sessions
+	url, tokenFile, tokenAuth := st.url, st.tokenFile, st.tokenAuth
 	st.mu.RUnlock()
 	if url == "" {
 		return nil
@@ -68,14 +68,11 @@ func (st *serveMCPEnvState) envForRoot(root string) map[string]string {
 		st.warnOnce("token-file",
 			"no token file for MCP children, so a remote wake cannot authenticate; start Serve with --token-file to make it wakeable")
 	}
-	if sessions == nil {
-		return env
-	}
-	if path := strings.TrimSpace(sessions(root)); path != "" {
+	if path := strings.TrimSpace(sessionPath); path != "" {
 		env["REASONIX_SESSION_PATH"] = path
 	} else {
-		st.warnOnce("session:"+root,
-			"no single session owns this workspace, so a remote wake for it lands in the foreground session", "root", root)
+		st.warnOnce("session",
+			"this MCP child has no session yet, so a remote wake from it names no session and lands in the foreground one")
 	}
 	return env
 }

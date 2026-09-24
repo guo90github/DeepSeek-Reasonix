@@ -159,8 +159,9 @@ type Options struct {
 	// MCPHostProfile is the capability surface for hosts Build creates;
 	// ignored when SharedHost is set (it fixed its own profile).
 	MCPHostProfile plugin.HostProfile
-	// MCPProcessEnv resolves the per-spawn env for stdio MCP children; nil keeps the previous behavior.
-	MCPProcessEnv func(root string) map[string]string
+	// MCPProcessEnv resolves the per-spawn env for a private host's stdio MCP
+	// children from the owning controller's session; nil keeps the previous behavior.
+	MCPProcessEnv func(sessionPath string) map[string]string
 	// CleanupPendingReconciler retries delayed physical cleanup for session
 	// artifacts left by a previous process. Nil uses the core physical-delete
 	// reconciler; frontends with different deletion semantics can override it.
@@ -743,8 +744,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// workspace root reuse running MCP processes (e.g. one CodeGraph daemon
 	// instead of one per tab). Otherwise construct a private host per controller.
 	pluginHost := opts.SharedHost
+	var sessionOf atomic.Pointer[func() string]
 	if pluginHost == nil {
-		pluginHost = newMCPHost(opts, root)
+		pluginHost = newMCPHost(opts, &sessionOf)
 	}
 
 	// Enabled MCP servers enter the tool catalog at boot. Cached schemas
@@ -1961,6 +1963,13 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// reviewer. Controllers that want one inject it explicitly; otherwise Goal
 	// uses the deterministic host policy.
 	ctrl := control.New(ctrlOpts)
+	// Bind a private host's children to the controller that owns them: one
+	// controller, one true session. A shared host serves several controllers, so
+	// its children learn their caller per MCP call instead.
+	if opts.SharedHost == nil && opts.MCPProcessEnv != nil {
+		sessionPath := ctrl.SessionPath
+		sessionOf.Store(&sessionPath)
+	}
 	// The role inputs set the session quality floor: delivery/deliver/quality
 	// raise it, light and its aliases fold to standard, unknown stays default.
 	if p, err := agentpreset.Normalize(firstNonEmpty(opts.AgentPreset, opts.TokenMode)); err == nil && p == agentpreset.Delivery {
@@ -2104,12 +2113,18 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 // frontend's per-spawn env resolver on it. A caller-supplied shared host keeps
 // the provider its owner installed, which is why this runs only when Build
 // received none.
-func newMCPHost(opts Options, root string) *plugin.Host {
+//
+// The resolver names the controller's own session, which does not exist yet
+// here: sessionOf is bound once it does. A child born in that window (catalog
+// discovery) still learns the endpoint, and learns its session per call.
+func newMCPHost(opts Options, sessionOf *atomic.Pointer[func() string]) *plugin.Host {
 	host := plugin.NewHostWithProfile(opts.MCPHostProfile)
 	if opts.MCPProcessEnv != nil {
-		// Resolved once per spawn: a listener that binds after this build still
-		// reaches children born later.
-		host.SetProcessEnvProvider(func() map[string]string { return opts.MCPProcessEnv(root) })
+		unbound := func() string { return "" }
+		sessionOf.Store(&unbound)
+		host.SetProcessEnvProvider(func() map[string]string {
+			return opts.MCPProcessEnv((*sessionOf.Load())())
+		})
 	}
 	return host
 }

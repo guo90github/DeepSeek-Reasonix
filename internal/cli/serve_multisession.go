@@ -34,7 +34,7 @@ func setupCLIMultiSessionProfile(ctx context.Context, model string, maxSteps int
 	}
 	opts := cliProfileBuildOptions(model, maxSteps, false, tag, cliBuildOverrides{
 		Preset: preset, OnSessionRecovered: cliSessionRecoveredHandler(leases),
-		MCPProcessEnv: env.envForRoot,
+		MCPProcessEnv: env.envForSession,
 	})
 	if broker != nil {
 		// The initial controller's tools go through the session-scoped view;
