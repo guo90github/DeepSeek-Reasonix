@@ -4,11 +4,31 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"reasonix/internal/control"
 	"reasonix/internal/provider"
 )
+
+func TestToolRecoverySnapshotWithoutControllerIsQuiet(t *testing.T) {
+	a := &App{tabs: map[string]*WorkspaceTab{"booting": {ID: "booting", Scope: "project", SessionPath: "/sessions/booting.jsonl"}}}
+	view, err := a.GetToolRecoveryForTab("booting")
+	if err != nil {
+		t.Fatalf("a tab without a controller reported an error: %v", err)
+	}
+	if view.SessionPath != "/sessions/booting.jsonl" || len(view.Calls) != 0 {
+		t.Fatalf("empty view = %+v, want that tab's session path and no calls", view)
+	}
+	body, err := json.Marshal(view)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The panel reads view.calls.length, so the quiet answer must marshal as [].
+	if !strings.Contains(string(body), `"calls":[]`) {
+		t.Fatalf("quiet view marshals without a call list: %s", body)
+	}
+}
 
 func TestRemoteToolRecoveryKeepsIdentityAndNeverReplaysUnknownPost(t *testing.T) {
 	posts := 0

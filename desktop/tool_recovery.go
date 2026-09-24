@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"reasonix/internal/control"
+	"reasonix/internal/provider"
 )
 
 type toolRecoveryController interface {
@@ -20,11 +21,14 @@ func (a *App) GetToolRecoveryForTab(tabID string) (control.ToolRecoverySnapshot,
 	if a.isRemoteTab(tabID) {
 		return a.remoteToolRecovery(tabID, nil)
 	}
-	_, ctrl := a.tabAndCtrlByID(tabID)
+	tab, ctrl := a.tabAndCtrlByID(tabID)
 	if target, ok := ctrl.(toolRecoveryController); ok {
 		return target.ToolRecoverySnapshot(), nil
 	}
-	return control.ToolRecoverySnapshot{}, fmt.Errorf("tool recovery unavailable")
+	// Frontends poll this for every idle transcript, so a tab whose controller is
+	// still building must answer "nothing to recover": an error here painted a
+	// warning on new sessions, and unlike a click there is nothing to acknowledge.
+	return control.ToolRecoverySnapshot{SessionPath: a.currentSessionPathFor(tab), Calls: []provider.ToolCallRecord{}}, nil
 }
 
 func (a *App) ResolveToolRecoveryForTab(tabID string, req control.ToolRecoveryRequest) (control.ToolRecoverySnapshot, error) {
