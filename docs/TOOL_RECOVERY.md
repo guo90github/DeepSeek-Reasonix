@@ -75,6 +75,15 @@ checks. Generic shell commands and arbitrary MCP services cannot prove external
 absence; they remain unknown. This implementation does not promise exactly-once
 effects for external services lacking authoritative receipts or deduplication.
 
+## Barrier default
+
+The write barrier is off unless `REASONIX_TOOL_RECOVERY_BARRIER=on` (also `1`,
+`true`, `block`, `enabled`) turns it back on. While off an unresolved receipt
+does not block writes, does not set a `recovery_required` turn status and is not
+reported as a pending set, so no recovery notice is painted. Receipts,
+statistics, the one-shot handoff and the recovery actions are still produced.
+The value is read per process, so a change applies after the owning host restarts.
+
 ## Transcript and compatibility
 
 `ValidateTranscript` checks an already normalized view without changing it.

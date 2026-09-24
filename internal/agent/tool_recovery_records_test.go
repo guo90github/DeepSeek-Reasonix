@@ -1,7 +1,9 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -87,5 +89,49 @@ func TestReadOnlyInterruptedCallsNeverDemandVerification(t *testing.T) {
 		if pending := a.PendingToolRecovery(); len(pending) != 0 {
 			t.Fatalf("state %q: an interrupted read-only call has no effect to confirm: %+v", state, pending)
 		}
+	}
+}
+
+// The barrier is a policy, not an invariant: it is off unless a value turns it
+// back on, while the durable receipt stays readable for statistics and recovery.
+func TestToolRecoveryBarrierOffByDefault(t *testing.T) {
+	r := &provider.ToolCallRecord{
+		Identity: provider.ActionIdentity{AttemptID: "attempt-bash", CallID: "call-bash", CanonicalTool: "bash"},
+		State:    provider.ToolRunUnknown, ReadOnly: false,
+	}
+	a := New(nil, tool.NewRegistry(), recoverySessionWithCall("call-bash", r), Options{}, event.Discard)
+
+	t.Setenv(envToolRecoveryBarrier, "")
+	if pending := a.PendingToolRecovery(); len(pending) != 1 {
+		t.Fatalf("the durable receipt must stay readable: %+v", pending)
+	}
+	plan := &toolCallPlan{
+		call:     provider.ToolCall{ID: "call-next", Name: "bash"},
+		permName: "bash", permArgs: json.RawMessage(`{}`), cctx: context.Background(),
+	}
+	if err := a.beginToolRecovery(context.Background(), plan); err != nil {
+		t.Fatalf("the default must not block a writer: %v", err)
+	}
+	var runErr error
+	a.finishRunRecovery(&runErr)
+	if runErr != nil {
+		t.Fatalf("the default must end the turn clean: %v", runErr)
+	}
+}
+
+// Re-enabling the barrier must restore the original behaviour, so a changed
+// default can never become a silent deletion of it.
+func TestToolRecoveryBarrierReenabledBlocksUnresolvedWriter(t *testing.T) {
+	r := &provider.ToolCallRecord{
+		Identity: provider.ActionIdentity{AttemptID: "attempt-bash", CallID: "call-bash", CanonicalTool: "bash"},
+		State:    provider.ToolRunUnknown, ReadOnly: false,
+	}
+	a := New(nil, tool.NewRegistry(), recoverySessionWithCall("call-bash", r), Options{}, event.Discard)
+
+	t.Setenv(envToolRecoveryBarrier, "on")
+	var runErr error
+	a.finishRunRecovery(&runErr)
+	if !errors.Is(runErr, ErrToolRecoveryRequired) {
+		t.Fatalf("the turn must report the unresolved effect, got %v", runErr)
 	}
 }

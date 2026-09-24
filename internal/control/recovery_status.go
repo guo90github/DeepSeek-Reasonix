@@ -1,6 +1,7 @@
 package control
 
 import (
+	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
 )
@@ -30,6 +31,9 @@ func (c *Controller) cancelledTurnWasSilent(completion *guardedTurnCompletion) b
 
 func (c *Controller) applyToolRecoveryTurnStatus(done *event.Event, completion *guardedTurnCompletion) {
 	if c == nil || c.executor == nil {
+		return
+	}
+	if agent.ToolRecoveryBarrierOff() {
 		return
 	}
 	if len(c.executor.PendingToolRecovery()) > 0 {

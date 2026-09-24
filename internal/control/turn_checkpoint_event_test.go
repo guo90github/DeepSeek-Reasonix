@@ -94,6 +94,8 @@ func TestTurnDoneCarriesValidatedCheckpointAcrossSuccessAndError(t *testing.T) {
 }
 
 func TestCancelledTurnDoneCarriesRetainedUserCheckpoint(t *testing.T) {
+	// The silent-interruption status belongs to the barrier's reporting.
+	t.Setenv("REASONIX_TOOL_RECOVERY_BARRIER", "on")
 	session := agent.NewSession("system")
 	started := make(chan struct{})
 	runner := &checkpointEventRunner{session: session, started: started, wait: true}

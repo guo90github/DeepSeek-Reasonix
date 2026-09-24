@@ -34,9 +34,13 @@ type ToolRecoveryRequest struct {
 func (c *Controller) ToolRecoverySnapshot() ToolRecoverySnapshot {
 	view := ToolRecoverySnapshot{SessionPath: c.SessionPath(), RuntimeEpoch: c.RuntimeStateSnapshot().RuntimeEpoch, Calls: []provider.ToolCallRecord{}, RetryEnabled: os.Getenv("REASONIX_TOOL_RECOVERY_RETRY") == "1"}
 	if c.executor != nil {
-		view.Calls = c.executor.PendingToolRecovery()
 		view.Statistics = c.executor.ToolRecoveryStatistics()
-		view.Silent = c.executor.SilentToolRecovery()
+		// With the barrier off nothing blocks writes, so reporting a pending set
+		// would only paint a notice the user cannot act on.
+		if !agent.ToolRecoveryBarrierOff() {
+			view.Calls = c.executor.PendingToolRecovery()
+			view.Silent = c.executor.SilentToolRecovery()
+		}
 	}
 	// Raw parameters stay in the session. Frontends get immutable identities
 	// and inspection facts, never an executable payload supplied by the UI.

@@ -39,6 +39,8 @@ func (t crashAfterEffectTool) Execute(context.Context, json.RawMessage) (string,
 }
 
 func TestToolRecoveryCrashAfterEffect(t *testing.T) {
+	// The review surface only reports a pending set while the barrier is on.
+	t.Setenv("REASONIX_TOOL_RECOVERY_BARRIER", "on")
 	if root := os.Getenv("REASONIX_RECOVERY_CRASH_FIXTURE"); root != "" {
 		reg := tool.NewRegistry()
 		reg.Add(crashAfterEffectTool{path: filepath.Join(root, "effects")})

@@ -53,6 +53,13 @@ hook、租约和工具执行管线。旧请求不能再次提交同一重试。
 自动证明外部效果不存在，因此默认保持未知。本实现不对没有权威回执或去重能力
 的第三方服务承诺 exactly-once。
 
+## 闸门默认值
+
+未决回执不阻止写入，除非 `REASONIX_TOOL_RECOVERY_BARRIER=on`（也接受 `1`、`true`、
+`block`、`enabled`）显式打开闸门。关闭时不产生 `recovery_required` 回合状态，也不把
+未决集合报告给界面，因此不出现恢复提示；回执、统计、一次性恢复提示与恢复动作仍照常
+产生。该值按进程读取，改动需重启拥有该 session 的主机后生效。
+
 ## 协议与兼容
 
 transcript gate 与执行恢复独立：在 provider-request interceptor 之后、请求发送

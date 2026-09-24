@@ -23,6 +23,9 @@ func (a *Agent) emitToolStarted(c provider.ToolCall) error {
 }
 
 func (a *Agent) finishRunRecovery(err *error) {
+	if toolRecoveryBarrierOff() {
+		return
+	}
 	for _, r := range a.PendingToolRecovery() {
 		if !r.ReadOnly {
 			*err = errors.Join(*err, ErrToolRecoveryRequired)

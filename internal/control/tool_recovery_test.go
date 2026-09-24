@@ -13,6 +13,8 @@ import (
 )
 
 func TestToolRecoverySnapshotStripsArgumentsAndIsStable(t *testing.T) {
+	// The review surface only reports a pending set while the barrier is on.
+	t.Setenv("REASONIX_TOOL_RECOVERY_BARRIER", "on")
 	const secret = "RECOVERY-ARGUMENT-MUST-STAY-LOCAL"
 	a := agent.New(nil, tool.NewRegistry(), agent.NewSession("system"), agent.Options{}, event.Discard)
 	a.Session().Add(provider.Message{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "call", Name: "write_file", Arguments: `{"path":"x"}`, Recovery: &provider.ToolCallRecord{Identity: provider.ActionIdentity{AttemptID: "attempt", CallID: "call"}, Arguments: json.RawMessage(`{"content":"` + secret + `"}`), State: provider.ToolRunUnknown}}}})
