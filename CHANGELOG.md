@@ -25,6 +25,12 @@ branch.
 - **Profile-scoped MCP schema caches:** capability-declaring hosts keep their
   own `v3` cache files so catalogs negotiated under different client
   capabilities never cross-read.
+- **Queued-wake gate reporting (`/inbox/items`):** a receipt whose item is still
+  waiting for a turn now names the gate holding it (`gate`), the host's own
+  sentence for that gate (`gateReason`), and whether that gate needs a human
+  answer or approval (`pendingPrompt`). All three are omitted whenever nothing
+  holds the item, so a reader that never learned them sees exactly the receipt
+  it saw before.
 
 ### Changed
 

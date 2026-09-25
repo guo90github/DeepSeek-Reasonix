@@ -284,6 +284,18 @@ where the item went in its body (`sessionPath`, plus `requestedSessionPath` when
 the caller named one), so blind delivery and addressed delivery stay
 distinguishable.
 
+**A queued receipt names its gate.** When the item is still waiting for a turn
+it also carries `gate`, the stable id of the runtime gate holding it
+(`awaiting_answer`, `turn_running`, `turn_finishing`, `rotating`, `closed`,
+`no_session_path`, `paused`, `readonly`, `host_dispatch`), `gateReason`, the
+host's own sentence for that gate, and `pendingPrompt`, true only when a human
+has to answer or approve before the item can run. A sender relays `gateReason`
+verbatim and branches on `gate`; the three fields are omitted whenever nothing
+holds the item, and older readers simply do not see them. `host_dispatch` means
+the host's publication hook owns the next kick, so the controller cannot see
+when it lands. A wake with nowhere to land is answered `409`, never a receipt
+claiming `no_session_path`: with no session file there is no queue to hold it.
+
 MCP servers reached over HTTP/SSE are not child processes and receive none of
 this environment.
 

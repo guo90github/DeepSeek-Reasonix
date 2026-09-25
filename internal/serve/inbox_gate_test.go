@@ -41,17 +41,23 @@ func TestQueuedWakeReceiptCarriesTheGateOverHTTP(t *testing.T) {
 	if receipt.SteerRejected != sessioninbox.SteerRejectedInboxPaused {
 		t.Fatalf("steerRejected = %q, want %q", receipt.SteerRejected, sessioninbox.SteerRejectedInboxPaused)
 	}
-	if receipt.DispatchGate != sessioninbox.DispatchGatePaused {
-		t.Fatalf("dispatchGate = %q, want %q", receipt.DispatchGate, sessioninbox.DispatchGatePaused)
+	if receipt.Gate != sessioninbox.GatePaused {
+		t.Fatalf("gate = %q, want %q", receipt.Gate, sessioninbox.GatePaused)
+	}
+	if receipt.GateReason != sessioninbox.GateReasonText(sessioninbox.GatePaused) {
+		t.Fatalf("gateReason = %q, want the host's own sentence", receipt.GateReason)
 	}
 	fields := map[string]any{}
 	if err := json.Unmarshal(body, &fields); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"steerRejected", "dispatchGate"} {
+	for _, key := range []string{"steerRejected", "gate", "gateReason"} {
 		if _, ok := fields[key]; !ok {
 			t.Fatalf("202 body lost %q: %s", key, body)
 		}
+	}
+	if _, ok := fields["pendingPrompt"]; ok {
+		t.Fatalf("a pause claimed the user owed an answer: %s", body)
 	}
 }
 
@@ -78,8 +84,14 @@ func TestQueuedFollowupWakeNamesTheHostKickOverHTTP(t *testing.T) {
 	if err := json.Unmarshal(body, &receipt); err != nil {
 		t.Fatalf("decode receipt: %v", err)
 	}
-	if receipt.DispatchGate != sessioninbox.DispatchGateHostDispatch {
-		t.Fatalf("dispatchGate = %q, want %q", receipt.DispatchGate, sessioninbox.DispatchGateHostDispatch)
+	if receipt.Gate != sessioninbox.GateHostDispatch {
+		t.Fatalf("gate = %q, want %q", receipt.Gate, sessioninbox.GateHostDispatch)
+	}
+	if receipt.GateReason != sessioninbox.GateReasonText(sessioninbox.GateHostDispatch) {
+		t.Fatalf("gateReason = %q, want the host's own sentence", receipt.GateReason)
+	}
+	if receipt.PendingPrompt {
+		t.Fatalf("the host-owned kick claimed the user owed an answer: %s", body)
 	}
 	fields := map[string]any{}
 	if err := json.Unmarshal(body, &fields); err != nil {

@@ -248,6 +248,15 @@ fragment 中，不会随请求进入服务器日志；旧版 serve 自动回退 
 就是目标。`202` 回执在 **body** 里写明实际落点（`sessionPath`；调用方点了名时
 另有 `requestedSessionPath`），盲投与定点投递因此始终可区分。
 
+**只排队的回执会说出它在等哪道闸。** 条目还没轮到回合时，回执另外带三项：`gate`
+是此刻关着它的那道闸的稳定 ID（`awaiting_answer`、`turn_running`、
+`turn_finishing`、`rotating`、`closed`、`no_session_path`、`paused`、`readonly`、
+`host_dispatch`）；`gateReason` 是宿主给这道闸写的原话；`pendingPrompt` 只在
+"必须先有人回答或审批才能跑"时为真。发送方按 `gate` 分支、把 `gateReason` 原样
+透传；没有闸关着时三项一律省略，旧读者看不到它们即可。`host_dispatch` 表示下一脚
+派发归宿主的发布钩子所有，会话这一侧看不到它何时放行。投递无处落地时一律回 `409`，
+不会回一个自称 `no_session_path` 的回执：没有会话文件就没有队列可存。
+
 以 HTTP/SSE 接入的 MCP 服务器不是子进程，不会拿到这套环境。
 
 ## 远程会话生命周期

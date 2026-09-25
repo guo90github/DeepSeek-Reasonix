@@ -145,27 +145,29 @@ func (c *Controller) dispatchInboxOnce() inboxDispatchResult {
 // instead of only that it is queued.
 func (c *Controller) inboxDispatchGate() string {
 	if c.PendingPrompt() {
-		return sessioninbox.DispatchGateAwaitingAnswer
+		return sessioninbox.GateAwaitingAnswer
 	}
 	c.mu.Lock()
 	switch {
 	case c.closed:
 		c.mu.Unlock()
-		return sessioninbox.DispatchGateClosed
+		return sessioninbox.GateClosed
 	case c.rotating:
 		c.mu.Unlock()
-		return sessioninbox.DispatchGateRotating
+		return sessioninbox.GateRotating
 	case c.running:
 		c.mu.Unlock()
-		return sessioninbox.DispatchGateTurnRunning
+		return sessioninbox.GateTurnRunning
 	case c.finishing:
 		c.mu.Unlock()
-		return sessioninbox.DispatchGateTurnFinishing
+		return sessioninbox.GateTurnFinishing
 	}
 	hostHook := c.modelSettings.beforeInboxDispatch != nil
 	c.mu.Unlock()
+	// Only a dispatcher reaches this branch without a session file: a caller
+	// that names no session is refused before admission and holds no receipt.
 	if c.SessionPath() == "" {
-		return sessioninbox.DispatchGateNoSessionPath
+		return sessioninbox.GateNoSessionPath
 	}
 	st, err := c.ensureInbox()
 	if err != nil {
@@ -173,23 +175,23 @@ func (c *Controller) inboxDispatchGate() string {
 	}
 	snap := st.CachedSnapshot()
 	if snap.Paused {
-		return sessioninbox.DispatchGatePaused
+		return sessioninbox.GatePaused
 	}
 	if snap.Readonly {
-		return sessioninbox.DispatchGateReadonly
+		return sessioninbox.GateReadonly
 	}
 	if hostHook {
 		// The host's publication hook owns the next kick; its answer is only
 		// visible to the dispatcher, never to the receipt.
-		return sessioninbox.DispatchGateHostDispatch
+		return sessioninbox.GateHostDispatch
 	}
 	return ""
 }
 
 // withDispatchGate annotates a receipt whose item is still queued with the gate
-// holding it: the disposition only says "queued".
+// holding it and the host's sentence for it: the disposition only says "queued".
 func (c *Controller) withDispatchGate(rec sessioninbox.InboxReceipt) sessioninbox.InboxReceipt {
-	if rec.DispatchGate != "" || rec.ItemID == "" {
+	if rec.Gate != "" || rec.ItemID == "" {
 		return rec
 	}
 	st, err := c.ensureInbox()
@@ -200,7 +202,10 @@ func (c *Controller) withDispatchGate(rec sessioninbox.InboxReceipt) sessioninbo
 	if err != nil || (meta.State != sessioninbox.StateQueued && meta.State != sessioninbox.StateUncertain) {
 		return rec
 	}
-	rec.DispatchGate = c.inboxDispatchGate()
+	gate := c.inboxDispatchGate()
+	rec.Gate = gate
+	rec.GateReason = sessioninbox.GateReasonText(gate)
+	rec.PendingPrompt = sessioninbox.GateWaitsForUser(gate)
 	return rec
 }
 
