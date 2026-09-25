@@ -4320,23 +4320,6 @@ tier = "eager"
 	}
 }
 
-func waitForMCPFailure(t *testing.T, h *plugin.Host, name string, timeout time.Duration) []plugin.Failure {
-	t.Helper()
-	deadline := time.Now().Add(timeout)
-	for {
-		failures := h.Failures()
-		for _, f := range failures {
-			if f.Name == name {
-				return failures
-			}
-		}
-		if time.Now().After(deadline) {
-			return failures
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
 // TestBuildExtraPluginProbeKeepsSessionProcessAlive pins the lifecycle split
 // used by host-supplied ACP/session MCP servers. The five-second readiness
 // context is cancelled before Build returns; a successful stdio child must

@@ -144,39 +144,10 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			s.results[i] = pre.output
 			return
 		}
-		t, _, ambiguous := a.svc.tools.ResolveCall(s.calls[i].Name)
-		known := t != nil && len(ambiguous) == 0
-		writer := known && !t.ReadOnly()
-		s.surfaceWriters[i] = writer
-		if earlierWriterRan && writer {
-			if refreshed, changed := refreshCurrentFileDiff(ctx, t, s.calls[i]); changed {
-				s.calls[i] = refreshed
-				a.sess.conversation.UpdateToolCallPreview(refreshed)
-				if err := a.emitFullToolDispatch(ctx, refreshed, true); err != nil {
-					wrapped := fmt.Errorf("persist refreshed tool dispatch %s: %w", refreshed.ID, err)
-					batchErrOnce.Do(func() { batchErr = wrapped })
-					s.outcomes[i] = toolOutcome{output: "cancelled: tool dispatch was not durable", errMsg: wrapped.Error()}
-					s.results[i] = s.outcomes[i].output
-					return
-				}
-			}
+		if a.prepareBatchCall(ctx, s, i, earlierWriterRan, &batchErr, &batchErrOnce) {
+			return
 		}
-		start := time.Now()
-		s.startedAt[i] = start.UnixMilli()
-		s.outcomes[i] = a.executeOne(ctx, turn, s.calls[i])
-		recordWorkspaceMutation(a.svc.sink, s.outcomes[i].workspaceMutation)
-		if s.outcomes[i].executed {
-			s.surfaceWriters[i] = s.outcomes[i].workspaceMutation != nil
-		}
-		if s.outcomes[i].resolved {
-			readOnly := s.outcomes[i].resolvedReadOnly
-			s.calls[i].ResolvedName = s.outcomes[i].resolvedName
-			s.calls[i].CapabilityID = s.outcomes[i].capabilityID
-			s.calls[i].ResolvedReadOnly = &readOnly
-			s.surfaceWriters[i] = !readOnly
-		}
-		s.durations[i] = time.Since(start).Milliseconds()
-		s.results[i] = s.outcomes[i].output
+		a.runBatchCall(ctx, turn, s, i)
 	}
 	committed := make([]bool, len(calls))
 	finalize := func(i int) {
@@ -377,6 +348,54 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 		recoveryStopTurn:   recoveryBatchStop,
 		recoveryStopReason: recoveryStopReason,
 	}
+}
+
+// prepareBatchCall resolves a call's tool and, once an earlier writer in this
+// batch has run, refreshes its preview from the new disk state. A dispatch that
+// cannot be persisted cancels the call rather than run it against a stale preview.
+// runBatchCall executes one batch call and folds its outcome back into the
+// shared slots: writer surfaces, resolved names, durations, and the result text.
+func (a *Agent) runBatchCall(ctx context.Context, turn *turnRuntime, s *batchSlots, i int) {
+	start := time.Now()
+	s.startedAt[i] = start.UnixMilli()
+	s.outcomes[i] = a.executeOne(ctx, turn, s.calls[i])
+	recordWorkspaceMutation(a.svc.sink, s.outcomes[i].workspaceMutation)
+	if s.outcomes[i].executed {
+		s.surfaceWriters[i] = s.outcomes[i].workspaceMutation != nil
+	}
+	if s.outcomes[i].resolved {
+		readOnly := s.outcomes[i].resolvedReadOnly
+		s.calls[i].ResolvedName = s.outcomes[i].resolvedName
+		s.calls[i].CapabilityID = s.outcomes[i].capabilityID
+		s.calls[i].ResolvedReadOnly = &readOnly
+		s.surfaceWriters[i] = !readOnly
+	}
+	s.durations[i] = time.Since(start).Milliseconds()
+	s.results[i] = s.outcomes[i].output
+}
+
+func (a *Agent) prepareBatchCall(ctx context.Context, s *batchSlots, i int, earlierWriterRan bool, batchErr *error, batchErrOnce *sync.Once) (skipped bool) {
+	t, _, ambiguous := a.svc.tools.ResolveCall(s.calls[i].Name)
+	known := t != nil && len(ambiguous) == 0
+	writer := known && !t.ReadOnly()
+	s.surfaceWriters[i] = writer
+	if !earlierWriterRan || !writer {
+		return false
+	}
+	refreshed, changed := refreshCurrentFileDiff(ctx, t, s.calls[i])
+	if !changed {
+		return false
+	}
+	s.calls[i] = refreshed
+	a.sess.conversation.UpdateToolCallPreview(refreshed)
+	if err := a.emitFullToolDispatch(ctx, refreshed, true); err != nil {
+		wrapped := fmt.Errorf("persist refreshed tool dispatch %s: %w", refreshed.ID, err)
+		batchErrOnce.Do(func() { *batchErr = wrapped })
+		s.outcomes[i] = toolOutcome{output: "cancelled: tool dispatch was not durable", errMsg: wrapped.Error()}
+		s.results[i] = s.outcomes[i].output
+		return true
+	}
+	return false
 }
 
 func (a *Agent) commitBatchCallResolution(call provider.ToolCall) {

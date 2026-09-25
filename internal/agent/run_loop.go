@@ -221,21 +221,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) (runErr err
 		cacheDiagnostics := CompareShape(prevPrefixShape, prefixShape, usage, contentReasons)
 		a.attachSessionContextDiagnostics(&cacheDiagnostics)
 		if err != nil {
-			quote := a.emitTurnUsage(usage, &cacheDiagnostics)
-			a.observeRunBudget(state, usage, quote)
-			if msg, ok := finishReasonMessage(usage); ok {
-				a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg})
-			}
-			// Exhausted stream retries (or a non-retryable error): persist one
-			// bounded LocalOnly recovery record for the next real user message.
-			// Intermediate failed attempts never wrote session state.
-			a.recordInterruptedDisplay(text, reasoning, partialCalls, true, err, state.workDurationMs())
-			// A broken provider stream can otherwise look like a silent hang
-			// followed only by the generic interrupted-turn notice (#9560).
-			if code, msg := streamInterruptNotice(err); msg != "" {
-				a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Code: code, Text: msg})
-			}
-			return err
+			return a.abandonStreamingAttempt(state, text, reasoning, partialCalls, usage, &cacheDiagnostics, err)
 		}
 		a.sess.lastPrefixShape = prefixShape
 		a.sess.haveLastPrefixShape = true
@@ -296,6 +282,23 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) (runErr err
 	// is already in the session, so the user can just send another message to pick
 	// up where it left off.
 	return a.gracePause(state)
+}
+
+// abandonStreamingAttempt closes out a sampling attempt whose stream failed:
+// one bounded LocalOnly recovery record for the next real user message, plus the
+// reason on the notice sink — a broken provider stream must not read as a silent
+// hang followed only by the generic interrupted-turn notice (#9560).
+func (a *Agent) abandonStreamingAttempt(state *turnRuntime, text, reasoning string, calls []provider.ToolCall, usage *provider.Usage, diag *CacheDiagnostics, err error) error {
+	quote := a.emitTurnUsage(usage, diag)
+	a.observeRunBudget(state, usage, quote)
+	if msg, ok := finishReasonMessage(usage); ok {
+		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Text: msg})
+	}
+	a.recordInterruptedDisplay(text, reasoning, calls, true, err, state.workDurationMs())
+	if code, msg := streamInterruptNotice(err); msg != "" {
+		a.svc.sink.Emit(event.Event{Kind: event.Notice, Level: event.LevelWarn, Code: code, Text: msg})
+	}
+	return err
 }
 
 func (a *Agent) emitProtocolRetry(attempt int, hasFallback bool) {

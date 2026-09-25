@@ -207,24 +207,11 @@ func New(cfg provider.Config) (provider.Provider, error) {
 			return nil, fmt.Errorf("openai: provider %q uses Ollama Cloud thinking; effort must be none, low, medium, high, or max", name)
 		}
 	case effort != "":
-		if hasExplicitEfforts {
-			// Explicit endpoint metadata overrides the generic OpenAI enum and its
-			// legacy max-to-high compatibility clamp.
-			if !supportsEffort(supportedEfforts, effort) {
-				return nil, fmt.Errorf("openai: provider %q: effort %q is not listed in supported_efforts: %v", name, effort, supportedEfforts)
-			}
-			break
+		resolved, err := resolveWireEffort(name, effort, hasExplicitEfforts, supportedEfforts)
+		if err != nil {
+			return nil, err
 		}
-		// Non-DeepSeek backends use OpenAI's reasoning_effort scale (low/medium/
-		// high) by default. Without an explicit provider vocabulary, max remains
-		// clamped to the OpenAI ceiling because MiMo and similar backends reject it.
-		switch effort {
-		case "max":
-			effort = "high"
-		case "low", "medium", "high":
-		default:
-			return nil, fmt.Errorf("openai: provider %q: effort must be low, medium, or high", name)
-		}
+		effort = resolved
 	}
 
 	// max_output_tokens=0 on official DeepSeek omits the wire field so the
@@ -263,6 +250,26 @@ func New(cfg provider.Config) (provider.Provider, error) {
 		http:            httpClient,
 		idleTimeout:     defaultStreamIdleTimeout,
 	}, nil
+}
+
+// resolveWireEffort maps a configured effort onto the vocabulary this endpoint
+// actually accepts. Explicit endpoint metadata wins over the generic OpenAI
+// enum, whose max is clamped to high because MiMo and similar backends reject it.
+func resolveWireEffort(name, effort string, hasExplicitEfforts bool, supportedEfforts []string) (string, error) {
+	if hasExplicitEfforts {
+		if !supportsEffort(supportedEfforts, effort) {
+			return "", fmt.Errorf("openai: provider %q: effort %q is not listed in supported_efforts: %v", name, effort, supportedEfforts)
+		}
+		return effort, nil
+	}
+	switch effort {
+	case "max":
+		return "high", nil
+	case "low", "medium", "high":
+		return effort, nil
+	default:
+		return "", fmt.Errorf("openai: provider %q: effort must be low, medium, or high", name)
+	}
 }
 
 func newHTTPClient(cfg provider.Config) (*http.Client, error) {
