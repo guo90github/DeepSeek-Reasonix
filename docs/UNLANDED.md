@@ -44,9 +44,17 @@
 ## 5 `LINT-1` 本仓自检 `repolint` 在未推分支上红
 
 - **来源**：`go run ./tools/repolint`（本机读数；改动前的条数由 `git stash` 在**改前树**上重跑核对）。
-- **状态**：**部分收**——改动前 **26 条** `New standards violations`，本笔收掉 6 条后剩 **20 条**，exit 仍为 1。
-  （房间条目 `#344` 题面写「7 条」，**那个数字是错的**：第一次读它时把输出 `tail` 了，只看到尾部 7 行。）
-- **本笔已收的 6 条，收法＝抽取到同包新文件**（不是删注释凑数）：`internal/config/config.go` → `config_model_overrides.go`、`internal/config/render_test.go` → `render_secrets_test.go`、`internal/control/controller.go` → `controller_session_recovery.go`、`internal/control/turn_orchestrator.go` → 同文件抽 `runPlanApprovedExecution`、`internal/plugin/plugin.go` → 字段注释 4→3 行、`internal/provider/openai/openai.go` → `openai_usage.go`。
-- **仍未收的 20 条**：`internal/**` 6 条（`provider/openai/openai.go` 函数体 181/180；`agent/run_loop.go` 2/1；`agent/execute_batch.go` 155/138 + complexity 23/22；`boot/boot.go` 1759/1735 + complexity 273/267；`agent/agent.go` 1981/1957；`boot/boot_test.go` 3697/3696）；`desktop/**` 14 条（`app.go` 函数体 356/354；`frontend/src/lib/useController.ts` 4530/4426；`WorkspacePanel.tsx` 1372/1350；`CapabilitiesPanel.tsx` 2643/2641；`__tests__/settings-refresh-snapshot.test.tsx` 229/179；`remote_tab.go` 121/92 等，多数只超 1–2 行）。形状＝`Go` 规则与 `TS/TSX` 文件体量各半。
-- **下一笔**：`internal/**` 继续按**抽取**收；`desktop/**` 先定口径再动——多数是**合并带进来的行位漂移**，而「不放宽基线」与「`-update` 只用于重命名/抽取」这两条今天打架（等房间裁定）。
-- **可红判据**：`go run ./tools/repolint` 退出 0；或违规清单被明确记为「已知并接受」并写出理由。
+- **状态**：**部分收**——`internal/**` 已**清零**；`desktop/**` 12 条仍在（见 §6）。改动前共 **26 条**，现 **12 条**，exit 仍为 1。
+  （房间条目 `#344` 题面写「7 条」，**那个数字是错的**：第一次读它时把输出 `tail` 了，只看到尾部 7 行 ⇒ 按 `COLLAB.md` §12「报数不许截断」重算。）
+- **收法＝抽取**（同包新文件 / 同文件抽函数，不是删注释凑数）：`provider/openai/openai.go` → `openai_usage.go` + `resolveWireEffort`；`agent/run_loop.go` → `abandonStreamingAttempt`；`agent/execute_batch.go` → `prepareBatchCall` + `runBatchCall`；`boot/boot.go` → `reviewers.go`（guardian / recovery reviewer 各一个 helper）；`agent/agent.go` → `agent_tool_output.go`；`boot/boot_test.go` → `boot_mcp_wait_test.go`；`config/config.go` → `config_model_overrides.go`；`config/render_test.go` → `render_secrets_test.go`；`control/controller.go` → `controller_session_recovery.go`；`control/turn_orchestrator.go` → `runPlanApprovedExecution`；`plugin/plugin.go` → 字段注释 4→3 行。
+- **下一笔**：只剩 §6 的 `desktop/**`。
+- **可红判据**：读法＝`go run ./tools/repolint 2>&1 | grep '^repolint: internal'` **无输出**（已达成）；全绿须 §6 一并落。
+
+## 6 `LINT-2` `desktop/**` 的 12 条：合并带进来的存量漂移（房间已裁定不在 `#344` 里做）
+
+- **来源**：`go run ./tools/repolint`；裁定＝房间 `#344` 讨论（fusion-root：**新债现场清零；存量债入账可核**）。
+- **状态**：未收，**在账**——12 条全在 `desktop/**`：`app.go` 函数体 356/354、`frontend/src/lib/useController.ts` 4530/4426、`frontend/src/components/WorkspacePanel.tsx` 1372/1350、`__tests__/settings-refresh-snapshot.test.tsx` 229/179、`__tests__/use-controller-meta.test.ts` 4/0、`CapabilitiesPanel.tsx` 2643/2641、`UsageStatsPanel.tsx` 277/276、`MemoryPanel.tsx` 1089/1088、`ThemeGallery.tsx` 490/489、`ThemeLibrary.tsx` 159/158、`remote_tab.go` 121/92、`audit_settings_app.go` essay 1/0。
+- **理由**：多数只超 1–2 行，形状是**合并（`origin/main-v2`）带进来的行位漂移**，不是本笔新债；拆桌面壳与前端组件是另一摊工作量。
+- **下一笔**：另开一条按抽取收，顺序建议——先纯文件体量（`remote_tab.go`、`settings-refresh-snapshot.test.tsx`），再动大件（`useController.ts`、`app.go`）。
+- **口径（先写死，免得日后扯皮）**：若最终走 `go run ./tools/repolint -update`，**提交信息必须写明「合并漂移 + 理由」**并把 diff 摆给评审看；**不许静默放宽基线**。
+- **可红判据**：`go run ./tools/repolint 2>&1 | grep '^repolint: desktop'` 输出为空；或本条被一条「已知并接受」的声明取代（附理由）。
