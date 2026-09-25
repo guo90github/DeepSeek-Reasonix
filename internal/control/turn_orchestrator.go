@@ -350,6 +350,13 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 		return nil
 	}
 	c.SetPlanMode(false)
+	return o.runPlanApprovedExecution(ctx, proposal)
+}
+
+// runPlanApprovedExecution runs the approved plan as a synthetic follow-up turn,
+// with writers auto-approved for that turn only.
+func (o *turnOrchestrator) runPlanApprovedExecution(ctx context.Context, proposal string) error {
+	c := o.c
 	todoArgs := c.seedPlanTodos(proposal)
 	execStart := c.sessionMessageCount()
 	// Starting plan execution is a real Recovery Episode boundary even though
@@ -360,7 +367,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	// later turn (even "continue") falls back to the normal per-tool approval.
 	c.approval.setPlanAutoApprove(true)
 	defer c.approval.setPlanAutoApprove(false)
-	err = func() error {
+	err := func() error {
 		marker := c.markInFlightTurn(execStart, false)
 		defer c.finishInFlightTurn(execStart, marker)
 		return o.runComposedSyntheticTurn(ctx, planApprovedMessage)

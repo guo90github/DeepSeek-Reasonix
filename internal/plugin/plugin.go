@@ -90,9 +90,8 @@ type Spec struct {
 	// model-visible mcp__server__tool names.
 	ToolTimeouts map[string]time.Duration
 	// WakeMethod is the MCP notification method this server may use to start
-	// work in the session it belongs to. Empty (the default) leaves it unable
-	// to wake anything: the power to start a turn is configured, never
-	// inherited from merely connecting. It never contributes to SchemaCacheKey.
+	// work in the session it belongs to. Empty leaves it unable to wake anything,
+	// and it never contributes to SchemaCacheKey.
 	WakeMethod string
 	// Dir, when set, is the working directory of a stdio subprocess. Empty means
 	// inherit reasonix's cwd (the default for user-configured plugins). It exists
