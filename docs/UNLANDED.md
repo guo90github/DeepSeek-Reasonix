@@ -34,17 +34,19 @@
 ## 4 `CUTPOINT-1` 两侧提交未推
 
 - **来源**：`git rev-list --count @{u}..HEAD`（本机读数）。
-- **状态**：未推——本条写入时 `dev-2` 领先 `origin/dev-2` **56 笔**、落后 0，工作树干净。
+- **状态**：未推——`dev-2` 领先 `origin/dev-2`、落后 0，工作树干净。
 - **理由**：本轮没人要求推；而「未推」意味着房内给的 sha 在远端取不到（对端只能靠本机路径读）。
 - **下一笔**：决定推，或明确记「不推」并替换本条。
-- **可红判据**：`git rev-list --count @{u}..HEAD` 归零，或本条被一条明确「不推」的声明取代。
+- **可红判据**：上面那条命令归零，或本条被一条明确「不推」的声明取代。
 
-> 计数会随每次提交变化，所以这一条的载体是**命令 + 仓绝对路径**，不是那个数字。
+> 本表**不写死计数**（写下的那一刻就过期）：载体是命令 + 仓绝对路径，读的人重跑取当前值。
 
 ## 5 `LINT-1` 本仓自检 `repolint` 在未推分支上红
 
-- **来源**：`go run ./tools/repolint`（本机读数，与 §0 同一时点）。
-- **状态**：未落——exit 1：`New standards violations` 共 7 条（`internal/config/config.go`、`internal/config/render_test.go`、`internal/control/controller.go`、`internal/control/turn_orchestrator.go`、`internal/plugin/plugin.go`、`internal/provider/openai/openai.go` 两条）。
-- **理由（本笔已排除）**：本笔只加两份 `docs/*.md`（`git show --stat e6de6ec74`），而 size 规则不查 `.md`；其中 `internal/plugin/plugin.go` 的超支来自上一轮的 `9f8efce3f`（该提交给该文件加了 9 行注释，把 essay 顶到 15/14），其余来自更早的合并。
-- **下一笔**：逐条对 `tools/repolint/baseline.json` 收窄——首选改代码（收窄注释 / 拆文件）；**不许静默放宽基线**，`-update` 只在重命名、抽取这类搬债场景用，并在 PR 里写明理由。
+- **来源**：`go run ./tools/repolint`（本机读数；改动前的条数由 `git stash` 在**改前树**上重跑核对）。
+- **状态**：**部分收**——改动前 **26 条** `New standards violations`，本笔收掉 6 条后剩 **20 条**，exit 仍为 1。
+  （房间条目 `#344` 题面写「7 条」，**那个数字是错的**：第一次读它时把输出 `tail` 了，只看到尾部 7 行。）
+- **本笔已收的 6 条，收法＝抽取到同包新文件**（不是删注释凑数）：`internal/config/config.go` → `config_model_overrides.go`、`internal/config/render_test.go` → `render_secrets_test.go`、`internal/control/controller.go` → `controller_session_recovery.go`、`internal/control/turn_orchestrator.go` → 同文件抽 `runPlanApprovedExecution`、`internal/plugin/plugin.go` → 字段注释 4→3 行、`internal/provider/openai/openai.go` → `openai_usage.go`。
+- **仍未收的 20 条**：`internal/**` 6 条（`provider/openai/openai.go` 函数体 181/180；`agent/run_loop.go` 2/1；`agent/execute_batch.go` 155/138 + complexity 23/22；`boot/boot.go` 1759/1735 + complexity 273/267；`agent/agent.go` 1981/1957；`boot/boot_test.go` 3697/3696）；`desktop/**` 14 条（`app.go` 函数体 356/354；`frontend/src/lib/useController.ts` 4530/4426；`WorkspacePanel.tsx` 1372/1350；`CapabilitiesPanel.tsx` 2643/2641；`__tests__/settings-refresh-snapshot.test.tsx` 229/179；`remote_tab.go` 121/92 等，多数只超 1–2 行）。形状＝`Go` 规则与 `TS/TSX` 文件体量各半。
+- **下一笔**：`internal/**` 继续按**抽取**收；`desktop/**` 先定口径再动——多数是**合并带进来的行位漂移**，而「不放宽基线」与「`-update` 只用于重命名/抽取」这两条今天打架（等房间裁定）。
 - **可红判据**：`go run ./tools/repolint` 退出 0；或违规清单被明确记为「已知并接受」并写出理由。
