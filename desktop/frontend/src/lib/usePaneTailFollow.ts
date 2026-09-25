@@ -11,6 +11,13 @@ import { createTranscriptTailSettle, type TranscriptTailSettle } from "./transcr
 import { createTranscriptScrollWriter } from "./transcriptScrollWriter";
 import type { TranscriptScrollMode } from "./transcriptScrollArbiter";
 import { nativeTranscriptDistanceFromBottom, TRANSCRIPT_AT_BOTTOM_THRESHOLD_PX } from "./transcriptScrollGeometry";
+import { recordTranscriptScrollDiagnostic } from "./transcriptScrollProbe";
+
+type PaneFollowSignal =
+  | "pane-content-version"
+  | "pane-dom-growth"
+  | "pane-height-callback"
+  | "pane-enable-flip";
 
 export function usePaneTailFollow({
   virtuosoRef,
@@ -114,8 +121,29 @@ export function usePaneTailFollow({
     return () => scrollerNode.removeEventListener("scroll", rearmFromScroll);
   }, [rearmFromScroll, scrollerNode]);
 
-  const reaim = useCallback(() => {
-    if (!enabledRef.current || modeRef.current !== "tail-follow") return;
+  // Every re-arm path names itself: the pane's four assembly inputs (projection
+  // identity, DOM growth, Virtuoso's height callback, the hydrating flip) each
+  // leave one readable entry with the decision taken at that instant. A desktop
+  // recording of a guidance row that never reached the viewport then says which
+  // signal arrived, whether the writer proceeded, and why it did not.
+  const reaimWith = useCallback((signal: PaneFollowSignal) => {
+    const element = scrollerRef.current;
+    const enabled = enabledRef.current;
+    const mode = modeRef.current;
+    const proceed = enabled && mode === "tail-follow";
+    recordTranscriptScrollDiagnostic(`pane.${signal.slice("pane-".length)}`, {
+      atMs: Math.round(performance.now()),
+      signal,
+      enabled,
+      mode,
+      proceed,
+      distance: element ? nativeTranscriptDistanceFromBottom(element) : undefined,
+      scrollTop: element?.scrollTop,
+      scrollHeight: element?.scrollHeight,
+      clientHeight: element?.clientHeight,
+      revision: geometryRevisionRef.current,
+    });
+    if (!proceed) return;
     // Single-column advances the geometry revision per layout event via
     // note(); the pane has no arbiter, so without a bump here every settle
     // loop after the session's first would burn its budget re-submitting
@@ -123,8 +151,11 @@ export function usePaneTailFollow({
     // growth signal as one new revision — the settle still re-checks native
     // distance, so a no-op signal costs one revision and no write.
     geometryRevisionRef.current += 1;
-    settle.schedule(false);
+    settle.schedule(false, signal);
   }, [settle]);
+
+  // Virtuoso's totalListHeightChanged lands here in both panes.
+  const reaim = useCallback(() => reaimWith("pane-height-callback"), [reaimWith]);
 
   // Growth detector independent of Virtuoso's callbacks: card folds, async
   // renders, and late row commits grow the list container even when no
@@ -145,18 +176,18 @@ export function usePaneTailFollow({
       scheduled = true;
       requestAnimationFrame(() => {
         scheduled = false;
-        reaim();
+        reaimWith("pane-dom-growth");
       });
     });
     observer.observe(content, { childList: true, subtree: true, characterData: true });
     return () => observer.disconnect();
-  }, [reaim, scrollerNode]);
+  }, [reaimWith, scrollerNode]);
 
   // Data identity: stream chunks rebuild the turns array; each change is a
   // growth signal (a no-op when nothing grew — schedule re-checks distance).
   useEffect(() => {
-    reaim();
-  }, [contentVersion, reaim]);
+    reaimWith("pane-content-version");
+  }, [contentVersion, reaimWith]);
 
   // Re-arm when the writer turns on (e.g. hydration/transition ends on the
   // left pane): the pane is otherwise left parked wherever restoration put it,
@@ -165,8 +196,8 @@ export function usePaneTailFollow({
   useEffect(() => {
     const turnedOn = !wasEnabledRef.current && enabled;
     wasEnabledRef.current = enabled;
-    if (turnedOn) reaim();
-  }, [enabled, reaim]);
+    if (turnedOn) reaimWith("pane-enable-flip");
+  }, [enabled, reaimWith]);
 
   useEffect(() => () => {
     generationRef.current += 1;

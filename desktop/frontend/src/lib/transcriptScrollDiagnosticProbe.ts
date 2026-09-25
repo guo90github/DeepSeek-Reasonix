@@ -38,7 +38,13 @@ export type TranscriptScrollDiagnosticSource =
   | "scroll-offset"
   | "recovery-begin"
   | "recovery-end"
-  | "native-scrollbar-release";
+  | "native-scrollbar-release"
+  // Split-pane assembly signals: which of the pane's four inputs re-armed the
+  // tail writer (BUG1D probe).
+  | "pane-content-version"
+  | "pane-dom-growth"
+  | "pane-height-callback"
+  | "pane-enable-flip";
 
 export type TranscriptTailWriteDiagnostic = {
   source?: TranscriptScrollDiagnosticSource;

@@ -609,5 +609,53 @@ await flushAllFrames();
 check(scrollTopValue + 100 >= scrollHeightValue, "assembly: the row after a prepend still ends inside the viewport");
 await unmount();
 
+// Scenario 17 (BUG1D probe): every assembly signal leaves a readable entry —
+// a desktop recording of a guidance row that never reached the viewport has to
+// name which signal arrived, whether the writer proceeded, and why not.
+type ProbeEntry = { type: string; fields: Record<string, unknown> };
+type ProbeHost = { __REASONIX_TRANSCRIPT_SCROLL_DIAGNOSTIC__?: (type: string, fields: Record<string, unknown>) => void };
+const probeHost = dom.window as unknown as ProbeHost;
+const previousProbe = probeHost.__REASONIX_TRANSCRIPT_SCROLL_DIAGNOSTIC__;
+const recorded: ProbeEntry[] = [];
+probeHost.__REASONIX_TRANSCRIPT_SCROLL_DIAGNOSTIC__ = (type, fields) => { recorded.push({ type, fields }); };
+const paneSignals = () => recorded.filter((entry) => entry.type.startsWith("pane.")).map((entry) => entry.type);
+scrollHeightValue = 1200;
+scrollTopValue = 1100;
+await mount();
+recorded.length = 0;
+scrollHeightValue = 1320;
+await act(async () => {
+  contentNode.appendChild(dom.window.document.createElement("article"));
+});
+await act(async () => {
+  api?.setProjection(turnsAfter);
+});
+await new Promise((resolve) => setTimeout(resolve, 0));
+await flushAllFrames();
+const signals = paneSignals();
+check(signals.includes("pane.content-version"), "the probe names the projection-identity signal");
+check(signals.includes("pane.dom-growth"), "the probe names the DOM growth signal");
+check(signals.indexOf("pane.content-version") < signals.indexOf("pane.dom-growth"),
+  "the recorded sequence keeps the arrival order");
+const versionEntry = recorded.find((entry) => entry.type === "pane.content-version");
+check(versionEntry?.fields.proceed === true, "the entry records that the writer proceeded");
+check(Number(versionEntry?.fields.distance) > 0, "the entry carries the gap at signal time (the row is below the fold until the write)");
+check(Number(versionEntry?.fields.atMs) >= 0, "the entry carries a time point");
+await unmount();
+// The paused arm: the same arrival under the hydrating gate records why it moved nothing.
+scrollHeightValue = 1320;
+scrollTopValue = 400;
+await mount(false);
+recorded.length = 0;
+await act(async () => {
+  api?.setProjection(turnsAfter);
+});
+await flushAllFrames();
+const paused = recorded.find((entry) => entry.type === "pane.content-version");
+check(paused?.fields.proceed === false, "a signal under the hydrating gate records no write");
+check(paused?.fields.enabled === false, "the entry names the gate that held it back");
+await unmount();
+probeHost.__REASONIX_TRANSCRIPT_SCROLL_DIAGNOSTIC__ = previousProbe;
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
