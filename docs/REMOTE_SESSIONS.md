@@ -284,17 +284,86 @@ where the item went in its body (`sessionPath`, plus `requestedSessionPath` when
 the caller named one), so blind delivery and addressed delivery stay
 distinguishable.
 
-**A queued receipt names its gate.** When the item is still waiting for a turn
-it also carries `gate`, the stable id of the runtime gate holding it
-(`awaiting_answer`, `turn_running`, `turn_finishing`, `rotating`, `closed`,
-`no_session_path`, `paused`, `readonly`, `host_dispatch`), `gateReason`, the
-host's own sentence for that gate, and `pendingPrompt`, true only when a human
-has to answer or approve before the item can run. A sender relays `gateReason`
-verbatim and branches on `gate`; the three fields are omitted whenever nothing
-holds the item, and older readers simply do not see them. `host_dispatch` means
-the host's publication hook owns the next kick, so the controller cannot see
-when it lands. A wake with nowhere to land is answered `409`, never a receipt
-claiming `no_session_path`: with no session file there is no queue to hold it.
+**A queued receipt names its gate, and says whether a human has to act.** While
+the item is still waiting for a turn it also carries:
+
+- `gate`, the stable id of the runtime gate holding it (`awaiting_answer`,
+  `turn_running`, `turn_finishing`, `rotating`, `closed`, `no_session_path`,
+  `paused`, `readonly`, `host_dispatch`);
+- `gateReason`, that gate's own sentence for a sender to relay verbatim. A host
+  whose publication hook can say why it did not publish sends its own sentence;
+  the gate template is only the fallback for a host that named no reason;
+- `pendingPrompt`, true only when a human has to answer or approve before the
+  item can run;
+- `state`, the item's durable lifecycle **now** (`queued`, `steer_accepted`,
+  `steer_consumed`, `running`, `blocked`, `uncertain`): a lookup reads the
+  current value, not the one from enqueue time;
+- `resumable`, whether **another wake would still lift** this item. `false`
+  means only a person can, either because the gate is one a human clears
+  (`closed`, `paused`, `readonly`, `no_session_path`, `awaiting_answer`) or
+  because the host answered that nothing hosts the runtime any more; a sender
+  escalates on it. `true` or absent means the item waits on something that
+  passes by itself;
+- `retryable` with `retryReason`: `false` means re-posting the same wake cannot
+  change the outcome — the item is still held by `host_dispatch` and the host
+  let all four of its deferrals (1s/3s/10s/30s) pass — and `retryReason` is the
+  sentence for it. Absent means a retry is still the right move.
+
+`position` has exactly one meaning: the item's own 1-based place in the queue,
+and 0 once it has been consumed or removed. Every writer reports that number,
+so there is no second reading of it as "how long the queue is".
+
+The fields are omitted whenever nothing holds the item, and older readers
+simply do not see them. `host_dispatch` means the host's publication hook owns
+the next kick and only the dispatcher sees its answer, so the enqueue receipt
+may still carry the template sentence while the **lookup**
+(`GET /inbox/receipt?key=<idempotency key>`) carries the host's own words. A
+wake with nowhere to land is answered `409`, never a receipt claiming
+`no_session_path`: with no session file there is no queue to hold it.
+
+**A lookup reads the current situation.** `GET /inbox/receipt?key=<key>`
+returns the gate, position, state, `paused`, and `capacity` as they are now,
+not as they were at enqueue. Once the item has been consumed and removed from
+the queue only the bounded idempotency record remains (7 days, 512 entries):
+`position` is then 0 and `state` is omitted. Idempotency keys are stable: same
+key + same content ⇒ `disposition=idempotent_hit`, same key + different content
+⇒ `409`; "same content" is the request fingerprint, which excludes `@`
+reference material materialized at enqueue.
+
+### Producing each of the six queue situations
+
+Every recipe uses the same yardstick: post one wake for that session carrying
+`X-Reasonix-Session-Path`, then read the `202` receipt (or the
+`GET /inbox/receipt?key=…` lookup). `<endpoint>` is the serve address the
+desktop or `reasonix web` exposes, `<session>` the session file path.
+
+1. **host_dispatch (nothing hosts it, a human must act)**: open the session in
+   the desktop, close its tab while keeping the session file, then post. The
+   receipt carries `gate=host_dispatch`, `resumable=false`, and a `gateReason`
+   saying no tab hosts it any more. Reopening that session's tab is the host
+   publishing the runtime: the item is admitted and the lookup turns into
+   `state=running`.
+2. **host_dispatch (the host can publish, it just has not yet)**: the session
+   has a live tab whose publication hook has not let it through (a runtime
+   being rebuilt, for instance). The receipt carries `gate=host_dispatch`,
+   `resumable=true`; when the same lookup starts reporting `retryable=false`
+   with `retryReason`, all four deferrals have passed and re-posting is
+   pointless — the item moves when a human reopens the tab.
+3. **paused (inbox paused)**: post after `POST /inbox/pause`. The receipt
+   carries `gate=paused`, `resumable=false`; `POST /inbox/resume` lets the
+   queue drain again.
+4. **rotating (session switching)**: post while the session is being switched.
+   The receipt carries `gate=rotating`, `resumable=true`, and the item is
+   admitted as soon as the switch ends.
+5. **awaiting_answer (a pending prompt)**: leave the session parked on a prompt
+   a human has to answer or approve, then post. The receipt carries
+   `gate=awaiting_answer`, `pendingPrompt=true`, `resumable=false`.
+6. **closed (queue sealed)**: a timing state inside the teardown window, where
+   the controller is already `closed` while the queue is still bound to it. Do
+   not build on it: after a tab is closed, a post is either refused (`409`, the
+   desktop cannot hand it to that session) or lands in `host_dispatch` (case 1).
+   `no_session_path` is the same shape: it lives in the dispatcher's own
+   decision and is always a `409` on the wire, never a receipt.
 
 MCP servers reached over HTTP/SSE are not child processes and receive none of
 this environment.

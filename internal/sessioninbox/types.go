@@ -203,10 +203,17 @@ type InboxSnapshot struct {
 type InboxReceipt struct {
 	ItemID      string      `json:"itemId"`
 	Disposition Disposition `json:"disposition"`
-	Position    int         `json:"position"`
-	Paused      bool        `json:"paused"`
-	Capacity    Capacity    `json:"capacity"`
-	Idempotent  bool        `json:"idempotent,omitempty"`
+	// Position is the item's 1-based place in the queue it is still in, or 0
+	// once that item is gone. Every writer reports that same number, so "queue
+	// number N" means one thing to every caller.
+	Position   int      `json:"position"`
+	Paused     bool     `json:"paused"`
+	Capacity   Capacity `json:"capacity"`
+	Idempotent bool     `json:"idempotent,omitempty"`
+	// State is the item's durable lifecycle, so a re-asking sender can tell
+	// queued from accepted, running, or consumed. Empty when the lookup only
+	// reached a bounded idempotency receipt.
+	State InboxState `json:"state,omitempty"`
 	// SessionPath is where the item was admitted; RequestedSessionPath is the
 	// address the caller named, empty when none was named. The enqueue response
 	// carries both; a /inbox/receipt lookup reads the stored item instead.
@@ -220,6 +227,15 @@ type InboxReceipt struct {
 	Gate          string `json:"gate,omitempty"`
 	GateReason    string `json:"gateReason,omitempty"`
 	PendingPrompt bool   `json:"pendingPrompt,omitempty"`
+	// Resumable is false when another wake cannot lift this item: only a human
+	// clears that gate. It is a pointer because false is the signal a sender
+	// escalates on, and omitempty would drop it.
+	Resumable *bool `json:"resumable,omitempty"`
+	// Retryable is false when re-posting this wake cannot change the outcome,
+	// with RetryReason the host's sentence for why. Absent means a retry is
+	// still the right move.
+	Retryable   *bool  `json:"retryable,omitempty"`
+	RetryReason string `json:"retryReason,omitempty"`
 }
 
 // EnqueueRequest is the input for durable admission.

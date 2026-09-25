@@ -427,9 +427,10 @@ func (s *Store) Enqueue(req EnqueueRequest) (InboxReceipt, error) {
 	return InboxReceipt{
 		ItemID:      id,
 		Disposition: DispositionQueuedFollowup,
-		Position:    len(next.Items),
+		Position:    next.positionOf(id),
 		Paused:      next.Paused,
 		Capacity:    snap.Capacity,
+		State:       StateQueued,
 	}, nil
 }
 

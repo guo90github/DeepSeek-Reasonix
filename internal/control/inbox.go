@@ -575,6 +575,7 @@ func (c *Controller) TrySubmitInboxItem(id string) (sessioninbox.InboxReceipt, e
 	c.mu.Unlock()
 	if beforeDispatch != nil {
 		release, err := beforeDispatch(c)
+		c.noteInboxHostAnswer(id, err)
 		if err != nil {
 			return sessioninbox.InboxReceipt{}, err
 		}

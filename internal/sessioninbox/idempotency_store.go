@@ -11,14 +11,29 @@ func (s *Store) LookupReceipt(key string) (InboxReceipt, bool) {
 		return InboxReceipt{}, false
 	}
 	if id, ok := s.man.Idempotency[key]; ok {
-		if _, found := s.man.item(id); found {
-			return InboxReceipt{ItemID: id, Disposition: DispositionIdempotentHit, Position: s.man.indexOf(id) + 1, Paused: s.man.Paused, Idempotent: true}, true
+		if meta, found := s.man.item(id); found {
+			return s.receiptForItemLocked(meta), true
 		}
 	}
 	if receipt, ok := s.man.Receipts[key]; ok && time.Since(receipt.CompletedAt) <= idempotencyReceiptTTL {
-		return InboxReceipt{ItemID: receipt.ItemID, Disposition: DispositionIdempotentHit, Paused: s.man.Paused, Idempotent: true}, true
+		return InboxReceipt{
+			ItemID: receipt.ItemID, Disposition: DispositionIdempotentHit,
+			Paused: s.man.Paused, Capacity: s.snapshotLocked().Capacity, Idempotent: true,
+		}, true
 	}
 	return InboxReceipt{}, false
+}
+
+// receiptForItemLocked reads the queue as it is now: a sender re-asking about a
+// wake needs the item's current place and lifecycle, not the pair it saw on the
+// first answer.
+func (s *Store) receiptForItemLocked(meta InboxItemMeta) InboxReceipt {
+	return InboxReceipt{
+		ItemID: meta.ID, Disposition: DispositionIdempotentHit,
+		Position: s.man.positionOf(meta.ID), Paused: s.man.Paused,
+		Capacity: s.snapshotLocked().Capacity, Idempotent: true,
+		State: meta.State,
+	}
 }
 
 func (s *Store) idempotentReceiptLocked(key, requestHash string) (InboxReceipt, bool, error) {
@@ -32,8 +47,9 @@ func (s *Store) idempotentReceiptLocked(key, requestHash string) (InboxReceipt, 
 			}
 			return InboxReceipt{
 				ItemID: item.ID, Disposition: DispositionIdempotentHit,
-				Position: s.man.indexOf(item.ID) + 1, Paused: s.man.Paused,
+				Position: s.man.positionOf(item.ID), Paused: s.man.Paused,
 				Capacity: s.snapshotLocked().Capacity, Idempotent: true,
+				State: item.State,
 			}, true, nil
 		}
 	}

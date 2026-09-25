@@ -16,6 +16,107 @@ import (
 
 const inboxDispatchTestTimeout = 15 * time.Second
 
+// The host knows why it did not publish; a receipt that only named the gate
+// would leave a sender unable to tell "wait" from "someone has to act".
+func TestReceiptLookupRelaysTheHostsOwnRefusal(t *testing.T) {
+	c, _, _ := newInboxDispatchController(t)
+	const hostSentence = "这个会话在桌面端已经没有标签页在托管它"
+	c.SetBeforeInboxDispatch(func(*Controller) (func(), error) {
+		return nil, &InboxDispatchRefusal{
+			Reason:    hostSentence,
+			Resumable: false,
+			Err:       ErrInboxRuntimeUnpublished,
+		}
+	})
+	c.inbox.mu.Lock()
+	c.inbox.scheduleDispatchRetry = func(time.Duration, func()) {}
+	c.inbox.mu.Unlock()
+
+	enqueued, err := c.EnqueueInbox(InboxRequest{
+		Intent: sessioninbox.IntentFollowup, Submit: "wake", Idempotency: "wake-1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.maybeDispatchInbox()
+	waitForHostRefusal(t, c, enqueued.ItemID)
+
+	looked, found, err := c.LookupInboxReceipt("wake-1")
+	if err != nil || !found {
+		t.Fatalf("lookup = %+v found=%t err=%v", looked, found, err)
+	}
+	if looked.Gate != sessioninbox.GateHostDispatch {
+		t.Fatalf("gate = %q, want %q", looked.Gate, sessioninbox.GateHostDispatch)
+	}
+	if looked.GateReason != hostSentence {
+		t.Fatalf("gateReason = %q, want the host's own sentence", looked.GateReason)
+	}
+	if looked.Resumable == nil || *looked.Resumable {
+		t.Fatalf("resumable = %v, want an explicit false", looked.Resumable)
+	}
+	if looked.State != sessioninbox.StateQueued || looked.Position != 1 {
+		t.Fatalf("lookup = %+v, want the item queued first", looked)
+	}
+	if looked.Retryable != nil {
+		t.Fatalf("retryable = %v before the defer ladder ran out", *looked.Retryable)
+	}
+}
+
+// Once the defer ladder runs out, one more wake cannot change the answer. The
+// receipt has to say so, or a sender keeps re-posting the same wake forever.
+func TestExhaustedHostDeferLadderReportsUnretryableWake(t *testing.T) {
+	c, _, _ := newInboxDispatchController(t)
+	deferTimers := make(chan func(), 8)
+	c.SetBeforeInboxDispatch(func(*Controller) (func(), error) { return nil, ErrInboxRuntimeUnpublished })
+	c.inbox.mu.Lock()
+	c.inbox.scheduleDispatchRetry = func(_ time.Duration, retry func()) { deferTimers <- retry }
+	c.inbox.mu.Unlock()
+
+	if _, err := c.EnqueueInbox(InboxRequest{
+		Intent: sessioninbox.IntentFollowup, Submit: "never admitted", Idempotency: "wake-2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	c.maybeDispatchInbox()
+	for i := range inboxDispatchDeferDelays {
+		select {
+		case retry := <-deferTimers:
+			retry()
+		case <-time.After(inboxDispatchTestTimeout):
+			t.Fatalf("deferral %d of %d was never scheduled", i+1, len(inboxDispatchDeferDelays))
+		}
+	}
+
+	looked, found, err := c.LookupInboxReceipt("wake-2")
+	if err != nil || !found {
+		t.Fatalf("lookup = %+v found=%t err=%v", looked, found, err)
+	}
+	if looked.Retryable == nil || *looked.Retryable {
+		t.Fatalf("retryable = %v, want an explicit false", looked.Retryable)
+	}
+	if looked.RetryReason == "" {
+		t.Fatalf("a stopped ladder must say why: %+v", looked)
+	}
+	if want := sessioninbox.GateReasonText(sessioninbox.GateHostDispatch); looked.GateReason != want {
+		t.Fatalf("gateReason = %q, want the gate template %q", looked.GateReason, want)
+	}
+	if looked.Resumable == nil || !*looked.Resumable {
+		t.Fatalf("resumable = %v, want true: the host may still publish", looked.Resumable)
+	}
+}
+
+func waitForHostRefusal(t *testing.T, c *Controller, itemID string) {
+	t.Helper()
+	deadline := time.Now().Add(inboxDispatchTestTimeout)
+	for time.Now().Before(deadline) {
+		if _, _, refused := c.inboxHostRefusalFor(itemID); refused {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	failInboxDispatchWait(t, c, "the host refusal to be recorded")
+}
+
 func TestClosedControllerCannotOpenInboxFromLateDispatch(t *testing.T) {
 	dir := t.TempDir()
 	c := New(Options{})

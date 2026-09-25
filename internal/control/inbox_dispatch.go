@@ -3,6 +3,7 @@ package control
 import (
 	"errors"
 	"log/slog"
+	"strings"
 	"time"
 
 	"reasonix/internal/sessioninbox"
@@ -25,6 +26,37 @@ var inboxDispatchDeferDelays = [...]time.Duration{
 // ErrInboxRuntimeUnpublished means the host owns the next dispatch kick:
 // either this runtime is a candidate or it was replaced before admission.
 var ErrInboxRuntimeUnpublished = errors.New("inbox runtime is not published")
+
+// InboxDispatchRefusal is a host's own answer for why its publication hook did
+// not publish this runtime: Reason is the sentence a sender relays verbatim,
+// Resumable says whether another wake could still lift the item, and Err keeps
+// the machine-readable cause (errors.Is still matches it). A host that cannot
+// name a reason returns the bare error instead.
+type InboxDispatchRefusal struct {
+	Reason    string
+	Resumable bool
+	Err       error
+}
+
+func (e *InboxDispatchRefusal) Error() string {
+	if e == nil {
+		return ""
+	}
+	if reason := strings.TrimSpace(e.Reason); reason != "" {
+		return reason
+	}
+	if e.Err != nil {
+		return e.Err.Error()
+	}
+	return "inbox dispatch was refused"
+}
+
+func (e *InboxDispatchRefusal) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Err
+}
 
 // NotifyInboxRuntimeReady is called after a host publishes a complete runtime.
 func (c *Controller) NotifyInboxRuntimeReady() {
@@ -212,7 +244,8 @@ func (c *Controller) inboxDispatchGate() string {
 }
 
 // withDispatchGate annotates a receipt whose item is still queued with the gate
-// holding it and the host's sentence for it: the disposition only says "queued".
+// holding it, the host's sentence for it, and whether anything a sender can do
+// would move it: the disposition alone only says "queued".
 func (c *Controller) withDispatchGate(rec sessioninbox.InboxReceipt) sessioninbox.InboxReceipt {
 	if rec.Gate != "" || rec.ItemID == "" {
 		return rec
@@ -227,9 +260,75 @@ func (c *Controller) withDispatchGate(rec sessioninbox.InboxReceipt) sessioninbo
 	}
 	gate := c.inboxDispatchGate()
 	rec.Gate = gate
+	rec.State = meta.State
 	rec.GateReason = sessioninbox.GateReasonText(gate)
 	rec.PendingPrompt = sessioninbox.GateWaitsForUser(gate)
+	resumable := sessioninbox.GateResumable(gate)
+	if gate == sessioninbox.GateHostDispatch {
+		// The host knew why it did not publish; its own answer beats the gate
+		// template, which only says the answer is invisible from here.
+		if reason, hostResumable, refused := c.inboxHostRefusalFor(rec.ItemID); refused {
+			rec.GateReason = reason
+			resumable = hostResumable
+		}
+		if c.inboxDeferLadderExhausted() {
+			retryable := false
+			rec.Retryable = &retryable
+			rec.RetryReason = inboxDeferExhaustedReason
+		}
+	}
+	rec.Resumable = &resumable
 	return rec
+}
+
+// inboxDeferExhaustedReason is the sentence for a host that let every rung of
+// the defer ladder pass: this side has nothing left to try.
+const inboxDeferExhaustedReason = "宿主这一侧四次退避（1s/3s/10s/30s）都没有放行，重试阶梯已经走完；" +
+	"再投一条只会拿到同样的答案，等宿主发布运行时（例如重开那个会话的标签页）才会放行。"
+
+// inboxDeferLadderExhausted reports whether the host let the whole defer ladder
+// pass without publishing, so re-posting the same wake cannot change anything.
+func (c *Controller) inboxDeferLadderExhausted() bool {
+	c.inbox.mu.Lock()
+	defer c.inbox.mu.Unlock()
+	return c.inbox.dispatchDeferAttempts >= len(inboxDispatchDeferDelays)
+}
+
+// inboxHostRefusal is one host answer: the sentence a sender relays verbatim,
+// and whether another wake could still lift the item it refused.
+type inboxHostRefusal struct {
+	itemID    string
+	reason    string
+	resumable bool
+}
+
+// noteInboxHostAnswer keeps the host's reason for the item it just refused, and
+// drops a stale one once the host lets that item through or names no reason.
+func (c *Controller) noteInboxHostAnswer(itemID string, err error) {
+	reason, resumable := "", false
+	var refusal *InboxDispatchRefusal
+	if errors.As(err, &refusal) {
+		reason, resumable = strings.TrimSpace(refusal.Reason), refusal.Resumable
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if reason == "" {
+		if current := c.modelSettings.inboxHostRefusal; current != nil && current.itemID == itemID {
+			c.modelSettings.inboxHostRefusal = nil
+		}
+		return
+	}
+	c.modelSettings.inboxHostRefusal = &inboxHostRefusal{itemID: itemID, reason: reason, resumable: resumable}
+}
+
+func (c *Controller) inboxHostRefusalFor(itemID string) (string, bool, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	refusal := c.modelSettings.inboxHostRefusal
+	if refusal == nil || refusal.itemID != itemID {
+		return "", false, false
+	}
+	return refusal.reason, refusal.resumable, true
 }
 
 func (c *Controller) nextInboxDispatchItem() (sessioninbox.InboxItemMeta, bool, error) {

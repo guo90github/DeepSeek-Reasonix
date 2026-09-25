@@ -129,13 +129,25 @@ func collectAppend(ctrl control.SessionAPI, msg InboundMessage, debounce time.Du
 			return sessioninbox.InboxReceipt{
 				ItemID:      last.ID,
 				Disposition: sessioninbox.DispositionQueuedFollowup,
-				Position:    snap.Capacity.Items,
+				Position:    queuePosition(snap.Items, last.ID),
 				Paused:      snap.Paused,
 				Capacity:    snap.Capacity,
+				State:       sessioninbox.StateQueued,
 			}, nil
 		}
 	}
 	return enqueueViaInbox(ctrl, msg, sessioninbox.IntentFollowup)
+}
+
+// queuePosition is the appended item's own 1-based place, not the queue length:
+// the debounce target is the last queued follow-up, which need not be the tail.
+func queuePosition(items []sessioninbox.InboxItemMeta, id string) int {
+	for i, it := range items {
+		if it.ID == id {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 // interruptEnqueue cancels the current turn and moves a new item to the front.

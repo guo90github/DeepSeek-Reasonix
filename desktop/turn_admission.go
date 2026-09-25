@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"reasonix/internal/control"
@@ -179,18 +180,48 @@ func (a *App) beforeInboxDispatch(ctrl *control.Controller) (func(), error) {
 	}
 	a.mu.RUnlock()
 	if owner == nil {
-		return nil, control.ErrInboxRuntimeUnpublished
+		return nil, &control.InboxDispatchRefusal{
+			Reason:    "这个会话在桌面端已经没有标签页在托管它（标签页已关闭或已分离），再投一条也拉不起来；重开这个会话的标签页才会放行。",
+			Resumable: false,
+			Err:       control.ErrInboxRuntimeUnpublished,
+		}
 	}
 	admission, current, err := a.beginRuntimeTurn(owner.ID, false, true)
 	if err != nil {
-		return nil, err
+		return nil, inboxDispatchRefusal(err)
 	}
 	if current != ctrl {
 		admission.abort()
 		if replacement, ok := current.(*control.Controller); ok {
 			go replacement.NotifyInboxRuntimeReady()
 		}
-		return nil, control.ErrInboxRuntimeUnpublished
+		return nil, &control.InboxDispatchRefusal{
+			Reason:    "这个会话的运行时刚被换掉，新的那一份已经在接手，稍等就会轮到这一条，不用人管。",
+			Resumable: true,
+			Err:       control.ErrInboxRuntimeUnpublished,
+		}
 	}
 	return func() { admission.finish(ctrl) }, nil
+}
+
+// inboxDispatchRefusal names the reason the tab refused the turn, but only for
+// the causes it understands: anything else keeps its bare error, so the receipt
+// falls back to the gate template instead of relaying a guess.
+func inboxDispatchRefusal(err error) error {
+	switch {
+	case errors.Is(err, control.ErrTurnRunning):
+		return &control.InboxDispatchRefusal{
+			Reason:    "这个会话的标签页里还有一轮在跑，跑完就会轮到这一条，不用人管。",
+			Resumable: true,
+			Err:       err,
+		}
+	case errors.Is(err, control.ErrInboxRuntimeUnpublished):
+		return &control.InboxDispatchRefusal{
+			Reason:    "这个会话的运行时在桌面端暂时不可用（标签页正在被关闭或重建），稍等会自动重试这一条。",
+			Resumable: true,
+			Err:       err,
+		}
+	default:
+		return err
+	}
 }

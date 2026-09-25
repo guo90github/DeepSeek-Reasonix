@@ -96,6 +96,15 @@ func (m *manifest) indexOf(id string) int {
 	return -1
 }
 
+// positionOf is the 1-based place of an item in the queue, and 0 once it is no
+// longer there. Receipts report this number and nothing else as a position.
+func (m *manifest) positionOf(id string) int {
+	if i := m.indexOf(id); i >= 0 {
+		return i + 1
+	}
+	return 0
+}
+
 func (m *manifest) item(id string) (InboxItemMeta, bool) {
 	i := m.indexOf(id)
 	if i < 0 {

@@ -248,14 +248,63 @@ fragment 中，不会随请求进入服务器日志；旧版 serve 自动回退 
 就是目标。`202` 回执在 **body** 里写明实际落点（`sessionPath`；调用方点了名时
 另有 `requestedSessionPath`），盲投与定点投递因此始终可区分。
 
-**只排队的回执会说出它在等哪道闸。** 条目还没轮到回合时，回执另外带三项：`gate`
-是此刻关着它的那道闸的稳定 ID（`awaiting_answer`、`turn_running`、
-`turn_finishing`、`rotating`、`closed`、`no_session_path`、`paused`、`readonly`、
-`host_dispatch`）；`gateReason` 是宿主给这道闸写的原话；`pendingPrompt` 只在
-"必须先有人回答或审批才能跑"时为真。发送方按 `gate` 分支、把 `gateReason` 原样
-透传；没有闸关着时三项一律省略，旧读者看不到它们即可。`host_dispatch` 表示下一脚
-派发归宿主的发布钩子所有，会话这一侧看不到它何时放行。投递无处落地时一律回 `409`，
-不会回一个自称 `no_session_path` 的回执：没有会话文件就没有队列可存。
+**只排队的回执会说出它在等哪道闸，以及这件事还要不要人管。** 条目还没轮到回合时，
+回执另外带这些字段：
+
+- `gate`：此刻关着它的那道闸的稳定 ID（`awaiting_answer`、`turn_running`、
+  `turn_finishing`、`rotating`、`closed`、`no_session_path`、`paused`、`readonly`、
+  `host_dispatch`）；
+- `gateReason`：这道闸的原因原话，发送方照抄不改写。宿主（桌面发布钩子）答得出
+  "为什么没发布"时给的就是宿主自己的那句话，宿主没给原因时才回落成该闸的模板句；
+- `pendingPrompt`：只在"必须先有人回答或审批才能跑"时为真；
+- `state`：条目**此刻**的持久状态（`queued`、`steer_accepted`、`steer_consumed`、
+  `running`、`blocked`、`uncertain`），回查给的是当前值，不是入队那一刻的值；
+- `resumable`：**此刻再投一条还能不能把它拉起来**。`false` 表示只有人能解开
+  （`closed`／`paused`／`readonly`／`no_session_path`／`awaiting_answer` 这几道闸，
+  或宿主答"已经没有运行时在托管它"），发送方据此升级给人；`true` 或省略表示它在
+  等一件自己会过去的事，不用人管；
+- `retryable` + `retryReason`：`false` 表示重投同一张欠条不会改变结果——条目仍被
+  `host_dispatch` 挡着而宿主的四次退避（1s／3s／10s／30s）已经走完，`retryReason`
+  是那句话；省略表示重投仍然是对的。
+
+`position` 只有一个口径：条目**自己**在队列里的 1 基序号，一旦它已被消费或移出队列
+就是 0。每个写入方报的都是这个数，不再有"队里现有多少条"这第二种读法。
+
+没有闸关着时这些字段一律省略，旧读者看不到它们即可。`host_dispatch` 表示下一脚派发
+归宿主的发布钩子所有：钩子的答案只有派发器看得见，所以入队那一下的回执可能还带着
+模板句，**回查**（`GET /inbox/receipt?key=<幂等键>`）会带宿主原话。投递无处落地时
+一律回 `409`，不会回一个自称 `no_session_path` 的回执：没有会话文件就没有队列可存。
+
+**回查读的是当前处境。** `GET /inbox/receipt?key=<幂等键>` 返回此刻的闸、位置、状态、
+`paused` 与 `capacity`，而不是入队时的快照；条目被消费并移出队列后只剩有界幂等记录
+（7 天、512 条），此时 `position` 为 0、`state` 省略。幂等键语义固定：同键 + 同内容 ⇒
+`disposition=idempotent_hit`，同键 + 异内容 ⇒ `409`；这里的"同内容"是请求指纹，不含
+入队时物化的 `@` 引用材料。
+
+### 验收：把六种排队处境各自造出来一次
+
+下面每条都用同一把尺子：向该会话投一条带 `X-Reasonix-Session-Path` 的唤醒，再看
+`202` 回执（或 `GET /inbox/receipt?key=…` 的回查）说了什么。`<endpoint>` 是桌面端或
+`reasonix web` 暴露的 serve 地址，`<session>` 是会话文件路径。
+
+1. **host_dispatch（没人在托管，要人动手）**：桌面端打开会话 → 关闭它的标签页
+   （会话文件保留）→ 投递。回执带 `gate=host_dispatch`、`resumable=false`，`gateReason`
+   是"已经没有标签页在托管它"那一句。重新打开该会话的标签页即"宿主发布运行时"，
+   条目随即被受理，回查变成 `state=running`。
+2. **host_dispatch（宿主办得到，只是还没放行）**：会话有空标签页但宿主的发布钩子
+   暂时没放行（例如标签页正在重建）。回执带 `gate=host_dispatch`、`resumable=true`，
+   同一个条目在回查里等到 `retryable=false` + `retryReason` 时，说明四次退避都过去了、
+   重投没有意义，等人重开标签页即可。
+3. **paused（收件箱暂停）**：`POST /inbox/pause` 之后投递，回执 `gate=paused`、
+   `resumable=false`；`POST /inbox/resume` 后队列立刻继续派发。
+4. **rotating（会话正在切换）**：投递与"切换会话"同时发生（切换窗口里投）。回执
+   `gate=rotating`、`resumable=true`，切换结束即被受理。
+5. **awaiting_answer（有待答提示）**：让该会话先弹出一个要人回答或审批的提示并停在
+   那里，再投递。回执 `gate=awaiting_answer`、`pendingPrompt=true`、`resumable=false`。
+6. **closed（队列已封）**：这是关闭窗口里的时序状态——控制器已经 `closed` 而队列还
+   绑在它身上的一瞬。稳定复现的做法是**不要靠它**：标签页关掉之后，投递要么被拒绝
+   （`409`，桌面端无法把这条交给那个会话），要么落进 `host_dispatch`（见第 1 条）。
+   `no_session_path` 同理，只存在于派发器自己的判定里，对外一律是 `409`，不是回执。
 
 以 HTTP/SSE 接入的 MCP 服务器不是子进程，不会拿到这套环境。
 

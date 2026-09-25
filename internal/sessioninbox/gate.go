@@ -31,3 +31,15 @@ func GateReasonText(gate string) string {
 // GateWaitsForUser reports whether a gate is the class the human clears
 // themselves, rather than one that opens on its own.
 func GateWaitsForUser(gate string) bool { return gate == GateAwaitingAnswer }
+
+// GateResumable reports whether another wake could still lift an item held by
+// this gate. False means only a human clears it: re-posting changes nothing
+// until someone opens the session, resumes the queue, or answers the prompt.
+func GateResumable(gate string) bool {
+	switch gate {
+	case GateAwaitingAnswer, GateClosed, GateNoSessionPath, GatePaused, GateReadonly:
+		return false
+	default:
+		return true
+	}
+}
