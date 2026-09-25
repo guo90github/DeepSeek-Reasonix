@@ -336,6 +336,34 @@ sub-second ladder, so a caller that honours it cannot outrun them. A refusal
 without the header is not classifiable (a `413` for an oversized body, a `400`
 for an empty one), and older hosts never send the header at all.
 
+**Guidance pushed in from outside the session says so.** An item carrying a
+named `source` (`http`, `push`, `acp`, `bot`) is injected into the running turn
+with one marker line ahead of its body:
+
+```
+[remote wake source=http item=682b9613-4815-48d3-bdf4-241231b66953]
+the pushed text
+```
+
+The marker names the source and the item id, so a woken session can tell a
+remote wake from its own owner typing — the misreport this prevents was a
+three-minute-late steer read as "the user queued this". Two rules make it a
+judgement instead of a guess:
+
+- **No marker means the item was queued in this process.** That is normative,
+  not a fallback: the mid-turn wrapper already describes those truthfully.
+- **A source this build does not name yet prints `source=unknown`** — never no
+  marker, and never prose. A reader maps anything else it meets to `unknown`
+  and does not fall back to parsing the body.
+
+The item id resolves on `GET /inbox/items/{id}` to `source` and the terminal
+`state`, whose closed set is `queued` → `steer_accepted` → `steer_consumed`,
+plus `running`, `blocked`, `uncertain`. Rejections (`rejected_*`) and requeues
+live on the receipt's `disposition`, not on `state`: an item that was requeued
+is simply `queued` again. The marker rides the message body — the turn tail —
+and never the system-prompt prefix, which has to stay byte-identical across
+turns for the provider's prefix cache.
+
 **A lookup reads the current situation.** `GET /inbox/receipt?key=<key>`
 returns the gate, position, state, `paused`, and `capacity` as they are now,
 not as they were at enqueue. Once the item has been consumed and removed from

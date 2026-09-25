@@ -43,7 +43,7 @@ func (c *Controller) unlockInboxSteerAdmission(dispatch *bool) {
 
 func inboxSteerLoader(st *sessioninbox.Store, itemID string) func() (string, error) {
 	return func() (string, error) {
-		_, env, err := st.ReadItem(itemID)
+		meta, env, err := st.ReadItem(itemID)
 		if err != nil {
 			if errors.Is(err, sessioninbox.ErrNotFound) {
 				return "", agent.ErrSteerWithdrawn
@@ -75,7 +75,7 @@ func inboxSteerLoader(st *sessioninbox.Store, itemID string) func() (string, err
 			}
 			return "", err
 		}
-		return firstNonEmptyStr(materialized, text), nil
+		return markInboxGuidance(meta, firstNonEmptyStr(materialized, text)), nil
 	}
 }
 
