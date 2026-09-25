@@ -13,13 +13,12 @@
 - **关键读数**：**红不是修出来的，是变异拿到的**——抹掉生长检测 `observer.observe(content, …)` ⇒ 8 条红（含 15a 两条）；去掉 `reaim` 的 `geometryRevisionRef.current += 1` ⇒ 3 条红。⇒ 修复前后同绿，只说明**主嫌在 hook 层不成立**。
 - **结论**：BUG1D 的唯一主嫌（`usePaneTailFollow` 的尾部跟随）**被反证**：数据身份变化 / DOM 生长 / 高度回调三条信号任一都能把视口带到真底。
 
-## 1b `BUG1D-2` 剩余症状若仍在，落点＝**pane 装配层**（hook 层已排除）
+## 1b `BUG1D-2` 装配层落点 → **已落**（仓内可跑用例，两层反证齐）
 
-- **来源**：同上（`P0/B379-A3` 交付正文里写明的「下一笔」）。
-- **状态**：未落——本轮只证到 hook 层，**没有**在任何一层复现出症状。
-- **理由**：hook 的输入全由 `ConversationPane` 给：`contentVersion: turns`、`enabled: !hydrating`、`totalListHeightChanged={reaim}`、`scrollerRef`；投影在 `conversationPaneTurns()`（`desktop/frontend/src/lib/transcriptPanes.ts:106`）。这三处只要有一处不按预期发信号，症状就与 hook 无关。
-- **下一笔**：写一个 **pane 级**用例（`SplitWorkspace` / `ConversationPane` 层，喂一条带 `inboxItemId` 的 notice）而不是 hook 级；或按下面的配方做真机对照。
-- **可红判据**：pane 级用例里「新引导行已进 `conversationPaneTurns` 的 answers，但滚动容器底部没有按新行更新」⇒ 红。
+- **来源**：同 §1（`P0/B379-A5`）。
+- **状态**：**已落**（提交 `fa03cb440`，本地未推）：同一夹具补了**场景 16a/16b/16c**，把装配层四条信号各钉一条——投影身份 `contentVersion: turns`（16a 喂的是**真投影** `buildTurnModels` → `conversationPaneTurns`，不是计数器）、hydrating 门 `enabled: !hydrating`（16b：hydrating 期到达不追高，翻转后才入视口）、`firstItemIndex` 记账（16c：先 prepend 老轮次不拽动尾随，之后新行仍收敛），以及「新引导行 ⇒ 行入视口」本身。`npx tsx src/__tests__/use-pane-tail-follow.test.tsx` **72 passed / 0 failed**；`npm run test:split` 三套件全过。
+- **能红（变异，可指）**：① 去掉 `enabled` 翻转时的重臂（`if (turnedOn) reaim()`）⇒ **4 条红**，含 16b 的 `assembly: the enable flip lands the row inside the viewport`；② 关掉生长检测（`observer.observe`）⇒ **8 条红**。两次均已 `git checkout` 复原。
+- **结论（第二层反证）**：hook 层（§1）与装配信号层（本节）的「进视口」路径今天都是通的，**仓内已无可指出的落点**；剩下唯一未验＝真机观感。
 - **复现配方（真机，由人验）**：开双栏 → 左栏停在底部（不手动上滚）→ 让收件箱攒一条引导行 → 看它是否自动进视口。
 
 ## 2 `VERIFY-1` 真机观感未验（分栏两条线）
