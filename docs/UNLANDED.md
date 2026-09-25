@@ -6,13 +6,20 @@
 生成命令 + 时点：`2026-09-26 02:54 +0800`；§4 那条读数由 `git -C C:\guosj\ai\deepseek-reasonix\DeepSeek-Reasonix rev-list --count '@{u}..HEAD'` 产出——**重跑取当前值**，别引用本表的数字。
 不含：已落项（在提交与各 `docs/*.md` 里）；已结为「不适用（附反证）」的项（记在房间条目上，不进本表）。
 
-## 1 `BUG1D-1` 分栏左栏尾部跟随的肯红用例
+## 1 `BUG1D-1` 分栏左栏尾部跟随的肯红用例 → **已落**（hook 层）
 
-- **来源**：房间 `P0/B162-BUG1D`（宿主侧）。
-- **状态**：未落——场景没写完，红/绿两轮读数都没有。
-- **理由**：主嫌已指到 `desktop/frontend/src/lib/usePaneTailFollow.ts:15`（由 `ConversationPane.tsx:314` 挂载），但肯红用例要在现成夹具 `desktop/frontend/src/__tests__/use-pane-tail-follow.test.tsx`（JSDOM + React + 假 RAF，已有 `flushFrames`/`flushAllFrames`）里补一个场景，本轮没写完 ⇒ 所以既不写「已定位」，也不写「已验证」。
-- **下一笔**：在该夹具加场景「**停在底部 + 新来一行（引导行）⇒ 断它进视口**」。
-- **可红判据**：让 follow 不重臂 ⇒ 用例必须红；修好后绿。
+- **来源**：房间 `P0/B162-BUG1D` → `P0/B379-A3`（宿主侧）。
+- **状态**：**已落**（提交 `9f862680b`，本地未推）：夹具里补了**场景 14 / 15a / 15b**（「停在底部 + 新来一条引导行 ⇒ 断它进视口」＋行体晚绘＋高度回调），`npx tsx src/__tests__/use-pane-tail-follow.test.tsx` **64 passed / 0 failed**，`npm run test:split` 三套件全过。
+- **关键读数**：**红不是修出来的，是变异拿到的**——抹掉生长检测 `observer.observe(content, …)` ⇒ 8 条红（含 15a 两条）；去掉 `reaim` 的 `geometryRevisionRef.current += 1` ⇒ 3 条红。⇒ 修复前后同绿，只说明**主嫌在 hook 层不成立**。
+- **结论**：BUG1D 的唯一主嫌（`usePaneTailFollow` 的尾部跟随）**被反证**：数据身份变化 / DOM 生长 / 高度回调三条信号任一都能把视口带到真底。
+
+## 1b `BUG1D-2` 剩余症状若仍在，落点＝**pane 装配层**（hook 层已排除）
+
+- **来源**：同上（`P0/B379-A3` 交付正文里写明的「下一笔」）。
+- **状态**：未落——本轮只证到 hook 层，**没有**在任何一层复现出症状。
+- **理由**：hook 的输入全由 `ConversationPane` 给：`contentVersion: turns`、`enabled: !hydrating`、`totalListHeightChanged={reaim}`、`scrollerRef`；投影在 `conversationPaneTurns()`（`desktop/frontend/src/lib/transcriptPanes.ts:106`）。这三处只要有一处不按预期发信号，症状就与 hook 无关。
+- **下一笔**：写一个 **pane 级**用例（`SplitWorkspace` / `ConversationPane` 层，喂一条带 `inboxItemId` 的 notice）而不是 hook 级；或按下面的配方做真机对照。
+- **可红判据**：pane 级用例里「新引导行已进 `conversationPaneTurns` 的 answers，但滚动容器底部没有按新行更新」⇒ 红。
 - **复现配方（真机，由人验）**：开双栏 → 左栏停在底部（不手动上滚）→ 让收件箱攒一条引导行 → 看它是否自动进视口。
 
 ## 2 `VERIFY-1` 真机观感未验（分栏两条线）
