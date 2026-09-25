@@ -34,6 +34,7 @@ type mcpServerSpec struct {
 	CallTimeoutSeconds    int               `json:"call_timeout_seconds"`
 	ToolTimeoutSeconds    map[string]int    `json:"tool_timeout_seconds"`
 	AutoStart             *bool             `json:"auto_start"`
+	WakeMethod            string            `json:"wake_method"`
 }
 
 // loadMCPJSON reads path (Claude Code's .mcp.json) and returns its servers as
@@ -214,6 +215,7 @@ func pluginEntryFromMCPSpec(name string, s mcpServerSpec) PluginEntry {
 		CallTimeoutSeconds:    s.CallTimeoutSeconds,
 		ToolTimeoutSeconds:    s.ToolTimeoutSeconds,
 		AutoStart:             s.AutoStart,
+		WakeMethod:            s.WakeMethod,
 	}
 	e, _ = NormalizePluginCommandLine(e)
 	return e

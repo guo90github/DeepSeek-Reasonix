@@ -1970,6 +1970,12 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		sessionPath := ctrl.SessionPath
 		sessionOf.Store(&sessionPath)
 	}
+	// A private host's children belong to exactly one session, so a server
+	// armed with Spec.WakeMethod can land its wake in this controller's inbox;
+	// a shared host serves several sessions and keeps the logged-drop path.
+	if opts.SharedHost == nil {
+		installInboxWakeHandler(pluginHost, ctrl)
+	}
 	// The role inputs set the session quality floor: delivery/deliver/quality
 	// raise it, light and its aliases fold to standard, unknown stays default.
 	if p, err := agentpreset.Normalize(firstNonEmpty(opts.AgentPreset, opts.TokenMode)); err == nil && p == agentpreset.Delivery {
@@ -2675,6 +2681,7 @@ func pluginSpecFromEntryWithOptions(e config.PluginEntry, workspaceRoot string, 
 		DefaultCallTimeout:    opts.DefaultCallTimeout,
 		CallTimeout:           secondsDuration(e.CallTimeoutSeconds),
 		ToolTimeouts:          toolTimeoutDurations(e.ToolTimeoutSeconds),
+		WakeMethod:            strings.TrimSpace(e.WakeMethod),
 		WorkspaceRoot:         strings.TrimSpace(workspaceRoot),
 		LaunchManager:         opts.LaunchManager,
 		ConfigSource:          configSource,

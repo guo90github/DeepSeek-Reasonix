@@ -30,6 +30,10 @@ type PluginEntry struct {
 	// AutoStart controls whether the server connects during session startup.
 	// Nil preserves historical behavior: configured servers start automatically.
 	AutoStart *bool `toml:"auto_start"`
+	// WakeMethod names the MCP notification method this server may use to start
+	// work in the session it serves. Empty (the default) leaves it unable to
+	// wake anything: the power to start a turn is configured, never inherited.
+	WakeMethod string `toml:"wake_method"`
 	// Tier is a legacy compatibility field. New config rendering omits it; enabled
 	// MCP servers connect automatically in the background unless auto_start=false.
 	// Historical values are accepted for old files:
