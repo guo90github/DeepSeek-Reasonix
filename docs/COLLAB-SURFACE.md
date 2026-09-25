@@ -14,7 +14,7 @@ sed -n '10,14p' internal/boot/inbox_wake_contract_test.go   # §1 载荷字段�
 sed -n '12,17p' internal/control/inbox_wake_marker.go        # §2 来源具名集合
 sed -n '11,23p' internal/serve/reject_class.go               # §3 分类头 + 三档取值
 sed -n '31,38p' internal/sessioninbox/types.go               # §4 state 封闭集
-sed -n '92,97p' internal/plugin/plugin.go                    # §5 武装声明处（空 = 不武装）
+sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明处（空 = 不武装）
 ```
 
 ## 1 唤醒载荷（冻结的跨仓契约）
@@ -59,7 +59,7 @@ sed -n '92,97p' internal/plugin/plugin.go                    # §5 武装声明�
 
 | 项 | 取值 | 定义处 |
 |---|---|---|
-| 声明处 | `Spec.WakeMethod`（MCP 通知方法名） | `internal/plugin/plugin.go:92` |
+| 声明处 | `Spec.WakeMethod`（MCP 通知方法名） | `internal/plugin/plugin.go:95` |
 | 配置面 | `[[plugins]].wake_method`（TOML）/ `wake_method`（`.mcp.json` 同名字段） | `internal/config/plugin_entry.go:36`、`internal/config/mcpjson.go:37` |
 | 空值 | **不武装**：一条字节都到不了会话 | `internal/plugin/client_wake.go:10`、`internal/plugin/client_wake_test.go:56` |
 | 共享 host | 不装处理器（一个 host 服务多会话，没有绑定对象） | `internal/boot/inbox_wake.go:14` |
