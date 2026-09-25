@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -11,7 +12,14 @@ import (
 	"reasonix/internal/tool"
 )
 
-const maxArgumentValidationMessageBytes = 4 << 10
+const (
+	maxArgumentValidationMessageBytes = 4 << 10
+	// A failed call names at most this many undeclared and declared argument
+	// names: the hint exists to end a blind retry, not to dump a schema.
+	maxUndeclaredInHint = 3
+	maxDeclaredInHint   = 12
+	minPrefixSuggestion = 4
+)
 
 // applyArgumentValidation runs after a proxy has resolved to its concrete
 // target and before hooks, permission, leases, subagents, or MCP tools/call.
@@ -109,10 +117,122 @@ func argumentValidationMessage(plan *toolCallPlan, result tool.ArgumentValidatio
 		fmt.Fprintf(&b, "\nThe call was not executed. Pass the parameters for %s directly at the root of its input object, correct the indicated errors and retry.", plan.permName)
 	}
 	b.WriteString("\nNormal permission checks still apply.")
+	if hint := undeclaredArgumentHint(plan.execTool, plan.execArgs); hint != "" {
+		b.WriteString("\n" + hint)
+	}
 	if hasRedundantArgumentWrapper(plan.execTool, plan.execArgs) {
 		b.WriteString("\nThe sole \"arguments\" wrapper does not match this tool's schema; its inner object matches the expected parameters. Remove that one wrapper from the target parameters when retrying; keep any outer capability call envelope.")
 	}
 	return truncateValidationMessage(b.String())
+}
+
+// plainObjectProperties returns a schema's declared properties when the schema
+// is a plain object schema readable by name alone. Composing keywords and
+// references are refused: their effective property set is not in this document.
+func plainObjectProperties(schema json.RawMessage) (map[string]json.RawMessage, bool) {
+	var doc map[string]json.RawMessage
+	if json.Unmarshal(schema, &doc) != nil || string(doc["type"]) != `"object"` {
+		return nil, false
+	}
+	for _, key := range []string{"$ref", "$dynamicRef", "$recursiveRef", "allOf", "anyOf", "oneOf", "not", "if", "then", "else", "patternProperties", "dependencies", "dependentSchemas"} {
+		if _, exists := doc[key]; exists {
+			return nil, false
+		}
+	}
+	var props map[string]json.RawMessage
+	if json.Unmarshal(doc["properties"], &props) != nil || props == nil {
+		return nil, false
+	}
+	return props, true
+}
+
+// allowsUndeclaredArguments reports whether a schema explicitly permits
+// additional properties. An absent keyword is "not declared", which the hint
+// still explains; a permissive one makes the hint misleading.
+func allowsUndeclaredArguments(schema json.RawMessage) bool {
+	var doc map[string]json.RawMessage
+	if json.Unmarshal(schema, &doc) != nil {
+		return false
+	}
+	raw, exists := doc["additionalProperties"]
+	return exists && strings.TrimSpace(string(raw)) != "false"
+}
+
+// undeclaredArgumentHint names arguments the tool does not declare. A schema
+// without "additionalProperties": false accepts a near-miss key silently, so the
+// only violation reports a missing required property and the caller retries
+// blind; naming both sides is what ends that loop.
+func undeclaredArgumentHint(target tool.Tool, raw json.RawMessage) string {
+	if target == nil {
+		return ""
+	}
+	if allowsUndeclaredArguments(target.Schema()) {
+		return ""
+	}
+	props, ok := plainObjectProperties(target.Schema())
+	if !ok || len(props) == 0 {
+		return ""
+	}
+	var args map[string]json.RawMessage
+	if json.Unmarshal(raw, &args) != nil || args == nil {
+		return ""
+	}
+	declared := make([]string, 0, len(props))
+	for name := range props {
+		declared = append(declared, name)
+	}
+	sort.Strings(declared)
+	var unknown []string
+	for name := range args {
+		if _, exists := props[name]; !exists {
+			unknown = append(unknown, name)
+		}
+	}
+	if len(unknown) == 0 {
+		return ""
+	}
+	sort.Strings(unknown)
+	suggestion := ""
+	if near := nearestDeclaredArgument(unknown[0], declared); near != "" {
+		suggestion = fmt.Sprintf(" Did you mean %q?", near)
+	}
+	return fmt.Sprintf("The argument %s is not declared by %s; declared arguments: %s.%s",
+		quotedNameList(unknown, maxUndeclaredInHint), target.Name(), quotedNameList(declared, maxDeclaredInHint), suggestion)
+}
+
+// nearestDeclaredArgument returns the declared name sharing the longest prefix
+// with an undeclared one, or "" when nothing shares enough of it to suggest.
+func nearestDeclaredArgument(name string, declared []string) string {
+	best, bestLen := "", 0
+	lower := strings.ToLower(name)
+	for _, candidate := range declared {
+		shared := sharedPrefixLen(lower, strings.ToLower(candidate))
+		if shared >= minPrefixSuggestion && shared > bestLen {
+			best, bestLen = candidate, shared
+		}
+	}
+	return best
+}
+
+func sharedPrefixLen(a, b string) int {
+	n := 0
+	for n < len(a) && n < len(b) && a[n] == b[n] {
+		n++
+	}
+	return n
+}
+
+func quotedNameList(names []string, limit int) string {
+	suffix := ""
+	if len(names) > limit {
+		suffix = fmt.Sprintf(", and %d more", len(names)-limit)
+		names = names[:limit]
+	}
+	quoted := make([]string, 0, len(names))
+	for _, name := range names {
+		quoted = append(quoted, fmt.Sprintf("%q", name))
+	}
+	return strings.Join(quoted, ", ") + suffix
 }
 
 // hasRedundantArgumentWrapper is a conservative, value-free hint, not a
@@ -121,17 +241,8 @@ func hasRedundantArgumentWrapper(target tool.Tool, raw json.RawMessage) bool {
 	if target == nil {
 		return false
 	}
-	var schema map[string]json.RawMessage
-	if json.Unmarshal(target.Schema(), &schema) != nil || string(schema["type"]) != `"object"` {
-		return false
-	}
-	for _, key := range []string{"$ref", "$dynamicRef", "$recursiveRef", "allOf", "anyOf", "oneOf", "not", "if", "then", "else", "patternProperties", "dependencies", "dependentSchemas"} {
-		if _, exists := schema[key]; exists {
-			return false
-		}
-	}
-	var props map[string]json.RawMessage
-	if json.Unmarshal(schema["properties"], &props) != nil || props == nil {
+	props, ok := plainObjectProperties(target.Schema())
+	if !ok {
 		return false
 	}
 	if _, exists := props["arguments"]; exists {

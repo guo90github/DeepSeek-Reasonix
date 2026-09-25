@@ -182,9 +182,11 @@ Normal permission and execution checks still apply to a corrected call.
 Errors retain the target name, schema fingerprint, violation paths, and
 `argument_validation:<tool>:<fingerprint>:<category>` diagnostic signature.
 Feedback identifies whether parameters belong at the direct tool's input root
-or inside a capability call's `arguments`. A conservative, value-free hint may
+or inside a capability call's `arguments`. Conservative, value-free hints may
 identify a single redundant `arguments` wrapper when the inner object satisfies
-the concrete contract, including conditional validation. This is advice only:
+the concrete contract (including conditional validation), or name arguments a
+tool does not declare — with the declared names and a prefix-similar suggestion
+— when the schema itself cannot reject an undeclared key. This is advice only:
 the host never unwraps, coerces, fills, or executes the supplied parameters as
 part of diagnosis. Legitimate `arguments` fields and nested skill contracts are
 preserved. Empty/null validation compatibility remains unchanged.
