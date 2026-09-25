@@ -321,6 +321,21 @@ may still carry the template sentence while the **lookup**
 wake with nowhere to land is answered `409`, never a receipt claiming
 `no_session_path`: with no session file there is no queue to hold it.
 
+**Every `409` on the inbox path says which retry policy applies.** The refusal
+carries `X-Reasonix-Reject-Class`, and that class is the whole contract — a
+sender picks its retry policy from it instead of matching the prose:
+
+| Class | Meaning | Retry |
+| --- | --- | --- |
+| `target_unreachable` | this serve is not the addressee: another runtime owns the session, the expected-session header disagrees, or activation could not move the foreground onto it | never: change the target or stop |
+| `not_accepting` | the queue refuses right now (capacity, pause); `Retry-After` carries the floor in seconds | yes, starting at `Retry-After` and capped by the caller |
+| `invalid_request` | the request cannot be honored as sent: state, a consumed idempotency key, a missing item, changed model settings | never: fix the request or read the existing receipt |
+
+`Retry-After` is a floor, not a promise: the queue's own re-attempts run on a
+sub-second ladder, so a caller that honours it cannot outrun them. A refusal
+without the header is not classifiable (a `413` for an oversized body, a `400`
+for an empty one), and older hosts never send the header at all.
+
 **A lookup reads the current situation.** `GET /inbox/receipt?key=<key>`
 returns the gate, position, state, `paused`, and `capacity` as they are now,
 not as they were at enqueue. Once the item has been consumed and removed from

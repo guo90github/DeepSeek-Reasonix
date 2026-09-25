@@ -52,7 +52,7 @@ func (s *Server) validateExpectedSessionLocked(w http.ResponseWriter, r *http.Re
 	if expected := r.Header.Get(expectedModelSettingsHeader); expected != "" {
 		snapshot, ok := s.ctl().(interface{ ModelSettingsSourceRevision() string })
 		if !ok || snapshot.ModelSettingsSourceRevision() != expected {
-			http.Error(w, "session model settings changed; apply the latest saved settings before starting this run", http.StatusConflict)
+			reject(w, rejectInvalidRequest, "session model settings changed; apply the latest saved settings before starting this run")
 			return false
 		}
 	}
@@ -61,10 +61,10 @@ func (s *Server) validateExpectedSessionLocked(w http.ResponseWriter, r *http.Re
 		// read-only by ownership. Answer with the takeover wording instead of
 		// the generic "active session changed".
 		if s.expectedSessionIsSpectatorPinLocked(r) {
-			http.Error(w, errSessionTakenOver, http.StatusConflict)
+			reject(w, rejectTargetUnreachable, errSessionTakenOver)
 			return false
 		}
-		http.Error(w, err.Error(), http.StatusConflict)
+		reject(w, rejectTargetUnreachable, err.Error())
 		return false
 	}
 	return true

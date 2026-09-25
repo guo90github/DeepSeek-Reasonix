@@ -217,7 +217,7 @@ func (s *Server) rejectMirroredForegroundLocked(w http.ResponseWriter) bool {
 	if !s.foregroundMirroredLocked() {
 		return false
 	}
-	http.Error(w, errSessionTakenOver, http.StatusConflict)
+	reject(w, rejectTargetUnreachable, errSessionTakenOver)
 	return true
 }
 

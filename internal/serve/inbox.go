@@ -35,9 +35,11 @@ func writeInboxError(w http.ResponseWriter, err error) {
 	case errors.Is(err, sessioninbox.ErrItemTooLarge):
 		http.Error(w, err.Error(), http.StatusRequestEntityTooLarge) // 413
 	case errors.Is(err, sessioninbox.ErrCapacityItems), errors.Is(err, sessioninbox.ErrCapacityBytes),
-		errors.Is(err, sessioninbox.ErrInvalidState), errors.Is(err, sessioninbox.ErrPaused),
-		errors.Is(err, sessioninbox.ErrNotFound), errors.Is(err, sessioninbox.ErrIdempotencyConflict):
-		http.Error(w, err.Error(), http.StatusConflict) // 409
+		errors.Is(err, sessioninbox.ErrPaused):
+		reject(w, rejectNotAccepting, err.Error()) // 409
+	case errors.Is(err, sessioninbox.ErrInvalidState), errors.Is(err, sessioninbox.ErrNotFound),
+		errors.Is(err, sessioninbox.ErrIdempotencyConflict):
+		reject(w, rejectInvalidRequest, err.Error()) // 409
 	case errors.Is(err, sessioninbox.ErrEmpty):
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	default:
@@ -63,7 +65,7 @@ func (s *Server) validateInboxReadSessionLocked(w http.ResponseWriter, r *http.R
 		return false
 	}
 	if err := s.expectedSessionPathErrorLocked(r.URL.Query().Get("session")); err != nil {
-		http.Error(w, err.Error(), http.StatusConflict)
+		reject(w, rejectTargetUnreachable, err.Error())
 		return false
 	}
 	return true
@@ -91,7 +93,7 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 	requested := agent.CanonicalSessionPath(strings.TrimSpace(r.Header.Get(sessionPathHeader)))
 	if requested != "" {
 		if err := s.activateAddressedSession(requested); err != nil {
-			http.Error(w, "addressed session cannot receive this here: "+err.Error(), http.StatusConflict)
+			reject(w, rejectTargetUnreachable, "addressed session cannot receive this here: "+err.Error())
 			return
 		}
 	} else if intent == sessioninbox.IntentSteer {
@@ -107,7 +109,7 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 		// success: refuse before admitting anything rather than deliver elsewhere.
 		slog.Warn("inbox: addressed session is not the delivery target; refusing instead of misdelivering",
 			"requested", requested, "landed", landed)
-		http.Error(w, "addressed session cannot receive this here", http.StatusConflict)
+		reject(w, rejectTargetUnreachable, "addressed session cannot receive this here")
 		return
 	}
 	req := control.InboxRequest{
