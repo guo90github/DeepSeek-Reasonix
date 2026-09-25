@@ -200,6 +200,7 @@ func (h *Host) bindToolListChanges(c *Client) {
 	})
 	c.watchToolListChanges()
 	h.watchAuxiliaryListChanges(c)
+	h.bindWakeNotifications(c)
 }
 
 func (h *Host) watchAuxiliaryListChanges(c *Client) {
