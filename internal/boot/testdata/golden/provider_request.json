@@ -101,7 +101,7 @@
     },
     {
       "name": "bash",
-      "description": "Execute a command in the shell and return combined stdout/stderr. To write outside the workspace, pass additional_write_dirs with the smallest concrete directories (no globs; absolute, workspace-relative, ~, or ${HOME}) and a justification. The host will not infer write paths from the command text. Use for builds, tests, git, package managers, etc. To search/read/list/edit/move files, prefer the dedicated tools (grep, read_file, ls, glob, edit_file, move_file) over shell grep/cat/ls/find/sed/mv/Move-Item — they behave identically on every OS. For symbol search or architecture questions, prefer LSP/read tools and targeted grep before shell commands.",
+      "description": "Execute a command in the shell and return combined stdout/stderr. To write outside the workspace, pass additional_write_dirs with the smallest concrete directories (no globs; absolute, workspace-relative, ~, or ${HOME}) and a justification. The host will not infer write paths from the command text. Use for builds, tests, git, package managers, etc. To search/read/list/edit/move files, prefer the dedicated tools (grep, read_file, ls, glob, edit_file, move_file) over shell grep/cat/ls/find/sed/mv/Move-Item — they behave identically on every OS. For symbol search or architecture questions, prefer LSP/read tools and targeted grep before shell commands.  - multi-line code: a bare 'python' can resolve through a Windows .bat shim that runs cmd.exe, which cuts the argument at the newline — a multi-line 'python -c \"...\"' then loses its code; use a heredoc (python - \u003c\u003c'PY'), a script file, or a one-line -c.\n  - paths: a '/' path inside a script is not bash's /tmp on Windows (there bash's /tmp is the session temp dir, while a native .exe reads '/tmp' as C:\\tmp); prefer $TMP, a script-relative path, or cygpath -w on Git for Windows.",
       "parameters": {
         "properties": {
           "additional_write_dirs": {
@@ -207,7 +207,7 @@
             "type": "string"
           },
           "operation_id": {
-            "description": "The host operation whose receipts are being cited. Required when citing runtime-issued receipts so evidence from another change cannot satisfy this step.",
+            "description": "Optional: the host adopts the operation the cited receipts belong to, so pass this only to pin a different one. Cite receipts from a single change; mixing receipts from two operations is rejected.",
             "type": "string"
           },
           "receipt_ids": {

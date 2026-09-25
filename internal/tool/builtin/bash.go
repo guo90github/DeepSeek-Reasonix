@@ -124,7 +124,7 @@ func (b bash) Description() string {
 	}
 	return "Execute a command in the shell and return combined stdout/stderr. " +
 		"To write outside the workspace, pass additional_write_dirs with the smallest concrete directories (no globs; absolute, workspace-relative, ~, or ${HOME}) and a justification. " +
-		"The host will not infer write paths from the command text." + bashToolSteer
+		"The host will not infer write paths from the command text." + bashToolSteer + posixShellTraps
 }
 
 // bashToolSteer points the model at the cross-platform built-in tools instead of
@@ -230,7 +230,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	if b.terminal != nil && !p.RunInBackground && !b.sb.Enforce() && !secrets.FilterSubprocessEnv() {
 		envMap := sandbox.SessionTempEnvMap(prepared.SessionTemp, prepared.LinuxSandboxed)
 		if out, ok, termErr := b.terminal.RunCommand(ctx, p.Command, b.workDir, b.timeout, envMap); ok {
-			out = appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command))
+			out = appendGitBashHints(appendSessionDataHint(out, b.guard.CommandHint(b.workDir, p.Command)), sh)
 			applyTerminalResult(ex, termErr)
 			ex.DurationMs = time.Since(start).Milliseconds()
 			return tool.DetailedResult{Output: out, Execution: ex}, termErr
@@ -288,7 +288,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	mergeRunInto(ex, runEx)
 	ex.DurationMs = time.Since(start).Milliseconds()
 	return tool.DetailedResult{
-		Output:    appendPowerShellGlobHint(b.appendWriteHints(ctx, out, err, p, wrapped), sh),
+		Output:    appendGitBashHints(appendPowerShellGlobHint(b.appendWriteHints(ctx, out, err, p, wrapped), sh), sh),
 		Execution: ex,
 	}, err
 }
