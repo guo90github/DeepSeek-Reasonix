@@ -364,6 +364,20 @@ is simply `queued` again. The marker rides the message body — the turn tail �
 and never the system-prompt prefix, which has to stay byte-identical across
 turns for the provider's prefix cache.
 
+**Three shapes all look like "the session stopped".** When a human reports "the
+message arrived and my session stopped", it is exactly one of these, and each is
+readable from fields that already exist:
+
+| Shape | What actually happened | Read |
+| --- | --- | --- |
+| A turn finished | the turn ended normally; the session is idle, not stopped | the session's own turn status / `turn_done` |
+| The message was injected | the running turn took the item as a mid-turn steer, and the turn did **not** end | receipt `disposition=steer_accepted` (accepted ≠ applied), item `state=steer_accepted` → `steer_consumed` |
+| The wake never reached | the message landed in the room but nothing moved the session | room `/api/wakes` `type=skipped` with its `reason`, or no event at all, and no inbox item |
+
+The host-side marker is what separates the last shape from the other two *inside*
+the session: injected guidance carries `[remote wake source=… item=…]`, and a
+message the session merely read while polling does not.
+
 **A lookup reads the current situation.** `GET /inbox/receipt?key=<key>`
 returns the gate, position, state, `paused`, and `capacity` as they are now,
 not as they were at enqueue. Once the item has been consumed and removed from
