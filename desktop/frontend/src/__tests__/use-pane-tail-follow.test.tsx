@@ -456,5 +456,69 @@ check(scrollWrites[0] === 1600, "the re-armed write lands on the new bottom (170
 check(scrollTopValue === 1600, "the viewport converges again on real growth");
 await unmount();
 
+// Scenario 14 (BUG1D): a guidance row lands at the tail while the pane is
+// pinned — the pane's turns identity changes AND the row mounts inside the
+// observed content. Both signals arrive in the same frame, which is the split
+// pane's real shape (transcriptRows re-partitions, then Virtuoso mounts the
+// row). The row must end inside the viewport, not just be rendered.
+scrollHeightValue = 1200;
+scrollTopValue = 1100;
+await mount();
+scrollWrites = [];
+scrollHeightValue = 1320; // one guidance row (~120px) appended at the tail
+await act(async () => {
+  contentNode.appendChild(dom.window.document.createElement("article"));
+});
+await act(() => api?.grow());
+await new Promise((resolve) => setTimeout(resolve, 0)); // flush MO microtasks
+await flushAllFrames();
+check(scrollWrites.length === 1, "a new guidance row emits exactly one tail write");
+check(scrollWrites[0] === 1220, "the write lands on the new native bottom (1320 - 100)");
+check(scrollTopValue + 100 >= scrollHeightValue, "the new guidance row ends inside the viewport");
+await unmount();
+
+// Scenario 15 (BUG1D): the row mounts as an empty shell first (markdown/worker
+// body not painted yet) and only grows to its real height afterwards. In the
+// real pane that later growth always carries one of two signals — a DOM
+// mutation inside the observed subtree, or Virtuoso's totalListHeightChanged —
+// and either has to carry the viewport to the measured bottom, otherwise the
+// row stays below the fold: the "rendered but never seen" shape.
+// 15a: the body paints (DOM mutation), with no data-identity change.
+scrollHeightValue = 1200;
+scrollTopValue = 1100;
+await mount();
+const guidanceRow = dom.window.document.createElement("article");
+await act(async () => {
+  contentNode.appendChild(guidanceRow);
+});
+await act(() => api?.grow());
+await flushAllFrames();
+check(scrollWrites.length === 0, "a zero-height row mount alone writes nothing");
+scrollWrites = [];
+scrollHeightValue = 1340; // the row body paints at its measured height
+await act(async () => {
+  guidanceRow.appendChild(dom.window.document.createElement("p"));
+});
+await new Promise((resolve) => setTimeout(resolve, 0)); // flush MO microtasks
+await flushAllFrames();
+check(scrollTopValue + 100 >= scrollHeightValue, "a late-painting guidance row still ends inside the viewport");
+check(scrollWrites.length === 1, "the late paint converges with one write");
+await unmount();
+// 15b: the same late height arrives only as Virtuoso's height callback.
+scrollHeightValue = 1200;
+scrollTopValue = 1100;
+await mount();
+await act(async () => {
+  contentNode.appendChild(dom.window.document.createElement("article"));
+});
+await act(() => api?.grow());
+await flushAllFrames();
+scrollWrites = [];
+scrollHeightValue = 1340;
+await act(() => api?.reaim()); // totalListHeightChanged, no data change
+await flushAllFrames();
+check(scrollTopValue + 100 >= scrollHeightValue, "a late height callback still ends inside the viewport");
+await unmount();
+
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
