@@ -11,9 +11,9 @@
 
 ```
 sed -n '10,14p' internal/boot/inbox_wake_contract_test.go   # §1 载荷字段集（契约用例）
-sed -n '12,17p' internal/control/inbox_wake_marker.go        # §2 来源具名集合
+sed -n '12,40p' internal/control/inbox_wake_marker.go        # §2 来源具名集合
 sed -n '11,23p' internal/serve/reject_class.go               # §3 分类头 + 三档取值
-sed -n '31,38p' internal/sessioninbox/types.go               # §4 state 封闭集
+sed -n '31,120p' internal/sessioninbox/types.go               # §4 state 封闭集
 sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明处（空 = 不武装）
 ```
 

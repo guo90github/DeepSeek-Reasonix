@@ -81,7 +81,7 @@ func IsBlocking(e Event) bool { return e == PreToolUse || e == UserPromptSubmit 
 
 // claudePermissionBlocking reports whether exit code 2 (or a timeout) on h
 // aborts the action even though PermissionRequest is not one of Reasonix's own
-// blocking events (docs/DESKTOP_HOOKS.md: "只有 PreToolUse 和 UserPromptSubmit
+// blocking events (docs/DESKTOP_HOOKS.zh-CN.md: "只有 PreToolUse 和 UserPromptSubmit
 // 是阻塞型事件"). Claude's own PermissionRequest contract denies the permission
 // on exit 2 the same way PreToolUse does (https://code.claude.com/docs/en/hooks),
 // so an imported Claude hook (PayloadFormat "claude") honors that instead of
