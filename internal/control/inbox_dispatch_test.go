@@ -309,3 +309,76 @@ func TestNaturalCompletionAutoDispatchesDurableFIFO(t *testing.T) {
 		t.Fatalf("completed FIFO left inbox state: %+v", snap)
 	}
 }
+
+// The host's hook answers ErrInboxRuntimeUnpublished whenever it has not
+// published this runtime, and it only kicks again on publication. A wake that
+// lands in that gap must be re-attempted here or it waits for a kick that may
+// never come.
+func TestHostUnpublishedRuntimeIsDeferredThenAdmitted(t *testing.T) {
+	c, runner, done := newInboxDispatchController(t)
+	deferTimers := make(chan func(), 8)
+	var mu sync.Mutex
+	published := false
+	c.SetBeforeInboxDispatch(func(*Controller) (func(), error) {
+		mu.Lock()
+		defer mu.Unlock()
+		if !published {
+			return nil, ErrInboxRuntimeUnpublished
+		}
+		return nil, nil
+	})
+	c.inbox.mu.Lock()
+	c.inbox.scheduleDispatchRetry = func(_ time.Duration, retry func()) { deferTimers <- retry }
+	c.inbox.mu.Unlock()
+	if _, err := c.EnqueueInbox(InboxRequest{Submit: "wake during host publication"}); err != nil {
+		t.Fatal(err)
+	}
+	c.maybeDispatchInbox()
+
+	var retry func()
+	select {
+	case retry = <-deferTimers:
+	case <-time.After(inboxDispatchTestTimeout):
+		failInboxDispatchWait(t, c, "host deferral timer")
+	}
+	select {
+	case got := <-runner.inputs:
+		t.Fatalf("item dispatched while the host reported its runtime unpublished: %q", got)
+	default:
+	}
+
+	mu.Lock()
+	published = true
+	mu.Unlock()
+	retry()
+	if got := waitForInboxDispatch(t, c, runner); got != "wake during host publication" {
+		t.Fatalf("deferred input = %q", got)
+	}
+	waitForInboxTurnDone(t, c, done)
+}
+
+func TestHostUnpublishedRuntimeDeferralsAreBounded(t *testing.T) {
+	c, _, _ := newInboxDispatchController(t)
+	deferTimers := make(chan func(), 8)
+	c.SetBeforeInboxDispatch(func(*Controller) (func(), error) { return nil, ErrInboxRuntimeUnpublished })
+	c.inbox.mu.Lock()
+	c.inbox.scheduleDispatchRetry = func(_ time.Duration, retry func()) { deferTimers <- retry }
+	c.inbox.mu.Unlock()
+	if _, err := c.EnqueueInbox(InboxRequest{Intent: sessioninbox.IntentFollowup, Submit: "never admitted"}); err != nil {
+		t.Fatal(err)
+	}
+	c.maybeDispatchInbox()
+	for i := range inboxDispatchDeferDelays {
+		select {
+		case retry := <-deferTimers:
+			retry()
+		case <-time.After(inboxDispatchTestTimeout):
+			t.Fatalf("deferral %d of %d was never scheduled", i+1, len(inboxDispatchDeferDelays))
+		}
+	}
+	select {
+	case <-deferTimers:
+		t.Fatal("deferrals continued past the ladder")
+	case <-time.After(100 * time.Millisecond):
+	}
+}

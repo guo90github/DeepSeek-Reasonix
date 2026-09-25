@@ -8,14 +8,29 @@ import (
 	"reasonix/internal/sessioninbox"
 )
 
-const maxInboxDispatchRetryAttempts = 3
+// inboxDispatchRetryDelays paces re-attempts after a transient admission or
+// Store failure: short, because those either clear at once or are permanent.
+var inboxDispatchRetryDelays = [...]time.Duration{
+	50 * time.Millisecond, 200 * time.Millisecond, 500 * time.Millisecond,
+}
+
+// inboxDispatchDeferDelays paces re-attempts while the host has not published
+// this runtime. The host kicks again when it publishes, so this ladder only
+// covers the window where that kick never arrives; expiry leaves the item
+// queued for the host exactly as before.
+var inboxDispatchDeferDelays = [...]time.Duration{
+	1 * time.Second, 3 * time.Second, 10 * time.Second, 30 * time.Second,
+}
 
 // ErrInboxRuntimeUnpublished means the host owns the next dispatch kick:
 // either this runtime is a candidate or it was replaced before admission.
 var ErrInboxRuntimeUnpublished = errors.New("inbox runtime is not published")
 
 // NotifyInboxRuntimeReady is called after a host publishes a complete runtime.
-func (c *Controller) NotifyInboxRuntimeReady() { c.maybeDispatchInbox() }
+func (c *Controller) NotifyInboxRuntimeReady() {
+	c.resetInboxDispatchRetries()
+	c.maybeDispatchInbox()
+}
 
 func (c *Controller) SetBeforeInboxDispatch(before func(*Controller) (func(), error)) {
 	c.mu.Lock()
@@ -29,6 +44,9 @@ const (
 	inboxDispatchIdle inboxDispatchResult = iota
 	inboxDispatchStarted
 	inboxDispatchRetry
+	// inboxDispatchDeferred means the host has not published this runtime yet:
+	// the item stays queued and inboxDispatchDeferDelays re-attempts admission.
+	inboxDispatchDeferred
 )
 
 // endRotation releases the admission gate and republishes durable queue work.
@@ -83,6 +101,8 @@ func (c *Controller) drainInboxDispatch() {
 		switch c.dispatchInboxOnce() {
 		case inboxDispatchRetry:
 			c.scheduleInboxDispatchRetry()
+		case inboxDispatchDeferred:
+			c.scheduleInboxDispatchDefer()
 		case inboxDispatchStarted, inboxDispatchIdle:
 			c.resetInboxDispatchRetries()
 		}
@@ -127,7 +147,10 @@ func (c *Controller) dispatchInboxOnce() inboxDispatchResult {
 	}
 	receipt, err := c.TrySubmitInboxItem(meta.ID)
 	if err != nil {
-		if errors.Is(err, ErrInboxRuntimeUnpublished) || errors.Is(err, ErrTurnRunning) {
+		if errors.Is(err, ErrInboxRuntimeUnpublished) {
+			return inboxDispatchDeferred
+		}
+		if errors.Is(err, ErrTurnRunning) {
 			return inboxDispatchIdle
 		}
 		slog.Warn("controller: dispatch inbox item", "err", err, "id", meta.ID)
@@ -233,18 +256,31 @@ func (c *Controller) nextInboxDispatchItem() (sessioninbox.InboxItemMeta, bool, 
 }
 
 func (c *Controller) scheduleInboxDispatchRetry() {
+	c.scheduleInboxDispatchAttempt(&c.inbox.dispatchRetryAttempts, inboxDispatchRetryDelays[:])
+}
+
+// scheduleInboxDispatchDefer re-attempts admission while the host has not
+// published this runtime. Running out of ladder leaves the item queued for the
+// host, which is what happened on the first attempt before.
+func (c *Controller) scheduleInboxDispatchDefer() {
+	c.scheduleInboxDispatchAttempt(&c.inbox.dispatchDeferAttempts, inboxDispatchDeferDelays[:])
+}
+
+// scheduleInboxDispatchAttempt arms the next attempt from one ladder, sharing a
+// single in-flight flag so a queued item never holds two timers. The ladders are
+// bounded: a persistent condition must not become a hot background loop.
+func (c *Controller) scheduleInboxDispatchAttempt(attempts *int, delays []time.Duration) {
 	c.inbox.mu.Lock()
-	if c.inbox.dispatchRetryScheduled || c.inbox.dispatchRetryAttempts >= maxInboxDispatchRetryAttempts {
+	if c.inbox.dispatchRetryScheduled || *attempts >= len(delays) {
 		c.inbox.mu.Unlock()
 		return
 	}
-	attempt := c.inbox.dispatchRetryAttempts
-	c.inbox.dispatchRetryAttempts++
+	delay := delays[*attempts]
+	*attempts++
 	c.inbox.dispatchRetryScheduled = true
 	schedule := c.inbox.scheduleDispatchRetry
 	c.inbox.mu.Unlock()
 
-	delay := [...]time.Duration{50 * time.Millisecond, 200 * time.Millisecond, 500 * time.Millisecond}[attempt]
 	retry := func() {
 		c.inbox.mu.Lock()
 		c.inbox.dispatchRetryScheduled = false
@@ -261,5 +297,6 @@ func (c *Controller) scheduleInboxDispatchRetry() {
 func (c *Controller) resetInboxDispatchRetries() {
 	c.inbox.mu.Lock()
 	c.inbox.dispatchRetryAttempts = 0
+	c.inbox.dispatchDeferAttempts = 0
 	c.inbox.mu.Unlock()
 }

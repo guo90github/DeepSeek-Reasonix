@@ -90,10 +90,11 @@ type inboxState struct {
 	admittingOwnership sync.Map
 	dispatching        bool
 	dispatchPending    bool
-	// Retry bookkeeping is guarded by mu. Retries are bounded so a persistent
-	// disk or materialization failure cannot create a hot background loop.
+	// Retry bookkeeping is guarded by mu. Both ladders are bounded so a
+	// persistent disk, materialization, or host-publication wait cannot loop.
 	dispatchRetryAttempts  int
 	dispatchRetryScheduled bool
+	dispatchDeferAttempts  int
 	// beforePreparedAdmission is a deterministic test hook for the gap between
 	// durable preparation and Controller admission. Production leaves it nil.
 	beforePreparedAdmission func()
