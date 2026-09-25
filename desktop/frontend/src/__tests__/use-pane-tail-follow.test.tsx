@@ -5,6 +5,8 @@ import React, { act, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { VirtuosoHandle } from "react-virtuoso";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
+import { buildTurnModels, NO_LIVE, type Item } from "../lib/transcriptRows";
+import { conversationPaneTurns } from "../lib/transcriptPanes";
 
 let passed = 0;
 let failed = 0;
@@ -117,6 +119,7 @@ type PaneApi = {
   grow: () => void;
   setEnabled: (next: boolean) => void;
   armScroller: () => void;
+  setProjection: (next: unknown) => void;
 };
 let api: PaneApi | null = null;
 const setApi = (next: PaneApi) => { api = next; };
@@ -125,11 +128,13 @@ function Harness({ enabled = true, delayedScroller = false }: { enabled?: boolea
   const virtuosoRef = useRef<VirtuosoHandle | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const [version, setVersion] = useState(0);
+  // The pane feeds the hook the projection identity (`turns`), not a counter.
+  const [projection, setProjection] = useState<unknown>(null);
   const [isEnabled, setIsEnabled] = useState(enabled);
   const { onUserGesture, reaim } = usePaneTailFollow({
     virtuosoRef,
     scrollerRef,
-    contentVersion: version,
+    contentVersion: projection ?? version,
     enabled: isEnabled,
   });
   useEffect(() => {
@@ -139,6 +144,7 @@ function Harness({ enabled = true, delayedScroller = false }: { enabled?: boolea
       grow: () => setVersion((current) => current + 1),
       setEnabled: setIsEnabled,
       armScroller: () => { scrollerRef.current = scrollerElement as unknown as HTMLDivElement; },
+      setProjection,
     });
   }, [onUserGesture, reaim]);
   // Callback refs assign during commit, before effects — the hook's scroll
@@ -518,6 +524,89 @@ scrollHeightValue = 1340;
 await act(() => api?.reaim()); // totalListHeightChanged, no data change
 await flushAllFrames();
 check(scrollTopValue + 100 >= scrollHeightValue, "a late height callback still ends inside the viewport");
+await unmount();
+
+// Scenario 16 (BUG1D-2, assembly signals): the pane hands the hook a
+// projection identity (`turns`), gates writes with `enabled: !hydrating`, and
+// shifts Virtuoso's `firstItemIndex` when older rows are prepended. Pin the
+// combination the symptom needs: a guidance row arrives while parked at the
+// bottom.
+const guidanceItem: Item = {
+  kind: "notice", id: "guidance-1", level: "info",
+  text: "Chat room #43: 点了你", inboxItemId: "ibx-43",
+};
+const openedWith: Item[] = [
+  { kind: "user", id: "u1", text: "上一问", submissionId: "s-u1", createdAt: 1000 },
+  { kind: "user", id: "u2", text: "这一问", submissionId: "s-u2", createdAt: 2000 },
+];
+const turnsBefore = conversationPaneTurns(buildTurnModels(openedWith, NO_LIVE, false, false));
+const turnsAfter = conversationPaneTurns(buildTurnModels([...openedWith, guidanceItem], NO_LIVE, false, false));
+check(turnsAfter.some((turn) => turn.answers.some((item) => item.id === "guidance-1")),
+  "the projection hands the guidance row to the left pane");
+check(turnsAfter !== turnsBefore,
+  "a new guidance row changes the projection identity (turns)");
+// 16a: the row lands while the pane is pinned — identity + growth in one frame.
+scrollHeightValue = 1200;
+scrollTopValue = 1100;
+await mount();
+scrollWrites = [];
+scrollHeightValue = 1320;
+await act(async () => {
+  contentNode.appendChild(dom.window.document.createElement("article"));
+});
+await act(async () => {
+  api?.setProjection(turnsAfter);
+});
+await new Promise((resolve) => setTimeout(resolve, 0));
+await flushAllFrames();
+check(scrollWrites.length === 1, "assembly: the guidance row emits exactly one tail write");
+check(scrollTopValue + 100 >= scrollHeightValue, "assembly: the guidance row ends inside the viewport");
+await unmount();
+// 16b: the same arrival while `enabled` is false (`hydrating`) parks the pane;
+// the flip to enabled has to carry it to the bottom, or the row stays below the
+// fold for the rest of the session.
+scrollHeightValue = 1320;
+scrollTopValue = 400; // restoration parked the pane mid-session
+await mount(false);
+scrollWrites = [];
+await act(async () => {
+  contentNode.appendChild(dom.window.document.createElement("article"));
+});
+await act(async () => {
+  api?.setProjection(turnsAfter);
+});
+await flushAllFrames();
+check(scrollWrites.length === 0, "assembly: a row arriving while hydrating is not chased");
+await act(() => api?.setEnabled(true));
+await flushAllFrames();
+check(scrollTopValue + 100 >= scrollHeightValue, "assembly: the enable flip lands the row inside the viewport");
+await unmount();
+// 16c: older rows are prepended (firstItemIndex shifts, no growth). The pinned
+// tail must not be tugged by that bookkeeping, and the next guidance row still
+// converges.
+scrollHeightValue = 1200;
+scrollTopValue = 1100;
+await mount();
+scrollWrites = [];
+const turnsPrepended = conversationPaneTurns(buildTurnModels(
+  [{ kind: "user", id: "u0", text: "更早一问", submissionId: "s-u0", createdAt: 500 }, ...openedWith],
+  NO_LIVE, false, false,
+));
+await act(async () => {
+  api?.setProjection(turnsPrepended);
+});
+await flushAllFrames();
+check(scrollWrites.length === 0, "assembly: a prepend does not tug the pinned tail");
+scrollHeightValue = 1340;
+await act(async () => {
+  contentNode.appendChild(dom.window.document.createElement("article"));
+});
+await act(async () => {
+  api?.setProjection(turnsAfter);
+});
+await new Promise((resolve) => setTimeout(resolve, 0));
+await flushAllFrames();
+check(scrollTopValue + 100 >= scrollHeightValue, "assembly: the row after a prepend still ends inside the viewport");
 await unmount();
 
 console.log(`\n${passed} passed, ${failed} failed`);
