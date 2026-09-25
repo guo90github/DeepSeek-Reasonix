@@ -40,3 +40,11 @@
 - **可红判据**：`git rev-list --count @{u}..HEAD` 归零，或本条被一条明确「不推」的声明取代。
 
 > 计数会随每次提交变化，所以这一条的载体是**命令 + 仓绝对路径**，不是那个数字。
+
+## 5 `LINT-1` 本仓自检 `repolint` 在未推分支上红
+
+- **来源**：`go run ./tools/repolint`（本机读数，与 §0 同一时点）。
+- **状态**：未落——exit 1：`New standards violations` 共 7 条（`internal/config/config.go`、`internal/config/render_test.go`、`internal/control/controller.go`、`internal/control/turn_orchestrator.go`、`internal/plugin/plugin.go`、`internal/provider/openai/openai.go` 两条）。
+- **理由（本笔已排除）**：本笔只加两份 `docs/*.md`（`git show --stat e6de6ec74`），而 size 规则不查 `.md`；其中 `internal/plugin/plugin.go` 的超支来自上一轮的 `9f8efce3f`（该提交给该文件加了 9 行注释，把 essay 顶到 15/14），其余来自更早的合并。
+- **下一笔**：逐条对 `tools/repolint/baseline.json` 收窄——首选改代码（收窄注释 / 拆文件）；**不许静默放宽基线**，`-update` 只在重命名、抽取这类搬债场景用，并在 PR 里写明理由。
+- **可红判据**：`go run ./tools/repolint` 退出 0；或违规清单被明确记为「已知并接受」并写出理由。
