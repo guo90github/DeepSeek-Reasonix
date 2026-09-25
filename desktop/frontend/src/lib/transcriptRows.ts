@@ -94,7 +94,10 @@ export function partitionTurnItems(items: readonly Item[], live: TranscriptLiveF
       if (isHostRecoveryGuidance(item.text)) {
         continue;
       }
-      if (isSteerNoticeText(item.text)) {
+      // Guidance tied to an inbox item is host-injected work addressed to the
+      // user, like a steer. Filing it as process material would drop it from the
+      // conversation column, which is the only column split mode shows it in.
+      if (isSteerNoticeText(item.text) || Boolean(item.inboxItemId)) {
         current.outsideItems.push(item);
         currentHasConversation = true;
       } else if (item.level === "warn" || item.variant === "delivery" || Boolean(item.action) || item.code === "search_sources_not_provided" || item.code === "incomplete_read") {
