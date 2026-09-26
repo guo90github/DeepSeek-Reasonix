@@ -107,7 +107,7 @@ type Server struct {
 	// sessionActivator owns /resume for embedded hosts that hold every session.
 	sessionActivator func(path string) error
 	// sessionLister answers /sessions from an embedded host's own index.
-	sessionLister func() []SessionInfo
+	sessionLister func(all bool) []SessionInfo
 	// submitDelegate routes /submit through an embedded host's composer path.
 	submitDelegate func(input string) error
 	// submitDelegateFor is the session-aware form: a wake addresses the session

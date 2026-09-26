@@ -11,23 +11,25 @@ import (
 )
 
 type sessionListEntry struct {
-	Name       string `json:"name"`
-	Path       string `json:"path"`
-	Title      string `json:"title,omitempty"`
-	Turns      int    `json:"turns,omitempty"`
-	Current    bool   `json:"current,omitempty"`
-	Running    bool   `json:"running,omitempty"`
-	TakenOver  bool   `json:"takenOver,omitempty"`
-	MtimeMilli int64  `json:"mtimeMilli"`
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Title       string `json:"title,omitempty"`
+	Turns       int    `json:"turns,omitempty"`
+	Current     bool   `json:"current,omitempty"`
+	Running     bool   `json:"running,omitempty"`
+	TakenOver   bool   `json:"takenOver,omitempty"`
+	MtimeMilli  int64  `json:"mtimeMilli"`
+	ProjectRoot string `json:"projectRoot,omitempty"`
 }
 
 // sessions lists saved sessions with event-log-aware titles and turn counts.
 func (s *Server) sessions(w http.ResponseWriter, r *http.Request) {
 	ctrl := s.ctl()
 	// An embedded host already indexes its sessions; a nil list falls back to
-	// the directory walk below.
+	// the directory walk below. all=1 交给宿主自己展开（它才知道每个项目根）：宿主
+	// 只报前台项目的清单就是 remote 眼里的"只有一个项目"。
 	if lister := s.sessionListerFunc(); lister != nil {
-		if rows := lister(); rows != nil {
+		if rows := lister(r.URL.Query().Get("all") == "1"); rows != nil {
 			out := make([]sessionListEntry, 0, len(rows))
 			for _, row := range rows {
 				out = append(out, sessionListEntry(row))

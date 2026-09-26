@@ -176,11 +176,14 @@ func (a *App) tabBySessionPath(sessionPath string) (*WorkspaceTab, error) {
 // listSessionsForRemote answers Serve's /sessions from the desktop's session
 // catalog — the same rows the history panel shows — instead of Serve's
 // per-transcript walk. A nil return before the catalog is ready falls back.
-func (a *App) listSessionsForRemote() []serve.SessionInfo {
+func (a *App) listSessionsForRemote(all bool) []serve.SessionInfo {
 	if a.sessionCatalog.Load() == nil {
 		return nil
 	}
 	metas := a.ListSessions()
+	if all {
+		metas = append(metas, a.listAllWorkspaceSessions(metas)...)
+	}
 	_, ctrl := a.activeTabAndCtrl()
 	running := ctrl != nil && ctrl.Running()
 	out := make([]serve.SessionInfo, 0, len(metas))
@@ -190,14 +193,40 @@ func (a *App) listSessionsForRemote() []serve.SessionInfo {
 			title = meta.Preview
 		}
 		out = append(out, serve.SessionInfo{
-			Name:       strings.TrimSuffix(filepath.Base(meta.Path), ".jsonl"),
-			Path:       meta.Path,
-			Title:      title,
-			Turns:      meta.Turns,
-			Current:    meta.Current,
-			Running:    meta.Current && running,
-			MtimeMilli: meta.LastActivityAt,
+			Name:        strings.TrimSuffix(filepath.Base(meta.Path), ".jsonl"),
+			Path:        meta.Path,
+			Title:       title,
+			Turns:       meta.Turns,
+			Current:     meta.Current,
+			Running:     meta.Current && running,
+			MtimeMilli:  meta.LastActivityAt,
+			ProjectRoot: meta.WorkspaceRoot,
 		})
+	}
+	return out
+}
+
+// listAllWorkspaceSessions 把侧边栏里每个工作区的会话都取来（跳过已在前台清单里的），
+// 让远端看到的项目数与桌面一致；每行带 WorkspaceRoot，手机才能显示可读的项目名。
+func (a *App) listAllWorkspaceSessions(seen []SessionMeta) []SessionMeta {
+	have := make(map[string]bool, len(seen))
+	for _, meta := range seen {
+		have[strings.ToLower(filepath.Clean(meta.Path))] = true
+	}
+	active := filepath.Clean(a.activeSessionDir())
+	out := []SessionMeta{}
+	for _, ws := range a.ListWorkspaces() {
+		dir := config.ProjectSessionDir(ws.Path)
+		if filepath.Clean(dir) == active {
+			continue
+		}
+		for _, meta := range a.listSessionsFromDir(dir, "") {
+			if have[strings.ToLower(filepath.Clean(meta.Path))] {
+				continue
+			}
+			have[strings.ToLower(filepath.Clean(meta.Path))] = true
+			out = append(out, meta)
+		}
 	}
 	return out
 }
