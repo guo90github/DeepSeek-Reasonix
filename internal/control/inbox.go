@@ -397,6 +397,9 @@ type InboxRoomLine struct {
 	Gate      string `json:"gate,omitempty"`
 	Reason    string `json:"reason,omitempty"`
 	Resumable bool   `json:"resumable,omitempty"`
+	// QueuedForMs answers only "how long", never "why it has not run" — that is
+	// the gate plus the host's own sentence.
+	QueuedForMs int64 `json:"queuedForMs,omitempty"`
 }
 
 // InboxRoomLineFor finds the item carrying this room seq. "Not found" is an
@@ -417,6 +420,11 @@ func (c *Controller) InboxRoomLineFor(seq int64) (InboxRoomLine, bool) {
 		if item.State == sessioninbox.StateQueued {
 			if gate, reason, resumable, ok := c.InboxDispatchWait(item.ID); ok {
 				line.Gate, line.Reason, line.Resumable = gate, reason, resumable
+			}
+			if !item.CreatedAt.IsZero() {
+				if waited := time.Since(item.CreatedAt).Milliseconds(); waited > 0 {
+					line.QueuedForMs = waited
+				}
 			}
 		}
 		return line, true
