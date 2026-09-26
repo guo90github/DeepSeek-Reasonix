@@ -70,4 +70,28 @@ func TestToolsCallCarriesTheCallerSession(t *testing.T) {
 	if got := meta[callerSessionMetaKey]; got != "/sessions/room.jsonl" {
 		t.Fatalf("_meta[%s] = %v, want the caller's session", callerSessionMetaKey, got)
 	}
+	// The same identity routes a later wake: the child cannot be asked who a
+	// notification is for, so the call that armed its server is the evidence.
+	if got := c.wakeCaller(); got != "/sessions/room.jsonl" {
+		t.Fatalf("wake route caller = %q, want the calling session", got)
+	}
+}
+
+// A call with no caller session must not arm a wake route: a host serving
+// several sessions would then deliver this session's mention to whichever one
+// happens to be listed first.
+func TestToolsCallWithoutCallerLeavesWakeRoutingEmpty(t *testing.T) {
+	ctx := context.Background()
+	tr := &capturingCallTransport{}
+	c := &Client{name: "room", t: tr, spec: Spec{Name: "room"}, transport: "stdio"}
+	tools, err := c.listTools(ctx)
+	if err != nil {
+		t.Fatalf("listTools: %v", err)
+	}
+	if _, err := tools[0].Execute(ctx, json.RawMessage(`{}`)); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if got := c.wakeCaller(); got != "" {
+		t.Fatalf("a callerless call armed wake routing to %q", got)
+	}
 }

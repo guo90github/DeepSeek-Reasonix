@@ -681,6 +681,10 @@ type Client struct {
 	surfaceStops      []func()
 	auxiliaryRefresh  auxiliaryListRefreshState
 	progressID        atomic.Uint64
+	// lastCallerSession is the session that most recently called this server.
+	// Written per call, read from the wake-notification goroutine; a wake has no
+	// request to attribute it to, so this is the route an unaddressed wake takes.
+	lastCallerSession atomic.Pointer[string]
 }
 
 // AuthorizeSpecLaunch records durable consent for an explicitly user-installed
@@ -1864,8 +1868,9 @@ func (t *remoteTool) callRaw(ctx context.Context, args json.RawMessage) (json.Ra
 		"name":      t.rawName,
 		"arguments": argMap,
 	}
-	if meta := callerSessionMeta(ctx); meta != nil {
-		params["_meta"] = meta
+	if path := callerSessionPath(ctx); path != "" {
+		params["_meta"] = callerSessionMeta(path)
+		t.client.noteCallerSession(path)
 	}
 	res, err := t.client.call(ctx, "tools/call", params)
 	if err != nil {

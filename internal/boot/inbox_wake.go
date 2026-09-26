@@ -15,8 +15,7 @@ import (
 
 // installInboxWakeHandler points server-initiated wakes at the session this
 // host serves, so a mention lands as guidance even while that session is idle
-// or mid-turn — the point of not depending on a poll being in flight. A shared
-// host serves several sessions and has no such binding.
+// or mid-turn — the point of not depending on a poll being in flight.
 func installInboxWakeHandler(host *plugin.Host, ctrl *control.Controller) {
 	if host == nil || ctrl == nil {
 		return
@@ -28,20 +27,41 @@ func inboxWakeHandler(ctrl *control.Controller) func(plugin.WakeMessage) {
 	if ctrl == nil {
 		return nil
 	}
+	return func(msg plugin.WakeMessage) { deliverInboxWake(ctrl, msg) }
+}
+
+// SharedWakeHandler is the sink for a host shared across sessions, which is the
+// desktop's shape: the wake lands in the inbox of the session the child last saw
+// call it. An unknown caller keeps the visible drop, because a host serving
+// several sessions that guessed one would deliver a mention into the wrong inbox.
+func SharedWakeHandler(resolve func(string) *control.Controller) func(plugin.WakeMessage) {
+	if resolve == nil {
+		return nil
+	}
 	return func(msg plugin.WakeMessage) {
-		body, extra, idem, err := wakeInbox(msg)
-		if err != nil {
-			slog.Warn("boot: server wake has no usable body; dropped", "server", msg.Server, "err", err)
+		ctrl := resolve(strings.TrimSpace(msg.Caller))
+		if ctrl == nil {
+			slog.Warn("boot: server wake names no reachable session; dropped",
+				"server", msg.Server, "caller", msg.Caller)
 			return
 		}
-		req := control.InboxRequest{
-			Intent: sessioninbox.IntentSteer, Source: "push",
-			Submit: body, Display: body, Raw: body,
-			Extra: extra, Idempotency: idem,
-		}
-		if _, err := ctrl.EnqueueInbox(req); err != nil {
-			slog.Warn("boot: server wake could not be queued", "server", msg.Server, "err", err)
-		}
+		deliverInboxWake(ctrl, msg)
+	}
+}
+
+func deliverInboxWake(ctrl *control.Controller, msg plugin.WakeMessage) {
+	body, extra, idem, err := wakeInbox(msg)
+	if err != nil {
+		slog.Warn("boot: server wake has no usable body; dropped", "server", msg.Server, "err", err)
+		return
+	}
+	req := control.InboxRequest{
+		Intent: sessioninbox.IntentSteer, Source: "push",
+		Submit: body, Display: body, Raw: body,
+		Extra: extra, Idempotency: idem,
+	}
+	if _, err := ctrl.EnqueueInbox(req); err != nil {
+		slog.Warn("boot: server wake could not be queued", "server", msg.Server, "err", err)
 	}
 }
 

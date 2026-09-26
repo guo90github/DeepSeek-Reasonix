@@ -55,11 +55,55 @@ func TestServerWakeWithoutTextIsDropped(t *testing.T) {
 	}
 }
 
-// An unwired host (shared host, or no session yet) must not panic when a wake
-// arrives: the plugin layer already logs the drop.
+// An unwired host (no session yet, or a shared host whose frontend armed no
+// resolver) must not panic when a wake arrives: the plugin layer already logs
+// the drop.
 func TestInboxWakeHandlerToleratesNoController(t *testing.T) {
 	installInboxWakeHandler(nil, nil)
 	if handler := inboxWakeHandler(nil); handler != nil {
 		t.Fatal("a nil controller produced a wake handler")
+	}
+	if handler := SharedWakeHandler(nil); handler != nil {
+		t.Fatal("a nil resolver produced a shared wake handler")
+	}
+}
+
+// The desktop's host is shared across sessions, so a wake must land in the inbox
+// of the session its caller names: there is no foreground session to fall back
+// on, and the fallback used to be a logged drop.
+func TestSharedHostWakeLandsInTheCallersInbox(t *testing.T) {
+	ctrl := wakeTestController(t)
+	handler := SharedWakeHandler(func(path string) *control.Controller {
+		if path == "/sessions/b.jsonl" {
+			return ctrl
+		}
+		return nil
+	})
+	if handler == nil {
+		t.Fatal("a resolver produced no shared wake handler")
+	}
+	handler(plugin.WakeMessage{
+		Server: "room", Caller: "/sessions/b.jsonl",
+		Payload: json.RawMessage(`{"seq":43,"text":"mentioned you"}`),
+	})
+
+	items := ctrl.InboxSnapshot().Items
+	if len(items) != 1 || items[0].Source != "push" {
+		t.Fatalf("inbox items = %+v, want one push item in the caller's session", items)
+	}
+}
+
+// An unknown caller keeps the visible drop: a host serving several sessions that
+// guessed one would deliver this mention into the wrong session's inbox.
+func TestSharedHostWakeWithUnknownCallerIsDropped(t *testing.T) {
+	ctrl := wakeTestController(t)
+	handler := SharedWakeHandler(func(string) *control.Controller { return nil })
+	handler(plugin.WakeMessage{
+		Server: "room", Caller: "/sessions/gone.jsonl",
+		Payload: json.RawMessage(`{"seq":43,"text":"mentioned you"}`),
+	})
+
+	if items := ctrl.InboxSnapshot().Items; len(items) != 0 {
+		t.Fatalf("an unattributable wake admitted %d item(s)", len(items))
 	}
 }

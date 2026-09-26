@@ -10,8 +10,12 @@ import (
 // turn, a mid-turn steer — is the host's decision; the server only says that
 // something arrived.
 type WakeMessage struct {
-	Server  string
-	Method  string
+	Server string
+	Method string
+	// Caller is the session that last called this server, empty when nothing
+	// has: one host serves several sessions, so a wake carries the only
+	// identity the child could learn, and the host never guesses one.
+	Caller  string
 	Payload json.RawMessage
 }
 
@@ -33,7 +37,7 @@ func (h *Host) bindWakeNotifications(c *Client) {
 	}
 	server, method := c.name, c.spec.WakeMethod
 	c.watchWakeNotifications(func(payload json.RawMessage) {
-		h.dispatchWake(WakeMessage{Server: server, Method: method, Payload: payload})
+		h.dispatchWake(WakeMessage{Server: server, Method: method, Caller: c.wakeCaller(), Payload: payload})
 	})
 }
 

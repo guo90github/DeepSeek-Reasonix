@@ -98,3 +98,25 @@ func TestSchemaCacheKeyIgnoresWakeMethod(t *testing.T) {
 		t.Fatalf("host-only wake method changed the schema cache key: got %q want %q", got, want)
 	}
 }
+
+// A wake carries the session whose call is the only identity the child could
+// have learned. Without it a host serving several sessions has nothing to route
+// by, and the desktop's shared host drops the wake instead of delivering it.
+func TestWakeCarriesTheCallerSession(t *testing.T) {
+	host := NewHostWithProfile(HostProfileCore)
+	var got []WakeMessage
+	host.SetWakeHandler(func(msg WakeMessage) { got = append(got, msg) })
+
+	client, tr := newWakeClient(Spec{Name: "room", WakeMethod: testWakeMethod})
+	host.bindWakeNotifications(client)
+	tr.notifications.dispatchNotification(testWakeMethod, json.RawMessage(`{"seq":43}`))
+	if len(got) != 1 || got[0].Caller != "" {
+		t.Fatalf("wake = %+v, want no caller before any call", got)
+	}
+
+	client.noteCallerSession("/sessions/room.jsonl")
+	tr.notifications.dispatchNotification(testWakeMethod, json.RawMessage(`{"seq":44}`))
+	if len(got) != 2 || got[1].Caller != "/sessions/room.jsonl" {
+		t.Fatalf("wake = %+v, want caller=/sessions/room.jsonl", got)
+	}
+}
