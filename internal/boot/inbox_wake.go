@@ -58,6 +58,7 @@ func wakeInbox(msg plugin.WakeMessage) (string, map[string]string, string, error
 		Kind     string   `json:"kind"`
 		Origin   string   `json:"origin"`
 		Mentions []string `json:"mentions"`
+		Panel    string   `json:"panel"`
 	}
 	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 		return "", nil, "", err
@@ -88,6 +89,9 @@ func wakeInbox(msg plugin.WakeMessage) (string, map[string]string, string, error
 	}
 	if len(payload.Mentions) > 0 {
 		extra["room.mentions"] = strings.Join(payload.Mentions, "\n")
+	}
+	if panel := strings.TrimSpace(payload.Panel); panel != "" {
+		extra["room.panel"] = panel
 	}
 	if len(extra) == 0 {
 		extra = nil

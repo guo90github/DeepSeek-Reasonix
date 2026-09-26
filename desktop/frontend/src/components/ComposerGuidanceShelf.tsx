@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronDown, ChevronUp, CornerDownRight, Pencil, Trash2, X } from "lucide-react";
+import { openExternal } from "../lib/bridge";
 import type { InboxRoomMeta } from "../lib/composerInboxQueue";
 import { guidanceHasKnownPendingState, guidanceIsEditable, guidanceIsInFlight, guidanceNeedsRetry } from "../lib/composerGuidance";
 import { useI18n } from "../lib/i18n";
@@ -158,6 +159,16 @@ export function ComposerGuidanceShelf({
                         ? t("composer.guidanceRoom", { topic: item.room.topic, from: item.room.from })
                         : item.room.from}
                     </span>
+                  )}
+                  {item.room?.panel && (
+                    <button
+                      className="composer-guidance-item__room composer-guidance-item__room--link"
+                      type="button"
+                      aria-label={t("composer.guidanceOpenRoom")}
+                      onClick={() => openExternal(item.room?.panel || "")}
+                    >
+                      {t("composer.guidanceOpenRoom")}
+                    </button>
                   )}
                   {editing ? (
                     <>

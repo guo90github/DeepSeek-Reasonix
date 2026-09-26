@@ -21866,6 +21866,17 @@ body > .mermaid-diagram--fullscreen {
   white-space: nowrap;
 }
 
+.composer-guidance-item__room--link {
+  cursor: pointer;
+  background: none;
+  color: var(--accent);
+  border-color: var(--border-strong);
+}
+
+.composer-guidance-item__room--link:hover {
+  background: var(--bg-hover);
+}
+
 .composer-guidance-item__editor {
   min-width: 0;
   width: 100%;

@@ -16,7 +16,7 @@ func TestInboxSnapshotViewCarriesRoom(t *testing.T) {
 			Source:  "push",
 			Room: &sessioninbox.RoomMeta{
 				Seq: 43, From: "fusion-root", Topic: 4, Kind: "say", Origin: "agent",
-				Mentions: []string{"reasonix-host"},
+				Mentions: []string{"reasonix-host"}, Panel: "http://127.0.0.1:8899",
 			},
 		}},
 	}
@@ -33,6 +33,9 @@ func TestInboxSnapshotViewCarriesRoom(t *testing.T) {
 	}
 	if len(room.Mentions) != 1 || room.Mentions[0] != "reasonix-host" {
 		t.Fatalf("mentions = %v, want [reasonix-host]", room.Mentions)
+	}
+	if room.Panel != "http://127.0.0.1:8899" {
+		t.Fatalf("panel = %q, want http://127.0.0.1:8899", room.Panel)
 	}
 }
 

@@ -81,6 +81,7 @@ type InboxRoomView struct {
 	Kind     string   `json:"kind,omitempty"`
 	Origin   string   `json:"origin,omitempty"`
 	Mentions []string `json:"mentions,omitempty"`
+	Panel    string   `json:"panel,omitempty"`
 }
 
 // InboxSnapshotView is the bridge-facing queue snapshot.
@@ -169,6 +170,7 @@ func inboxRoomView(room *sessioninbox.RoomMeta) *InboxRoomView {
 		Kind:     room.Kind,
 		Origin:   room.Origin,
 		Mentions: room.Mentions,
+		Panel:    room.Panel,
 	}
 }
 

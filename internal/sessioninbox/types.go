@@ -105,6 +105,7 @@ type RoomMeta struct {
 	Kind     string   `json:"kind,omitempty"`
 	Origin   string   `json:"origin,omitempty"`
 	Mentions []string `json:"mentions,omitempty"`
+	Panel    string   `json:"panel,omitempty"`
 }
 
 // InboxItemMeta is the durable metadata kept in the manifest (never the body).

@@ -8,6 +8,7 @@ export type InboxRoomMeta = {
   kind?: string;
   origin?: string;
   mentions?: string[];
+  panel?: string;
 };
 
 export type InboxSnapshotLike = {

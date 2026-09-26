@@ -24705,6 +24705,13 @@
             },
             "kind": "array"
           }
+        },
+        {
+          "name": "panel",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
         }
       ]
     },

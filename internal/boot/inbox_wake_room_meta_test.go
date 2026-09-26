@@ -14,7 +14,7 @@ func TestServerWakeCarriesRoomMeta(t *testing.T) {
 	handler := inboxWakeHandler(ctrl)
 	handler(plugin.WakeMessage{
 		Server: "chatting", Method: "notifications/chatting/room_message",
-		Payload: json.RawMessage(`{"seq":43,"from":"fusion-root","text":"Chat room #43: fusion-root mentioned you","topic":4,"mentions":["reasonix-host"],"kind":"say","origin":"agent"}`),
+		Payload: json.RawMessage(`{"seq":43,"from":"fusion-root","text":"Chat room #43: fusion-root mentioned you","topic":4,"mentions":["reasonix-host"],"kind":"say","origin":"agent","panel":"http://127.0.0.1:8899"}`),
 	})
 
 	items := ctrl.InboxSnapshot().Items
@@ -27,6 +27,9 @@ func TestServerWakeCarriesRoomMeta(t *testing.T) {
 	}
 	if room.Seq != 43 || room.From != "fusion-root" || room.Topic != 4 || room.Kind != "say" || room.Origin != "agent" {
 		t.Fatalf("room meta = %+v, want seq=43 from=fusion-root topic=4 kind=say origin=agent", room)
+	}
+	if room.Panel != "http://127.0.0.1:8899" {
+		t.Fatalf("room panel = %q, want http://127.0.0.1:8899", room.Panel)
 	}
 	if len(room.Mentions) != 1 || room.Mentions[0] != "reasonix-host" {
 		t.Fatalf("room mentions = %v, want [reasonix-host]", room.Mentions)

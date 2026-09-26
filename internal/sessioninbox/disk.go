@@ -416,6 +416,7 @@ func roomMetaFromExtra(extra map[string]string) *RoomMeta {
 		Topic:  topic,
 		Kind:   strings.TrimSpace(extra["room.kind"]),
 		Origin: strings.TrimSpace(extra["room.origin"]),
+		Panel:  strings.TrimSpace(extra["room.panel"]),
 	}
 	if raw := extra["room.mentions"]; raw != "" {
 		rm.Mentions = strings.Split(raw, "\n")

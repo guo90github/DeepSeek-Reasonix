@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:dd81b456baa8ee1807e5e2efbe545bd3a95d6b638748e3855126cb85d94cc97a";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:f91ab156aff37734da1ae840f05c64cefb33909ede94b1e44dc69c8ce03cb1fc";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -2279,6 +2279,7 @@ export interface InboxRoomView {
   kind?: string;
   origin?: string;
   mentions?: string[];
+  panel?: string;
 }
 
 export interface InboxSnapshotView {
