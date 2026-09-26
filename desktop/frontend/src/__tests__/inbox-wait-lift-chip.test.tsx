@@ -1,9 +1,9 @@
 // Run: npx tsx src/__tests__/inbox-wait-lift-chip.test.tsx
 //
-// A line the host refused reads the same whether or not another wake could still
-// lift it — unless the chip says. The wire carries the flag only when it is true,
-// so absence is read as "not liftable" *only* next to a host sentence: a bare gate
-// is the queue's name, not a refusal, and nothing is claimed about it.
+// Whether the host answered for a line is its own column now, so the chip reads the
+// lift from that column instead of inferring it from a sentence. An old host that
+// sends no column claims nothing: the frontend must not turn a missing field into
+// an assertion about a line nobody spoke about.
 
 import assert from "node:assert/strict";
 import { act } from "react";
@@ -12,14 +12,15 @@ import { guidanceFromInboxSnapshot } from "../lib/composerInboxQueue";
 
 const flush = () => new Promise<void>(resolve => setTimeout(resolve, 0));
 
-const liftable = guidanceFromInboxSnapshot({
-  items: [{ id: "a", preview: "p", state: "queued", waitReason: "忙", waitResumable: true }],
+const carried = guidanceFromInboxSnapshot({
+  items: [{ id: "a", preview: "p", state: "queued", waitReason: "忙", waitRefused: true, waitResumable: true }],
 } as never);
-assert.equal(liftable[0]?.waitResumable, true, "a true flag reaches the chip model");
-const silent = guidanceFromInboxSnapshot({
+assert.equal(carried[0]?.waitRefused, true, "the refusal column reaches the chip model");
+assert.equal(carried[0]?.waitResumable, true, "the lift column reaches the chip model");
+const absent = guidanceFromInboxSnapshot({
   items: [{ id: "b", preview: "p", state: "queued", waitReason: "忙" }],
 } as never);
-assert.equal(silent[0]?.waitResumable, undefined, "an absent flag stays absent, never invented");
+assert.equal(absent[0]?.waitRefused, undefined, "an absent column stays absent, never invented");
 
 async function renderWithItem(item: Record<string, unknown>): Promise<string> {
   installDom("zh-CN");
@@ -37,23 +38,31 @@ async function renderWithItem(item: Record<string, unknown>): Promise<string> {
 
 const resumable = await renderWithItem({
   id: "ibx-1", preview: "房间 #43 点名了你", state: "queued", intent: "steer",
-  waitReason: "这个会话在桌面端已经没有标签页在托管它", waitResumable: true,
+  waitReason: "这个会话在桌面端已经没有标签页在托管它", waitRefused: true, waitResumable: true,
 });
 assert.ok(resumable.includes("这个会话在桌面端已经没有标签页在托管它"), `want the sentence, got: ${resumable}`);
 assert.ok(resumable.includes("再叫一次能提起来"), `want the liftable reading, got: ${resumable}`);
 
 const notResumable = await renderWithItem({
   id: "ibx-2", preview: "房间 #44 点名了你", state: "queued", intent: "steer",
-  waitReason: "这个会话在桌面端已经没有标签页在托管它",
+  waitReason: "这个会话在桌面端已经没有标签页在托管它", waitRefused: true,
 });
 assert.ok(notResumable.includes("再叫一次也提不起来"), `want the unliftable reading, got: ${notResumable}`);
 
-const gateOnly = await renderWithItem({
+// The column, not the sentence, is what the chip reads: an old host's answer that
+// carries a sentence but no column says nothing about lifting.
+const noColumn = await renderWithItem({
   id: "ibx-3", preview: "房间 #45 点名了你", state: "queued", intent: "steer",
+  waitReason: "这个会话在桌面端已经没有标签页在托管它",
+});
+assert.ok(noColumn.includes("这个会话在桌面端已经没有标签页在托管它"), `want the sentence still shown, got: ${noColumn}`);
+assert.equal(noColumn.includes("提起来"), false, `no column means no claim about lifting, got: ${noColumn}`);
+
+const gateOnly = await renderWithItem({
+  id: "ibx-4", preview: "房间 #46 点名了你", state: "queued", intent: "steer",
   waitGate: "dispatch",
 });
 assert.ok(gateOnly.includes("卡在 dispatch"), `want the gate name, got: ${gateOnly}`);
-assert.equal(gateOnly.includes("提不起来"), false, "a bare gate refuses nothing, so nothing is claimed");
 assert.equal(gateOnly.includes("提起来"), false, "a bare gate refuses nothing, so nothing is claimed");
 
 process.stdout.write("\ninbox wait-lift chip: all assertions passed\n");

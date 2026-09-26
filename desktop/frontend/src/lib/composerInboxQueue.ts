@@ -27,6 +27,7 @@ export type InboxSnapshotLike = {
     waitGate?: string;
     waitReason?: string;
     waitResumable?: boolean;
+    waitRefused?: boolean;
     room?: InboxRoomMeta | null;
   }>;
 };
@@ -62,6 +63,7 @@ export function guidanceFromInboxSnapshot(snap: InboxSnapshotLike | null | undef
     waitGate: (it.waitGate || "").trim() || undefined,
     waitReason: (it.waitReason || "").trim() || undefined,
     waitResumable: typeof it.waitResumable === "boolean" ? it.waitResumable : undefined,
+    waitRefused: typeof it.waitRefused === "boolean" ? it.waitRefused : undefined,
     room: it.room ?? null,
     paused: Boolean(snap?.paused),
     recoveredCount: snap?.paused && snap?.recovered

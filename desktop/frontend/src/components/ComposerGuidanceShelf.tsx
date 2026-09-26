@@ -23,6 +23,7 @@ export type PendingGuidance = {
   waitGate?: string;
   waitReason?: string;
   waitResumable?: boolean;
+  waitRefused?: boolean;
   room?: InboxRoomMeta | null;
   paused?: boolean;
   recoveredCount?: number;
@@ -134,9 +135,10 @@ export function ComposerGuidanceShelf({
               // The host's own sentence wins; a bare gate is passed through as its
               // own word rather than translated into a claim nobody made.
               const waitWhy = item.waitReason || (item.waitGate ? t("composer.guidanceWaitGate", { gate: item.waitGate }) : "");
-              // Only the host's refusal says anything about lifting it: a bare gate
-              // is just the queue's name, so nothing is claimed about another wake.
-              const waitLift = !item.waitReason
+              // Whether the host answered at all is its own column, so the lift is read
+              // from it rather than inferred from a sentence; a bare gate is just the
+              // queue's name, and an old host that sends no column claims nothing.
+              const waitLift = !item.waitRefused
                 ? ""
                 : item.waitResumable === true
                   ? t("composer.guidanceWaitLiftable")
