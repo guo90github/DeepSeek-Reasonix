@@ -703,6 +703,7 @@ export const zhTW: Record<DictKey, string> = {
   "composer.guidanceRoomHub": "房間系統",
   "composer.guidanceOpenRoom": "開啟房間面板",
   "composer.guidanceWaitSeconds": "已等 {seconds} 秒",
+  "composer.guidanceWaitGate": "卡在 {gate}",
   "composer.guidanceWaitMinutes": "已等 {minutes} 分 {seconds} 秒",
   "composer.guidanceCount": "待處理引導 {n}",
   "composer.guidanceRemaining": "還有 {n} 條",

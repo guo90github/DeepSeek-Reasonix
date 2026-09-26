@@ -953,6 +953,7 @@ export const zh: Record<DictKey, string> = {
   "composer.guidanceRoomHub": "房间系统",
   "composer.guidanceOpenRoom": "打开房间面板",
   "composer.guidanceWaitSeconds": "已等 {seconds} 秒",
+  "composer.guidanceWaitGate": "卡在 {gate}",
   "composer.guidanceWaitMinutes": "已等 {minutes} 分 {seconds} 秒",
   "composer.guidanceCount": "待处理引导 {n}",
   "composer.guidanceRemaining": "还有 {n} 条",

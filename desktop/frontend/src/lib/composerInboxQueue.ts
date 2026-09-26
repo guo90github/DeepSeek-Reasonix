@@ -24,6 +24,8 @@ export type InboxSnapshotLike = {
     intent?: string;
     source?: string;
     waitMs?: number;
+    waitGate?: string;
+    waitReason?: string;
     room?: InboxRoomMeta | null;
   }>;
 };
@@ -56,6 +58,8 @@ export function guidanceFromInboxSnapshot(snap: InboxSnapshotLike | null | undef
     intent: it.intent,
     source: it.source,
     waitMs: typeof it.waitMs === "number" && it.waitMs > 0 ? it.waitMs : undefined,
+    waitGate: (it.waitGate || "").trim() || undefined,
+    waitReason: (it.waitReason || "").trim() || undefined,
     room: it.room ?? null,
     paused: Boolean(snap?.paused),
     recoveredCount: snap?.paused && snap?.recovered

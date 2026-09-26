@@ -16,9 +16,12 @@ export type PendingGuidance = {
   state?: string;
   intent?: string;
   source?: string;
-  // waitMs is how long this item has been waiting. It answers "how long" only;
-  // the gate and the host's own sentence say why it is not running yet.
+  // waitMs says how long this item has been waiting; waitReason is the host's own
+  // sentence for why it is not running yet, and waitGate names what holds the
+  // queue. Only "how long" is derived here — the why is passed through as given.
   waitMs?: number;
+  waitGate?: string;
+  waitReason?: string;
   room?: InboxRoomMeta | null;
   paused?: boolean;
   recoveredCount?: number;
@@ -127,6 +130,9 @@ export function ComposerGuidanceShelf({
               const canEdit = Boolean(onEdit) && !readOnly && !disabled && guidanceIsEditable(item) && !waitingForEarlier && sendingId === null;
               const editing = editingId === item.id;
               const waitParts = inboxWaitParts(item.waitMs);
+              // The host's own sentence wins; a bare gate is passed through as its
+              // own word rather than translated into a claim nobody made.
+              const waitWhy = item.waitReason || (item.waitGate ? t("composer.guidanceWaitGate", { gate: item.waitGate }) : "");
               const actionLabel = inFlight
                 ? t("composer.guidanceInFlight")
                 : waitingForEarlier
@@ -158,11 +164,15 @@ export function ComposerGuidanceShelf({
                   ) : (
                     <span className="composer-guidance-item__text">{item.text.trim() || t("composer.guidanceEmptyPreview")}</span>
                   )}
-                  {waitParts && (
+                  {(waitParts || waitWhy) && (
                     <span className="composer-guidance-item__wait">
-                      {waitParts.minutes > 0
-                        ? t("composer.guidanceWaitMinutes", { minutes: waitParts.minutes, seconds: waitParts.seconds })
-                        : t("composer.guidanceWaitSeconds", { seconds: waitParts.seconds })}
+                      {waitParts
+                        ? (waitParts.minutes > 0
+                          ? t("composer.guidanceWaitMinutes", { minutes: waitParts.minutes, seconds: waitParts.seconds })
+                          : t("composer.guidanceWaitSeconds", { seconds: waitParts.seconds }))
+                        : ""}
+                      {waitParts && waitWhy ? " · " : ""}
+                      {waitWhy}
                     </span>
                   )}
                   {item.room?.from && (
