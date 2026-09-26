@@ -257,7 +257,14 @@ func (a *App) mirrorEventToEmbeddedServe(tabID string, e event.Event) {
 		return
 	}
 	host.bc.SetCurrentSession(foreground)
-	host.bc.EmitWire(eventwire.ToWire(e))
+	wired := eventwire.ToWire(e)
+	if wired.SessionPath == "" {
+		// Remote SSE clients (the phone reads /events?all=1) route frames by
+		// SessionPath and drop untagged ones as unattributable, so an unstamped
+		// turn_started/tool_*/turn_done left their turn state frozen.
+		wired.SessionPath = foreground
+	}
+	host.bc.EmitWire(wired)
 	host.noteMirroredFrame(foreground)
 }
 
