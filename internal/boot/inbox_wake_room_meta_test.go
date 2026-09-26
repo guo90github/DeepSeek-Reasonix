@@ -79,6 +79,33 @@ func TestServerWakeRetryIsIdempotent(t *testing.T) {
 	}
 }
 
+// Two rooms share one server name and restart seq from 1: the panel host keeps
+// their idempotency keys apart so a wake for the new room cannot collide with
+// the old room's queued item.
+func TestServerWakeIdempotencyKeysRoomsApart(t *testing.T) {
+	ctrl := wakeTestController(t)
+	handler := inboxWakeHandler(ctrl)
+	handler(plugin.WakeMessage{
+		Server: "chatting", Method: "notifications/chatting/room_message",
+		Payload: json.RawMessage(`{"seq":7,"from":"hub","text":"old room line","kind":"say","origin":"agent","panel":"http://127.0.0.1:8899"}`),
+	})
+	handler(plugin.WakeMessage{
+		Server: "chatting", Method: "notifications/chatting/room_message",
+		Payload: json.RawMessage(`{"seq":7,"from":"hub","text":"new room line","kind":"say","origin":"agent","panel":"http://127.0.0.1:8990"}`),
+	})
+
+	items := ctrl.InboxSnapshot().Items
+	if len(items) != 2 {
+		t.Fatalf("inbox items = %d, want 2 (different rooms must not collide)", len(items))
+	}
+	if items[0].Idempotency != "room-wake:chatting:127.0.0.1:8899:7" {
+		t.Fatalf("first idempotency = %q, want the room-scoped key", items[0].Idempotency)
+	}
+	if items[1].Idempotency != "room-wake:chatting:127.0.0.1:8990:7" {
+		t.Fatalf("second idempotency = %q, want the room-scoped key", items[1].Idempotency)
+	}
+}
+
 // A non-http(s) panel value must never reach the frontend's openExternal.
 func TestServerWakeDropsNonHTTPPanel(t *testing.T) {
 	ctrl := wakeTestController(t)

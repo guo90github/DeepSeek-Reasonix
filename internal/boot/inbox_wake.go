@@ -71,6 +71,9 @@ func wakeInbox(msg plugin.WakeMessage) (string, map[string]string, string, error
 	idem := ""
 	if msg.Server != "" && payload.Seq > 0 {
 		idem = "room-wake:" + msg.Server + ":" + strconv.FormatInt(payload.Seq, 10)
+		if u, err := url.Parse(strings.TrimSpace(payload.Panel)); err == nil && u.Host != "" {
+			idem = "room-wake:" + msg.Server + ":" + u.Host + ":" + strconv.FormatInt(payload.Seq, 10)
+		}
 	}
 	extra := map[string]string{}
 	if payload.Seq > 0 {
