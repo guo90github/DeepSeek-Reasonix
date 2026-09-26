@@ -3,6 +3,7 @@ import { Check, ChevronDown, ChevronUp, CornerDownRight, Pencil, Trash2, X } fro
 import { openExternal } from "../lib/bridge";
 import type { InboxRoomMeta } from "../lib/composerInboxQueue";
 import { guidanceHasKnownPendingState, guidanceIsEditable, guidanceIsInFlight, guidanceNeedsRetry } from "../lib/composerGuidance";
+import { inboxWaitParts } from "../lib/inboxWait";
 import { useI18n } from "../lib/i18n";
 import type { StructuredInvocationSubmit } from "../lib/invocationDisplay";
 import { InboxRecoveryBanner } from "./InboxRecoveryBanner";
@@ -15,6 +16,9 @@ export type PendingGuidance = {
   state?: string;
   intent?: string;
   source?: string;
+  // waitMs is how long this item has been waiting. It answers "how long" only;
+  // the gate and the host's own sentence say why it is not running yet.
+  waitMs?: number;
   room?: InboxRoomMeta | null;
   paused?: boolean;
   recoveredCount?: number;
@@ -122,6 +126,7 @@ export function ComposerGuidanceShelf({
               const waitingForEarlier = !running && !inFlight && index > 0;
               const canEdit = Boolean(onEdit) && !readOnly && !disabled && guidanceIsEditable(item) && !waitingForEarlier && sendingId === null;
               const editing = editingId === item.id;
+              const waitParts = inboxWaitParts(item.waitMs);
               const actionLabel = inFlight
                 ? t("composer.guidanceInFlight")
                 : waitingForEarlier
@@ -152,6 +157,13 @@ export function ComposerGuidanceShelf({
                     />
                   ) : (
                     <span className="composer-guidance-item__text">{item.text.trim() || t("composer.guidanceEmptyPreview")}</span>
+                  )}
+                  {waitParts && (
+                    <span className="composer-guidance-item__wait">
+                      {waitParts.minutes > 0
+                        ? t("composer.guidanceWaitMinutes", { minutes: waitParts.minutes, seconds: waitParts.seconds })
+                        : t("composer.guidanceWaitSeconds", { seconds: waitParts.seconds })}
+                    </span>
                   )}
                   {item.room?.from && (
                     <span className="composer-guidance-item__room">

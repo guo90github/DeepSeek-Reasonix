@@ -951,6 +951,8 @@ export const en = {
   "composer.guidanceRoomTask": "Task · {from}",
   "composer.guidanceRoomHub": "Room system",
   "composer.guidanceOpenRoom": "Open room panel",
+  "composer.guidanceWaitSeconds": "waiting {seconds}s",
+  "composer.guidanceWaitMinutes": "waiting {minutes}m {seconds}s",
   "composer.guidanceCount": "Queued guidance {n}",
   "composer.guidanceRemaining": "{n} more queued",
   "composer.guidanceCollapse": "Collapse",
