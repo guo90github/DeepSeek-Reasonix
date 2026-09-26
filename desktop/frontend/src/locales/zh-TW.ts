@@ -699,6 +699,7 @@ export const zhTW: Record<DictKey, string> = {
   "composer.runStripEstimateHint": "基於字元數的流式估算，與實際值可能有偏差；請求結束後顯示精確值。",
   "composer.guidanceQueue": "待處理引導",
   "composer.guidanceRoom": "聊天室 #{topic} · {from}",
+  "composer.guidanceRoomTask": "派活 · {from}",
   "composer.guidanceOpenRoom": "開啟房間面板",
   "composer.guidanceCount": "待處理引導 {n}",
   "composer.guidanceRemaining": "還有 {n} 條",
