@@ -28,7 +28,7 @@ func inboxWakeHandler(ctrl *control.Controller) func(plugin.WakeMessage) {
 		return nil
 	}
 	return func(msg plugin.WakeMessage) {
-		body, extra, err := wakeInbox(msg)
+		body, extra, idem, err := wakeInbox(msg)
 		if err != nil {
 			slog.Warn("boot: server wake has no usable body; dropped", "server", msg.Server, "err", err)
 			return
@@ -36,7 +36,7 @@ func inboxWakeHandler(ctrl *control.Controller) func(plugin.WakeMessage) {
 		req := control.InboxRequest{
 			Intent: sessioninbox.IntentSteer, Source: "push",
 			Submit: body, Display: body, Raw: body,
-			Extra: extra,
+			Extra: extra, Idempotency: idem,
 		}
 		if _, err := ctrl.EnqueueInbox(req); err != nil {
 			slog.Warn("boot: server wake could not be queued", "server", msg.Server, "err", err)
@@ -47,8 +47,9 @@ func inboxWakeHandler(ctrl *control.Controller) func(plugin.WakeMessage) {
 // wakeInbox reads the guidance out of a wake payload. The sending side already
 // decided this line addresses this session, so the host neither re-derives
 // mentions nor rewrites the text it will show; the structured room fields are
-// carried verbatim for the frontend to badge.
-func wakeInbox(msg plugin.WakeMessage) (string, map[string]string, error) {
+// carried verbatim for the frontend to badge. The idempotency key pins one
+// room line to one inbox item so a retried wake cannot queue twice.
+func wakeInbox(msg plugin.WakeMessage) (string, map[string]string, string, error) {
 	var payload struct {
 		Text     string   `json:"text"`
 		Seq      int64    `json:"seq"`
@@ -59,11 +60,15 @@ func wakeInbox(msg plugin.WakeMessage) (string, map[string]string, error) {
 		Mentions []string `json:"mentions"`
 	}
 	if err := json.Unmarshal(msg.Payload, &payload); err != nil {
-		return "", nil, err
+		return "", nil, "", err
 	}
 	body := strings.TrimSpace(payload.Text)
 	if body == "" {
-		return "", nil, errors.New("wake payload carries no text")
+		return "", nil, "", errors.New("wake payload carries no text")
+	}
+	idem := ""
+	if msg.Server != "" && payload.Seq > 0 {
+		idem = "room-wake:" + msg.Server + ":" + strconv.FormatInt(payload.Seq, 10)
 	}
 	extra := map[string]string{}
 	if payload.Seq > 0 {
@@ -87,5 +92,5 @@ func wakeInbox(msg plugin.WakeMessage) (string, map[string]string, error) {
 	if len(extra) == 0 {
 		extra = nil
 	}
-	return body, extra, nil
+	return body, extra, idem, nil
 }

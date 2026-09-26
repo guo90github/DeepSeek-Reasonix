@@ -54,3 +54,24 @@ func TestServerWakeWithoutRoomFieldsHasNoRoomMeta(t *testing.T) {
 		t.Fatalf("room meta = %+v, want nil for a non-room wake", items[0].Room)
 	}
 }
+
+// One room line is one inbox item: a retried wake with the same server+seq
+// lands on the already-queued item instead of queueing a duplicate.
+func TestServerWakeRetryIsIdempotent(t *testing.T) {
+	ctrl := wakeTestController(t)
+	handler := inboxWakeHandler(ctrl)
+	wake := plugin.WakeMessage{
+		Server: "chatting", Method: "notifications/chatting/room_message",
+		Payload: json.RawMessage(`{"seq":43,"from":"fusion-root","text":"Chat room #43: fusion-root mentioned you","topic":4,"kind":"say","origin":"agent"}`),
+	}
+	handler(wake)
+	handler(wake)
+
+	items := ctrl.InboxSnapshot().Items
+	if len(items) != 1 {
+		t.Fatalf("inbox items = %d, want 1 after a retried wake", len(items))
+	}
+	if items[0].Idempotency != "room-wake:chatting:43" {
+		t.Fatalf("idempotency = %q, want room-wake:chatting:43", items[0].Idempotency)
+	}
+}
