@@ -75,6 +75,7 @@ type InboxItemView struct {
 	// WaitGate/WaitReason/WaitResumable explain a queued item that is not running
 	// yet: the gate holding it, and — when the host refused to admit it — the
 	// host's own sentence plus whether another wake could still lift it.
+	WaitRefused   bool   `json:"waitRefused,omitempty"`
 	WaitGate      string `json:"waitGate,omitempty"`
 	WaitReason    string `json:"waitReason,omitempty"`
 	WaitResumable bool   `json:"waitResumable,omitempty"`
@@ -160,6 +161,9 @@ func inboxSnapshotView(snap sessioninbox.InboxSnapshot, wait func(string) (strin
 			if gate, reason, resumable, ok := wait(it.ID); ok {
 				view.WaitGate, view.WaitReason, view.WaitResumable = gate, reason, resumable
 			}
+			// WaitResumable is only readable next to this: the host answered for
+			// this line, and its answer included whether another wake could lift it.
+			view.WaitRefused = view.WaitReason != ""
 			if !it.CreatedAt.IsZero() {
 				if waited := time.Since(it.CreatedAt).Milliseconds(); waited > 0 {
 					view.WaitMs = waited

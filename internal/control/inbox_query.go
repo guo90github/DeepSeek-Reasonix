@@ -20,6 +20,10 @@ type InboxRoomLine struct {
 	Gate      string `json:"gate,omitempty"`
 	Reason    string `json:"reason,omitempty"`
 	Resumable bool   `json:"resumable,omitempty"`
+	// Refused says the host answered for this line at all. It is what makes
+	// Resumable meaningful: an absent Resumable means "no" only next to a
+	// refusal, and says nothing about a line nobody refused.
+	Refused bool `json:"refused,omitempty"`
 	// QueuedForMs answers only "how long", never "why it has not run" — that is
 	// the gate plus the host's own sentence.
 	QueuedForMs int64 `json:"queuedForMs,omitempty"`
@@ -121,6 +125,11 @@ func (c *Controller) InboxRoomLineFor(seq int64) (InboxRoomLine, bool) {
 		if item.State == sessioninbox.StateQueued {
 			if gate, reason, resumable, ok := c.InboxDispatchWait(item.ID); ok {
 				line.Gate, line.Reason, line.Resumable = gate, reason, resumable
+			}
+			// A refusal without a sentence is not recorded as one, so the pair
+			// "refused" and "has a sentence" stay the same fact.
+			if _, _, refused := c.inboxHostRefusalFor(item.ID); refused {
+				line.Refused = true
 			}
 			if !item.CreatedAt.IsZero() {
 				if waited := time.Since(item.CreatedAt).Milliseconds(); waited > 0 {
