@@ -385,6 +385,45 @@ func (c *Controller) InboxDispatchWait(itemID string) (gate, reason string, resu
 	return gate, reason, resumable, gate != "" || refused
 }
 
+// InboxRoomLine is what this session holds for one room line, addressed by the seq
+// the room prints: the durable state plus — while it is queued — the gate holding
+// it and the host's own sentence. The push route has no reply channel, so this is
+// how a sender asks the host what became of the line it pushed.
+type InboxRoomLine struct {
+	ItemID    string `json:"itemId"`
+	State     string `json:"state"`
+	Source    string `json:"source,omitempty"`
+	Preview   string `json:"preview,omitempty"`
+	Gate      string `json:"gate,omitempty"`
+	Reason    string `json:"reason,omitempty"`
+	Resumable bool   `json:"resumable,omitempty"`
+}
+
+// InboxRoomLineFor finds the item carrying this room seq. "Not found" is an
+// answer of its own: it means this session never took that line in, which must
+// never be read as delivered.
+func (c *Controller) InboxRoomLineFor(seq int64) (InboxRoomLine, bool) {
+	if seq <= 0 {
+		return InboxRoomLine{}, false
+	}
+	for _, item := range c.InboxSnapshot().Items {
+		if item.Room == nil || item.Room.Seq != seq {
+			continue
+		}
+		line := InboxRoomLine{
+			ItemID: item.ID, State: string(item.State),
+			Source: item.Source, Preview: item.Preview,
+		}
+		if item.State == sessioninbox.StateQueued {
+			if gate, reason, resumable, ok := c.InboxDispatchWait(item.ID); ok {
+				line.Gate, line.Reason, line.Resumable = gate, reason, resumable
+			}
+		}
+		return line, true
+	}
+	return InboxRoomLine{}, false
+}
+
 func (c *Controller) ReadInboxItem(id string) (sessioninbox.InboxItemMeta, sessioninbox.PromptEnvelope, error) {
 	st, err := c.ensureInbox()
 	if err != nil {

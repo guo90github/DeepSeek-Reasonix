@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"reasonix/internal/agent"
@@ -15,6 +16,7 @@ import (
 func (s *Server) registerInboxRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /inbox", s.inboxList)
 	mux.HandleFunc("GET /inbox/receipt", s.inboxReceipt)
+	mux.HandleFunc("GET /inbox/room-line", s.inboxRoomLine)
 	mux.HandleFunc("POST /inbox/items", s.foregroundMutation(s.inboxEnqueue))
 	mux.HandleFunc("GET /inbox/items/{id}", s.inboxGet)
 	mux.HandleFunc("PATCH /inbox/items/{id}", s.foregroundMutation(s.inboxUpdate))
@@ -56,6 +58,36 @@ func (s *Server) inboxList(w http.ResponseWriter, r *http.Request) {
 	snap := s.inboxAPI().InboxSnapshot()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(snap)
+}
+
+// inboxRoomLine answers what this session holds for one room line, by the seq the
+// room prints. A push wake has no reply channel, so a sender asks here instead of
+// assuming the line landed.
+func (s *Server) inboxRoomLine(w http.ResponseWriter, r *http.Request) {
+	s.bindMu.Lock()
+	defer s.bindMu.Unlock()
+	if !s.validateInboxReadSessionLocked(w, r) {
+		return
+	}
+	seq, err := strconv.ParseInt(strings.TrimSpace(r.URL.Query().Get("seq")), 10, 64)
+	if err != nil || seq <= 0 {
+		http.Error(w, "seq must be a positive integer", http.StatusBadRequest)
+		return
+	}
+	lookup, ok := s.inboxAPI().(interface {
+		InboxRoomLineFor(int64) (control.InboxRoomLine, bool)
+	})
+	if !ok {
+		http.Error(w, "this host cannot answer room lines", http.StatusNotImplemented)
+		return
+	}
+	line, found := lookup.InboxRoomLineFor(seq)
+	w.Header().Set("Content-Type", "application/json")
+	if !found {
+		_ = json.NewEncoder(w).Encode(map[string]any{"found": false})
+		return
+	}
+	_ = json.NewEncoder(w).Encode(map[string]any{"found": true, "line": line})
 }
 
 // validateInboxReadSessionLocked keeps legacy unscoped reads compatible while
