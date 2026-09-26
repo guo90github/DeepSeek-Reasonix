@@ -90,6 +90,9 @@ type inboxState struct {
 	admittingOwnership sync.Map
 	dispatching        bool
 	dispatchPending    bool
+	// settledRoomLines answers "what became of room line N" after its item left the
+	// queue. Bounded by roomLineSettledLimit, guarded by mu.
+	settledRoomLines map[int64]settledRoomLine
 	// Retry bookkeeping is guarded by mu. Both ladders are bounded so a
 	// persistent disk, materialization, or host-publication wait cannot loop.
 	dispatchRetryAttempts  int
@@ -350,87 +353,6 @@ func (c *Controller) EnqueueInbox(req InboxRequest) (sessioninbox.InboxReceipt, 
 	}
 	sessioninbox.NoteEnqueue(int64(len(env.SubmitText)))
 	return rec, nil
-}
-
-func (c *Controller) InboxSnapshot() sessioninbox.InboxSnapshot {
-	st, err := c.ensureInbox()
-	if err != nil {
-		return sessioninbox.InboxSnapshot{}
-	}
-	if recovered, recoverErr := st.RecoverOrphanedInFlightOwnedBy(c.inbox.ownsItem); recoverErr != nil {
-		slog.Warn("controller: recover orphaned inbox items", "err", recoverErr)
-	} else if recovered > 0 {
-		sessioninbox.NoteRecovered(recovered)
-	}
-	c.inbox.mu.Lock()
-	beforeSnapshotRead := c.inbox.beforeSnapshotRead
-	c.inbox.mu.Unlock()
-	if beforeSnapshotRead != nil {
-		beforeSnapshotRead()
-	}
-	return st.Snapshot()
-}
-
-// InboxDispatchWait says why a queued item is not running yet: the gate holding
-// this queue, plus — when the host refused it — the host's own sentence and
-// whether another wake could still lift it. It reads, never mutates, so a
-// surface that shows it cannot change what the queue does.
-func (c *Controller) InboxDispatchWait(itemID string) (gate, reason string, resumable, ok bool) {
-	itemID = strings.TrimSpace(itemID)
-	if itemID == "" {
-		return "", "", false, false
-	}
-	gate = c.inboxDispatchGate()
-	reason, resumable, refused := c.inboxHostRefusalFor(itemID)
-	return gate, reason, resumable, gate != "" || refused
-}
-
-// InboxRoomLine is what this session holds for one room line, addressed by the seq
-// the room prints: the durable state plus — while it is queued — the gate holding
-// it and the host's own sentence. The push route has no reply channel, so this is
-// how a sender asks the host what became of the line it pushed.
-type InboxRoomLine struct {
-	ItemID    string `json:"itemId"`
-	State     string `json:"state"`
-	Source    string `json:"source,omitempty"`
-	Preview   string `json:"preview,omitempty"`
-	Gate      string `json:"gate,omitempty"`
-	Reason    string `json:"reason,omitempty"`
-	Resumable bool   `json:"resumable,omitempty"`
-	// QueuedForMs answers only "how long", never "why it has not run" — that is
-	// the gate plus the host's own sentence.
-	QueuedForMs int64 `json:"queuedForMs,omitempty"`
-}
-
-// InboxRoomLineFor finds the item carrying this room seq. "Not found" is an
-// answer of its own: this session's queue does not hold that line. It does not
-// mean the session never took it in — a line that ran is acknowledged and leaves
-// the queue, and only the receipt (by idempotency key) still says so.
-func (c *Controller) InboxRoomLineFor(seq int64) (InboxRoomLine, bool) {
-	if seq <= 0 {
-		return InboxRoomLine{}, false
-	}
-	for _, item := range c.InboxSnapshot().Items {
-		if item.Room == nil || item.Room.Seq != seq {
-			continue
-		}
-		line := InboxRoomLine{
-			ItemID: item.ID, State: string(item.State),
-			Source: item.Source, Preview: item.Preview,
-		}
-		if item.State == sessioninbox.StateQueued {
-			if gate, reason, resumable, ok := c.InboxDispatchWait(item.ID); ok {
-				line.Gate, line.Reason, line.Resumable = gate, reason, resumable
-			}
-			if !item.CreatedAt.IsZero() {
-				if waited := time.Since(item.CreatedAt).Milliseconds(); waited > 0 {
-					line.QueuedForMs = waited
-				}
-			}
-		}
-		return line, true
-	}
-	return InboxRoomLine{}, false
 }
 
 func (c *Controller) ReadInboxItem(id string) (sessioninbox.InboxItemMeta, sessioninbox.PromptEnvelope, error) {
@@ -749,6 +671,14 @@ func (c *Controller) onInboxTurnDone() {
 	if beforeAck != nil {
 		beforeAck()
 	}
+	// A room line that runs leaves the queue for good, so read the pairs the ack is
+	// about to erase before it does.
+	roomSeqs := map[string]int64{}
+	for _, item := range st.Snapshot().Items {
+		if item.Room != nil && item.Room.Seq > 0 {
+			roomSeqs[item.ID] = item.Room.Seq
+		}
+	}
 	ackFailed := false
 	requeued := false
 	for _, id := range ids {
@@ -765,6 +695,10 @@ func (c *Controller) onInboxTurnDone() {
 			slog.Warn("controller: inbox ack dequeue", "err", err, "id", id)
 			_ = st.SetState(id, sessioninbox.StateUncertain, "turn completed but inbox acknowledgement failed")
 			ackFailed = true
+			continue
+		}
+		if seq := roomSeqs[id]; seq > 0 {
+			c.noteRoomLineSettled(seq, "acknowledged")
 		}
 	}
 	if requeued {
@@ -850,13 +784,4 @@ func (c *Controller) TryEnqueueFollowup(req InboxRequest) (sessioninbox.InboxRec
 		c.maybeDispatchInbox()
 	}
 	return c.withDispatchGate(rec), nil
-}
-
-func firstNonEmptyStr(vals ...string) string {
-	for _, v := range vals {
-		if strings.TrimSpace(v) != "" {
-			return strings.TrimSpace(v)
-		}
-	}
-	return ""
 }

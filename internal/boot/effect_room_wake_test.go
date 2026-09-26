@@ -67,10 +67,9 @@ model = "x"
 		t.Fatalf("EnqueueInbox: %v", err)
 	}
 
-	// Queueing is not waking: admission waits for the host to publish this
-	// runtime, so an unhosted session's mention stays queued (and invisible)
-	// until a frontend says the runtime is ready. Pin that, because a wake that
-	// silently sits queued is indistinguishable from a session that stopped.
+	// Queueing is not waking: admission waits for the host to publish this runtime,
+	// so an unhosted mention stays queued until a frontend says it is ready. Pin it,
+	// because a wake that silently sits queued looks like a session that stopped.
 	time.Sleep(200 * time.Millisecond)
 	if got := len(rec.requests()); got != served {
 		t.Fatalf("a queued wake started a turn before the host published the runtime: requests %d → %d", served, got)

@@ -199,10 +199,9 @@ type MCPServerInfo struct {
 	StartupStage     string        `json:"startup_stage,omitempty"`
 	StartupElapsedMS int64         `json:"startup_elapsed_ms,omitempty"`
 	Stderr           string        `json:"stderr,omitempty"`
-	// WakeMethod is the MCP notification this server may use to start work in
-	// the session it belongs to, and WakeArmed says the config actually allows
-	// it. Empty means the channel a room needs — waking an idle session without
-	// a poll being in flight — is closed, which is a diagnostic, not an error.
+	// WakeMethod is how this server may start work in its session, and WakeArmed
+	// says the config allows it. Empty means the channel a room needs — waking an
+	// idle session with no poll in flight — is closed: a diagnostic, not an error.
 	WakeMethod string `json:"wake_method,omitempty"`
 	WakeArmed  bool   `json:"wake_armed,omitempty"`
 	// LastWake is what the host last did with a wake from this server ("",
