@@ -71,6 +71,12 @@ type InboxItemView struct {
 	CreatedAt   string         `json:"createdAt,omitempty"`
 	Position    int            `json:"position"`
 	Room        *InboxRoomView `json:"room,omitempty"`
+	// WaitGate/WaitReason/WaitResumable explain a queued item that is not running
+	// yet: the gate holding it, and — when the host refused to admit it — the
+	// host's own sentence plus whether another wake could still lift it.
+	WaitGate      string `json:"waitGate,omitempty"`
+	WaitReason    string `json:"waitReason,omitempty"`
+	WaitResumable bool   `json:"waitResumable,omitempty"`
 }
 
 // InboxRoomView is the chat-room origin carried for badge rendering.
@@ -129,10 +135,10 @@ type InboxEnvelopeView struct {
 	SubmitText  string `json:"submitText"`
 }
 
-func inboxSnapshotView(snap sessioninbox.InboxSnapshot) InboxSnapshotView {
+func inboxSnapshotView(snap sessioninbox.InboxSnapshot, wait func(string) (string, string, bool, bool)) InboxSnapshotView {
 	items := make([]InboxItemView, 0, len(snap.Items))
 	for i, it := range snap.Items {
-		items = append(items, InboxItemView{
+		view := InboxItemView{
 			ID:          it.ID,
 			Intent:      string(it.Intent),
 			State:       string(it.State),
@@ -143,7 +149,15 @@ func inboxSnapshotView(snap sessioninbox.InboxSnapshot) InboxSnapshotView {
 			CreatedAt:   it.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			Position:    i + 1,
 			Room:        inboxRoomView(it.Room),
-		})
+		}
+		// Only a queued item can be waiting to run; a running or finished one has
+		// no gate left to name, and the wait is what makes a stranded wake visible.
+		if wait != nil && it.State == sessioninbox.StateQueued {
+			if gate, reason, resumable, ok := wait(it.ID); ok {
+				view.WaitGate, view.WaitReason, view.WaitResumable = gate, reason, resumable
+			}
+		}
+		items = append(items, view)
 	}
 	return InboxSnapshotView{
 		Revision:    snap.Revision,
@@ -194,7 +208,13 @@ func (a *App) InboxSnapshot(tabID string) (InboxSnapshotView, error) {
 	if err != nil {
 		return InboxSnapshotView{}, err
 	}
-	return inboxSnapshotView(ctrl.InboxSnapshot()), nil
+	// Only the concrete controller can name the gate holding a queued item; a host
+	// that exposes less still gets the snapshot, just without the wait.
+	var wait func(string) (string, string, bool, bool)
+	if concrete, ok := ctrl.(*control.Controller); ok {
+		wait = concrete.InboxDispatchWait
+	}
+	return inboxSnapshotView(ctrl.InboxSnapshot(), wait), nil
 }
 
 // EnqueueInboxFollowup durably queues a follow-up for the tab.

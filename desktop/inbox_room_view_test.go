@@ -20,7 +20,7 @@ func TestInboxSnapshotViewCarriesRoom(t *testing.T) {
 			},
 		}},
 	}
-	view := inboxSnapshotView(snap)
+	view := inboxSnapshotView(snap, nil)
 	if len(view.Items) != 1 {
 		t.Fatalf("items = %d, want 1", len(view.Items))
 	}
@@ -43,7 +43,7 @@ func TestInboxSnapshotViewLeavesRoomNilForPlainItems(t *testing.T) {
 	snap := sessioninbox.InboxSnapshot{
 		Items: []sessioninbox.InboxItemMeta{{ID: "i1", Preview: "plain push", Source: "push"}},
 	}
-	view := inboxSnapshotView(snap)
+	view := inboxSnapshotView(snap, nil)
 	if len(view.Items) != 1 {
 		t.Fatalf("items = %d, want 1", len(view.Items))
 	}

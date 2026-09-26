@@ -371,6 +371,20 @@ func (c *Controller) InboxSnapshot() sessioninbox.InboxSnapshot {
 	return st.Snapshot()
 }
 
+// InboxDispatchWait says why a queued item is not running yet: the gate holding
+// this queue, plus — when the host refused it — the host's own sentence and
+// whether another wake could still lift it. It reads, never mutates, so a
+// surface that shows it cannot change what the queue does.
+func (c *Controller) InboxDispatchWait(itemID string) (gate, reason string, resumable, ok bool) {
+	itemID = strings.TrimSpace(itemID)
+	if itemID == "" {
+		return "", "", false, false
+	}
+	gate = c.inboxDispatchGate()
+	reason, resumable, refused := c.inboxHostRefusalFor(itemID)
+	return gate, reason, resumable, gate != "" || refused
+}
+
 func (c *Controller) ReadInboxItem(id string) (sessioninbox.InboxItemMeta, sessioninbox.PromptEnvelope, error) {
 	st, err := c.ensureInbox()
 	if err != nil {

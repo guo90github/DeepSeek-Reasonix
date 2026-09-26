@@ -44,7 +44,7 @@ func (a *App) remoteInboxSnapshot(tabID string) (InboxSnapshotView, error) {
 	if current != tab || current.gen != gen || current.selectionRevision != selection || current.client != client || current.base != base || current.state != "ready" || current.routing.currentPath != path || current.routing.rehydratingPath != "" {
 		return InboxSnapshotView{}, fmt.Errorf("remote inbox route changed during read")
 	}
-	return inboxSnapshotView(snap), nil
+	return inboxSnapshotView(snap, nil), nil
 }
 
 // enqueueRemoteFollowup preserves the route, rich input and caller's stable
