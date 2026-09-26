@@ -1,13 +1,54 @@
 package serve
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
 )
+
+// SetSessionCreator installs the embedded host's new-session factory for
+// POST /new. A host owns every controller this serve's foreground points at,
+// so rotation belongs to it: only the host can open a session without demoting
+// a controller that has a turn in flight.
+func (s *Server) SetSessionCreator(f func(ctx context.Context) (string, error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sessionCreator = f
+}
+
+func (s *Server) sessionCreatorFunc() func(context.Context) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.sessionCreator
+}
+
+// newSessionFromHost publishes the session an embedded host just opened. The
+// expected-session fence guards rotations of the session a caller displayed;
+// opening a new one misroutes nothing, so a stale pin is not a refusal here.
+func (s *Server) newSessionFromHost(w http.ResponseWriter, r *http.Request, create func(context.Context) (string, error), emitNotice bool) {
+	path, err := create(r.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusConflict)
+		return
+	}
+	path = agent.CanonicalSessionPath(strings.TrimSpace(path))
+	if path == "" {
+		http.Error(w, "host opened no session", http.StatusConflict)
+		return
+	}
+	s.bc.ResetSessionPath(path)
+	w.Header().Set(sessionPathHeader, path)
+	s.announceSessionChanged(path, true)
+	if emitNotice {
+		s.bc.Emit(event.Event{Kind: event.Notice, Text: "new session", SessionPath: path})
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
 
 func (s *Server) planDecision(w http.ResponseWriter, r *http.Request) {
 	var body struct {
@@ -125,6 +166,13 @@ func (s *Server) newSessionFromSubmit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) newSessionCommand(w http.ResponseWriter, r *http.Request, emitNotice bool) {
 	s.bindMu.Lock()
 	defer s.bindMu.Unlock()
+	// An embedded host owns the controllers this foreground resolves to, and it
+	// decides what "new session" means there. Rotation below cannot serve that
+	// case: a host controller carries no session tag to detach.
+	if create := s.sessionCreatorFunc(); create != nil {
+		s.newSessionFromHost(w, r, create, emitNotice)
+		return
+	}
 	if !s.validateSwitchExpectedLocked(w, r) {
 		return
 	}

@@ -106,8 +106,15 @@ type Server struct {
 	foreground func() (control.SessionAPI, bool)
 	// sessionActivator owns /resume for embedded hosts that hold every session.
 	sessionActivator func(path string) error
+	// sessionCreator opens a new session for /new. Only a host can: the
+	// controllers this serve's foreground points at belong to the host's
+	// windows, and rotating them is the host's own move to make.
+	sessionCreator func(ctx context.Context) (string, error)
 	// sessionLister answers /sessions from an embedded host's own index.
 	sessionLister func(all bool) []SessionInfo
+	// projectCreator registers a new project for /new-project. Only a host with
+	// a window can: a standalone serve cannot move its workspace root.
+	projectCreator func(NewProjectRequest) (NewProjectResult, error)
 	// submitDelegate routes /submit through an embedded host's composer path.
 	submitDelegate func(input string) error
 	// submitDelegateFor is the session-aware form: a wake addresses the session
@@ -594,6 +601,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /history", s.history)
 	mux.HandleFunc("GET /context", s.context)
 	mux.HandleFunc("POST /submit", s.submit)
+	mux.HandleFunc("POST /upload", s.upload)
 	s.registerInboxRoutes(mux)
 	mux.HandleFunc("POST /cancel", s.foregroundMutation(s.cancel))
 	mux.HandleFunc("POST /approve", s.foregroundMutation(s.approve))
@@ -602,6 +610,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /composer-profile", s.composerProfile)
 	mux.HandleFunc("POST /compact", s.foregroundMutation(s.compact))
 	mux.HandleFunc("POST /new", s.newSession)
+	mux.HandleFunc("POST /new-project", s.newProject)
 	mux.HandleFunc("POST /clear", s.clearSession)
 	mux.HandleFunc("POST /rewind", s.rewind)
 	mux.HandleFunc("POST /fork", s.fork)
@@ -643,7 +652,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /todos", s.todos)
 	mux.HandleFunc("POST /delete-session", s.deleteSession)
 	mux.HandleFunc("POST /shutdown", s.requestShutdown)
-	return logMiddleware(gzipMiddleware(s.auth.middleware(s.hostGuard(csrfGuard(mux)))))
+	return logMiddleware(gzipMiddleware(s.auth.middleware(s.hostGuard(s.csrfGuard(mux)))))
 }
 
 // requestShutdown retires the serve loop on a coordinator's request: it is how

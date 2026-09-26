@@ -98,7 +98,11 @@ func (a *App) startEmbeddedServe() {
 	host.srv = serve.New(ctrl, host.bc, config.ServeConfig{AuthMode: "token", Token: token})
 	host.srv.SetForegroundProvider(a.embeddedServeController)
 	host.srv.SetSessionActivator(a.activateSessionForRemote)
+	// /new is the window's own move: its active tab is a controller this
+	// process built, which carries no serve-side session tag to rotate.
+	host.srv.SetSessionCreator(a.createSessionForRemote)
 	host.srv.SetSessionLister(a.listSessionsForRemote)
+	host.srv.SetProjectCreator(a.createProjectForRemote)
 	host.srv.SetSubmitDelegate(a.submitRemoteInput)
 	// The session-aware form: a wake that names a session lands in that tab.
 	host.srv.SetSubmitDelegateFor(a.submitRemoteInputFor)
@@ -124,6 +128,42 @@ func (a *App) embeddedServeController() (control.SessionAPI, bool) {
 		return nil, false
 	}
 	return ctrl, true
+}
+
+// createSessionForRemote answers POST /new with the window's own move: it opens
+// a blank surface for the active tab's scope, exactly as the app shell's "new
+// session" does, and reports the session the phone should switch to.
+func (a *App) createSessionForRemote(ctx context.Context) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	tab, _ := a.activeTabAndCtrl()
+	if tab == nil || tab.ReadOnly {
+		return "", errors.New("no writable tab is foreground in the desktop window")
+	}
+	scope, root := "global", tab.WorkspaceRoot
+	if tab.Scope == "project" && strings.TrimSpace(root) != "" {
+		scope = "project"
+	}
+	// Split reuses or adds a surface without collapsing the tabs the user has
+	// open; the single-surface styles keep exactly one — the same branch the app
+	// shell's own "new session" takes (desktopNavigationOwner.ts openBlank).
+	var (
+		meta TabMeta
+		err  error
+	)
+	if a.singleSurfaceLayoutEnabled() {
+		meta, err = a.EnsureBlankSurface(scope, root)
+	} else {
+		meta, err = a.EnsureBlankTab(scope, root)
+	}
+	if err != nil {
+		return "", err
+	}
+	if path := strings.TrimSpace(meta.SessionPath); path != "" {
+		return path, nil
+	}
+	return "", errors.New("the new session is not ready yet; retry once the window shows it")
 }
 
 // submitRemoteInput routes the phone's prompt through the window's own composer
@@ -185,25 +225,41 @@ func (a *App) listSessionsForRemote(all bool) []serve.SessionInfo {
 		metas = append(metas, a.listAllWorkspaceSessions(metas)...)
 	}
 	_, ctrl := a.activeTabAndCtrl()
-	running := ctrl != nil && ctrl.Running()
+	foregroundRunning := ctrl != nil && ctrl.Running()
+	_, sessionOverlays := a.catalogRuntimeOverlays()
 	out := make([]serve.SessionInfo, 0, len(metas))
 	for _, meta := range metas {
-		title := meta.Title
-		if title == "" {
-			title = meta.Preview
-		}
+		title := remoteSessionTitle(meta)
+		// Running is a property of the session, not of the window: a detached
+		// runtime keeps running after the foreground moved on, and the phone
+		// counts its badges from these rows.
+		running := sessionOverlays[sessionRuntimeKey(meta.Path)].running ||
+			(meta.Current && foregroundRunning)
 		out = append(out, serve.SessionInfo{
 			Name:        strings.TrimSuffix(filepath.Base(meta.Path), ".jsonl"),
 			Path:        meta.Path,
 			Title:       title,
 			Turns:       meta.Turns,
 			Current:     meta.Current,
-			Running:     meta.Current && running,
+			Running:     running,
 			MtimeMilli:  meta.LastActivityAt,
 			ProjectRoot: meta.WorkspaceRoot,
 		})
 	}
 	return out
+}
+
+// remoteSessionTitle 沿用桌面端自己的会话名优先级（title → topicTitle → preview）：
+// 远端要显示窗口里的同一个名字，漏掉 topicTitle 就会把"新的会话"那类占位名显示成首条消息。
+func remoteSessionTitle(meta SessionMeta) string {
+	switch {
+	case meta.Title != "":
+		return meta.Title
+	case meta.TopicTitle != "":
+		return meta.TopicTitle
+	default:
+		return meta.Preview
+	}
 }
 
 // listAllWorkspaceSessions 把侧边栏里每个工作区的会话都取来（跳过已在前台清单里的），

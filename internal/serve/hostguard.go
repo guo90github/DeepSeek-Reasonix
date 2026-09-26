@@ -1,6 +1,7 @@
 package serve
 
 import (
+	"crypto/subtle"
 	"net"
 	"net/http"
 	"strings"
@@ -77,9 +78,9 @@ func (s *Server) hostGuard(next http.Handler) http.Handler {
 // application/json forces a CORS preflight the unauthenticated server never
 // answers, blocking cross-site requests; the same-origin frontend (which always
 // sends JSON) is unaffected.
-func csrfGuard(next http.Handler) http.Handler {
+func (s *Server) csrfGuard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
+		if r.Method == http.MethodPost && !s.bearerAuthorized(r) {
 			ct := r.Header.Get("Content-Type")
 			if i := strings.IndexByte(ct, ';'); i >= 0 {
 				ct = ct[:i]
@@ -91,4 +92,21 @@ func csrfGuard(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// bearerAuthorized reports whether the request proved the shared token with an
+// Authorization header. A page cannot set that header without a preflight this
+// server never answers, so a multipart upload may skip the JSON requirement on
+// that credential — the cookie, which a page CAN send, may not.
+func (s *Server) bearerAuthorized(r *http.Request) bool {
+	if s.auth == nil {
+		return false
+	}
+	token := s.auth.Token()
+	if token == "" {
+		return false
+	}
+	scheme, credential, ok := strings.Cut(r.Header.Get("Authorization"), " ")
+	return ok && strings.EqualFold(scheme, "Bearer") &&
+		subtle.ConstantTimeCompare([]byte(credential), []byte(token)) == 1
 }
