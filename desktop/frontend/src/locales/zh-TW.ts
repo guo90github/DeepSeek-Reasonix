@@ -704,6 +704,8 @@ export const zhTW: Record<DictKey, string> = {
   "composer.guidanceOpenRoom": "開啟房間面板",
   "composer.guidanceWaitSeconds": "已等 {seconds} 秒",
   "composer.guidanceWaitGate": "卡在 {gate}",
+  "composer.guidanceWaitLiftable": "再叫一次能提起來",
+  "composer.guidanceWaitUnliftable": "再叫一次也提不起來",
   "composer.guidanceWaitMinutes": "已等 {minutes} 分 {seconds} 秒",
   "composer.guidanceCount": "待處理引導 {n}",
   "composer.guidanceRemaining": "還有 {n} 條",

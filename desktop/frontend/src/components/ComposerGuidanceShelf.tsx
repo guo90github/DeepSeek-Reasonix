@@ -22,6 +22,7 @@ export type PendingGuidance = {
   waitMs?: number;
   waitGate?: string;
   waitReason?: string;
+  waitResumable?: boolean;
   room?: InboxRoomMeta | null;
   paused?: boolean;
   recoveredCount?: number;
@@ -133,6 +134,13 @@ export function ComposerGuidanceShelf({
               // The host's own sentence wins; a bare gate is passed through as its
               // own word rather than translated into a claim nobody made.
               const waitWhy = item.waitReason || (item.waitGate ? t("composer.guidanceWaitGate", { gate: item.waitGate }) : "");
+              // Only the host's refusal says anything about lifting it: a bare gate
+              // is just the queue's name, so nothing is claimed about another wake.
+              const waitLift = !item.waitReason
+                ? ""
+                : item.waitResumable === true
+                  ? t("composer.guidanceWaitLiftable")
+                  : t("composer.guidanceWaitUnliftable");
               const actionLabel = inFlight
                 ? t("composer.guidanceInFlight")
                 : waitingForEarlier
@@ -173,6 +181,7 @@ export function ComposerGuidanceShelf({
                         : ""}
                       {waitParts && waitWhy ? " · " : ""}
                       {waitWhy}
+                      {waitLift ? ` · ${waitLift}` : ""}
                     </span>
                   )}
                   {item.room?.from && (

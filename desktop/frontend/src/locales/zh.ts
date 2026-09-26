@@ -954,6 +954,8 @@ export const zh: Record<DictKey, string> = {
   "composer.guidanceOpenRoom": "打开房间面板",
   "composer.guidanceWaitSeconds": "已等 {seconds} 秒",
   "composer.guidanceWaitGate": "卡在 {gate}",
+  "composer.guidanceWaitLiftable": "再叫一次能提起来",
+  "composer.guidanceWaitUnliftable": "再叫一次也提不起来",
   "composer.guidanceWaitMinutes": "已等 {minutes} 分 {seconds} 秒",
   "composer.guidanceCount": "待处理引导 {n}",
   "composer.guidanceRemaining": "还有 {n} 条",

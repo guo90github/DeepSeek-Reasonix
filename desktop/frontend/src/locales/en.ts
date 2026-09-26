@@ -953,6 +953,8 @@ export const en = {
   "composer.guidanceOpenRoom": "Open room panel",
   "composer.guidanceWaitSeconds": "waiting {seconds}s",
   "composer.guidanceWaitGate": "waiting on {gate}",
+  "composer.guidanceWaitLiftable": "another wake can still lift it",
+  "composer.guidanceWaitUnliftable": "another wake will not lift it",
   "composer.guidanceWaitMinutes": "waiting {minutes}m {seconds}s",
   "composer.guidanceCount": "Queued guidance {n}",
   "composer.guidanceRemaining": "{n} more queued",
