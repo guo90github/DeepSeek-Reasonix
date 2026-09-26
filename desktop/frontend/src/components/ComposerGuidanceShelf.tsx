@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, ChevronDown, ChevronUp, CornerDownRight, Pencil, Trash2, X } from "lucide-react";
+import type { InboxRoomMeta } from "../lib/composerInboxQueue";
 import { guidanceHasKnownPendingState, guidanceIsEditable, guidanceIsInFlight, guidanceNeedsRetry } from "../lib/composerGuidance";
 import { useI18n } from "../lib/i18n";
 import type { StructuredInvocationSubmit } from "../lib/invocationDisplay";
@@ -13,6 +14,7 @@ export type PendingGuidance = {
   state?: string;
   intent?: string;
   source?: string;
+  room?: InboxRoomMeta | null;
   paused?: boolean;
   recoveredCount?: number;
   structured?: StructuredInvocationSubmit;
@@ -149,6 +151,13 @@ export function ComposerGuidanceShelf({
                     />
                   ) : (
                     <span className="composer-guidance-item__text">{item.text.trim() || t("composer.guidanceEmptyPreview")}</span>
+                  )}
+                  {item.room?.from && (
+                    <span className="composer-guidance-item__room">
+                      {item.room.topic
+                        ? t("composer.guidanceRoom", { topic: item.room.topic, from: item.room.from })
+                        : item.room.from}
+                    </span>
                   )}
                   {editing ? (
                     <>

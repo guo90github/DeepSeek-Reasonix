@@ -947,6 +947,7 @@ export const en = {
   "composer.turnPhaseReviewing": "Reviewing",
   "composer.runStripEstimateHint": "Streaming estimates based on character count. Final values are reported after each request and may differ.",
   "composer.guidanceQueue": "Queued guidance",
+  "composer.guidanceRoom": "Chat room #{topic} · {from}",
   "composer.guidanceCount": "Queued guidance {n}",
   "composer.guidanceRemaining": "{n} more queued",
   "composer.guidanceCollapse": "Collapse",

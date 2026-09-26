@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:87e937a78bb4cdb289b3b96ac1ab126907909dcba368f19151bc39b589ad99d0";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:dd81b456baa8ee1807e5e2efbe545bd3a95d6b638748e3855126cb85d94cc97a";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -2260,6 +2260,7 @@ export interface InboxItemView {
   blockReason?: string;
   createdAt?: string;
   position: number;
+  room?: InboxRoomView | null;
 }
 
 export interface InboxReceiptView {
@@ -2269,6 +2270,15 @@ export interface InboxReceiptView {
   paused: boolean;
   idempotent?: boolean;
   error?: string;
+}
+
+export interface InboxRoomView {
+  seq?: number;
+  from?: string;
+  topic?: number;
+  kind?: string;
+  origin?: string;
+  mentions?: string[];
 }
 
 export interface InboxSnapshotView {

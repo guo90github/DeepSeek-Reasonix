@@ -61,15 +61,26 @@ func inboxBridgeError(err error) error {
 
 // InboxItemView is the bridge-facing metadata row (never full body).
 type InboxItemView struct {
-	ID          string `json:"id"`
-	Intent      string `json:"intent"`
-	State       string `json:"state"`
-	Preview     string `json:"preview"`
-	ByteSize    int64  `json:"byteSize"`
-	Source      string `json:"source,omitempty"`
-	BlockReason string `json:"blockReason,omitempty"`
-	CreatedAt   string `json:"createdAt,omitempty"`
-	Position    int    `json:"position"`
+	ID          string         `json:"id"`
+	Intent      string         `json:"intent"`
+	State       string         `json:"state"`
+	Preview     string         `json:"preview"`
+	ByteSize    int64          `json:"byteSize"`
+	Source      string         `json:"source,omitempty"`
+	BlockReason string         `json:"blockReason,omitempty"`
+	CreatedAt   string         `json:"createdAt,omitempty"`
+	Position    int            `json:"position"`
+	Room        *InboxRoomView `json:"room,omitempty"`
+}
+
+// InboxRoomView is the chat-room origin carried for badge rendering.
+type InboxRoomView struct {
+	Seq      int64    `json:"seq,omitempty"`
+	From     string   `json:"from,omitempty"`
+	Topic    int64    `json:"topic,omitempty"`
+	Kind     string   `json:"kind,omitempty"`
+	Origin   string   `json:"origin,omitempty"`
+	Mentions []string `json:"mentions,omitempty"`
 }
 
 // InboxSnapshotView is the bridge-facing queue snapshot.
@@ -130,6 +141,7 @@ func inboxSnapshotView(snap sessioninbox.InboxSnapshot) InboxSnapshotView {
 			BlockReason: it.BlockReason,
 			CreatedAt:   it.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			Position:    i + 1,
+			Room:        inboxRoomView(it.Room),
 		})
 	}
 	return InboxSnapshotView{
@@ -143,6 +155,20 @@ func inboxSnapshotView(snap sessioninbox.InboxSnapshot) InboxSnapshotView {
 		Bytes:       snap.Capacity.Bytes,
 		MaxItems:    snap.Capacity.MaxItems,
 		MaxBytes:    snap.Capacity.MaxBytes,
+	}
+}
+
+func inboxRoomView(room *sessioninbox.RoomMeta) *InboxRoomView {
+	if room == nil {
+		return nil
+	}
+	return &InboxRoomView{
+		Seq:      room.Seq,
+		From:     room.From,
+		Topic:    room.Topic,
+		Kind:     room.Kind,
+		Origin:   room.Origin,
+		Mentions: room.Mentions,
 	}
 }
 

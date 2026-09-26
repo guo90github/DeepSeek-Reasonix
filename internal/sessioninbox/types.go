@@ -96,6 +96,17 @@ var (
 	ErrIdempotencyConflict = errors.New("idempotency key was already used for different input")
 )
 
+// RoomMeta is the structured origin of a chat-room wake, copied verbatim from
+// the wake payload so the frontend can badge it without re-deriving anything.
+type RoomMeta struct {
+	Seq      int64    `json:"seq,omitempty"`
+	From     string   `json:"from,omitempty"`
+	Topic    int64    `json:"topic,omitempty"`
+	Kind     string   `json:"kind,omitempty"`
+	Origin   string   `json:"origin,omitempty"`
+	Mentions []string `json:"mentions,omitempty"`
+}
+
 // InboxItemMeta is the durable metadata kept in the manifest (never the body).
 type InboxItemMeta struct {
 	ID        string      `json:"id"`
@@ -117,6 +128,7 @@ type InboxItemMeta struct {
 	Refs        []RefSummary `json:"refs,omitempty"`
 	BlockReason string       `json:"blockReason,omitempty"`
 	RunID       string       `json:"runId,omitempty"`
+	Room        *RoomMeta    `json:"room,omitempty"`
 }
 
 // RefSummary is a short reference summary stored in the manifest.

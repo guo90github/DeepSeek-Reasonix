@@ -409,6 +409,7 @@ func (s *Store) Enqueue(req EnqueueRequest) (InboxReceipt, error) {
 		Idempotency: idem,
 		Refs:        refSummaries(env.Refs),
 		RunID:       s.runID,
+		Room:        roomMetaFromExtra(env.Extra),
 	}
 
 	// Transaction: write blob → commit manifest → receipt.

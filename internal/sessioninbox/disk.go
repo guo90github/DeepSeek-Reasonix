@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -398,6 +399,31 @@ func firstNonEmpty(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// roomMetaFromExtra reads the chat-room origin a wake handler left in the
+// envelope. Keys are the wake payload fields; an absent room stays nil so
+// non-room items never grow a room object.
+func roomMetaFromExtra(extra map[string]string) *RoomMeta {
+	if extra == nil {
+		return nil
+	}
+	seq, _ := strconv.ParseInt(extra["room.seq"], 10, 64)
+	topic, _ := strconv.ParseInt(extra["room.topic"], 10, 64)
+	rm := &RoomMeta{
+		Seq:    seq,
+		From:   strings.TrimSpace(extra["room.from"]),
+		Topic:  topic,
+		Kind:   strings.TrimSpace(extra["room.kind"]),
+		Origin: strings.TrimSpace(extra["room.origin"]),
+	}
+	if raw := extra["room.mentions"]; raw != "" {
+		rm.Mentions = strings.Split(raw, "\n")
+	}
+	if rm.Seq == 0 && rm.From == "" && rm.Kind == "" && rm.Origin == "" {
+		return nil
+	}
+	return rm
 }
 
 func agentBranchID(sessionPath string) string {

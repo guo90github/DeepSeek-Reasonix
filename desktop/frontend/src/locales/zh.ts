@@ -948,6 +948,7 @@ export const zh: Record<DictKey, string> = {
   "composer.turnPhaseReviewing": "复审中",
   "composer.runStripEstimateHint": "基于字符数的流式估算，与实际值可能有偏差；请求结束后显示精确值。",
   "composer.guidanceQueue": "待处理引导",
+  "composer.guidanceRoom": "聊天室 #{topic} · {from}",
   "composer.guidanceCount": "待处理引导 {n}",
   "composer.guidanceRemaining": "还有 {n} 条",
   "composer.guidanceCollapse": "收起",

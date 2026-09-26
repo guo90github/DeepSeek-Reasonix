@@ -698,6 +698,7 @@ export const zhTW: Record<DictKey, string> = {
   "composer.turnPhaseReviewing": "複審中",
   "composer.runStripEstimateHint": "基於字元數的流式估算，與實際值可能有偏差；請求結束後顯示精確值。",
   "composer.guidanceQueue": "待處理引導",
+  "composer.guidanceRoom": "聊天室 #{topic} · {from}",
   "composer.guidanceCount": "待處理引導 {n}",
   "composer.guidanceRemaining": "還有 {n} 條",
   "composer.guidanceCollapse": "收起",

@@ -1,6 +1,15 @@
 import type { PendingGuidance } from "../components/ComposerGuidanceShelf";
 import { asArray } from "./array";
 
+export type InboxRoomMeta = {
+  seq?: number;
+  from?: string;
+  topic?: number;
+  kind?: string;
+  origin?: string;
+  mentions?: string[];
+};
+
 export type InboxSnapshotLike = {
   paused?: boolean;
   recovered?: boolean;
@@ -13,6 +22,7 @@ export type InboxSnapshotLike = {
     state?: string;
     intent?: string;
     source?: string;
+    room?: InboxRoomMeta | null;
   }>;
 };
 
@@ -43,6 +53,7 @@ export function guidanceFromInboxSnapshot(snap: InboxSnapshotLike | null | undef
     state: it.state,
     intent: it.intent,
     source: it.source,
+    room: it.room ?? null,
     paused: Boolean(snap?.paused),
     recoveredCount: snap?.paused && snap?.recovered
       ? visible.length
