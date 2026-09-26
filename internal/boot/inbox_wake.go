@@ -49,20 +49,73 @@ func SharedWakeHandler(resolve func(string) *control.Controller) func(plugin.Wak
 	}
 }
 
-func deliverInboxWake(ctrl *control.Controller, msg plugin.WakeMessage) {
+// wakeEnqueueOutcome names what happened to one wake, because the failures are
+// not interchangeable: a key already held by another line means this wake was
+// dropped, while a full or paused inbox means the same wake may land later.
+type wakeEnqueueOutcome int
+
+const (
+	wakeEnqueueAccepted wakeEnqueueOutcome = iota
+	wakeEnqueueKeyCollision
+	wakeEnqueueRefused
+	wakeEnqueueFailed
+)
+
+func (o wakeEnqueueOutcome) String() string {
+	switch o {
+	case wakeEnqueueAccepted:
+		return "accepted"
+	case wakeEnqueueKeyCollision:
+		return "key-collision"
+	case wakeEnqueueRefused:
+		return "refused"
+	default:
+		return "failed"
+	}
+}
+
+func wakeEnqueueOutcomeFor(err error) wakeEnqueueOutcome {
+	switch {
+	case err == nil:
+		return wakeEnqueueAccepted
+	case errors.Is(err, sessioninbox.ErrIdempotencyConflict):
+		return wakeEnqueueKeyCollision
+	case errors.Is(err, sessioninbox.ErrPaused),
+		errors.Is(err, sessioninbox.ErrCapacityItems),
+		errors.Is(err, sessioninbox.ErrCapacityBytes):
+		return wakeEnqueueRefused
+	default:
+		return wakeEnqueueFailed
+	}
+}
+
+func deliverInboxWake(ctrl *control.Controller, msg plugin.WakeMessage) wakeEnqueueOutcome {
 	body, extra, idem, err := wakeInbox(msg)
 	if err != nil {
 		slog.Warn("boot: server wake has no usable body; dropped", "server", msg.Server, "err", err)
-		return
+		return wakeEnqueueFailed
 	}
 	req := control.InboxRequest{
 		Intent: sessioninbox.IntentSteer, Source: "push",
 		Submit: body, Display: body, Raw: body,
 		Extra: extra, Idempotency: idem,
 	}
-	if _, err := ctrl.EnqueueInbox(req); err != nil {
-		slog.Warn("boot: server wake could not be queued", "server", msg.Server, "err", err)
+	_, err = ctrl.EnqueueInbox(req)
+	outcome := wakeEnqueueOutcomeFor(err)
+	switch outcome {
+	case wakeEnqueueAccepted:
+	case wakeEnqueueKeyCollision:
+		// Another line already holds this key: this wake was dropped, and the key
+		// is the only evidence that a room identity got reused.
+		slog.Warn("boot: server wake collided with another line already queued under its key; dropped",
+			"server", msg.Server, "key", idem, "err", err)
+	case wakeEnqueueRefused:
+		slog.Warn("boot: server wake refused by the inbox; it stays undelivered until the inbox accepts again",
+			"server", msg.Server, "key", idem, "err", err)
+	default:
+		slog.Warn("boot: server wake could not be queued", "server", msg.Server, "key", idem, "err", err)
 	}
+	return outcome
 }
 
 // wakeInbox reads the guidance out of a wake payload. The sending side already
