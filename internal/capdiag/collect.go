@@ -478,6 +478,10 @@ func collectMCP(cfg *config.Config, root, home, reasonixHome string, disp func(s
 		if !p.ShouldAutoStart() {
 			info.StartIntent = "off"
 		}
+		// Host-only policy carried into diagnostics: an unarmed wake is the
+		// difference between "a room can start a turn here" and "it can only wait".
+		info.WakeMethod = strings.TrimSpace(p.WakeMethod)
+		info.WakeArmed = info.WakeMethod != ""
 		if owner, ok := cfg.PluginPackageOwner(p.Name); ok {
 			info.PackageOwner = owner
 			info.Source = "plugin_package"

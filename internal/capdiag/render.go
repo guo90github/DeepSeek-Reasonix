@@ -87,6 +87,9 @@ func RenderText(r Report) string {
 		if s.ToolCount > 0 {
 			fmt.Fprintf(&b, " tools=%d", s.ToolCount)
 		}
+		if s.WakeArmed {
+			fmt.Fprintf(&b, " wake=%s", s.WakeMethod)
+		}
 		b.WriteByte('\n')
 		if s.SourcePath != "" {
 			fmt.Fprintf(&b, "    source_path: %s\n", s.SourcePath)
