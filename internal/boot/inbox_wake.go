@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -90,11 +91,19 @@ func wakeInbox(msg plugin.WakeMessage) (string, map[string]string, string, error
 	if len(payload.Mentions) > 0 {
 		extra["room.mentions"] = strings.Join(payload.Mentions, "\n")
 	}
-	if panel := strings.TrimSpace(payload.Panel); panel != "" {
+	if panel := strings.TrimSpace(payload.Panel); panel != "" && isHTTPPanelURL(panel) {
 		extra["room.panel"] = panel
 	}
 	if len(extra) == 0 {
 		extra = nil
 	}
 	return body, extra, idem, nil
+}
+
+// isHTTPPanelURL keeps the open-in-browser link a link: only http(s) URLs with
+// a host survive, so a misbehaving server cannot hand the frontend a
+// javascript:/file: URL to open.
+func isHTTPPanelURL(raw string) bool {
+	u, err := url.Parse(raw)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }

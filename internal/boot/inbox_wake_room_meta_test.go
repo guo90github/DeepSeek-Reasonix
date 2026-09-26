@@ -78,3 +78,32 @@ func TestServerWakeRetryIsIdempotent(t *testing.T) {
 		t.Fatalf("idempotency = %q, want room-wake:chatting:43", items[0].Idempotency)
 	}
 }
+
+// A non-http(s) panel value must never reach the frontend's openExternal.
+func TestServerWakeDropsNonHTTPPanel(t *testing.T) {
+	ctrl := wakeTestController(t)
+	handler := inboxWakeHandler(ctrl)
+	handler(plugin.WakeMessage{
+		Server: "chatting", Method: "notifications/chatting/room_message",
+		Payload: json.RawMessage(`{"seq":44,"from":"hub","text":"batch done","kind":"say","origin":"agent","panel":"javascript:alert(1)"}`),
+	})
+	handler(plugin.WakeMessage{
+		Server: "chatting", Method: "notifications/chatting/room_message",
+		Payload: json.RawMessage(`{"seq":45,"from":"hub","text":"batch done","kind":"say","origin":"agent","panel":"file:///C:/windows/system32/calc.exe"}`),
+	})
+	handler(plugin.WakeMessage{
+		Server: "chatting", Method: "notifications/chatting/room_message",
+		Payload: json.RawMessage(`{"seq":46,"from":"hub","text":"batch done","kind":"say","origin":"agent","panel":"http://127.0.0.1:8899"}`),
+	})
+
+	items := ctrl.InboxSnapshot().Items
+	if len(items) != 3 {
+		t.Fatalf("inbox items = %d, want 3", len(items))
+	}
+	if items[0].Room.Panel != "" || items[1].Room.Panel != "" {
+		t.Fatalf("non-http panel leaked: %q / %q", items[0].Room.Panel, items[1].Room.Panel)
+	}
+	if items[2].Room.Panel != "http://127.0.0.1:8899" {
+		t.Fatalf("http panel = %q, want http://127.0.0.1:8899", items[2].Room.Panel)
+	}
+}
