@@ -8,13 +8,14 @@ import (
 )
 
 // The structured room fields travel with the wake so the frontend can badge it
-// as a chat-room item; the preview text stays verbatim and unchanged.
+// as a chat-room item; the preview text stays verbatim and unchanged. The
+// payload is the frozen producer fixture, not a second hand-written copy.
 func TestServerWakeCarriesRoomMeta(t *testing.T) {
 	ctrl := wakeTestController(t)
 	handler := inboxWakeHandler(ctrl)
 	handler(plugin.WakeMessage{
 		Server: "chatting", Method: "notifications/chatting/room_message",
-		Payload: json.RawMessage(`{"seq":43,"from":"fusion-root","text":"Chat room #43: fusion-root mentioned you","topic":4,"mentions":["reasonix-host"],"kind":"say","origin":"agent","panel":"http://127.0.0.1:8899"}`),
+		Payload: readRoomWakeFixture(t),
 	})
 
 	items := ctrl.InboxSnapshot().Items
@@ -25,17 +26,17 @@ func TestServerWakeCarriesRoomMeta(t *testing.T) {
 	if room == nil {
 		t.Fatal("room meta = nil, want the payload's structured fields")
 	}
-	if room.Seq != 43 || room.From != "fusion-root" || room.Topic != 4 || room.Kind != "say" || room.Origin != "agent" {
-		t.Fatalf("room meta = %+v, want seq=43 from=fusion-root topic=4 kind=say origin=agent", room)
+	if room.Seq != 43 || room.From != "chatside" || room.Topic != 6 || room.Kind != "say" || room.Origin != "agent" {
+		t.Fatalf("room meta = %+v, want seq=43 from=chatside topic=6 kind=say origin=agent", room)
 	}
 	if room.Panel != "http://127.0.0.1:8899" {
 		t.Fatalf("room panel = %q, want http://127.0.0.1:8899", room.Panel)
 	}
-	if len(room.Mentions) != 1 || room.Mentions[0] != "reasonix-host" {
-		t.Fatalf("room mentions = %v, want [reasonix-host]", room.Mentions)
+	if len(room.Mentions) != 1 || room.Mentions[0] != "DeepSeek-Reasonix" {
+		t.Fatalf("room mentions = %v, want [DeepSeek-Reasonix]", room.Mentions)
 	}
-	if items[0].Preview != "Chat room #43: fusion-root mentioned you" {
-		t.Fatalf("item body = %q, want the payload text verbatim", items[0].Preview)
+	if want := "@DeepSeek-Reasonix 房间 #43：跨仓 fixture 的冻结载荷"; items[0].Preview != want {
+		t.Fatalf("item body = %q, want %q", items[0].Preview, want)
 	}
 }
 
