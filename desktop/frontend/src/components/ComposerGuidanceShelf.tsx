@@ -155,11 +155,13 @@ export function ComposerGuidanceShelf({
                   )}
                   {item.room?.from && (
                     <span className="composer-guidance-item__room">
-                      {item.room.kind === "task"
-                        ? t("composer.guidanceRoomTask", { from: item.room.from })
-                        : item.room.topic
-                          ? t("composer.guidanceRoom", { topic: item.room.topic, from: item.room.from })
-                          : item.room.from}
+                      {item.room.from === "hub"
+                        ? t("composer.guidanceRoomHub")
+                        : item.room.kind === "task"
+                          ? t("composer.guidanceRoomTask", { from: item.room.from })
+                          : item.room.topic
+                            ? t("composer.guidanceRoom", { topic: item.room.topic, from: item.room.from })
+                            : item.room.from}
                     </span>
                   )}
                   {item.room?.panel && (

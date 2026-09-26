@@ -700,6 +700,7 @@ export const zhTW: Record<DictKey, string> = {
   "composer.guidanceQueue": "待處理引導",
   "composer.guidanceRoom": "聊天室 #{topic} · {from}",
   "composer.guidanceRoomTask": "派活 · {from}",
+  "composer.guidanceRoomHub": "房間系統",
   "composer.guidanceOpenRoom": "開啟房間面板",
   "composer.guidanceCount": "待處理引導 {n}",
   "composer.guidanceRemaining": "還有 {n} 條",

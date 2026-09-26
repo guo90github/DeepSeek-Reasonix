@@ -950,6 +950,7 @@ export const zh: Record<DictKey, string> = {
   "composer.guidanceQueue": "待处理引导",
   "composer.guidanceRoom": "聊天室 #{topic} · {from}",
   "composer.guidanceRoomTask": "派活 · {from}",
+  "composer.guidanceRoomHub": "房间系统",
   "composer.guidanceOpenRoom": "打开房间面板",
   "composer.guidanceCount": "待处理引导 {n}",
   "composer.guidanceRemaining": "还有 {n} 条",

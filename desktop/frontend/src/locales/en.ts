@@ -949,6 +949,7 @@ export const en = {
   "composer.guidanceQueue": "Queued guidance",
   "composer.guidanceRoom": "Chat room #{topic} · {from}",
   "composer.guidanceRoomTask": "Task · {from}",
+  "composer.guidanceRoomHub": "Room system",
   "composer.guidanceOpenRoom": "Open room panel",
   "composer.guidanceCount": "Queued guidance {n}",
   "composer.guidanceRemaining": "{n} more queued",
