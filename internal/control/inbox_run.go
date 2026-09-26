@@ -23,7 +23,7 @@ func (c *Controller) RunInboxTurn(ctx context.Context, id string) error {
 	if meta.State != sessioninbox.StateQueued {
 		return sessioninbox.ErrInvalidState
 	}
-	run, block, err := c.prepareInboxRun(env)
+	run, block, err := c.prepareInboxRun(meta, env)
 	if err != nil {
 		return err
 	}
@@ -47,11 +47,15 @@ func (c *Controller) RunInboxTurn(ctx context.Context, id string) error {
 	}, run)
 }
 
-func (c *Controller) prepareInboxRun(env sessioninbox.PromptEnvelope) (func(context.Context) error, string, error) {
+func (c *Controller) prepareInboxRun(meta sessioninbox.InboxItemMeta, env sessioninbox.PromptEnvelope) (func(context.Context) error, string, error) {
 	submit, frozenImages, block, err := applyInboxReferences(env)
 	if err != nil || block != "" {
 		return nil, block, err
 	}
+	// This is the path an idle session is woken on: a queued item becomes its own
+	// turn. Without the marker the model reads an outside mention as its owner
+	// typing, which is exactly what the steer path already marks against.
+	submit = markInboxGuidance(meta, submit)
 	display := firstNonEmptyStr(env.DisplayText, submit)
 	raw := firstNonEmptyStr(env.RawText, submit)
 	requests := controlInvocationsFromInbox(env)

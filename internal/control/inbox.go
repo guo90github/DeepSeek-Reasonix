@@ -599,7 +599,7 @@ func (c *Controller) TrySubmitInboxItem(id string) (sessioninbox.InboxReceipt, e
 	if st.Snapshot().Paused {
 		return sessioninbox.InboxReceipt{}, sessioninbox.ErrPaused
 	}
-	run, block, materializeErr := c.prepareInboxRun(env)
+	run, block, materializeErr := c.prepareInboxRun(meta, env)
 	if materializeErr != nil {
 		return sessioninbox.InboxReceipt{}, materializeErr
 	}
