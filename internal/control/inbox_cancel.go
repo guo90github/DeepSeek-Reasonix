@@ -36,6 +36,7 @@ func (c *Controller) CancelWithInboxItemsResult(ids []string, source string) (In
 		c.Cancel()
 		return result, err
 	}
+	seqs := c.roomSeqsOf(st, ids)
 	discarded, err := st.DiscardPendingItemsOwnedResult(ids, strings.TrimSpace(source))
 	if err != nil {
 		// Keep the inbox paused for inspection if an item already crossed the
@@ -44,6 +45,7 @@ func (c *Controller) CancelWithInboxItemsResult(ids []string, source string) (In
 		return result, err
 	}
 	result.DiscardedItemIDs = discarded
+	c.noteRoomLinesGone(seqs, "discarded")
 	c.Cancel()
 	if !wasPaused {
 		if err := st.SetPaused(false); err != nil {

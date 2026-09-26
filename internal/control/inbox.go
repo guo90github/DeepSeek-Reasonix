@@ -466,8 +466,10 @@ func (c *Controller) DeleteInboxItem(id string) error {
 	if _, recoverErr := st.RecoverOrphanedInFlightOwnedBy(c.inbox.ownsItem); recoverErr != nil {
 		slog.Warn("controller: recover inbox item before delete", "err", recoverErr, "id", id)
 	}
+	seqs := c.roomSeqsOf(st, []string{id})
 	err = st.DeletePendingOrAcceptedItem(id)
 	if err == nil || errors.Is(err, sessioninbox.ErrNotFound) {
+		c.noteRoomLinesGone(seqs, "deleted")
 		return nil
 	}
 	return err

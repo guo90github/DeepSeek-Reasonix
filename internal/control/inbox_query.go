@@ -66,6 +66,35 @@ func (c *Controller) noteRoomLineSettled(seq int64, disposition string) {
 	}
 }
 
+// roomSeqsOf reads the room lines carried by these items, before they leave: after
+// removal only the receipt still knows the pair. It reads the store, never
+// InboxSnapshot — a snapshot recovers orphans, and a cancel must not change state.
+func (c *Controller) roomSeqsOf(st *sessioninbox.Store, itemIDs []string) map[string]int64 {
+	wanted := make(map[string]bool, len(itemIDs))
+	for _, id := range itemIDs {
+		wanted[id] = true
+	}
+	seqs := make(map[string]int64, len(itemIDs))
+	if st == nil {
+		return seqs
+	}
+	for _, item := range st.Snapshot().Items {
+		if wanted[item.ID] && item.Room != nil && item.Room.Seq > 0 {
+			seqs[item.ID] = item.Room.Seq
+		}
+	}
+	return seqs
+}
+
+// noteRoomLinesGone remembers the endings of room lines removed without running:
+// "discarded" is a cancelled pending item, "deleted" one removed outright. Both
+// words are the store's own, so this ledger and the durable receipt agree.
+func (c *Controller) noteRoomLinesGone(seqs map[string]int64, disposition string) {
+	for _, seq := range seqs {
+		c.noteRoomLineSettled(seq, disposition)
+	}
+}
+
 func (c *Controller) settledRoomLineFor(seq int64) (settledRoomLine, bool) {
 	c.inbox.mu.Lock()
 	defer c.inbox.mu.Unlock()
