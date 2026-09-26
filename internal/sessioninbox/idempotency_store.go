@@ -16,9 +16,14 @@ func (s *Store) LookupReceipt(key string) (InboxReceipt, bool) {
 		}
 	}
 	if receipt, ok := s.man.Receipts[key]; ok && time.Since(receipt.CompletedAt) <= idempotencyReceiptTTL {
+		settledAt := ""
+		if !receipt.CompletedAt.IsZero() {
+			settledAt = receipt.CompletedAt.UTC().Format(time.RFC3339)
+		}
 		return InboxReceipt{
 			ItemID: receipt.ItemID, Disposition: DispositionIdempotentHit,
 			Paused: s.man.Paused, Capacity: s.snapshotLocked().Capacity, Idempotent: true,
+			Settled: string(receipt.Disposition), SettledAt: settledAt,
 		}, true
 	}
 	return InboxReceipt{}, false

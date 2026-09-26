@@ -227,6 +227,11 @@ type InboxReceipt struct {
 	// queued from accepted, running, or consumed. Empty when the lookup only
 	// reached a bounded idempotency receipt.
 	State InboxState `json:"state,omitempty"`
+	// Settled is how a gone item ended — the disposition stored when it left the
+	// queue (acknowledged / discarded / deleted). Without it an idempotency hit
+	// cannot tell "ran and finished" from "was cancelled before it ran".
+	Settled   string `json:"settled,omitempty"`
+	SettledAt string `json:"settledAt,omitempty"`
 	// SessionPath is where the item was admitted; RequestedSessionPath is the
 	// address the caller named, empty when none was named. The enqueue response
 	// carries both; a /inbox/receipt lookup reads the stored item instead.

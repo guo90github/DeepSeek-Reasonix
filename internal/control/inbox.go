@@ -403,8 +403,9 @@ type InboxRoomLine struct {
 }
 
 // InboxRoomLineFor finds the item carrying this room seq. "Not found" is an
-// answer of its own: it means this session never took that line in, which must
-// never be read as delivered.
+// answer of its own: this session's queue does not hold that line. It does not
+// mean the session never took it in — a line that ran is acknowledged and leaves
+// the queue, and only the receipt (by idempotency key) still says so.
 func (c *Controller) InboxRoomLineFor(seq int64) (InboxRoomLine, bool) {
 	if seq <= 0 {
 		return InboxRoomLine{}, false
