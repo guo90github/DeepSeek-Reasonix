@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"reasonix/internal/control"
 	"reasonix/internal/sessioninbox"
@@ -77,6 +78,9 @@ type InboxItemView struct {
 	WaitGate      string `json:"waitGate,omitempty"`
 	WaitReason    string `json:"waitReason,omitempty"`
 	WaitResumable bool   `json:"waitResumable,omitempty"`
+	// WaitMs is how long a queued item has been waiting. It answers "how long",
+	// never "why it is not running" — that is WaitGate plus WaitReason.
+	WaitMs int64 `json:"waitMs,omitempty"`
 }
 
 // InboxRoomView is the chat-room origin carried for badge rendering.
@@ -155,6 +159,11 @@ func inboxSnapshotView(snap sessioninbox.InboxSnapshot, wait func(string) (strin
 		if wait != nil && it.State == sessioninbox.StateQueued {
 			if gate, reason, resumable, ok := wait(it.ID); ok {
 				view.WaitGate, view.WaitReason, view.WaitResumable = gate, reason, resumable
+			}
+			if !it.CreatedAt.IsZero() {
+				if waited := time.Since(it.CreatedAt).Milliseconds(); waited > 0 {
+					view.WaitMs = waited
+				}
 			}
 		}
 		items = append(items, view)
