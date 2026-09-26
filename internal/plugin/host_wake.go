@@ -19,12 +19,28 @@ type WakeMessage struct {
 	Payload json.RawMessage
 }
 
+// WakeOutcome is what a host did with one wake. The vocabulary lives here so the
+// sink's answer, the log line, and diagnostics cannot describe the same wake
+// three different ways: a wake nobody could admit must stay distinguishable from
+// one that was delivered.
+type WakeOutcome string
+
+const (
+	WakeDelivered      WakeOutcome = "delivered"
+	WakeKeyCollision   WakeOutcome = "key-collision"
+	WakeRefused        WakeOutcome = "refused"
+	WakeFailed         WakeOutcome = "failed"
+	WakeNoHandler      WakeOutcome = "no-handler"
+	WakeUnroutable     WakeOutcome = "unroutable"
+	WakeUndeliverable  WakeOutcome = "undeliverable"
+	WakeOutcomeUnknown WakeOutcome = "unknown"
+)
+
 // SetWakeHandler installs the sink for server-initiated wakes. Set it before
 // the first connect, like profile: connects read the field without a lock.
-// With no handler a wake is logged and dropped rather than delivered in
-// silence, so an unwired channel stays visible instead of becoming a second
-// delivery path nobody can observe.
-func (h *Host) SetWakeHandler(f func(WakeMessage)) {
+// The sink returns what it did with the wake so an undelivered one is reported
+// by the host that owns the connection, not only by the sink that tried.
+func (h *Host) SetWakeHandler(f func(WakeMessage) WakeOutcome) {
 	h.wakeHandler = f
 }
 
@@ -46,9 +62,43 @@ func (h *Host) dispatchWake(msg WakeMessage) {
 		return
 	}
 	if h.wakeHandler == nil {
+		h.noteWakeOutcome(msg.Server, WakeNoHandler)
 		slog.Warn("plugin: wake notification has no handler; dropped",
-			"server", msg.Server, "method", msg.Method)
+			"server", msg.Server, "method", msg.Method, "outcome", string(WakeNoHandler))
 		return
 	}
-	h.wakeHandler(msg)
+	outcome := h.wakeHandler(msg)
+	if outcome == "" {
+		outcome = WakeOutcomeUnknown
+	}
+	h.noteWakeOutcome(msg.Server, outcome)
+	if outcome != WakeDelivered {
+		slog.Warn("plugin: server wake was not delivered",
+			"server", msg.Server, "method", msg.Method, "outcome", string(outcome))
+	}
+}
+
+// noteWakeOutcome remembers the last answer for one server, which is what lets a
+// status surface say "this room's last push was refused" instead of nothing.
+func (h *Host) noteWakeOutcome(server string, outcome WakeOutcome) {
+	if server == "" {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.wakeOutcomes == nil {
+		h.wakeOutcomes = map[string]WakeOutcome{}
+	}
+	h.wakeOutcomes[server] = outcome
+}
+
+// WakeOutcomeFor reports what the host last did with a wake from this server,
+// empty when it has not woken anything yet.
+func (h *Host) WakeOutcomeFor(server string) WakeOutcome {
+	if h == nil {
+		return ""
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.wakeOutcomes[server]
 }

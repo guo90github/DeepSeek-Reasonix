@@ -34,7 +34,10 @@ const testWakeMethod = "notifications/room/room_message"
 func TestDeclaredWakeMethodReachesTheHostSink(t *testing.T) {
 	host := NewHostWithProfile(HostProfileCore)
 	var got []WakeMessage
-	host.SetWakeHandler(func(msg WakeMessage) { got = append(got, msg) })
+	host.SetWakeHandler(func(msg WakeMessage) WakeOutcome {
+		got = append(got, msg)
+		return WakeDelivered
+	})
 
 	client, tr := newWakeClient(Spec{Name: "room", WakeMethod: testWakeMethod})
 	host.bindWakeNotifications(client)
@@ -56,7 +59,10 @@ func TestDeclaredWakeMethodReachesTheHostSink(t *testing.T) {
 func TestUndeclaredServerCannotWakeTheSession(t *testing.T) {
 	host := NewHostWithProfile(HostProfileCore)
 	delivered := 0
-	host.SetWakeHandler(func(WakeMessage) { delivered++ })
+	host.SetWakeHandler(func(WakeMessage) WakeOutcome {
+		delivered++
+		return WakeDelivered
+	})
 
 	client, tr := newWakeClient(Spec{Name: "room"})
 	host.bindWakeNotifications(client)
@@ -72,7 +78,10 @@ func TestUndeclaredServerCannotWakeTheSession(t *testing.T) {
 func TestClosedClientNoLongerWakesTheSession(t *testing.T) {
 	host := NewHostWithProfile(HostProfileCore)
 	delivered := 0
-	host.SetWakeHandler(func(WakeMessage) { delivered++ })
+	host.SetWakeHandler(func(WakeMessage) WakeOutcome {
+		delivered++
+		return WakeDelivered
+	})
 
 	client, tr := newWakeClient(Spec{Name: "room", WakeMethod: testWakeMethod})
 	host.bindWakeNotifications(client)
@@ -105,7 +114,10 @@ func TestSchemaCacheKeyIgnoresWakeMethod(t *testing.T) {
 func TestWakeCarriesTheCallerSession(t *testing.T) {
 	host := NewHostWithProfile(HostProfileCore)
 	var got []WakeMessage
-	host.SetWakeHandler(func(msg WakeMessage) { got = append(got, msg) })
+	host.SetWakeHandler(func(msg WakeMessage) WakeOutcome {
+		got = append(got, msg)
+		return WakeDelivered
+	})
 
 	client, tr := newWakeClient(Spec{Name: "room", WakeMethod: testWakeMethod})
 	host.bindWakeNotifications(client)
@@ -118,5 +130,47 @@ func TestWakeCarriesTheCallerSession(t *testing.T) {
 	tr.notifications.dispatchNotification(testWakeMethod, json.RawMessage(`{"seq":44}`))
 	if len(got) != 2 || got[1].Caller != "/sessions/room.jsonl" {
 		t.Fatalf("wake = %+v, want caller=/sessions/room.jsonl", got)
+	}
+}
+
+// What the sink did with a wake is a fact about the server, so the host keeps it:
+// "the room pushed and nothing happened" must be answerable from the server's own
+// status, not by guessing from a log line.
+func TestWakeOutcomeIsKeptPerServer(t *testing.T) {
+	host := NewHostWithProfile(HostProfileCore)
+	host.SetWakeHandler(func(WakeMessage) WakeOutcome { return WakeRefused })
+
+	client, tr := newWakeClient(Spec{Name: "room", WakeMethod: testWakeMethod})
+	host.bindWakeNotifications(client)
+	if got := host.WakeOutcomeFor("room"); got != "" {
+		t.Fatalf("outcome before any wake = %q, want empty", got)
+	}
+
+	tr.notifications.dispatchNotification(testWakeMethod, json.RawMessage(`{"seq":43}`))
+	if got := host.WakeOutcomeFor("room"); got != WakeRefused {
+		t.Fatalf("outcome = %q, want %q", got, WakeRefused)
+	}
+	for _, s := range host.Servers() {
+		if s.Name == "room" && s.LastWake != string(WakeRefused) {
+			t.Fatalf("server status LastWake = %q, want %q", s.LastWake, WakeRefused)
+		}
+	}
+
+	client.close()
+	if got := host.WakeOutcomeFor("room"); got != WakeRefused {
+		t.Fatalf("outcome after the client closed = %q, want the recorded answer", got)
+	}
+}
+
+// With no sink installed the drop is still an outcome the host can report: an
+// unwired channel must not look the same as a delivered wake.
+func TestWakeWithoutHandlerRecordsTheDrop(t *testing.T) {
+	host := NewHostWithProfile(HostProfileCore)
+	client, tr := newWakeClient(Spec{Name: "room", WakeMethod: testWakeMethod})
+	host.bindWakeNotifications(client)
+
+	tr.notifications.dispatchNotification(testWakeMethod, json.RawMessage(`{"seq":43}`))
+	if got := host.WakeOutcomeFor("room"); got != WakeNoHandler {
+		t.Fatalf("outcome = %q, want %q", got, WakeNoHandler)
 	}
 }

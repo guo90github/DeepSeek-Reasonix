@@ -205,6 +205,10 @@ type MCPServerInfo struct {
 	// a poll being in flight — is closed, which is a diagnostic, not an error.
 	WakeMethod string `json:"wake_method,omitempty"`
 	WakeArmed  bool   `json:"wake_armed,omitempty"`
+	// LastWake is what the host last did with a wake from this server ("",
+	// delivered, refused, unroutable, …): the outcome half of the same channel,
+	// so "the room pushed and nothing happened" has one place to be answered.
+	LastWake string `json:"last_wake,omitempty"`
 }
 
 // MCPToolInfo is one tool discovered during live/runtime probe.

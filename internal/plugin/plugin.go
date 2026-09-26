@@ -206,8 +206,11 @@ type Host struct {
 
 	// wakeHandler receives server-initiated wakes. It is host-only policy, set
 	// before the first connect like profile; nil drops wakes with a log line.
-	wakeHandler func(WakeMessage)
+	wakeHandler func(WakeMessage) WakeOutcome
 
+	// wakeOutcomes remembers the last answer per server, so a status surface can
+	// say what happened to a wake instead of only that one arrived.
+	wakeOutcomes map[string]WakeOutcome
 	// appInstances is the bounded MCP Apps instance registry, built with the
 	// Host and never nil.
 	appInstances *appInstanceRegistry
@@ -780,6 +783,9 @@ func (h *Host) Servers() []ServerStatus {
 			ConfigSource: strings.TrimSpace(c.spec.ConfigSource),
 			Tools:        len(c.toolCatalog.adapters),
 			HasTools:     c.capabilities.tools,
+		}
+		if outcome, ok := h.wakeOutcomes[c.name]; ok {
+			s.LastWake = string(outcome)
 		}
 		fillServerNegotiation(&s, h.profile, c)
 		s.ToolList = append([]ToolInfo(nil), c.toolCatalog.infos...)

@@ -23,29 +23,46 @@ func installInboxWakeHandler(host *plugin.Host, ctrl *control.Controller) {
 	host.SetWakeHandler(inboxWakeHandler(ctrl))
 }
 
-func inboxWakeHandler(ctrl *control.Controller) func(plugin.WakeMessage) {
+func inboxWakeHandler(ctrl *control.Controller) func(plugin.WakeMessage) plugin.WakeOutcome {
 	if ctrl == nil {
 		return nil
 	}
-	return func(msg plugin.WakeMessage) { deliverInboxWake(ctrl, msg) }
+	return func(msg plugin.WakeMessage) plugin.WakeOutcome {
+		return wakeOutcomeName(deliverInboxWake(ctrl, msg))
+	}
 }
 
 // SharedWakeHandler is the sink for a host shared across sessions, which is the
 // desktop's shape: the wake lands in the inbox of the session the child last saw
 // call it. An unknown caller keeps the visible drop, because a host serving
 // several sessions that guessed one would deliver a mention into the wrong inbox.
-func SharedWakeHandler(resolve func(string) *control.Controller) func(plugin.WakeMessage) {
+func SharedWakeHandler(resolve func(string) *control.Controller) func(plugin.WakeMessage) plugin.WakeOutcome {
 	if resolve == nil {
 		return nil
 	}
-	return func(msg plugin.WakeMessage) {
+	return func(msg plugin.WakeMessage) plugin.WakeOutcome {
 		ctrl := resolve(strings.TrimSpace(msg.Caller))
 		if ctrl == nil {
 			slog.Warn("boot: server wake names no reachable session; dropped",
 				"server", msg.Server, "caller", msg.Caller)
-			return
+			return plugin.WakeUnroutable
 		}
-		deliverInboxWake(ctrl, msg)
+		return wakeOutcomeName(deliverInboxWake(ctrl, msg))
+	}
+}
+
+// wakeOutcomeName is the one mapping from this layer's classification to the
+// vocabulary every surface reads, so the sink's answer and the log agree.
+func wakeOutcomeName(outcome wakeEnqueueOutcome) plugin.WakeOutcome {
+	switch outcome {
+	case wakeEnqueueAccepted:
+		return plugin.WakeDelivered
+	case wakeEnqueueKeyCollision:
+		return plugin.WakeKeyCollision
+	case wakeEnqueueRefused:
+		return plugin.WakeRefused
+	default:
+		return plugin.WakeFailed
 	}
 }
 

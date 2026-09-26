@@ -34,6 +34,9 @@ type ServerStatus struct {
 	// HostProfile is the client-capability profile this host declares
 	// ("core-v1", "interactive-v1", "desktop-apps-2026-01-26-v1").
 	HostProfile string
+	// LastWake is what the host last did with a wake from this server, empty
+	// when none has arrived: the outcome half of the wake channel.
+	LastWake string
 	// ElicitationNegotiated reports that the client declared elicitation and
 	// the session runs a protocol revision where the server can use it.
 	ElicitationNegotiated bool

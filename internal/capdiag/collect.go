@@ -593,6 +593,7 @@ func mergeRuntimeHost(rep *MCPReport, host *plugin.Host, root, home, reasonixHom
 			rep.Servers[i].RuntimeStatus = "connected"
 			rep.Servers[i].ToolCount = s.Tools
 			rep.Servers[i].Tools = tools
+			rep.Servers[i].LastWake = s.LastWake
 			// Only warn when the server advertised a tools capability but listed none.
 			if s.HasTools && s.Tools == 0 {
 				*issues = append(*issues, Issue{
