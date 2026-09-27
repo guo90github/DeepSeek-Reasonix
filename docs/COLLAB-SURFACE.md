@@ -6,7 +6,7 @@
 
 ## 0 生成命令 + 时点
 
-时点：`2026-09-26 02:54 +0800`；仓根 `C:\guosj\ai\deepseek-reasonix\DeepSeek-Reasonix`（`dev-2`）。
+时点：随本表最后一次改动刷新（`git log -1 --format=%cI -- docs/COLLAB-SURFACE.md`）；仓根 `C:\guosj\ai\deepseek-reasonix\DeepSeek-Reasonix`（`dev-2`）。
 值会随代码变，所以**载体是下面这五条命令，不是本表的字面值**——读的人重跑一次即可：
 
 ```
@@ -15,6 +15,9 @@ sed -n '12,40p' internal/control/inbox_wake_marker.go        # §2 来源具名�
 sed -n '11,23p' internal/serve/reject_class.go               # §3 分类头 + 三档取值
 sed -n '31,120p' internal/sessioninbox/types.go               # §4 state 封闭集
 sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明处（空 = 不武装）
+sed -n '14,34p' internal/control/inbox_query.go              # §7 按 seq 回答的字段集与封闭值
+sed -n '86,94p' internal/serve/inbox.go                       # §7 「队列里没有」那一档怎么答
+sed -n '228,236p' internal/sessioninbox/types.go              # §7 回执上的同一对
 ```
 
 ## 1 唤醒载荷（冻结的跨仓契约）
@@ -22,7 +25,7 @@ sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明�
 | 项 | 取值 | 定义处 |
 |---|---|---|
 | 字段集 | `seq` `from` `text` `topic` `mentions[]` `kind` `origin` | `internal/boot/inbox_wake_contract_test.go:10`（用例即契约） |
-| 宿主实际消费 | **只有 `text`**：逐字落进 inbox 正文，不重解析 `mentions` | `internal/boot/inbox_wake.go:48` |
+| 宿主实际消费 | **只有 `text`**：逐字落进 inbox 正文，不重解析 `mentions` | `internal/boot/inbox_wake.go:157` |
 | 无正文 / 非法载荷 | 丢弃 + 告警，**不收成空回合** | `internal/boot/inbox_wake.go:31`、`internal/boot/inbox_wake_test.go:47` |
 
 反例：把 `mentions` 当投递判据（宿主再筛一遍）——与契约相反，发送侧已判定「这行是给你的」。
@@ -49,7 +52,7 @@ sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明�
 
 | 项 | 取值 | 定义处 |
 |---|---|---|
-| 字段集 | `id` `sessionId` `intent` `state` `revision` `blobName` `source` `createdAt` `updatedAt` `preview` `byteSize` `checksum` `idempotencyKey` `refs[]` `blockReason` `runId` | `internal/sessioninbox/types.go:100` |
+| 字段集 | `id` `sessionId` `intent` `state` `revision` `blobName` `source` `createdAt` `updatedAt` `preview` `byteSize` `checksum` `idempotencyKey` `refs[]` `blockReason` `runId` | `internal/sessioninbox/types.go:113` |
 | `state` 封闭集 | `queued` / `steer_accepted` / `steer_consumed` / `running` / `blocked` / `uncertain` | `internal/sessioninbox/types.go:32` |
 | 唤醒落地时 | `intent=steer`、`source=push` | `internal/boot/inbox_wake.go:35` |
 
@@ -63,6 +66,23 @@ sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明�
 | 配置面 | `[[plugins]].wake_method`（TOML）/ `wake_method`（`.mcp.json` 同名字段） | `internal/config/plugin_entry.go:36`、`internal/config/mcpjson.go:37` |
 | 空值 | **不武装**：一条字节都到不了会话 | `internal/plugin/client_wake.go:10`、`internal/plugin/client_wake_test.go:56` |
 | 共享 host | 不装处理器（一个 host 服务多会话，没有绑定对象） | `internal/boot/inbox_wake.go:14` |
+
+## 7 房间行的按 seq 回答（查找方向）
+
+`GET /inbox/room-line?seq=N`（桌面桥同名调用走同一条）是这条查找的唯一出口：推送唤醒没有回执通道，
+发送方问「我第 N 句叫的人到底怎么了」就问这里。
+
+| 项 | 取值 | 定义处 |
+|---|---|---|
+| 字段集 | `itemId` `state` `source` `preview` `gate` `reason` `refused` `resumable` `queuedForMs` `settled` `settledAt` | `internal/control/inbox_query.go:22` |
+| 「宿主拒过没」 | `refused` 就是那一栏；`resumable` **只在 `refused` 在时才有意义**，缺 `refused` 时不许拿“有没有 `reason`”反推 | `internal/control/inbox_query.go:26` |
+| 时长 | `queuedForMs` 只答「等了多久」，不答「为什么还没跑」；非排队态不带 | `internal/control/inbox_query.go:29` |
+| 收尾三档（离开队列后怎么结束的） | `acknowledged`（跑完并确认）/ `discarded`（被取消）/ `deleted`（被删掉）——存储自己的处置原词 | `internal/sessioninbox/ops.go:448`、`internal/sessioninbox/ops.go:144`、`internal/sessioninbox/ops.go:44` |
+| 同一对在回执上 | `settled` / `settledAt`（按幂等键查回执时同义） | `internal/sessioninbox/types.go:233` |
+| 读法 | `found=false` **不等于**「从没接过」：带 `settled` = 离开过队列、这么结束的；不带才只说没有。端点据此判「这一路到底知道点什么」 | `internal/serve/inbox.go:89` |
+
+反例：把 `found=false` 一律读成“没接过”（把跑完/被取消抹成没这回事）、或把它读成“没送达”（给读者的动作完全不同）。
+收尾只说它**怎么离开队列**，不说他跑得好不好。
 
 ## 6 与聊天侧指纹的差项
 
