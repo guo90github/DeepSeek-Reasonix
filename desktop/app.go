@@ -795,6 +795,12 @@ func (a *App) restoreOrBuildTabs() {
 	}
 
 	// First launch: create a default Global tab.
+	a.createFirstLaunchGlobalTab(ctx)
+}
+
+// createFirstLaunchGlobalTab is the first-launch path's only tab, kept beside
+// the restore branch so both shapes stay readable at one screen.
+func (a *App) createFirstLaunchGlobalTab(ctx context.Context) {
 	tab := a.createTabEntry("global", globalTabWorkspaceRoot(), "")
 	tab.sink = &tabEventSink{tabID: tab.ID, app: a, ctx: ctx}
 	tab.TopicTitle = "Global"
