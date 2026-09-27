@@ -18,6 +18,7 @@ sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明�
 sed -n '14,34p' internal/control/inbox_query.go              # §7 按 seq 回答的字段集与封闭值
 sed -n '86,94p' internal/serve/inbox.go                       # §7 「队列里没有」那一档怎么答
 sed -n '228,236p' internal/sessioninbox/types.go              # §7 回执上的同一对
+sed -n '6,10p' internal/sessioninbox/settled_gloss.go          # §7 收尾措辞的唯一出处
 ```
 
 ## 1 唤醒载荷（冻结的跨仓契约）
@@ -77,12 +78,14 @@ sed -n '228,236p' internal/sessioninbox/types.go              # §7 回执上的
 | 字段集 | `itemId` `state` `source` `preview` `gate` `reason` `refused` `resumable` `queuedForMs` `settled` `settledAt` | `internal/control/inbox_query.go:22` |
 | 「宿主拒过没」 | `refused` 就是那一栏；`resumable` **只在 `refused` 在时才有意义**，缺 `refused` 时不许拿“有没有 `reason`”反推 | `internal/control/inbox_query.go:26` |
 | 时长 | `queuedForMs` 只答「等了多久」，不答「为什么还没跑」；非排队态不带 | `internal/control/inbox_query.go:29` |
-| 收尾三档（离开队列后怎么结束的） | `acknowledged`（跑完并确认）/ `discarded`（被取消）/ `deleted`（被删掉）——存储自己的处置原词 | `internal/sessioninbox/ops.go:448`、`internal/sessioninbox/ops.go:144`、`internal/sessioninbox/ops.go:44` |
+| 收尾三档（离开队列后怎么结束的） | `acknowledged`（跑完并确认）/ `discarded`（被丢弃）/ `deleted`（被删掉）——存储自己的处置原词；措辞只有一处声明，桌面那份被同词测试钉住 | `internal/sessioninbox/ops.go:448`、`internal/sessioninbox/ops.go:144`、`internal/sessioninbox/ops.go:44`、`internal/sessioninbox/settled_gloss.go:6` |
 | 同一对在回执上 | `settled` / `settledAt`（按幂等键查回执时同义） | `internal/sessioninbox/types.go:233` |
 | 读法 | `found=false` **不等于**「从没接过」：带 `settled` = 离开过队列、这么结束的；不带才只说没有。端点据此判「这一路到底知道点什么」 | `internal/serve/inbox.go:89` |
 
-反例：把 `found=false` 一律读成“没接过”（把跑完/被取消抹成没这回事）、或把它读成“没送达”（给读者的动作完全不同）。
-收尾只说它**怎么离开队列**，不说他跑得好不好。
+反例一（`refused` → `resumable`）：缺 `refused` 时把“`resumable` 不在”读成**提不起来**——那两种情形在线上同形，
+只有宿主真的为这行给过答复（`refused`）时`resumable` 才在说话；拿“有没有原话”反推也是同一个错。
+反例二（`settled` → `found`）：把 `found=false` 一律读成“没接过”（把跑完/被丢弃抹成没这回事）、或把它读成“没送达”
+（给读者的动作完全不同）；再或把 `settled` 当成“他跑得好不好”——它只说**怎么离开队列**；不认得的处置词照原样带出，不加注解。
 
 ## 6 与聊天侧指纹的差项
 
