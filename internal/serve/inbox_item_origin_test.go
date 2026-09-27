@@ -57,3 +57,47 @@ func TestInboxItemEndpointReportsOriginAndTerminalState(t *testing.T) {
 	}
 	t.Logf("GET /inbox/items/%s -> %s", receipt.ItemID, strings.TrimSpace(string(body)))
 }
+
+// A room that names its own line number on the wake gets it back on the item, so
+// the two sides reconcile on the line rather than on a host-only id. The field is
+// additive: without it the item is the same plain http wake as before.
+func TestInboxItemEndpointKeepsTheRoomLineItWasGiven(t *testing.T) {
+	dir := t.TempDir()
+	foreground := runtimeStateServeController(t, dir, "foreground", nil)
+	server := New(foreground, nil, config.ServeConfig{})
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+
+	posted := postInboxWake(t, httpServer.URL, `{"input":"room wake","intent":"steer","seq":"43"}`, "")
+	if posted.StatusCode != http.StatusAccepted {
+		t.Fatalf("enqueue: status=%d, want 202", posted.StatusCode)
+	}
+	receipt := decodeInboxReceipt(t, posted)
+
+	response, err := http.Get(httpServer.URL + "/inbox/items/" + receipt.ItemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var view struct {
+		Meta struct {
+			Source string `json:"source"`
+			Room   *struct {
+				Seq int64 `json:"seq"`
+			} `json:"room"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal(body, &view); err != nil {
+		t.Fatalf("decode item view: %v (%s)", err, body)
+	}
+	if view.Meta.Source != "room-wake" {
+		t.Fatalf("source = %q, want room-wake for an item naming a room line", view.Meta.Source)
+	}
+	if view.Meta.Room == nil || view.Meta.Room.Seq != 43 {
+		t.Fatalf("room line = %+v, want seq 43 (body: %s)", view.Meta.Room, body)
+	}
+}

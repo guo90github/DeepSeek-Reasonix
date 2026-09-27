@@ -98,3 +98,16 @@ func TestWakeMarkerNamesAnUnlistedSourceAndSkipsTheLocalOne(t *testing.T) {
 		t.Fatalf("an item queued in this process produced %q, want no marker", marker)
 	}
 }
+
+// A room wake names the line the room itself prints, because that number is the
+// one both sides can look up; the host-only item id alone cannot be reconciled.
+// An item with no room provenance prints no seq — the marker invents nothing.
+func TestWakeMarkerCarriesTheRoomSeqItKnows(t *testing.T) {
+	named := sessioninbox.InboxItemMeta{ID: "item-1", Source: "room-wake", Room: &sessioninbox.RoomMeta{Seq: 43}}
+	if marker := inboxWakeMarker(named); marker != "[remote wake source=room-wake item=item-1 seq=43]" {
+		t.Fatalf("room wake marker = %q, want the line's seq appended", marker)
+	}
+	if marker := inboxWakeMarker(sessioninbox.InboxItemMeta{ID: "item-1", Source: "room-wake"}); marker != "[remote wake source=room-wake item=item-1]" {
+		t.Fatalf("room-wake without a line produced %q, want no seq", marker)
+	}
+}

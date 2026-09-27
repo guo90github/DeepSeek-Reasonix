@@ -134,6 +134,8 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 		Invocations    []control.InvocationRequest `json:"invocations"`
 		Intent         string                      `json:"intent"`
 		IdempotencyKey string                      `json:"idempotencyKey"`
+		// Optional and additive: a producer that omits it queues as before.
+		Seq string `json:"seq"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.Input) == "" {
 		http.Error(w, "missing input", http.StatusBadRequest)
@@ -168,14 +170,16 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 		reject(w, rejectTargetUnreachable, "addressed session cannot receive this here")
 		return
 	}
+	roomExtra := roomSeqExtra(body.Seq)
 	req := control.InboxRequest{
 		Intent:      intent,
 		Display:     body.Display,
 		Raw:         body.Input,
 		Submit:      body.Input,
-		Source:      "http",
+		Source:      control.WakeSourceFor(roomExtra, "http"),
 		Idempotency: body.IdempotencyKey,
 		Invocations: body.Invocations,
+		Extra:       roomExtra,
 	}
 	if req.Display == "" {
 		req.Display = body.Input
@@ -197,6 +201,18 @@ func (s *Server) inboxEnqueue(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(rec)
+}
+
+// roomSeqExtra carries the chat room's line number when the producer names one,
+// under the key the boot wake handler already writes, so RoomMeta assembles
+// identically on both routes. An unusable seq stays absent: the item is then a
+// plain http wake rather than one claiming a line nobody can reconcile.
+func roomSeqExtra(raw string) map[string]string {
+	seq, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64)
+	if err != nil || seq <= 0 {
+		return nil
+	}
+	return map[string]string{"room.seq": strconv.FormatInt(seq, 10)}
 }
 
 func (s *Server) inboxReceipt(w http.ResponseWriter, r *http.Request) {

@@ -11,7 +11,7 @@
 
 ```
 sed -n '10,14p' internal/boot/inbox_wake_contract_test.go   # §1 载荷字段集（契约用例）
-sed -n '12,40p' internal/control/inbox_wake_marker.go        # §2 来源具名集合
+sed -n '13,55p' internal/control/inbox_wake_marker.go        # §2 来源具名集合
 sed -n '11,23p' internal/serve/reject_class.go               # §3 分类头 + 三档取值
 sed -n '31,125p' internal/sessioninbox/types.go               # §4 state 封闭集
 sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明处（空 = 不武装）
@@ -38,10 +38,11 @@ sed -n '230,240p' internal/control/inbox_dispatch.go          # §8 与回执共
 
 | 项 | 取值 | 定义处 |
 |---|---|---|
-| 标记形状 | `[remote wake source=<source> item=<id>]` + 换行 + 正文 | `internal/control/inbox_wake_marker.go:20`、`:39` |
-| 具名集合 | `http` `push` `acp` `bot` | `internal/control/inbox_wake_marker.go:12` |
-| 未具名但非空 | `unknown`（原值不当信息抹掉，也绝不当成本地排队） | `internal/control/inbox_wake_marker.go:37` |
-| 空 source | **不打标记** = 本进程内排队 | `internal/control/inbox_wake_marker.go:31` |
+| 标记形状 | `[remote wake source=<source> item=<id>]` + 换行 + 正文；条目指名了房间行号时再由 `roomSeqSuffix` 加 ` seq=<n>`（房间代拍＋`seq`，2026-09-27） | `internal/control/inbox_wake_marker.go:55` |
+| 具名集合 | `http` `push` `acp` `bot` `room-wake` | `internal/control/inbox_wake_marker.go:13` |
+| 谁算 `room-wake` | 条目带 `room.seq` 就按房间行算，与它从哪条入库路由进来无关（两条路由同一判定） | `internal/control/inbox_wake_marker.go:29` |
+| 未具名但非空 | `unknown`（原值不当信息抹掉，也绝不当成本地排队） | `internal/control/inbox_wake_marker.go:53` |
+| 空 source | **不打标记** = 本进程内排队 | `internal/control/inbox_wake_marker.go:47` |
 | 位置约束 | 只在回合正文；**绝不进系统提示前缀**（前缀要字节稳定，前缀缓存靠它） | `internal/control/inbox_wake_marker_test.go:64` |
 
 ## 3 宿主回执的拒绝分类
@@ -58,7 +59,7 @@ sed -n '230,240p' internal/control/inbox_dispatch.go          # §8 与回执共
 |---|---|---|
 | 字段集 | `id` `sessionId` `intent` `state` `revision` `blobName` `source` `createdAt` `updatedAt` `preview` `byteSize` `checksum` `idempotencyKey` `refs[]` `blockReason` `runId` | `internal/sessioninbox/types.go:118` |
 | `state` 封闭集 | `queued` / `steer_accepted` / `steer_consumed` / `running` / `blocked` / `uncertain` | `internal/sessioninbox/types.go:32` |
-| 唤醒落地时 | `intent=steer`、`source=push` | `internal/boot/inbox_wake.go:35` |
+| 唤醒落地时 | `intent=steer`；载荷带房间行时 `source=room-wake`，其余 `source=push`（同一判定 `WakeSourceFor`） | `internal/boot/inbox_wake.go:116` |
 
 `rejected_*` 是**回执的 `disposition`**，不是 `state`：两者别互相当成对方那一档。
 

@@ -21,11 +21,11 @@ func wakeTestController(t *testing.T) *control.Controller {
 	})
 }
 
-// A wake from an armed server lands as guidance in this session's inbox with
-// source=push: the session is woken without a poll being in flight, which is
-// the whole point of the channel. The stored source is also what makes the
-// injected guidance say [remote wake source=push …] instead of lying about the
-// user having queued it.
+// A wake from an armed server lands as guidance in this session's inbox: the
+// session is woken without a poll being in flight, which is the whole point of
+// the channel. The stored source is also what makes the injected guidance say
+// [remote wake source=…] instead of lying about the user having queued it, and a
+// payload naming the room's own line reports the room rather than the transport.
 func TestServerWakeLandsInTheSessionInbox(t *testing.T) {
 	ctrl := wakeTestController(t)
 	handler := inboxWakeHandler(ctrl)
@@ -38,8 +38,8 @@ func TestServerWakeLandsInTheSessionInbox(t *testing.T) {
 	if len(items) != 1 {
 		t.Fatalf("inbox items = %d, want 1", len(items))
 	}
-	if items[0].Source != "push" {
-		t.Fatalf("item source = %q, want push", items[0].Source)
+	if items[0].Source != "room-wake" {
+		t.Fatalf("item source = %q, want room-wake for a payload naming a room line", items[0].Source)
 	}
 }
 
@@ -88,8 +88,8 @@ func TestSharedHostWakeLandsInTheCallersInbox(t *testing.T) {
 	})
 
 	items := ctrl.InboxSnapshot().Items
-	if len(items) != 1 || items[0].Source != "push" {
-		t.Fatalf("inbox items = %+v, want one push item in the caller's session", items)
+	if len(items) != 1 || items[0].Source != "room-wake" {
+		t.Fatalf("inbox items = %+v, want one room-wake item in the caller's session", items)
 	}
 }
 

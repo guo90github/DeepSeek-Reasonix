@@ -25,7 +25,7 @@ func TestWakePayloadContractLandsTextVerbatim(t *testing.T) {
 	if items[0].Preview != "Chat room #43: fusion-root mentioned you" {
 		t.Fatalf("item body = %q, want the payload text verbatim", items[0].Preview)
 	}
-	if items[0].Source != "push" {
-		t.Fatalf("item source = %q, want push", items[0].Source)
+	if items[0].Source != "room-wake" {
+		t.Fatalf("item source = %q, want room-wake for a payload naming a room line", items[0].Source)
 	}
 }

@@ -113,7 +113,7 @@ func deliverInboxWake(ctrl *control.Controller, msg plugin.WakeMessage) wakeEnqu
 		return wakeEnqueueFailed
 	}
 	req := control.InboxRequest{
-		Intent: sessioninbox.IntentSteer, Source: "push",
+		Intent: sessioninbox.IntentSteer, Source: control.WakeSourceFor(extra, "push"),
 		Submit: body, Display: body, Raw: body,
 		Extra: extra, Idempotency: idem,
 	}

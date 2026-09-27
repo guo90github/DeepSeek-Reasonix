@@ -1,6 +1,7 @@
 package control
 
 import (
+	"strconv"
 	"strings"
 
 	"reasonix/internal/sessioninbox"
@@ -10,10 +11,25 @@ import (
 // A producer this list does not name yet still gets a marker — as "unknown":
 // swallowing it would leave a reader to conclude the guidance was queued here.
 var inboxGuidanceSources = map[string]string{
-	"http": "http",
-	"push": "push",
-	"acp":  "acp",
-	"bot":  "bot",
+	"http":      "http",
+	"push":      "push",
+	"acp":       "acp",
+	"bot":       "bot",
+	"room-wake": "room-wake",
+}
+
+// WakeSourceRoom is the source a wake carries when the chat room's own line
+// number identifies it — the transport that carried it is then not the story.
+const WakeSourceRoom = "room-wake"
+
+// WakeSourceFor picks the provenance a wake reports: an item naming a room line
+// is a room wake, anything else stays the transport it arrived on. Both ingest
+// routes call it, so the marker's vocabulary has one author instead of two.
+func WakeSourceFor(extra map[string]string, transport string) string {
+	if extra["room.seq"] != "" {
+		return WakeSourceRoom
+	}
+	return transport
 }
 
 const (
@@ -36,7 +52,18 @@ func inboxWakeMarker(meta sessioninbox.InboxItemMeta) string {
 	} else {
 		source = inboxWakeSourceUnknown
 	}
-	return inboxWakeMarkerPrefix + source + " item=" + meta.ID + "]"
+	return inboxWakeMarkerPrefix + source + " item=" + meta.ID + roomSeqSuffix(meta) + "]"
+}
+
+// roomSeqSuffix prints the room line's own seq — the one number both sides can
+// name — beside the host-only item id, so a reader reconciles a wake against the
+// line that caused it. An item with no room provenance prints none: a guessed
+// seq would be worse than its absence.
+func roomSeqSuffix(meta sessioninbox.InboxItemMeta) string {
+	if meta.Room == nil || meta.Room.Seq <= 0 {
+		return ""
+	}
+	return " seq=" + strconv.FormatInt(meta.Room.Seq, 10)
 }
 
 // markInboxGuidance puts the marker on the guidance the model will see. It

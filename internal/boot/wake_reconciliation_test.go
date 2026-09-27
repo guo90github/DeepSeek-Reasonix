@@ -39,8 +39,11 @@ func TestWakeReconciliationHostSideRecords(t *testing.T) {
 			t.Fatalf("outcome = %q, want %q", got, plugin.WakeDelivered)
 		}
 		items := ctrl.InboxSnapshot().Items
-		if len(items) != 1 || items[0].Source != "push" {
-			t.Fatalf("inbox items = %+v, want one push item", items)
+		if len(items) != 1 || items[0].Source != "room-wake" {
+			t.Fatalf("inbox items = %+v, want one item carrying the room provenance", items)
+		}
+		if items[0].Room == nil || items[0].Room.Seq != 43 {
+			t.Fatalf("room provenance = %+v, want the fixture's seq 43", items[0].Room)
 		}
 		if items[0].Idempotency != "room-wake:chatting:127.0.0.1:8899:43" {
 			t.Fatalf("idempotency = %q, want the host-derived room key", items[0].Idempotency)

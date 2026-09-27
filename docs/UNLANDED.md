@@ -64,3 +64,17 @@
 - **下一笔**：另开一条按抽取收，顺序建议——先纯文件体量（`remote_tab.go`、`settings-refresh-snapshot.test.tsx`），再动大件（`useController.ts`、`app.go`）。
 - **口径（先写死，免得日后扯皮）**：若最终走 `go run ./tools/repolint -update`，**提交信息必须写明「合并漂移 + 理由」**并把 diff 摆给评审看；**不许静默放宽基线**。
 - **可红判据**：`go run ./tools/repolint 2>&1 | grep '^repolint: desktop'` 输出为空；或本条被一条「已知并接受」的声明取代（附理由）。
+
+## 7 `WAKE-SRC-1` 房间唤醒来历：`room-wake` + `seq`（房间代拍＋`seq`）
+
+- **来源**：房间 `P0/B27-A2`（宿主侧）、裁定 `#64`（`COLLAB.md §17.1`：可带 `seq`、只做加法、四前提）、同步条 `P1/B27-A8`。
+- **状态**：**已落（宿主侧受理 + 标记）**，本地未推。落地面：
+  - `internal/control/inbox_wake_marker.go`：具名集合加 `room-wake`；条目带 `room.seq` 时标记打 ` seq=<n>`；`WakeSourceFor` 是两条入库路由**共用**的唯一判定（不许各判一份）。
+  - `internal/serve/inbox.go`：`POST /inbox/items` 接受可选字符串键 `seq`（发送侧 body 是 `map[string]string`），转成 `room.seq` 填 `Extra`；`Source` 由固定 `"http"` 改为 `WakeSourceFor(…, "http")`。宿主解析器**不** `DisallowUnknownFields` ⇒ 老发送方少带/多带键都不受影响（`internal/serve/inbox.go:138`）。
+  - `internal/boot/inbox_wake.go`：push 路同样改走 `WakeSourceFor(…, "push")`。
+- **未落（在账，两条）**：
+  1. **发送侧（chatting）还没带 `seq`** ⇒ 今天真机唤醒仍会是 `[remote wake source=http item=<uuid>]`，房间行号对不上账。判据＝那条唤醒对应 `GET /inbox/items/{id}` 的 `source` 变 `room-wake`、`room.seq` 有值。
+  2. **HTTP 路只接了 `seq`**：`from` / `topic` / `kind` / `origin` / `mentions` / `panel` 仍只有 push 路有 ⇒ HTTP 送达的房间条目在引导货架上没有边栏（`room.panel` 还牵一条非 http(s) 过滤要一起搬）。
+- **口径**：按 §17.1② 不许拿正文里的 `#<seq>` 文本当字段替身；seq 缺席就是缺席（不猜、不伪造）。
+- **可红判据**：`go test ./internal/boot/ -run Wake`、`go test ./internal/serve/ -run TestInboxItemEndpoint`、`go test ./internal/control/ -run TestWakeMarker` 三处全绿；反例＝把 `WakeSourceFor` 退回固定值，对应用例当场红。
+- **随本条更新的旧断言（可在 diff 里看）**：`internal/boot/wake_reconciliation_test.go` 原先断言房间夹具 `Source == "push"`，按新口径改为 `room-wake` 并补钉 `Room.Seq == 43`。
