@@ -59,11 +59,12 @@
 ## 6 `LINT-2` `desktop/**` 的 12 条：合并带进来的存量漂移（房间已裁定不在 `#344` 里做）
 
 - **来源**：`go run ./tools/repolint`；裁定＝房间 `#344` 讨论（fusion-root：**新债现场清零；存量债入账可核**）。
-- **状态**：未收，**在账**——12 条全在 `desktop/**`：`app.go` 函数体 356/354、`frontend/src/lib/useController.ts` 4530/4426、`frontend/src/components/WorkspacePanel.tsx` 1372/1350、`__tests__/settings-refresh-snapshot.test.tsx` 229/179、`__tests__/use-controller-meta.test.ts` 4/0、`CapabilitiesPanel.tsx` 2643/2641、`UsageStatsPanel.tsx` 277/276、`MemoryPanel.tsx` 1089/1088、`ThemeGallery.tsx` 490/489、`ThemeLibrary.tsx` 159/158、`remote_tab.go` 121/92、`audit_settings_app.go` essay 1/0。
+- **状态**：**部分收（Go 侧已清零）**。现读数（本机现跑，`go run ./tools/repolint 2>&1 | grep '^desktop/'`）：只剩 **9 条，全在 `desktop/frontend/**`**——`lib/useController.ts` 5330/4426（超额度 104）、`__tests__/settings-refresh-snapshot.test.tsx` 1029/179（超 50）、`__tests__/use-controller-meta.test.ts` 804/0（超 4）、`components/WorkspacePanel.tsx` 2174/1350（超 24）、`CapabilitiesPanel.tsx` 3443/2641（超 2）、`MemoryPanel.tsx` 1889/1088（超 1）、`ThemeGallery.tsx` 1290/489（超 1）、`ThemeLibrary.tsx` 959/158（超 1）、`UsageStatsPanel.tsx` 1077/276（超 1）。
+  Go 侧已收：`remote_tab.go` 旁观态三函数抽到 `remote_tab_spectator.go`（提交 `b6c492cd9`）、`app.go` 首次启动默认页抽成 `createFirstLaunchGlobalTab`（提交 `ff290cb4c`）、`audit_settings_app.go` 与 `inbox_room_line.go` 两处 4 行正文注释压回 3 行。`app.go` / `remote_tab.go` 两条已不在读数里。
 - **理由**：多数只超 1–2 行，形状是**合并（`origin/main-v2`）带进来的行位漂移**，不是本笔新债；拆桌面壳与前端组件是另一摊工作量。
-- **下一笔**：另开一条按抽取收，顺序建议——先纯文件体量（`remote_tab.go`、`settings-refresh-snapshot.test.tsx`），再动大件（`useController.ts`、`app.go`）。
+- **下一笔**：**前端那 9 条**按抽取收（`useController.ts` 是唯一大件，其余只差 1–24 行）。注意验证成本：TSX 抽取要跑前端类型检查/单测（长跑），所以要单独一轮做，不要混在别的改动里。
 - **口径（先写死，免得日后扯皮）**：若最终走 `go run ./tools/repolint -update`，**提交信息必须写明「合并漂移 + 理由」**并把 diff 摆给评审看；**不许静默放宽基线**。
-- **可红判据**：`go run ./tools/repolint 2>&1 | grep '^repolint: desktop'` 输出为空；或本条被一条「已知并接受」的声明取代（附理由）。
+- **可红判据**：`go run ./tools/repolint 2>&1 | grep '^desktop/'` 输出为空；或本条被一条「已知并接受」的声明取代（附理由）。
 
 ## 7 `WAKE-SRC-1` 房间唤醒来历：`room-wake` + `seq`（房间代拍＋`seq`）
 
