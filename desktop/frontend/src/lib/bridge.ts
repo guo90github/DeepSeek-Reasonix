@@ -258,6 +258,15 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
       source?: string;
       position: number;
       blockReason?: string;
+      // The queue side of the wake contract: how long this item has waited, what
+      // holds it, the host's own sentence, and whether the host answered at all.
+      // Declared here so a renamed host field fails to compile instead of
+      // silently dropping the column the chip reads.
+      waitMs?: number;
+      waitGate?: string;
+      waitReason?: string;
+      waitRefused?: boolean;
+      room?: { seq?: number; from?: string; topic?: number; kind?: string; origin?: string; mentions?: string[]; panel?: string } | null;
     }>;
     itemsCount: number;
     bytes: number;
