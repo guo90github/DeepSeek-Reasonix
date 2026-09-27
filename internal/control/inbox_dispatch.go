@@ -169,11 +169,15 @@ func (c *Controller) dispatchInboxOnce() inboxDispatchResult {
 	beforeSubmit := c.inbox.beforeDispatchSubmit
 	c.inbox.mu.Unlock()
 	if !ok {
+		// An empty queue has nothing to explain: drop a failure recorded for a
+		// line that is no longer waiting, so it cannot answer for a later one.
+		c.clearInboxStartFailure()
 		return inboxDispatchIdle
 	}
 	if beforeSubmit != nil {
 		if err := beforeSubmit(meta.ID); err != nil {
 			slog.Warn("controller: inbox dispatch hook", "err", err, "id", meta.ID)
+			c.noteInboxStartFailure(err)
 			return inboxDispatchRetry
 		}
 	}
@@ -186,13 +190,39 @@ func (c *Controller) dispatchInboxOnce() inboxDispatchResult {
 			return inboxDispatchIdle
 		}
 		slog.Warn("controller: dispatch inbox item", "err", err, "id", meta.ID)
+		c.noteInboxStartFailure(err)
 		return inboxDispatchRetry
 	}
 	if receipt.Disposition == sessioninbox.DispositionStarted {
+		c.clearInboxStartFailure()
 		return inboxDispatchStarted
 	}
 	// A competing turn or rotation owns the next kick when its gate releases.
 	return inboxDispatchIdle
+}
+
+// noteInboxStartFailure records why the last attempt to start a queued turn
+// failed, so a line that is still queued stops looking like an untouched queue.
+func (c *Controller) noteInboxStartFailure(err error) {
+	if err == nil {
+		return
+	}
+	c.inbox.mu.Lock()
+	c.inbox.startFailure = err.Error()
+	c.inbox.mu.Unlock()
+}
+
+func (c *Controller) clearInboxStartFailure() {
+	c.inbox.mu.Lock()
+	c.inbox.startFailure = ""
+	c.inbox.mu.Unlock()
+}
+
+// inboxStartFailure reads the recorded start failure under the inbox lock.
+func (c *Controller) inboxStartFailure() string {
+	c.inbox.mu.Lock()
+	defer c.inbox.mu.Unlock()
+	return c.inbox.startFailure
 }
 
 // inboxDispatchGate names the gate that currently holds queued work, checked in
@@ -239,6 +269,11 @@ func (c *Controller) inboxDispatchGate() string {
 		// The host's publication hook owns the next kick; its answer is only
 		// visible to the dispatcher, never to the receipt.
 		return sessioninbox.GateHostDispatch
+	}
+	// The queue is open and nothing is holding it: if the last start attempt
+	// failed, that failure is the reason this line is still here.
+	if c.inboxStartFailure() != "" {
+		return sessioninbox.GateStartFailed
 	}
 	return ""
 }

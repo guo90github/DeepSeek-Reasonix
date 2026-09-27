@@ -289,10 +289,13 @@ the item is still waiting for a turn it also carries:
 
 - `gate`, the stable id of the runtime gate holding it (`awaiting_answer`,
   `turn_running`, `turn_finishing`, `rotating`, `closed`, `no_session_path`,
-  `paused`, `readonly`, `host_dispatch`);
+  `paused`, `readonly`, `host_dispatch`, `start_failed`);
 - `gateReason`, that gate's own sentence for a sender to relay verbatim. A host
   whose publication hook can say why it did not publish sends its own sentence;
-  the gate template is only the fallback for a host that named no reason;
+  the gate template is only the fallback for a host that named no reason. For
+  `start_failed` the sentence is the failure itself (context overflow,
+  compaction, or provider error), because that is the only part a reader can
+  act on;
 - `pendingPrompt`, true only when a human has to answer or approve before the
   item can run;
 - `state`, the item's durable lifecycle **now** (`queued`, `steer_accepted`,
@@ -300,10 +303,11 @@ the item is still waiting for a turn it also carries:
   current value, not the one from enqueue time;
 - `resumable`, whether **another wake would still lift** this item. `false`
   means only a person can, either because the gate is one a human clears
-  (`closed`, `paused`, `readonly`, `no_session_path`, `awaiting_answer`) or
-  because the host answered that nothing hosts the runtime any more; a sender
-  escalates on it. `true` or absent means the item waits on something that
-  passes by itself;
+  (`closed`, `paused`, `readonly`, `no_session_path`, `awaiting_answer`), because
+  the start itself failed (`start_failed`: re-posting the same line would fail
+  the same way), or because the host answered that nothing hosts the runtime any
+  more; a sender escalates on it. `true` or absent means the item waits on
+  something that passes by itself;
 - `retryable` with `retryReason`: `false` means re-posting the same wake cannot
   change the outcome — the item is still held by `host_dispatch` and the host
   let all four of its deferrals (1s/3s/10s/30s) pass — and `retryReason` is the
@@ -387,7 +391,7 @@ key + same content ⇒ `disposition=idempotent_hit`, same key + different conten
 ⇒ `409`; "same content" is the request fingerprint, which excludes `@`
 reference material materialized at enqueue.
 
-### Producing each of the six queue situations
+### Producing each of the seven queue situations
 
 Every recipe uses the same yardstick: post one wake for that session carrying
 `X-Reasonix-Session-Path`, then read the `202` receipt (or the
@@ -421,6 +425,14 @@ desktop or `reasonix web` exposes, `<session>` the session file path.
    desktop cannot hand it to that session) or lands in `host_dispatch` (case 1).
    `no_session_path` is the same shape: it lives in the dispatcher's own
    decision and is always a `409` on the wire, never a receipt.
+7. **start_failed (the queue is open and the start itself failed)**: leave a
+   queued item whose dispatch attempt fails — the session's context is over the
+   model window, compaction cannot rescue it, or the provider rejects the turn.
+   The receipt carries `gate=start_failed`, `resumable=false`, and a
+   `gateReason` quoting the failure. It is the one situation where the queue is
+   not held by anybody: without it a sender sees `202` plus `idle` and cannot
+   tell a stalled session from a slow one. The gate clears when a start
+   succeeds, or when the queue empties.
 
 MCP servers reached over HTTP/SSE are not child processes and receive none of
 this environment.

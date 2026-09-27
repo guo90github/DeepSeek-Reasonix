@@ -98,6 +98,10 @@ type inboxState struct {
 	dispatchRetryAttempts  int
 	dispatchRetryScheduled bool
 	dispatchDeferAttempts  int
+	// startFailure is the last attempt that failed to start a queued turn; a
+	// queued line with an open queue is otherwise indistinguishable from
+	// "nothing happened yet". Cleared when a turn starts. Guarded by mu.
+	startFailure string
 	// beforePreparedAdmission is a deterministic test hook for the gap between
 	// durable preparation and Controller admission. Production leaves it nil.
 	beforePreparedAdmission func()

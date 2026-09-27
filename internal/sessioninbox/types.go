@@ -68,7 +68,10 @@ const (
 // Gate names the runtime gate that currently keeps a queued item from being
 // admitted as a turn, so a queued receipt can say what it waits on instead of
 // only that it waits. host_dispatch means the host's publication hook owns the
-// next kick and the controller cannot see its answer.
+// next kick and the controller cannot see its answer; start_failed means the
+// queue was open and the last attempt to start a turn itself failed (context
+// overflow, compaction, or provider failure), which is the one case a queued
+// line otherwise looks identical to "nothing happened".
 const (
 	GateAwaitingAnswer = "awaiting_answer"
 	GateTurnRunning    = "turn_running"
@@ -79,6 +82,7 @@ const (
 	GatePaused         = "paused"
 	GateReadonly       = "readonly"
 	GateHostDispatch   = "host_dispatch"
+	GateStartFailed    = "start_failed"
 )
 
 // Sentinel errors for capacity and validation.

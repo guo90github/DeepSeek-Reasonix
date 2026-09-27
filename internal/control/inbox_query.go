@@ -131,6 +131,11 @@ func (c *Controller) InboxDispatchWait(itemID string) (gate, reason string, resu
 		return "", "", false, false
 	}
 	gate = c.inboxDispatchGate()
+	if gate == sessioninbox.GateStartFailed {
+		// The dynamic sentence beats the gate's own class text: what failed is
+		// the only thing a reader can act on.
+		return gate, c.inboxStartFailure(), false, true
+	}
 	reason, resumable, refused := c.inboxHostRefusalFor(itemID)
 	return gate, reason, resumable, gate != "" || refused
 }

@@ -253,16 +253,19 @@ fragment 中，不会随请求进入服务器日志；旧版 serve 自动回退 
 
 - `gate`：此刻关着它的那道闸的稳定 ID（`awaiting_answer`、`turn_running`、
   `turn_finishing`、`rotating`、`closed`、`no_session_path`、`paused`、`readonly`、
-  `host_dispatch`）；
+  `host_dispatch`、`start_failed`）；
 - `gateReason`：这道闸的原因原话，发送方照抄不改写。宿主（桌面发布钩子）答得出
   "为什么没发布"时给的就是宿主自己的那句话，宿主没给原因时才回落成该闸的模板句；
+  `start_failed` 给的就是那次失败本身（上下文超窗、压缩失败或模型报错），因为那是
+  读的人唯一能据以动手的东西；
 - `pendingPrompt`：只在"必须先有人回答或审批才能跑"时为真；
 - `state`：条目**此刻**的持久状态（`queued`、`steer_accepted`、`steer_consumed`、
   `running`、`blocked`、`uncertain`），回查给的是当前值，不是入队那一刻的值；
 - `resumable`：**此刻再投一条还能不能把它拉起来**。`false` 表示只有人能解开
-  （`closed`／`paused`／`readonly`／`no_session_path`／`awaiting_answer` 这几道闸，
-  或宿主答"已经没有运行时在托管它"），发送方据此升级给人；`true` 或省略表示它在
-  等一件自己会过去的事，不用人管；
+  （`closed`／`paused`／`readonly`／`no_session_path`／`awaiting_answer` 这几道闸、
+  起回合本身失败过（`start_failed`：同一条再投一次会照样失败），或宿主答"已经没有
+  运行时在托管它"），发送方据此升级给人；`true` 或省略表示它在等一件自己会过去的
+  事，不用人管；
 - `retryable` + `retryReason`：`false` 表示重投同一张欠条不会改变结果——条目仍被
   `host_dispatch` 挡着而宿主的四次退避（1s／3s／10s／30s）已经走完，`retryReason`
   是那句话；省略表示重投仍然是对的。
@@ -331,7 +334,7 @@ fragment 中，不会随请求进入服务器日志；旧版 serve 自动回退 
 `disposition=idempotent_hit`，同键 + 异内容 ⇒ `409`；这里的"同内容"是请求指纹，不含
 入队时物化的 `@` 引用材料。
 
-### 验收：把六种排队处境各自造出来一次
+### 验收：把七种排队处境各自造出来一次
 
 下面每条都用同一把尺子：向该会话投一条带 `X-Reasonix-Session-Path` 的唤醒，再看
 `202` 回执（或 `GET /inbox/receipt?key=…` 的回查）说了什么。`<endpoint>` 是桌面端或
@@ -355,6 +358,11 @@ fragment 中，不会随请求进入服务器日志；旧版 serve 自动回退 
    绑在它身上的一瞬。稳定复现的做法是**不要靠它**：标签页关掉之后，投递要么被拒绝
    （`409`，桌面端无法把这条交给那个会话），要么落进 `host_dispatch`（见第 1 条）。
    `no_session_path` 同理，只存在于派发器自己的判定里，对外一律是 `409`，不是回执。
+7. **start_failed（队列开着、起回合本身失败）**：让一条排队条目的派发尝试失败——
+   会话上下文超窗、压缩救不回来，或模型直接拒绝这一轮。回执带 `gate=start_failed`、
+   `resumable=false`，`gateReason` 引的就是那句失败原文。这是唯一"没有任何闸关着"
+   的处境：没有它，发送方只看到 `202` 加 `idle`，分不出会话卡死和会话慢。起回合
+   成功、或队列空了，这道闸就清掉。
 
 以 HTTP/SSE 接入的 MCP 服务器不是子进程，不会拿到这套环境。
 

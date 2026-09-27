@@ -23,6 +23,8 @@ func GateReasonText(gate string) string {
 		return "它的队列是只读的，这一条不会被派发。"
 	case GateHostDispatch:
 		return "下一脚派发归宿主（桌面发布钩子）所有，会话这一侧看不到它何时放行。"
+	case GateStartFailed:
+		return "队列没被谁握住，是上一次起回合本身失败了（上下文超窗、压缩或模型报错），所以它一直排在那里。"
 	default:
 		return ""
 	}
@@ -37,7 +39,7 @@ func GateWaitsForUser(gate string) bool { return gate == GateAwaitingAnswer }
 // until someone opens the session, resumes the queue, or answers the prompt.
 func GateResumable(gate string) bool {
 	switch gate {
-	case GateAwaitingAnswer, GateClosed, GateNoSessionPath, GatePaused, GateReadonly:
+	case GateAwaitingAnswer, GateClosed, GateNoSessionPath, GatePaused, GateReadonly, GateStartFailed:
 		return false
 	default:
 		return true
