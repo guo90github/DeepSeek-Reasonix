@@ -68,12 +68,12 @@
 ## 7 `WAKE-SRC-1` 房间唤醒来历：`room-wake` + `seq`（房间代拍＋`seq`）
 
 - **来源**：房间 `P0/B27-A2`（宿主侧）、裁定 `#64`（`COLLAB.md §17.1`：可带 `seq`、只做加法、四前提）、同步条 `P1/B27-A8`。
-- **状态**：**已落（宿主侧受理 + 标记）**，本地未推。落地面：
+- **状态**：**已落（宿主侧受理 + 标记）**，本地提交 `083f6505e`（未推）。落地面：
   - `internal/control/inbox_wake_marker.go`：具名集合加 `room-wake`；条目带 `room.seq` 时标记打 ` seq=<n>`；`WakeSourceFor` 是两条入库路由**共用**的唯一判定（不许各判一份）。
   - `internal/serve/inbox.go`：`POST /inbox/items` 接受可选字符串键 `seq`（发送侧 body 是 `map[string]string`），转成 `room.seq` 填 `Extra`；`Source` 由固定 `"http"` 改为 `WakeSourceFor(…, "http")`。宿主解析器**不** `DisallowUnknownFields` ⇒ 老发送方少带/多带键都不受影响（`internal/serve/inbox.go:138`）。
   - `internal/boot/inbox_wake.go`：push 路同样改走 `WakeSourceFor(…, "push")`。
 - **未落（在账，两条）**：
-  1. **发送侧（chatting）还没带 `seq`** ⇒ 今天真机唤醒仍会是 `[remote wake source=http item=<uuid>]`，房间行号对不上账。判据＝那条唤醒对应 `GET /inbox/items/{id}` 的 `source` 变 `room-wake`、`room.seq` 有值。
+  1. **发送侧**：对侧已落（聊天仓 `wake.go:750` 加 `payload["seq"]`，房间 `#104`；对侧未推）⇒ 本条改盯**两端接上**：真机唤醒的条目应带 `source=room-wake` 且 `room.seq` 有值；判据＝`GET /inbox/items/{id}` 读这两栏（此前只有 `source=http`、无 `room`）。
   2. **HTTP 路只接了 `seq`**：`from` / `topic` / `kind` / `origin` / `mentions` / `panel` 仍只有 push 路有 ⇒ HTTP 送达的房间条目在引导货架上没有边栏（`room.panel` 还牵一条非 http(s) 过滤要一起搬）。
 - **口径**：按 §17.1② 不许拿正文里的 `#<seq>` 文本当字段替身；seq 缺席就是缺席（不猜、不伪造）。
 - **可红判据**：`go test ./internal/boot/ -run Wake`、`go test ./internal/serve/ -run TestInboxItemEndpoint`、`go test ./internal/control/ -run TestWakeMarker` 三处全绿；反例＝把 `WakeSourceFor` 退回固定值，对应用例当场红。
