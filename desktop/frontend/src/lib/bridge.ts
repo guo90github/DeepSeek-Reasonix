@@ -264,6 +264,24 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
     maxItems: number;
     maxBytes: number;
   }>;
+  // Asks what this session holds for one room line, by the seq the room prints.
+  // found=false with an ending means the line left the queue; optional because a
+  // host older than this belongs to the same contract as the rest of the surface.
+  InboxRoomLine?(tabID: string, seq: number): Promise<{
+    found: boolean;
+    line?: {
+      itemId?: string;
+      state?: string;
+      source?: string;
+      gate?: string;
+      reason?: string;
+      refused?: boolean;
+      resumable?: boolean;
+      queuedForMs?: number;
+      settled?: string;
+      settledAt?: string;
+    };
+  }>;
   EnqueueInboxSteer(tabID: string, display: string, submit: string, idempotency: string): Promise<{ itemId: string; disposition: string; position: number; paused: boolean; idempotent?: boolean; error?: string }>;
   EnqueueInboxSteerForTurn?(tabID: string, turnID: string, display: string, submit: string, idempotency: string): Promise<{ itemId: string; disposition: string; position: number; paused: boolean; idempotent?: boolean; error?: string }>;
   SteerInboxItem(tabID: string, itemID: string): Promise<{
