@@ -80,12 +80,17 @@ export function ComposerGuidanceShelf({
   const hiddenCount = Math.max(0, items.length - 2);
   const [editingId, setEditingId] = useState<string | null>(null);
   // One answer per row: what the host says about that room line, asked on demand
-  // (never inferred), and never invented when the question cannot be asked.
-  const [roomLineAnswers, setRoomLineAnswers] = useState<Record<string, string>>({});
+  // (never inferred), and never invented when the question cannot be asked. The
+  // hour it was asked rides along, so an old answer can never read as the current
+  // one — asking again replaces it rather than stacking a second one.
+  const [roomLineAnswers, setRoomLineAnswers] = useState<Record<string, { text: string; askedAt: string }>>({});
   const askRoomLine = (id: string, seq: number) => {
     // A host that cannot be asked is an answer of its own: say so, and never turn
     // a failure into silence or into an ending nobody reported.
-    const answer = (text: string) => setRoomLineAnswers((prev) => ({ ...prev, [id]: text }));
+    const answer = (text: string) => setRoomLineAnswers((prev) => ({
+      ...prev,
+      [id]: { text, askedAt: new Date().toLocaleTimeString() },
+    }));
     const unknown = t("composer.guidanceRoomLineUnknown");
     try {
       const ask = app.InboxRoomLine;
@@ -246,11 +251,13 @@ export function ComposerGuidanceShelf({
                         aria-label={t("composer.guidanceAskRoomLine")}
                         onClick={() => askRoomLine(item.id, item.room?.seq || 0)}
                       >
-                        {t("composer.guidanceAskRoomLine")}
+                        {roomLineAnswers[item.id] ? t("composer.guidanceRoomLineAskAgain") : t("composer.guidanceAskRoomLine")}
                       </button>
                       {roomLineAnswers[item.id] && (
                         <span className="composer-guidance-item__roomline">
-                          {roomLineAnswers[item.id]}
+                          {roomLineAnswers[item.id].text}
+                          {" · "}
+                          {t("composer.guidanceRoomLineAskedAt", { time: roomLineAnswers[item.id].askedAt })}
                         </span>
                       )}
                     </>

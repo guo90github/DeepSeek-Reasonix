@@ -955,6 +955,8 @@ export const zh: Record<DictKey, string> = {
   "composer.guidanceWaitSeconds": "已等 {seconds} 秒",
   "composer.guidanceWaitGate": "卡在 {gate}",
   "composer.guidanceAskRoomLine": "问一下宿主",
+  "composer.guidanceRoomLineAskAgain": "再问一次",
+  "composer.guidanceRoomLineAskedAt": "{time} 问的",
   "composer.guidanceRoomLineQueued": "宿主说：还在它的队列里",
   "composer.guidanceRoomLineSettled": "宿主说：已经离开队列——{settled}",
   "composer.guidanceRoomLineNever": "宿主说：没收过这一条",

@@ -45,21 +45,23 @@ async function ask(answer: () => Promise<unknown>): Promise<string> {
 }
 
 const queued = await ask(async () => ({ found: true, line: { state: "queued" } }));
-assert.equal(queued, "宿主说：还在它的队列里", `still queued reads as an answer, got: ${queued}`);
+assert.ok(queued.startsWith("宿主说：还在它的队列里"), `still queued reads as an answer, got: ${queued}`);
+// An answer without the hour it was asked is an old answer pretending to be new.
+assert.match(queued, / · \d{1,2}:\d{2}:\d{2} 问的$/, `the answer must carry when it was asked, got: ${queued}`);
 
 const settled = await ask(async () => ({ found: false, line: { settled: "acknowledged", settledAt: "2026-09-26T00:00:00Z" } }));
-assert.equal(settled, "宿主说：已经离开队列——acknowledged（跑完并确认）",
+assert.ok(settled.startsWith("宿主说：已经离开队列——acknowledged（跑完并确认）"),
   `the ending is printed with the host's own word, got: ${settled}`);
 
 const cancelled = await ask(async () => ({ found: false, line: { settled: "discarded" } }));
-assert.equal(cancelled, "宿主说：已经离开队列——discarded（被丢弃）", `got: ${cancelled}`);
+assert.ok(cancelled.startsWith("宿主说：已经离开队列——discarded（被丢弃）"), `got: ${cancelled}`);
 
 const never = await ask(async () => ({ found: false }));
-assert.equal(never, "宿主说：没收过这一条", `got: ${never}`);
+assert.ok(never.startsWith("宿主说：没收过这一条"), `got: ${never}`);
 
 // A question that could not be asked must say exactly that — not silence, and
 // certainly not an ending nobody reported.
 const unreachable = await ask(async () => { throw new Error("host unreachable"); });
-assert.equal(unreachable, "问不到宿主，未知", `got: ${unreachable}`);
+assert.ok(unreachable.startsWith("问不到宿主，未知"), `got: ${unreachable}`);
 
 process.stdout.write("\ninbox room-line ask: all assertions passed\n");

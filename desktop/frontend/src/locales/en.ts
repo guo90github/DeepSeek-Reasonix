@@ -954,6 +954,8 @@ export const en = {
   "composer.guidanceWaitSeconds": "waiting {seconds}s",
   "composer.guidanceWaitGate": "waiting on {gate}",
   "composer.guidanceAskRoomLine": "Ask the host",
+  "composer.guidanceRoomLineAskAgain": "Ask again",
+  "composer.guidanceRoomLineAskedAt": "asked at {time}",
   "composer.guidanceRoomLineQueued": "Host says: still in its queue",
   "composer.guidanceRoomLineSettled": "Host says: it left the queue — {settled}",
   "composer.guidanceRoomLineNever": "Host says: it never took that line",
