@@ -80,12 +80,19 @@ gofmt -w .                          # catches gofmt (saves ~13s CI)
 go vet ./...                        # catches vet warnings (saves ~52s CI/lint)
 make lint                           # golangci-lint at CI's pin + repolint
 go test ./internal/tool/builtin/ ./internal/boot/  # catches tool/boot test breaks
+make frontend-check                 # app tsconfig typecheck (see the note below)
 ```
 
 `make lint` runs both gates CI runs, at the version in `.golangci-version`;
 `make lint-install` installs it. Do not skip it: a `modernize` finding never
 shows up in `go vet`, and the CI round trip that catches it instead costs ten
 minutes.
+
+`make frontend-check` catches what CI only catches late: the unit job runs the
+*test* tsconfig, while the *app* tsconfig typecheck lives inside the packaging
+build — which `REASONIX_LOCAL_SKIP_CHECKS=1` skips on this machine. An
+undefined identifier in app code therefore reaches the app as a runtime
+`ReferenceError`; the typecheck names it in a second.
 
 ## Import cycle rule
 

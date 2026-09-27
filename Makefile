@@ -9,7 +9,7 @@ GOEXE := $(shell go env GOEXE)
 # One pin for the Makefile and the CI lint job; see .github/workflows/ci.yml.
 GOLANGCI_VERSION := $(shell cat .golangci-version)
 
-.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update test desktop-test desktop-test-short desktop-test-times sdk-test sdk-test-race hooks cross clean
+.PHONY: build vet fmt lint lint-go lint-install lint-cross lint-update test frontend-check desktop-test desktop-test-short desktop-test-times sdk-test sdk-test-race hooks cross clean
 
 build:
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o bin/reasonix$(GOEXE) ./cmd/reasonix
@@ -51,6 +51,13 @@ lint-cross:
 
 test:
 	go test ./...
+
+# The app tsconfig, not the test one: CI runs the test tsconfig in the unit job,
+# while the app typecheck lives inside the packaging build — which the local
+# packaging SOP skips. Without this target a frontend type error is invisible
+# here (an undefined identifier in app code becomes a runtime ReferenceError).
+frontend-check:
+	cd desktop/frontend && npx tsc --noEmit
 
 desktop-test:
 	cd desktop && go test .
