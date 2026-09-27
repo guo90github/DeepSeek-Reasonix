@@ -5163,6 +5163,36 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/inbox_room_line.go",
+      "name": "InboxRoomLine",
+      "owner": "App.InboxRoomLine",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "integer"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.InboxRoomLineView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tabID",
+          "seq"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.InboxRoomLine"
+      },
+      "sources": [
+        "desktop/inbox_room_line.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/inbox_app.go",
       "name": "InboxSnapshot",
       "owner": "App.InboxSnapshot",
@@ -16539,6 +16569,27 @@
           "type": {
             "kind": "string"
           }
+        },
+        {
+          "name": "wake_method",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "wake_armed",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "last_wake",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
         }
       ]
     },
@@ -17046,6 +17097,85 @@
         },
         {
           "name": "responsesMode",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "control.InboxRoomLine": {
+      "fields": [
+        {
+          "name": "itemId",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "state",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "source",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "preview",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "gate",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reason",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "resumable",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "refused",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "queuedForMs",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "settled",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "settledAt",
           "optional": true,
           "type": {
             "kind": "string"
@@ -24614,6 +24744,41 @@
             },
             "kind": "nullable"
           }
+        },
+        {
+          "name": "waitRefused",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "waitGate",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "waitReason",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "waitResumable",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "waitMs",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
         }
       ]
     },
@@ -24655,6 +24820,27 @@
           "optional": true,
           "type": {
             "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.InboxRoomLineView": {
+      "fields": [
+        {
+          "name": "found",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "line",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "control.InboxRoomLine"
+            },
+            "kind": "nullable"
           }
         }
       ]

@@ -2781,6 +2781,21 @@
       ]
     }
   },
+  "InboxRoomLine": {
+    "domain": "desktop/inbox_room_line.go",
+    "owner": "App.InboxRoomLine",
+    "sources": [
+      "desktop/inbox_room_line.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.InboxRoomLine",
+      "inputs": [
+        "tabID",
+        "seq"
+      ]
+    }
+  },
   "InboxSnapshot": {
     "domain": "desktop/inbox_app.go",
     "owner": "App.InboxSnapshot",

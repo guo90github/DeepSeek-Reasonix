@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:f91ab156aff37734da1ae840f05c64cefb33909ede94b1e44dc69c8ce03cb1fc";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:c5d934d1418d8ef55e33ef88d623729cd25b1601a2ff69eb6d40710aa7bd24eb";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -201,6 +201,7 @@ export const DESKTOP_COMMANDS = [
   "HooksSettings",
   "ImportThemePack",
   "InboxHasItems",
+  "InboxRoomLine",
   "InboxSnapshot",
   "InspectWorktreeMerge",
   "InstallMCPServer",
@@ -787,6 +788,9 @@ export interface MCPServerInfo {
   startup_stage?: string;
   startup_elapsed_ms?: number;
   stderr?: string;
+  wake_method?: string;
+  wake_armed?: boolean;
+  last_wake?: string;
 }
 
 export interface MCPToolInfo {
@@ -887,6 +891,20 @@ export interface ProviderProtocolEndpoint {
   checkedOn: string;
   authHeader?: boolean;
   responsesMode?: string;
+}
+
+export interface InboxRoomLine {
+  itemId: string;
+  state: string;
+  source?: string;
+  preview?: string;
+  gate?: string;
+  reason?: string;
+  resumable?: boolean;
+  refused?: boolean;
+  queuedForMs?: number;
+  settled?: string;
+  settledAt?: string;
 }
 
 export interface SessionAuditIssue {
@@ -2261,6 +2279,11 @@ export interface InboxItemView {
   createdAt?: string;
   position: number;
   room?: InboxRoomView | null;
+  waitRefused?: boolean;
+  waitGate?: string;
+  waitReason?: string;
+  waitResumable?: boolean;
+  waitMs?: number;
 }
 
 export interface InboxReceiptView {
@@ -2270,6 +2293,11 @@ export interface InboxReceiptView {
   paused: boolean;
   idempotent?: boolean;
   error?: string;
+}
+
+export interface InboxRoomLineView {
+  found: boolean;
+  line?: InboxRoomLine | null;
 }
 
 export interface InboxRoomView {
@@ -4571,6 +4599,7 @@ export interface GeneratedDesktopCommands {
   HooksSettings(arg0: string): Promise<HooksSettingsView>;
   ImportThemePack(arg0: string, arg1: boolean): Promise<ThemeImportResult>;
   InboxHasItems(arg0: string): Promise<boolean>;
+  InboxRoomLine(arg0: string, arg1: number): Promise<InboxRoomLineView>;
   InboxSnapshot(arg0: string): Promise<InboxSnapshotView>;
   InspectWorktreeMerge(arg0: string): Promise<MergeInspection>;
   InstallMCPServer(arg0: MCPServerInput): Promise<MCPInstallResult>;
