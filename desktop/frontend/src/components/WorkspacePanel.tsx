@@ -24,6 +24,7 @@ import {
   X,
 } from "lucide-react";
 import { asArray } from "../lib/array";
+import { normalizeCompletionSummary } from "../lib/completionSummary";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import {
@@ -197,7 +198,8 @@ export function WorkspacePanel({
     && verificationRevealRequest.turnStartAt === turnStartAt
     && verificationRevealRequest.sessionPath === sessionPath ? verificationRevealRequest : null;
   const requestedSummary = activeVerificationRevealRequest?.summary;
-  const visibleCompletionSummary = requestedSummary?.turnId && requestedSummary.turnId === completionSummary?.turnId ? completionSummary : requestedSummary ?? completionSummary;
+  const visibleSummary = requestedSummary?.turnId && requestedSummary.turnId === completionSummary?.turnId ? completionSummary : requestedSummary ?? completionSummary;
+  const visibleCompletionSummary = useMemo(() => visibleSummary ? normalizeCompletionSummary(visibleSummary) : undefined, [visibleSummary]);
   const workspaceScopeKey = workspaceScopeKeyProp ?? `${workspaceTabId}\u0000${cwd ?? ""}`;
   const lastWorkspaceScopeKeyRef = useRef(workspaceScopeKey);
   const scopeSwitchPendingRef = useRef(false);

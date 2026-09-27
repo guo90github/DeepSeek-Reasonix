@@ -156,6 +156,16 @@ console.log("\nworkspace turn verification");
 }
 
 {
+  const current = summary(3);
+  const request = { id: 8, summary: { turnId: "turn-raw", mutations: 1 } as unknown as WireCompletionSummary, tabId: "tab-a", turnStartAt: 420, sessionPath: "/raw.json", view: "checks" as const };
+  const { dom, root } = await createHarness({ initialViewMode: "changed", completionSummary: current, sessionPath: "/raw.json", verificationRevealRequest: request, turnStartAt: 420 });
+  await waitFor("reveal without a verdict", () => document.getElementById(WORKSPACE_TURN_VERIFICATION_ID) !== null);
+  ok(document.getElementById(WORKSPACE_TURN_VERIFICATION_ID) !== null, "a reveal request whose summary has no verdict renders the check panel");
+  ok(document.querySelector(".workspace-completion-summary--attention") === null, "a missing verdict does not raise the attention flag");
+  await closeHarness(dom, root);
+}
+
+{
   const current = summary(2);
   const historical = { ...summary(7), receipt: { verdict: "partial", verifications: [{ command: "go test ./...", passed: false, exitCode: 1, toolCallId: "check-old", stale: true }] } };
   const request = { id: 1, summary: historical, tabId: "tab-a", turnStartAt: 100, currentSummary: current, sessionPath: "/old.json", view: "checks" as const };

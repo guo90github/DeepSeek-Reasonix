@@ -17,15 +17,16 @@ export function historicalResultNotice(message: HistoryMessage, id: string): Ext
 
 /** Replace only the current user turn's result, keeping its mounted identity. */
 export function withTurnResult(s: State, summary: WireCompletionSummary): State {
+  const normalized = normalizeCompletionSummary(summary);
   const boundary = lastUserIndex(s.items);
   const index = s.items.findIndex((item, i) => i > boundary && item.kind === "notice" && item.variant === "completion");
-  const presentation = completionSummaryPresentation(summary, sessionQualityFloor(s.meta), t);
-  if (!presentation) return { ...s, completionSummary: summary, items: index < 0 ? s.items : s.items.filter((_, i) => i !== index) };
+  const presentation = completionSummaryPresentation(normalized, sessionQualityFloor(s.meta), t);
+  if (!presentation) return { ...s, completionSummary: normalized, items: index < 0 ? s.items : s.items.filter((_, i) => i !== index) };
   const id = index < 0 ? `q${s.seq}` : s.items[index].id;
-  const notice: Item = { kind: "notice", id, variant: "completion", action: "open_changes", level: presentation.level, title: presentation.title, text: presentation.body, completionSummary: summary };
+  const notice: Item = { kind: "notice", id, variant: "completion", action: "open_changes", level: presentation.level, title: presentation.title, text: presentation.body, completionSummary: normalized };
   const items = [...s.items];
   if (index < 0) items.push(notice); else items[index] = notice;
-  return { ...s, completionSummary: summary, items, seq: s.seq + Number(index < 0) };
+  return { ...s, completionSummary: normalized, items, seq: s.seq + Number(index < 0) };
 }
 
 export function withRunningChecks(s: State): State {

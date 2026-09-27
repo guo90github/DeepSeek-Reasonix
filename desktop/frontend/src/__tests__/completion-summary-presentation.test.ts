@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { completionSummaryPresentation, normalizeCompletionSummary } from "../lib/completionSummary";
+import { completionSummaryNeedsAttention, completionSummaryPresentation, normalizeCompletionSummary } from "../lib/completionSummary";
 import { mergeTurnResult, normalizeTurnChanges, turnChangeText, turnCheckState } from "../lib/turnResult";
 import { historicalResultNotice, withTurnResult, withRunningChecks } from "../lib/completionResultState";
 import { partitionTurnItems } from "../lib/transcriptRows";
 import { initialState, type State, type Item } from "../lib/useController";
 import { t } from "../lib/i18n";
-import type { TurnChanges } from "../lib/types";
+import type { TurnChanges, WireCompletionSummary } from "../lib/types";
 
 const diff: TurnChanges = { id: "0:1", turn: 0, coverage: "complete", files: [{ path: "a.ts", kind: "modify", added: 2, removed: 1 }], added: 2, removed: 1, reasons: [] };
 const legacy = { ...mergeTurnResult(), mutations: 17, changed_files: 9 };
@@ -16,7 +16,7 @@ const result = normalizeCompletionSummary(mergeTurnResult(legacy, receipt, "turn
 assert.equal(result.checkpointTurn, 0);
 assert.match(turnChangeText(result, t), /1.*file.*\+2 −1/);
 assert.equal(turnCheckState(result).status, "none");
-assert.equal(completionSummaryPresentation(result, "standard", t)?.title, "Turn result");
+assert.equal(completionSummaryPresentation(result, "standard", t)?.title, t("notice.completionChangesTitle"));
 assert.match(turnChangeText(mergeTurnResult(undefined, { ...receipt, diff: { ...diff, coverage: "partial" } }), t), /partial/i);
 assert.equal(normalizeTurnChanges({ ...diff, added: -1 })?.coverage, "unknown");
 for (const [check, expected] of [
@@ -39,6 +39,11 @@ state = withRunningChecks({ ...state, items: [...state.items, tool("c1"), tool("
 assert.equal(state.completionSummary?.liveChecks?.length, 2);
 state = withRunningChecks({ ...state, items: state.items.map(i => i.kind === "tool" && i.id === "c1" ? { ...i, status: "done" } : i) });
 assert.equal(state.completionSummary?.checking, true, "one completed parallel check does not stop the other");
+assert.equal(completionSummaryNeedsAttention({ turnId: "turn-raw", mutations: 1 } as WireCompletionSummary), false, "a summary with no verdict is read as unremarkable instead of throwing");
+const rawTurn = withTurnResult({ ...initialState, items: [{ kind: "user", id: "u9", text: "go" }], seq: 30 } as State, { turnId: "turn-raw", mutations: 2 } as WireCompletionSummary);
+assert.equal(rawTurn.completionSummary?.verdict, "", "the turn result writer stores a string verdict");
+assert.equal(rawTurn.completionSummary?.floor, "", "the turn result writer stores a recorded floor slot");
+assert.equal(rawTurn.items.filter(i => i.kind === "notice").at(-1)!.completionSummary?.verdict, "", "the published notice carries the same normalized summary");
 const history = historicalResultNotice({ role: "notice", content: "", completionReceipt: receipt, checkpointTurn: 0, turnId: "turn-0" }, "history");
 assert.equal(history?.completionSummary?.receipt?.diff?.id, diff.id);
 assert.equal(history?.completionSummary?.checkpointTurn, 0);

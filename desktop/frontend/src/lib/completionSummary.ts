@@ -41,7 +41,7 @@ export function completionSummaryNeedsAttention(
   if (!summary) return false;
   const recordedFloor = (summary.floor ?? "").trim().toLowerCase();
   if (recordedFloor === "standard" || recordedFloor === "delivery") return Boolean(summary.attention);
-  const verdict = summary.verdict.trim().toLowerCase();
+  const verdict = String(summary.verdict ?? "").trim().toLowerCase();
   const kinds = new Set((summary.gap_kinds ?? []).map((gap) => gap.trim().toLowerCase()).filter(Boolean));
   if (verdict === "blocked" || summary.checks_failed > 0 || summary.checks_suppressed > 0) return true;
   if (kinds.has("unbacked_claim") || kinds.has("failed_verification")) return true;
