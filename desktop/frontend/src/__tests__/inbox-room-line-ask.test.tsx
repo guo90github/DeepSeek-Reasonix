@@ -52,7 +52,7 @@ assert.equal(settled, "宿主说：已经离开队列——acknowledged（跑完
   `the ending is printed with the host's own word, got: ${settled}`);
 
 const cancelled = await ask(async () => ({ found: false, line: { settled: "discarded" } }));
-assert.equal(cancelled, "宿主说：已经离开队列——discarded（被取消）", `got: ${cancelled}`);
+assert.equal(cancelled, "宿主说：已经离开队列——discarded（被丢弃）", `got: ${cancelled}`);
 
 const never = await ask(async () => ({ found: false }));
 assert.equal(never, "宿主说：没收过这一条", `got: ${never}`);

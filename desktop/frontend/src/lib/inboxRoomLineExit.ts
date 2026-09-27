@@ -22,7 +22,7 @@ export type RoomLineExit =
 // passed through as its own word rather than explained into a claim nobody made.
 const settledGloss: Record<string, string> = {
   acknowledged: "跑完并确认",
-  discarded: "被取消",
+  discarded: "被丢弃",
   deleted: "被删掉",
 };
 

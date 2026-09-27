@@ -28,7 +28,7 @@ assert.deepEqual(roomLineExit({ found: false, line: {} }), { kind: "never" },
   "found=false without the ending column is never seen, not a guessed ending");
 
 assert.equal(settledLabel("acknowledged"), "acknowledged（跑完并确认）", "a known word carries its gloss");
-assert.equal(settledLabel("discarded"), "discarded（被取消）");
+assert.equal(settledLabel("discarded"), "discarded（被丢弃）");
 assert.equal(settledLabel("deleted"), "deleted（被删掉）");
 assert.equal(settledLabel("weird_new_word"), "weird_new_word", "an unknown word is passed through, never explained");
 assert.equal(settledLabel("  "), "", "an empty word says nothing");
