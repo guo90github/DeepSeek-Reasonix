@@ -83,11 +83,14 @@ func (s *Server) inboxRoomLine(w http.ResponseWriter, r *http.Request) {
 	}
 	line, found := lookup.InboxRoomLineFor(seq)
 	w.Header().Set("Content-Type", "application/json")
-	if !found {
+	// A line that already left the queue is still an answer: found stays false, and
+	// the ending it carries is what separates "ran, then was cancelled" from "never
+	// took it in". Dropping it here is how that distinction died on the wire before.
+	if !found && line.Settled == "" {
 		_ = json.NewEncoder(w).Encode(map[string]any{"found": false})
 		return
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{"found": true, "line": line})
+	_ = json.NewEncoder(w).Encode(map[string]any{"found": found, "line": line})
 }
 
 // validateInboxReadSessionLocked keeps legacy unscoped reads compatible while
