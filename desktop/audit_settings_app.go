@@ -2,10 +2,9 @@ package main
 
 import "reasonix/internal/config"
 
-// The audit settings are user-triggered configuration only; they do not rebuild
-// the controller (the audit model is resolved lazily at AuditTurn time, and the
-// input ceiling is read from the controller built for the tab). All setters
-// persist through the shared config-edit path.
+// The audit settings are user-triggered configuration only: they do not rebuild
+// the controller (the audit model is resolved lazily at AuditTurn time). Every
+// setter persists through the shared config-edit path.
 
 // SetAuditModel configures the standalone model used for manual reasoning audits.
 func (a *App) SetAuditModel(name string) error {

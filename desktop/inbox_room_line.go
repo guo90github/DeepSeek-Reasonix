@@ -35,9 +35,8 @@ func (a *App) InboxRoomLine(tabID string, seq int64) (InboxRoomLineView, error) 
 	}
 	line, found := lookup.InboxRoomLineFor(seq)
 	// A line that already left the queue is still an answer: found stays false and
-	// the ending it carries separates "ran, then cancelled" from "never took it in".
-	// The endpoint answers the same way; dropping it here is how the two surfaces
-	// told a caller different things about one line.
+	// the ending it carries separates "ran, then cancelled" from "never took it
+	// in". Dropping it here is how these two surfaces told a caller different things.
 	if !found && line.Settled == "" {
 		return InboxRoomLineView{Found: false}, nil
 	}
