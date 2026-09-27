@@ -125,6 +125,9 @@ func (c *Controller) drainInboxDispatch() {
 		if !c.inbox.dispatchPending {
 			c.inbox.dispatching = false
 			c.inbox.mu.Unlock()
+			// Work left behind is what the stall alarm exists for: a line that
+			// waits here is the one nobody will ask about.
+			c.armStaleQueueAlert()
 			return
 		}
 		c.inbox.dispatchPending = false

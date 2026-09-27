@@ -652,6 +652,14 @@ type Messages struct {
 
 	// usage / help
 	UsageBody string // full multi-line help text
+
+	// What used to reach only the log: a compaction that failed and a context
+	// drifting toward the window, each with the action that follows. The two
+	// queue-stall alarms stay apart because the human action differs.
+	ContextCompactionFailed  string
+	ContextNearingWindow     string
+	InboxStalePausedFmt      string
+	InboxStaleStartFailedFmt string
 }
 
 // ProviderStatusMessage returns an actionable explanation for a known provider

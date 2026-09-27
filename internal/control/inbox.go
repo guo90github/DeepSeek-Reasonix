@@ -118,6 +118,12 @@ type inboxState struct {
 	beforeDispatchSubmit func(itemID string) error
 	// scheduleDispatchRetry replaces the production timer in deterministic tests.
 	scheduleDispatchRetry func(delay time.Duration, retry func())
+	// staleAlertArmed and staleAlertedItem keep the queue-stall alarm to one
+	// timer at a time and one sentence per waiting line. Guarded by mu.
+	staleAlertArmed  bool
+	staleAlertedItem string
+	// scheduleStaleAlert replaces the production timer in deterministic tests.
+	scheduleStaleAlert func(delay time.Duration, check func())
 }
 
 func (s *inboxState) trackActive(id string) {

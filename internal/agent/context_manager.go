@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"sync/atomic"
 
+	"reasonix/internal/event"
+	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
 )
 
@@ -23,6 +25,9 @@ type compactionProgress struct {
 	// lastTurn stops the post-turn observer and the pre-send preflight from
 	// paying for two summaries during one active tool loop.
 	lastTurn atomic.Int64
+	// nearingWarned makes the "drifting toward the window" prompt once per
+	// lineage: advice that repeats every round is noise, not a signal.
+	nearingWarned bool
 }
 
 // ContextManager is the sole owner of provider-visible context maintenance.
@@ -122,6 +127,7 @@ func (m ContextManager) prepareOnce(ctx context.Context, policy ContextPreparePo
 		prepared.InputTokens = est
 	}
 	inputHash := a.contextMaintenanceInputHash(visible)
+	a.warnNearingWindow(est, a.effectiveContextWindow())
 	// Receipts back off sub-critical retries only. A failed summary never
 	// fabricates a digest; at the ceiling the lossy truncation rescue is the
 	// last resort, so the turn still leaves with a view the provider accepts.
@@ -318,6 +324,27 @@ func (a *Agent) resetCompactionProgress() {
 	a.sess.compaction.stuckInputHash = ""
 	a.sess.compaction.consecutive = 0
 	a.sess.compaction.failedTurn.Store(0)
+}
+
+// nearingWindowRatio is where a session is told it is drifting toward the
+// window: advice ahead of maintenance, well below the fold trigger.
+const nearingWindowRatio = 0.60
+
+// warnNearingWindow says once per lineage that the context is drifting toward
+// the model window and names the way out. It only reads, so a surface that
+// shows the prompt cannot change what maintenance does.
+func (a *Agent) warnNearingWindow(est, window int) {
+	if a == nil || window <= 0 || a.svc.sink == nil || a.sess.compaction.nearingWarned {
+		return
+	}
+	if est < int(float64(window)*nearingWindowRatio) {
+		return
+	}
+	a.sess.compaction.nearingWarned = true
+	a.svc.sink.Emit(event.Event{
+		Kind: event.Notice, Level: event.LevelInfo, Text: i18n.M.ContextNearingWindow,
+		Detail: fmt.Sprintf("context=%d window=%d trigger=%d fold_soon=%t", est, window, a.compactTrigger(), est >= a.compactTrigger()),
+	})
 }
 
 func (m ContextManager) currentPrepared() PreparedContext {

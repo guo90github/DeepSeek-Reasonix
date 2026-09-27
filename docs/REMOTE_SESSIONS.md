@@ -434,6 +434,12 @@ desktop or `reasonix web` exposes, `<session>` the session file path.
    tell a stalled session from a slow one. The gate clears when a start
    succeeds, or when the queue empties.
 
+A line that waits more than ten minutes against a paused queue or a failed start
+is announced where the operator is, not only in the receipt: the host emits a
+warning notice naming which of the two it is, the wait, and — for a failed start
+— the cause. One line gets one notice, so a session stuck for hours does not
+repeat itself.
+
 MCP servers reached over HTTP/SSE are not child processes and receive none of
 this environment.
 

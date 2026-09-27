@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"reasonix/internal/event"
+	"reasonix/internal/i18n"
 	"reasonix/internal/provider"
 )
 
@@ -165,6 +166,12 @@ func (a *Agent) emitCompactionTelemetry(t CompactionTelemetry) {
 		// new summarizer failures never install a degraded projection.
 		if t.Mode != CompactionModeDegraded {
 			slog.Warn("agent: compaction failed", "detail", detail+" err_type="+t.Error)
+			// A failure the user cannot see is a failure nobody acts on: the log
+			// line alone let a stalled session look idle for hours.
+			a.svc.sink.Emit(event.Event{
+				Kind: event.Notice, Level: event.LevelWarn, Text: i18n.M.ContextCompactionFailed,
+				Detail: detail + " err_type=" + t.Error,
+			})
 			return
 		}
 		detail += " err_type=" + t.Error
