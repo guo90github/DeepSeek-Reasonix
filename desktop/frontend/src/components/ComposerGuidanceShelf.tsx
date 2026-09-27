@@ -4,6 +4,8 @@ import { openExternal } from "../lib/bridge";
 import type { InboxRoomMeta } from "../lib/composerInboxQueue";
 import { guidanceHasKnownPendingState, guidanceIsEditable, guidanceIsInFlight, guidanceNeedsRetry } from "../lib/composerGuidance";
 import { inboxWaitParts } from "../lib/inboxWait";
+import { roomLineExit, settledLabel } from "../lib/inboxRoomLineExit";
+import { app } from "../lib/bridge";
 import { useI18n } from "../lib/i18n";
 import type { StructuredInvocationSubmit } from "../lib/invocationDisplay";
 import { InboxRecoveryBanner } from "./InboxRecoveryBanner";
@@ -40,6 +42,7 @@ export type InboxRecoveryNotice = {
 export function ComposerGuidanceShelf({
   recovery,
   recoveryDisabled,
+  tabId,
   items,
   expanded,
   running,
@@ -56,6 +59,8 @@ export function ComposerGuidanceShelf({
 }: {
   recovery: InboxRecoveryNotice | null;
   recoveryDisabled: boolean;
+  // Which tab's host answers the room-line question — the shelf had no tab of its own.
+  tabId: string;
   items: PendingGuidance[];
   expanded: boolean;
   running: boolean;
@@ -74,6 +79,32 @@ export function ComposerGuidanceShelf({
   const visible = expanded ? items : items.slice(0, 2);
   const hiddenCount = Math.max(0, items.length - 2);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // One answer per row: what the host says about that room line, asked on demand
+  // (never inferred), and never invented when the question cannot be asked.
+  const [roomLineAnswers, setRoomLineAnswers] = useState<Record<string, string>>({});
+  const askRoomLine = (id: string, seq: number) => {
+    // A host that cannot be asked is an answer of its own: say so, and never turn
+    // a failure into silence or into an ending nobody reported.
+    const answer = (text: string) => setRoomLineAnswers((prev) => ({ ...prev, [id]: text }));
+    const unknown = t("composer.guidanceRoomLineUnknown");
+    try {
+      const ask = app.InboxRoomLine;
+      if (typeof ask !== "function") {
+        answer(unknown);
+        return;
+      }
+      void ask(tabId, seq).then((view) => {
+        const exit = roomLineExit(view);
+        answer(exit.kind === "queued"
+          ? t("composer.guidanceRoomLineQueued")
+          : exit.kind === "settled"
+            ? t("composer.guidanceRoomLineSettled", { settled: settledLabel(exit.settled) })
+            : t("composer.guidanceRoomLineNever"));
+      }).catch(() => answer(unknown));
+    } catch {
+      answer(unknown);
+    }
+  };
   const [editDraft, setEditDraft] = useState("");
   const [editBusy, setEditBusy] = useState(false);
 
@@ -206,6 +237,23 @@ export function ComposerGuidanceShelf({
                     >
                       {t("composer.guidanceOpenRoom")}
                     </button>
+                  )}
+                  {(item.room?.seq || 0) > 0 && (
+                    <>
+                      <button
+                        className="composer-guidance-item__room composer-guidance-item__room--link"
+                        type="button"
+                        aria-label={t("composer.guidanceAskRoomLine")}
+                        onClick={() => askRoomLine(item.id, item.room?.seq || 0)}
+                      >
+                        {t("composer.guidanceAskRoomLine")}
+                      </button>
+                      {roomLineAnswers[item.id] && (
+                        <span className="composer-guidance-item__roomline">
+                          {roomLineAnswers[item.id]}
+                        </span>
+                      )}
+                    </>
                   )}
                   {editing ? (
                     <>

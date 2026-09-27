@@ -4343,6 +4343,7 @@ export function Composer({
               recovered: Boolean(pendingGuidance[0].recoveredCount),
             } : null}
             recoveryDisabled={Boolean(disabled || readOnly)}
+            tabId={tabId || ""}
             items={pendingGuidance}
             expanded={guidanceExpanded}
             running={running}
