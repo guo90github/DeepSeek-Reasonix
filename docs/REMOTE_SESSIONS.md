@@ -325,6 +325,14 @@ may still carry the template sentence while the **lookup**
 wake with nowhere to land is answered `409`, never a receipt claiming
 `no_session_path`: with no session file there is no queue to hold it.
 
+**A sender can also ask whether it is being held at all.** `GET /inbox/gate` is
+the read-only, parameter-free answer to that: the same `gate` and `gateReason`, a
+`resumable` a sender escalates on, the queue's own `paused`/`readonly`, `queued`
+and `oldestQueuedForMs`, and — when the gate is `start_failed` — the failure text
+itself. No wake has to be posted and no seq is needed, because the question
+"should I wake anyone here?" comes *before* there is a line to ask about. It
+answers the hold; `GET /inbox` answers the queue's contents.
+
 **Every `409` on the inbox path says which retry policy applies.** The refusal
 carries `X-Reasonix-Reject-Class`, and that class is the whole contract — a
 sender picks its retry policy from it instead of matching the prose:

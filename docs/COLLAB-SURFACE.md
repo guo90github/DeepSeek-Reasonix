@@ -13,12 +13,15 @@
 sed -n '10,14p' internal/boot/inbox_wake_contract_test.go   # §1 载荷字段集（契约用例）
 sed -n '12,40p' internal/control/inbox_wake_marker.go        # §2 来源具名集合
 sed -n '11,23p' internal/serve/reject_class.go               # §3 分类头 + 三档取值
-sed -n '31,120p' internal/sessioninbox/types.go               # §4 state 封闭集
+sed -n '31,125p' internal/sessioninbox/types.go               # §4 state 封闭集
 sed -n '92,95p' internal/plugin/plugin.go                    # §5 武装声明处（空 = 不武装）
 sed -n '14,34p' internal/control/inbox_query.go              # §7 按 seq 回答的字段集与封闭值
-sed -n '86,94p' internal/serve/inbox.go                       # §7 「队列里没有」那一档怎么答
-sed -n '228,236p' internal/sessioninbox/types.go              # §7 回执上的同一对
+sed -n '104,114p' internal/serve/inbox.go                      # §7 「队列里没有」那一档怎么答
+sed -n '232,242p' internal/sessioninbox/types.go              # §7 回执上的同一对
 sed -n '6,10p' internal/sessioninbox/settled_gloss.go          # §7 收尾措辞的唯一出处
+sed -n '16,22p' internal/serve/inbox.go                       # §8 全局那条只读出口挂在哪
+sed -n '190,226p' internal/control/inbox_query.go             # §8 字段集 + 失败那句原话
+sed -n '230,240p' internal/control/inbox_dispatch.go          # §8 与回执共用的那一份判定
 ```
 
 ## 1 唤醒载荷（冻结的跨仓契约）
@@ -53,7 +56,7 @@ sed -n '6,10p' internal/sessioninbox/settled_gloss.go          # §7 收尾措�
 
 | 项 | 取值 | 定义处 |
 |---|---|---|
-| 字段集 | `id` `sessionId` `intent` `state` `revision` `blobName` `source` `createdAt` `updatedAt` `preview` `byteSize` `checksum` `idempotencyKey` `refs[]` `blockReason` `runId` | `internal/sessioninbox/types.go:113` |
+| 字段集 | `id` `sessionId` `intent` `state` `revision` `blobName` `source` `createdAt` `updatedAt` `preview` `byteSize` `checksum` `idempotencyKey` `refs[]` `blockReason` `runId` | `internal/sessioninbox/types.go:118` |
 | `state` 封闭集 | `queued` / `steer_accepted` / `steer_consumed` / `running` / `blocked` / `uncertain` | `internal/sessioninbox/types.go:32` |
 | 唤醒落地时 | `intent=steer`、`source=push` | `internal/boot/inbox_wake.go:35` |
 
@@ -79,8 +82,8 @@ sed -n '6,10p' internal/sessioninbox/settled_gloss.go          # §7 收尾措�
 | 「宿主拒过没」 | `refused` 就是那一栏；`resumable` **只在 `refused` 在时才有意义**，缺 `refused` 时不许拿“有没有 `reason`”反推 | `internal/control/inbox_query.go:26` |
 | 时长 | `queuedForMs` 只答「等了多久」，不答「为什么还没跑」；非排队态不带 | `internal/control/inbox_query.go:29` |
 | 收尾三档（离开队列后怎么结束的） | `acknowledged`（跑完并确认）/ `discarded`（被丢弃）/ `deleted`（被删掉）——存储自己的处置原词；措辞只有一处声明，桌面那份被同词测试钉住 | `internal/sessioninbox/ops.go:448`、`internal/sessioninbox/ops.go:144`、`internal/sessioninbox/ops.go:44`、`internal/sessioninbox/settled_gloss.go:6` |
-| 同一对在回执上 | `settled` / `settledAt`（按幂等键查回执时同义） | `internal/sessioninbox/types.go:233` |
-| 读法 | `found=false` **不等于**「从没接过」：带 `settled` = 离开过队列、这么结束的；不带才只说没有。端点据此判「这一路到底知道点什么」 | `internal/serve/inbox.go:89` |
+| 同一对在回执上 | `settled` / `settledAt`（按幂等键查回执时同义） | `internal/sessioninbox/types.go:237` |
+| 读法 | `found=false` **不等于**「从没接过」：带 `settled` = 离开过队列、这么结束的；不带才只说没有。端点据此判「这一路到底知道点什么」 | `internal/serve/inbox.go:109` |
 
 反例一（`refused` → `resumable`）：缺 `refused` 时把“`resumable` 不在”读成**提不起来**——那两种情形在线上同形，
 只有宿主真的为这行给过答复（`refused`）时`resumable` 才在说话；拿“有没有原话”反推也是同一个错。
@@ -96,3 +99,18 @@ sed -n '6,10p' internal/sessioninbox/settled_gloss.go          # §7 收尾措�
 - **MCP 工具清单**：宿主侧没有对等物——它不是 MCP server。对等面是 §5 的配置字段集。
 - **条文号集合**：宿主侧不使用 `B` 编号；规则落在 `docs/REMOTE_SESSIONS.md` 的节名上（例：「三种形态都长得像『会话停了』」）。
 - **`delivery.path` / `skipped.reason` 值域**：只在聊天侧（hub 出参）。宿主侧对应的是 §3 的分类头与 §4 的 `state` / 回执 `disposition`。
+
+## 8 队列全局那条只读出口（「我是不是被握着」）
+
+§7 是**按行**问：要知道某一句的下落，得先有那一句的 seq。房间真正要先知道的是「此刻这个会话会不会跑东西」——
+它还没投任何东西时也得能问。`GET /inbox/gate` 就是这条路：只读、无参数、不改变它报告的那个持有状态。
+
+| 项 | 取值 | 定义处 |
+|---|---|---|
+| 出口 | `GET /inbox/gate`，与其它读一样按会话围栏，用同一套围栏校验 | `internal/serve/inbox.go:18` |
+| 字段集 | `gate` `gateReason` `resumable` `pendingPrompt` `paused` `readonly` `queued` `oldestQueuedForMs` `startFailure` | `internal/control/inbox_query.go:193` |
+| 与回执同一个来源 | 闸名来自同一个判定，回执与这条路不许各判一份 | `internal/control/inbox_dispatch.go:234` |
+| 「为什么还没跑」 | 起回合本身失败时，闸名取 `start_failed`，`gateReason` 就是那句失败原文；比默认的闸类模板句更该被照抄 | `internal/control/inbox_query.go:224` |
+
+反例（把这条路当队列内容读）：它答的是**持有**，不是条目。要知道有哪几条、各排多久，用 `GET /inbox` 的快照；
+把 `queued` 当条目清单（它只是个数）是第一处读错，拿 `gate` 反推「我的那条跑了没」是第二处（那是 §7 的活）。

@@ -185,6 +185,68 @@ func (c *Controller) InboxRoomLineFor(seq int64) (InboxRoomLine, bool) {
 	return InboxRoomLine{}, false
 }
 
+// InboxGate is the queue-wide answer to "is this session being held, and by
+// what?". It is the same gate a queued receipt carries, available without
+// posting a line and without naming a seq — a reader that wants to know whether
+// anything will run here can just ask. It is a read: asking never changes the
+// hold it reports.
+type InboxGate struct {
+	Gate          string `json:"gate,omitempty"`
+	GateReason    string `json:"gateReason,omitempty"`
+	Resumable     bool   `json:"resumable"`
+	PendingPrompt bool   `json:"pendingPrompt,omitempty"`
+	// Paused and Readonly are the queue's own flags, reported even when an
+	// earlier gate (a running turn, say) is the one holding the line today.
+	Paused   bool `json:"paused"`
+	Readonly bool `json:"readonly,omitempty"`
+	// Queued counts the lines still waiting here, and OldestQueuedForMs says how
+	// long the first of them has been waiting: "held" and "held for an hour" are
+	// different answers to a sender.
+	Queued            int    `json:"queued"`
+	OldestQueuedForMs int64  `json:"oldestQueuedForMs,omitempty"`
+	StartFailure      string `json:"startFailure,omitempty"`
+}
+
+// InboxGate reports the hold on this session's queue. It reads the cached
+// snapshot, never InboxSnapshot: a status read must not recover orphans or
+// otherwise change what the queue does.
+func (c *Controller) InboxGate() InboxGate {
+	gate := c.inboxDispatchGate()
+	out := InboxGate{
+		Gate: gate, GateReason: sessioninbox.GateReasonText(gate),
+		Resumable:     sessioninbox.GateResumable(gate),
+		PendingPrompt: sessioninbox.GateWaitsForUser(gate),
+	}
+	if gate == sessioninbox.GateStartFailed {
+		// The failure sentence beats the gate's class text: it is the part a
+		// reader can act on.
+		out.StartFailure = c.inboxStartFailure()
+		out.GateReason = out.StartFailure
+	}
+	st, err := c.ensureInbox()
+	if err != nil {
+		return out
+	}
+	snap := st.CachedSnapshot()
+	out.Paused, out.Readonly = snap.Paused, snap.Readonly
+	var oldest time.Time
+	for _, item := range snap.Items {
+		if item.State != sessioninbox.StateQueued {
+			continue
+		}
+		out.Queued++
+		if oldest.IsZero() || item.CreatedAt.Before(oldest) {
+			oldest = item.CreatedAt
+		}
+	}
+	if !oldest.IsZero() {
+		if waited := time.Since(oldest).Milliseconds(); waited > 0 {
+			out.OldestQueuedForMs = waited
+		}
+	}
+	return out
+}
+
 func firstNonEmptyStr(vals ...string) string {
 	for _, v := range vals {
 		if strings.TrimSpace(v) != "" {

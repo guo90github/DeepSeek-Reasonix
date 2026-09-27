@@ -278,6 +278,12 @@ fragment 中，不会随请求进入服务器日志；旧版 serve 自动回退 
 模板句，**回查**（`GET /inbox/receipt?key=<幂等键>`）会带宿主原话。投递无处落地时
 一律回 `409`，不会回一个自称 `no_session_path` 的回执：没有会话文件就没有队列可存。
 
+**发送方还可以先问一句「我这边被握着没」。** `GET /inbox/gate` 就是这条只读、无参数的
+回答：同样的 `gate` 与 `gateReason`、发送方据此升级的 `resumable`、队列自己的
+`paused`／`readonly`、`queued` 与 `oldestQueuedForMs`，以及闸名为 `start_failed` 时
+那句失败原文。不必先投一条、也不需要 seq——「这会儿该不该叫人」这个问题发生在**还没有
+哪一行可问**之前。它答的是**持有**；队列里有什么，用 `GET /inbox`。
+
 **收件箱路径上的每个 `409` 都说清了适用哪条重试策略。** 拒绝响应带
 `X-Reasonix-Reject-Class`，这个档位就是契约的全部——发送方据此选重试策略，不必去
 匹配正文文案：

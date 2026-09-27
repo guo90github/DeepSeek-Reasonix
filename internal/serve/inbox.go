@@ -15,6 +15,7 @@ import (
 
 func (s *Server) registerInboxRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /inbox", s.inboxList)
+	mux.HandleFunc("GET /inbox/gate", s.inboxGate)
 	mux.HandleFunc("GET /inbox/receipt", s.inboxReceipt)
 	mux.HandleFunc("GET /inbox/room-line", s.inboxRoomLine)
 	mux.HandleFunc("POST /inbox/items", s.foregroundMutation(s.inboxEnqueue))
@@ -58,6 +59,26 @@ func (s *Server) inboxList(w http.ResponseWriter, r *http.Request) {
 	snap := s.inboxAPI().InboxSnapshot()
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(snap)
+}
+
+// inboxGate answers the hold on this queue read-only: what is keeping queued
+// lines from running right now, without a seq and without posting anything. A
+// wake's receipt carries the same gate, but only for a line the sender already
+// pushed — this is how a room asks whether it is being held at all.
+func (s *Server) inboxGate(w http.ResponseWriter, r *http.Request) {
+	s.bindMu.Lock()
+	defer s.bindMu.Unlock()
+	if !s.validateInboxReadSessionLocked(w, r) {
+		return
+	}
+	reader, ok := s.inboxAPI().(interface {
+		InboxGate() control.InboxGate
+	})
+	if !ok {
+		http.Error(w, "this host cannot answer the queue gate", http.StatusNotImplemented)
+		return
+	}
+	writeJSON(w, reader.InboxGate())
 }
 
 // inboxRoomLine answers what this session holds for one room line, by the seq the

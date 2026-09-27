@@ -80,8 +80,13 @@ gofmt -w .                          # catches gofmt (saves ~13s CI)
 go vet ./...                        # catches vet warnings (saves ~52s CI/lint)
 make lint                           # golangci-lint at CI's pin + repolint
 go test ./internal/tool/builtin/ ./internal/boot/  # catches tool/boot test breaks
+go test ./tools/collabgate/         # catches COLLAB-SURFACE anchors you shifted
 make frontend-check                 # app tsconfig typecheck (see the note below)
 ```
+
+`tools/collabgate` pins every `文件:行` in `docs/COLLAB-SURFACE.md` to the tokens
+that row claims, so adding lines anywhere above a cited line breaks it silently —
+`make lint` does not run it.
 
 `make lint` runs both gates CI runs, at the version in `.golangci-version`;
 `make lint-install` installs it. Do not skip it: a `modernize` finding never
