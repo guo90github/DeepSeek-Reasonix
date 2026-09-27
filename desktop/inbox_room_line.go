@@ -8,9 +8,9 @@ import (
 	"reasonix/internal/control"
 )
 
-// InboxRoomLineView is the bridge answer for one room line. found=false is the
-// honest "this session never took that line in" — it must never be rendered as an
-// empty line, and never as delivered.
+// InboxRoomLineView is the bridge answer for one room line. found=false means the
+// line is not in the queue — never "no such line": when the ending is known the
+// line comes back carrying it, and only a bare found=false says nobody took it in.
 type InboxRoomLineView struct {
 	Found bool                   `json:"found"`
 	Line  *control.InboxRoomLine `json:"line,omitempty"`
@@ -34,10 +34,14 @@ func (a *App) InboxRoomLine(tabID string, seq int64) (InboxRoomLineView, error) 
 		return InboxRoomLineView{}, fmt.Errorf("this host cannot answer room lines")
 	}
 	line, found := lookup.InboxRoomLineFor(seq)
-	if !found {
+	// A line that already left the queue is still an answer: found stays false and
+	// the ending it carries separates "ran, then cancelled" from "never took it in".
+	// The endpoint answers the same way; dropping it here is how the two surfaces
+	// told a caller different things about one line.
+	if !found && line.Settled == "" {
 		return InboxRoomLineView{Found: false}, nil
 	}
-	return InboxRoomLineView{Found: true, Line: &line}, nil
+	return InboxRoomLineView{Found: found, Line: &line}, nil
 }
 
 // remoteInboxRoomLine forwards the question to the host that owns a remote tab,
