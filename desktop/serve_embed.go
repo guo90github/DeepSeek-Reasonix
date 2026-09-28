@@ -96,16 +96,7 @@ func (a *App) startEmbeddedServe() {
 	}
 	host := &embeddedServe{app: a, bc: serve.NewBroadcaster()}
 	host.srv = serve.New(ctrl, host.bc, config.ServeConfig{AuthMode: "token", Token: token})
-	host.srv.SetForegroundProvider(a.embeddedServeController)
-	host.srv.SetSessionActivator(a.activateSessionForRemote)
-	// /new is the window's own move: its active tab is a controller this
-	// process built, which carries no serve-side session tag to rotate.
-	host.srv.SetSessionCreator(a.createSessionForRemote)
-	host.srv.SetSessionLister(a.listSessionsForRemote)
-	host.srv.SetProjectCreator(a.createProjectForRemote)
-	host.srv.SetSubmitDelegate(a.submitRemoteInput)
-	// The session-aware form: a wake that names a session lands in that tab.
-	host.srv.SetSubmitDelegateFor(a.submitRemoteInputFor)
+	a.attachEmbeddedServeHooks(host.srv)
 	host.ln, host.addr = ln, ln.Addr().String()
 	ctx, cancel := context.WithCancel(a.bootContext())
 	host.mu.Lock()
@@ -120,6 +111,24 @@ func (a *App) startEmbeddedServe() {
 	slog.Info("embedded serve: listening", "addr", host.addr, "tokenFile", serveTokenPath())
 }
 
+// attachEmbeddedServeHooks points a Serve instance at this window's own
+// controllers and catalogs. Kept in one place so the remote HTTP surface is
+// wired identically wherever it runs: a hook that is not registered here is a
+// hook the phone never reaches.
+func (a *App) attachEmbeddedServeHooks(srv *serve.Server) {
+	srv.SetForegroundProvider(a.embeddedServeController)
+	srv.SetSessionActivator(a.activateSessionForRemote)
+	// /new is the window's own move: its active tab is a controller this
+	// process built, which carries no serve-side session tag to rotate.
+	srv.SetSessionCreator(a.createSessionForRemote)
+	srv.SetSessionLister(a.listSessionsForRemote)
+	srv.SetProjectLister(a.listProjectsForRemote)
+	srv.SetProjectCreator(a.createProjectForRemote)
+	srv.SetSubmitDelegate(a.submitRemoteInput)
+	// The session-aware form: a wake that names a session lands in that tab.
+	srv.SetSubmitDelegateFor(a.submitRemoteInputFor)
+}
+
 // embeddedServeController resolves the controller the phone must reach: the
 // active tab's, so a submit lands in the conversation the user is reading.
 func (a *App) embeddedServeController() (control.SessionAPI, bool) {
@@ -131,27 +140,21 @@ func (a *App) embeddedServeController() (control.SessionAPI, bool) {
 }
 
 // createSessionForRemote answers POST /new with the window's own move: it opens
-// a blank surface for the active tab's scope, exactly as the app shell's "new
-// session" does, and reports the session the phone should switch to.
-func (a *App) createSessionForRemote(ctx context.Context) (string, error) {
+// a blank surface for the workspace the caller named — the active tab's scope
+// when it named none — exactly as the app shell's "new session" does, and
+// reports the session the phone should switch to.
+func (a *App) createSessionForRemote(ctx context.Context, req serve.NewSessionRequest) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
-	tab, _ := a.activeTabAndCtrl()
-	if tab == nil || tab.ReadOnly {
-		return "", errors.New("no writable tab is foreground in the desktop window")
-	}
-	scope, root := "global", tab.WorkspaceRoot
-	if tab.Scope == "project" && strings.TrimSpace(root) != "" {
-		scope = "project"
+	scope, root, err := a.remoteNewSessionTarget(req)
+	if err != nil {
+		return "", err
 	}
 	// Split reuses or adds a surface without collapsing the tabs the user has
 	// open; the single-surface styles keep exactly one — the same branch the app
 	// shell's own "new session" takes (desktopNavigationOwner.ts openBlank).
-	var (
-		meta TabMeta
-		err  error
-	)
+	var meta TabMeta
 	if a.singleSurfaceLayoutEnabled() {
 		meta, err = a.EnsureBlankSurface(scope, root)
 	} else {

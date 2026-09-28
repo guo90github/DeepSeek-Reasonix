@@ -3,6 +3,9 @@ package serve
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -11,17 +14,54 @@ import (
 	"reasonix/internal/event"
 )
 
+// NewSessionRequest is what POST /new may ask for: the workspace the new
+// session must bind to. The zero value keeps the host's own default (the
+// window's foreground scope), which is what a caller with no preference sends.
+type NewSessionRequest struct {
+	Scope       string `json:"scope,omitempty"`
+	ProjectRoot string `json:"projectRoot,omitempty"`
+}
+
+// decodeNewSessionRequest reads POST /new's optional target. An empty body and
+// an empty object both mean "host default", so every pre-existing caller keeps
+// working.
+func decodeNewSessionRequest(r *http.Request) (NewSessionRequest, error) {
+	var req NewSessionRequest
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			return req, errors.New("bad body")
+		}
+	}
+	req.Scope = strings.TrimSpace(req.Scope)
+	req.ProjectRoot = strings.TrimSpace(req.ProjectRoot)
+	switch req.Scope {
+	case "":
+		if req.ProjectRoot != "" {
+			return req, errors.New("projectRoot needs scope=project")
+		}
+	case "global":
+		req.ProjectRoot = ""
+	case "project":
+		if req.ProjectRoot == "" {
+			return req, errors.New("projectRoot is required for scope=project")
+		}
+	default:
+		return req, fmt.Errorf("unknown scope %q", req.Scope)
+	}
+	return req, nil
+}
+
 // SetSessionCreator installs the embedded host's new-session factory for
 // POST /new. A host owns every controller this serve's foreground points at,
 // so rotation belongs to it: only the host can open a session without demoting
 // a controller that has a turn in flight.
-func (s *Server) SetSessionCreator(f func(ctx context.Context) (string, error)) {
+func (s *Server) SetSessionCreator(f func(ctx context.Context, req NewSessionRequest) (string, error)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sessionCreator = f
 }
 
-func (s *Server) sessionCreatorFunc() func(context.Context) (string, error) {
+func (s *Server) sessionCreatorFunc() func(context.Context, NewSessionRequest) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.sessionCreator
@@ -30,8 +70,8 @@ func (s *Server) sessionCreatorFunc() func(context.Context) (string, error) {
 // newSessionFromHost publishes the session an embedded host just opened. The
 // expected-session fence guards rotations of the session a caller displayed;
 // opening a new one misroutes nothing, so a stale pin is not a refusal here.
-func (s *Server) newSessionFromHost(w http.ResponseWriter, r *http.Request, create func(context.Context) (string, error), emitNotice bool) {
-	path, err := create(r.Context())
+func (s *Server) newSessionFromHost(w http.ResponseWriter, r *http.Request, req NewSessionRequest, create func(context.Context, NewSessionRequest) (string, error), emitNotice bool) {
+	path, err := create(r.Context(), req)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
@@ -170,7 +210,12 @@ func (s *Server) newSessionCommand(w http.ResponseWriter, r *http.Request, emitN
 	// decides what "new session" means there. Rotation below cannot serve that
 	// case: a host controller carries no session tag to detach.
 	if create := s.sessionCreatorFunc(); create != nil {
-		s.newSessionFromHost(w, r, create, emitNotice)
+		req, err := decodeNewSessionRequest(r)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		s.newSessionFromHost(w, r, req, create, emitNotice)
 		return
 	}
 	if !s.validateSwitchExpectedLocked(w, r) {

@@ -14,7 +14,7 @@ import (
 	"reasonix/internal/control"
 )
 
-func hostCreatorServer(t *testing.T, create func(context.Context) (string, error)) (*httptest.Server, *int) {
+func hostCreatorServer(t *testing.T, create func(context.Context, NewSessionRequest) (string, error)) (*httptest.Server, *int) {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cur.jsonl")
@@ -26,9 +26,9 @@ func hostCreatorServer(t *testing.T, create func(context.Context) (string, error
 	server := New(ctrl, bc, config.ServeConfig{})
 
 	calls := 0
-	server.SetSessionCreator(func(ctx context.Context) (string, error) {
+	server.SetSessionCreator(func(ctx context.Context, req NewSessionRequest) (string, error) {
 		calls++
-		return create(ctx)
+		return create(ctx, req)
 	})
 	srv := httptest.NewServer(server.Handler())
 	t.Cleanup(srv.Close)
@@ -37,7 +37,12 @@ func hostCreatorServer(t *testing.T, create func(context.Context) (string, error
 
 func postNew(t *testing.T, srv *httptest.Server, expected string) (*http.Response, string) {
 	t.Helper()
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/new", bytes.NewReader([]byte(`{}`)))
+	return postNewBody(t, srv, expected, `{}`)
+}
+
+func postNewBody(t *testing.T, srv *httptest.Server, expected, body string) (*http.Response, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/new", bytes.NewReader([]byte(body)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,8 +54,8 @@ func postNew(t *testing.T, srv *httptest.Server, expected string) (*http.Respons
 	if err != nil {
 		t.Fatal(err)
 	}
-	body, _ := readAll(resp)
-	return resp, body
+	text, _ := readAll(resp)
+	return resp, text
 }
 
 // TestNewSessionDelegatesToHost covers the embedded-host contract: the host
@@ -59,7 +64,7 @@ func postNew(t *testing.T, srv *httptest.Server, expected string) (*http.Respons
 // rotation of a displayed session, and opening a new one misroutes nothing.
 func TestNewSessionDelegatesToHost(t *testing.T) {
 	hostPath := filepath.Join(t.TempDir(), "host.jsonl")
-	srv, calls := hostCreatorServer(t, func(context.Context) (string, error) {
+	srv, calls := hostCreatorServer(t, func(context.Context, NewSessionRequest) (string, error) {
 		return hostPath, nil
 	})
 
@@ -86,11 +91,11 @@ func TestNewSessionDelegatesToHost(t *testing.T) {
 func TestNewSessionHostFailureIsConflict(t *testing.T) {
 	cases := []struct {
 		name   string
-		create func(context.Context) (string, error)
+		create func(context.Context, NewSessionRequest) (string, error)
 		want   string
 	}{
-		{"host error", func(context.Context) (string, error) { return "", errors.New("no window") }, "no window"},
-		{"empty path", func(context.Context) (string, error) { return "  ", nil }, "host opened no session"},
+		{"host error", func(context.Context, NewSessionRequest) (string, error) { return "", errors.New("no window") }, "no window"},
+		{"empty path", func(context.Context, NewSessionRequest) (string, error) { return "  ", nil }, "host opened no session"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -103,5 +108,42 @@ func TestNewSessionHostFailureIsConflict(t *testing.T) {
 				t.Fatalf("/new body = %q, want %q", body, tc.want)
 			}
 		})
+	}
+}
+
+// TestNewSessionCarriesTargetToHost pins the remote-binding contract: a caller
+// that names a workspace gets that workspace — the host resolves the scope — so
+// the target must survive the wire, a malformed one must be refused rather than
+// silently demoted to the window's default, and no target at all must still
+// reach the host as the zero request.
+func TestNewSessionCarriesTargetToHost(t *testing.T) {
+	hostPath := filepath.Join(t.TempDir(), "host.jsonl")
+	var got NewSessionRequest
+	srv, _ := hostCreatorServer(t, func(_ context.Context, req NewSessionRequest) (string, error) {
+		got = req
+		return hostPath, nil
+	})
+
+	resp, body := postNewBody(t, srv, "", `{"scope":"project","projectRoot":" /tmp/demo "}`)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("/new with a target status = %d body %q, want 204", resp.StatusCode, body)
+	}
+	if got.Scope != "project" || got.ProjectRoot != "/tmp/demo" {
+		t.Fatalf("host request = %+v, want the trimmed project target", got)
+	}
+
+	bad, badBody := postNewBody(t, srv, "", `{"scope":"project"}`)
+	if bad.StatusCode != http.StatusBadRequest {
+		t.Fatalf("/new without a root = %d body %q, want 400", bad.StatusCode, badBody)
+	}
+	if unknown, unknownBody := postNewBody(t, srv, "", `{"scope":"workspace"}`); unknown.StatusCode != http.StatusBadRequest {
+		t.Fatalf("/new with an unknown scope = %d body %q, want 400", unknown.StatusCode, unknownBody)
+	}
+
+	if resp, body := postNewBody(t, srv, "", ``); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("/new with no body = %d body %q, want 204", resp.StatusCode, body)
+	}
+	if got.Scope != "" || got.ProjectRoot != "" {
+		t.Fatalf("a bodyless /new reached the host as %+v, want the zero target", got)
 	}
 }

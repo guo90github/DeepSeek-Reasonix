@@ -109,9 +109,13 @@ type Server struct {
 	// sessionCreator opens a new session for /new. Only a host can: the
 	// controllers this serve's foreground points at belong to the host's
 	// windows, and rotating them is the host's own move to make.
-	sessionCreator func(ctx context.Context) (string, error)
+	sessionCreator func(ctx context.Context, req NewSessionRequest) (string, error)
 	// sessionLister answers /sessions from an embedded host's own index.
 	sessionLister func(all bool) []SessionInfo
+	// projectLister answers /projects from an embedded host's own workspace
+	// list: a standalone serve has one working directory and cannot name the
+	// desktop's projects, so it reports none.
+	projectLister func() []ProjectEntry
 	// projectCreator registers a new project for /new-project. Only a host with
 	// a window can: a standalone serve cannot move its workspace root.
 	projectCreator func(NewProjectRequest) (NewProjectResult, error)
@@ -640,6 +644,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("POST /extension-form", s.foregroundMutation(s.submitExtensionForm))
 	s.registerRuntimeRecoveryRoutes(mux)
 	mux.HandleFunc("GET /sessions", s.sessions)
+	mux.HandleFunc("GET /projects", s.projects)
 	mux.HandleFunc("GET /ownership", s.ownership)
 	mux.HandleFunc("POST /handoff", s.handoff)
 	mux.HandleFunc("POST /external/frames", s.externalFrames)

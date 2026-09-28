@@ -8,6 +8,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
+	"reasonix/internal/serve"
 )
 
 // The phone's /new must become the window's own move: a blank surface for the
@@ -34,7 +35,7 @@ func TestCreateSessionForRemoteFollowsActiveTabScope(t *testing.T) {
 			}
 			app.activeTabID = tab.ID
 
-			path, err := app.createSessionForRemote(t.Context())
+			path, err := app.createSessionForRemote(t.Context(), serve.NewSessionRequest{})
 			if err != nil {
 				t.Fatalf("createSessionForRemote: %v", err)
 			}
@@ -49,6 +50,56 @@ func TestCreateSessionForRemoteFollowsActiveTabScope(t *testing.T) {
 				t.Errorf("returned %q, but the foreground tab owns %q", path, active.SessionPath)
 			}
 		})
+	}
+}
+
+// A caller that names a workspace gets that workspace, whatever the window's
+// foreground tab happens to be: the phone picked a project and the desktop must
+// not decide for it. A malformed target is refused instead of silently falling
+// back to the foreground project, which is how a remote session ends up bound
+// to a workspace the user never chose.
+func TestCreateSessionForRemoteBindsRequestedProject(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	foregroundRoot := t.TempDir()
+	wantedRoot := t.TempDir()
+
+	app := NewApp()
+	tab, err := app.EnsureBlankTab("project", foregroundRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	app.activeTabID = tab.ID
+
+	path, err := app.createSessionForRemote(t.Context(), serve.NewSessionRequest{Scope: "project", ProjectRoot: wantedRoot})
+	if err != nil {
+		t.Fatalf("createSessionForRemote: %v", err)
+	}
+	active, _ := app.activeTabAndCtrl()
+	if active == nil {
+		t.Fatal("no active tab after the targeted new-session")
+	}
+	if !sameProjectRoot(active.WorkspaceRoot, wantedRoot) {
+		t.Fatalf("workspace = %q, want the requested %q", active.WorkspaceRoot, wantedRoot)
+	}
+	if agent.CanonicalSessionPath(active.SessionPath) != agent.CanonicalSessionPath(path) {
+		t.Fatalf("returned %q, but the foreground tab owns %q", path, active.SessionPath)
+	}
+
+	if _, err := app.createSessionForRemote(t.Context(), serve.NewSessionRequest{Scope: "global"}); err != nil {
+		t.Fatalf("global target: %v", err)
+	}
+	if active, _ := app.activeTabAndCtrl(); active == nil || active.Scope != "global" {
+		t.Fatalf("global target landed in %+v, want the global scope", active)
+	}
+
+	for _, req := range []serve.NewSessionRequest{
+		{Scope: "project"},
+		{Scope: "workspace", ProjectRoot: wantedRoot},
+		{Scope: "project", ProjectRoot: filepath.Join(wantedRoot, "missing")},
+	} {
+		if _, err := app.createSessionForRemote(t.Context(), req); err == nil {
+			t.Fatalf("%+v was accepted, want a refusal", req)
+		}
 	}
 }
 
@@ -87,7 +138,7 @@ func TestCreateSessionForRemoteFollowsLayoutStyle(t *testing.T) {
 			app.tabOrder = []string{kept.ID}
 			app.activeTabID = kept.ID
 
-			newPath, err := app.createSessionForRemote(t.Context())
+			newPath, err := app.createSessionForRemote(t.Context(), serve.NewSessionRequest{})
 			if err != nil {
 				t.Fatalf("createSessionForRemote: %v", err)
 			}
@@ -131,7 +182,7 @@ func TestCreateSessionForRemoteRefusesUnwritableForeground(t *testing.T) {
 	app.tabOrder = append(app.tabOrder, readOnly.ID)
 
 	app.activeTabID = readOnly.ID
-	_, err = app.createSessionForRemote(t.Context())
+	_, err = app.createSessionForRemote(t.Context(), serve.NewSessionRequest{})
 	if err == nil || !strings.Contains(err.Error(), "writable") {
 		t.Fatalf("read-only foreground err = %v, want the writable-tab refusal", err)
 	}
@@ -139,7 +190,7 @@ func TestCreateSessionForRemoteRefusesUnwritableForeground(t *testing.T) {
 	cancelled, cancel := context.WithCancel(t.Context())
 	cancel()
 	app.activeTabID = ready.ID
-	if _, err := app.createSessionForRemote(cancelled); err == nil {
+	if _, err := app.createSessionForRemote(cancelled, serve.NewSessionRequest{}); err == nil {
 		t.Error("cancelled request opened a session")
 	}
 }
