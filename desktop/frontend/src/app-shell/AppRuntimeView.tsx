@@ -30,6 +30,7 @@ import { SessionStatusBanners } from "./SessionStatusBanners";
 import { ChatPaneRegion } from "./ChatPaneRegion";
 import { noticePreviewMockEnabled } from "./NoticePreviewPanel";
 import { DecisionFooterRegion } from "./DecisionFooterRegion";
+import { FOOTER_PANEL_MODULES } from "../components/footerPanelModules";
 import { WorkspaceDockRegion } from "./WorkspaceDockRegion";
 import { AppBottomRegions } from "./AppBottomRegions";
 import { AppOverlayHost } from "./AppOverlayHost";
@@ -390,6 +391,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             todo={footerTodo}
             undo={footerUndo}
             decision={decisionFooterSurface}
+            footerPanel={splitSurface ? { modules: FOOTER_PANEL_MODULES, tabId: activeTabId, workspaceScopeKey: session.workspaceScopeKey } : null}
             composer={buildComposerSurface({
               view: {
                 hidden: composerSurfaceHidden,

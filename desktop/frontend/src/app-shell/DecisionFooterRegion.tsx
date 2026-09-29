@@ -1,6 +1,8 @@
 import { lazy, Suspense, type ComponentProps, type CSSProperties, type ReactNode } from "react";
 
 import { Composer } from "../components/Composer";
+import { FooterPanelBand } from "../components/FooterPanelBand";
+import type { FooterPanelModule } from "../components/FooterPanel";
 
 const TodoPanel = lazy(() => import("../components/TodoPanel").then((module) => ({ default: module.TodoPanel })));
 const UndoRewindBanner = lazy(() => import("../components/UndoRewindBanner").then((module) => ({ default: module.UndoRewindBanner })));
@@ -53,6 +55,12 @@ export type DecisionFooterRegionProps = {
     headline?: string;
     props: ComposerProps;
   };
+  /** Split layout only: the bottom band also carries a panel card. */
+  footerPanel?: {
+    modules: readonly FooterPanelModule[];
+    tabId?: string;
+    workspaceScopeKey: string;
+  } | null;
 };
 
 function DecisionSurface({ surface }: { surface: DecisionFooterSurface }) {
@@ -81,8 +89,14 @@ export function DecisionFooterRegion({
   undo,
   decision,
   composer,
+  footerPanel,
 }: DecisionFooterRegionProps) {
   if (hidden) return null;
+
+  // A decision owns the footer and a creation hero centres the composer; the
+  // panel follows the composer out of the way in both, so the band never shows
+  // a panel beside an empty composer slot.
+  const bandPanel = footerPanel && !decision && !composer.hidden && !composer.hero ? footerPanel : null;
 
   return (
     <footer className={className} ref={footerRef} style={style} inert={composer.inert || undefined} aria-hidden={composer.inert || undefined}>
@@ -91,20 +105,22 @@ export function DecisionFooterRegion({
         undo={undo ? <UndoRewindBanner key={undo.identity} {...undo.props} /> : null}
         decision={decision ? <DecisionSurface surface={decision} /> : null}
       />
-      {/* Composer remains mounted while decisions are visible so session-scoped drafts survive. */}
-      <div
-        className={[
-          "composer-decision-host",
-          composer.inert ? "composer-decision-host--footprint-hidden" : composer.hidden ? "composer-decision-host--hidden" : "",
-          composer.hero ? "composer-decision-host--creation-hero" : "",
-        ].filter(Boolean).join(" ")}
-        hidden={Boolean(decision) || undefined}
-        inert={composer.hidden ? true : undefined}
-        aria-hidden={composer.hidden ? true : undefined}
-      >
-        {composer.hero && composer.headline ? <h2 className="welcome-creation__headline">{composer.headline}</h2> : null}
-        <Composer {...composer.props} />
-      </div>
+      <FooterPanelBand panel={bandPanel}>
+        {/* Composer remains mounted while decisions are visible so session-scoped drafts survive. */}
+        <div
+          className={[
+            "composer-decision-host",
+            composer.inert ? "composer-decision-host--footprint-hidden" : composer.hidden ? "composer-decision-host--hidden" : "",
+            composer.hero ? "composer-decision-host--creation-hero" : "",
+          ].filter(Boolean).join(" ")}
+          hidden={Boolean(decision) || undefined}
+          inert={composer.hidden ? true : undefined}
+          aria-hidden={composer.hidden ? true : undefined}
+        >
+          {composer.hero && composer.headline ? <h2 className="welcome-creation__headline">{composer.headline}</h2> : null}
+          <Composer {...composer.props} />
+        </div>
+      </FooterPanelBand>
     </footer>
   );
 }

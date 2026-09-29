@@ -337,6 +337,14 @@ export const en = {
   "split.toggleProcessPane": "Process",
   "split.autoProcessPane": "Auto-width process pane",
 
+  // footer panel (split layout bottom band)
+  "footerPanel.title": "Panel",
+  "footerPanel.changedFiles": "Changed files",
+  "footerPanel.fileCount": "{n} files",
+  "footerPanel.refresh": "Refresh changes",
+  "footerPanel.resize": "Resize footer panel",
+  "footerPanel.noChanges": "No changes",
+
   // topic bar
   "topicBar.renameSession": "Rename session",
   "topicBar.more": "More",

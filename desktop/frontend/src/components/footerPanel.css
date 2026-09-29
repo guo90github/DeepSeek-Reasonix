@@ -1,0 +1,283 @@
+/* Split layout's bottom band: the composer and the footer panel share row 3 of
+   the conversation column, separated by a draggable rail. Both wrappers are
+   display:contents until a panel is present, so the single-column footer keeps
+   exactly the box it had before this band existed. Lazily imported by
+   FooterPanelBand. */
+
+.footer-band,
+.footer-band__composer {
+  display: contents;
+}
+
+.footer-band--panel {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+
+/* The composer column sizes to its own content; the panel is pinned to the
+   composer CARD's measured height instead, so the two cards keep a shared top
+   and bottom edge whatever is stacked above the card. */
+.footer-band--panel .footer-band__composer {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.footer-band__divider {
+  flex: 0 0 8px;
+  align-self: stretch;
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+  background: transparent;
+}
+
+.footer-band__divider::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1px;
+  background: var(--border);
+  border-radius: 999px;
+  transition: width 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.footer-band__divider:hover::before,
+.footer-band__divider--active::before,
+.footer-band__divider:focus-visible::before {
+  width: 14px;
+  background: linear-gradient(180deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.footer-band__divider:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.footer-band--resizing,
+.footer-band--resizing * {
+  user-select: none;
+}
+
+.footer-band__panel {
+  flex: 0 0 var(--footer-panel-share, 38%);
+  display: flex;
+  align-self: flex-end;
+  height: var(--footer-composer-card-height, auto);
+  min-width: 0;
+}
+
+/* No applicable module → no card at all: the composer takes the width back
+   instead of holding an empty panel. A module that renders nothing leaves no
+   .footer-panel__section behind, which is what this keys on. */
+.footer-band--panel:not(:has(.footer-panel__section)) {
+  display: block;
+}
+
+.footer-band--panel:not(:has(.footer-panel__section)) .footer-band__divider,
+.footer-band--panel:not(:has(.footer-panel__section)) .footer-band__panel {
+  display: none;
+}
+
+/* ── panel card ─────────────────────────────────────────────────────────── */
+
+.footer-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--bg-elev);
+  overflow: hidden;
+}
+
+.footer-panel__head {
+  flex: 0 0 auto;
+  padding: 7px 12px 6px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: var(--text-sm, 12px);
+  font-weight: 620;
+  color: var(--fg-dim);
+}
+
+.footer-panel__stack {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.footer-panel__section + .footer-panel__section {
+  border-top: 1px solid var(--border-soft);
+}
+
+.footer-panel__section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-sm, 12px);
+  cursor: pointer;
+  text-align: left;
+}
+
+.footer-panel__section-head:hover {
+  background: color-mix(in srgb, var(--fg) 6%, transparent);
+}
+
+.footer-panel__chevron {
+  flex: 0 0 auto;
+  color: var(--fg-dim);
+  transition: transform 0.14s ease;
+}
+
+.footer-panel__chevron--closed {
+  transform: rotate(-90deg);
+}
+
+.footer-panel__section-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer-panel__section-body {
+  padding: 0 12px 8px;
+}
+
+.footer-panel__note {
+  margin: 0;
+  padding: 2px 0;
+  font-size: var(--text-xs, 11px);
+  color: var(--fg-dim);
+}
+
+.footer-panel__note--error {
+  color: var(--danger, #e5484d);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer-panel__chevron {
+    transition: none;
+  }
+}
+
+/* ── changed-files module ───────────────────────────────────────────────── */
+
+.footer-changed {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footer-changed__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs, 11px);
+  color: var(--fg-dim);
+}
+
+.footer-changed__branch,
+.footer-changed__count {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.footer-changed__branch {
+  max-width: 45%;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.footer-changed__stat {
+  font-variant-numeric: tabular-nums;
+}
+
+.footer-changed__stat--add {
+  color: var(--ok, #16a34a);
+}
+
+.footer-changed__stat--del {
+  color: var(--danger, #e5484d);
+}
+
+.footer-changed__refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.footer-changed__refresh:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.footer-changed__spin {
+  animation: footer-changed-spin 0.9s linear infinite;
+}
+
+@keyframes footer-changed-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer-changed__spin { animation: none; }
+}
+
+.footer-changed__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.footer-changed__row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 2px 0;
+  min-width: 0;
+  font-size: var(--text-sm, 12px);
+}
+
+.footer-changed__status {
+  flex: 0 0 auto;
+  width: 16px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: var(--text-2xs, 10px);
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.footer-changed__path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

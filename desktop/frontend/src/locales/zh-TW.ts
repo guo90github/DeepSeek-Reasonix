@@ -258,6 +258,14 @@ export const zhTW: Record<DictKey, string> = {
   "split.toggleProcessPane": "過程欄",
   "split.autoProcessPane": "過程欄自動寬度",
 
+  // 底部面板（分欄底部橫帶）
+  "footerPanel.title": "面板",
+  "footerPanel.changedFiles": "改動檔案",
+  "footerPanel.fileCount": "{n} 個檔案",
+  "footerPanel.refresh": "重新整理改動",
+  "footerPanel.resize": "調整底部面板寬度",
+  "footerPanel.noChanges": "無改動",
+
   // 話題欄
   "topicBar.renameSession": "重新命名會話",
   "topicBar.copyAll": "複製會話",

@@ -38,7 +38,7 @@ export async function waitFor(label: string, predicate: () => boolean) {
   throw new Error(`timed out waiting for ${label}`);
 }
 
-function installDom() {
+export function installDom() {
   const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", {
     pretendToBeVisual: true,
     url: "http://localhost/",
