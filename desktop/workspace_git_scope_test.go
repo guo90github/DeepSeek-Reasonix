@@ -123,6 +123,54 @@ func TestWorkspaceTallyBudgetAndFileKinds(t *testing.T) {
 	}
 }
 
+func TestWorkspaceGitStatsForTabListsDirtyFiles(t *testing.T) {
+	base := gitScopeRepo(t)
+	commit := func(args ...string) {
+		t.Helper()
+		args = append([]string{"-C", base, "-c", "user.name=Test", "-c", "user.email=test@example.invalid"}, args...)
+		if out, err := workspaceGit(args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(base, "tracked.txt"), []byte("v1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commit("add", "tracked.txt")
+	commit("commit", "-m", "tracked")
+	if err := os.WriteFile(filepath.Join(base, "tracked.txt"), []byte("v2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(base, "untracked.txt"), []byte("new\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	a := &App{tabs: map[string]*WorkspaceTab{"a": {WorkspaceRoot: base}}}
+	view, err := a.WorkspaceGitStatsForTab("a", base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !view.GitAvailable {
+		t.Fatalf("git unavailable: %s", view.GitErr)
+	}
+	// The footer's "Git 未提交" module counts and lists these files; an empty
+	// list reported 0 while the workspace was dirty.
+	byPath := map[string]WorkspaceChangeView{}
+	for _, file := range view.Files {
+		byPath[file.Path] = file
+	}
+	if len(view.Files) != 2 {
+		t.Fatalf("files = %+v, want the two dirty paths", view.Files)
+	}
+	if byPath["tracked.txt"].GitStatus != "M" || byPath["untracked.txt"].GitStatus != "??" {
+		t.Fatalf("statuses = %+v", view.Files)
+	}
+	for _, file := range view.Files {
+		if len(file.Sources) != 1 || file.Sources[0] != "git" {
+			t.Fatalf("%s sources = %v, want git only", file.Path, file.Sources)
+		}
+	}
+}
+
 func TestWorkspaceChangesExpiredDeadlineIsIncomplete(t *testing.T) {
 	base := gitScopeRepo(t)
 	a := &App{tabs: map[string]*WorkspaceTab{"a": {WorkspaceRoot: base}}}

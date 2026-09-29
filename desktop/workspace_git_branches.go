@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -68,10 +69,19 @@ func (a *App) WorkspaceGitStatsForTab(tabID, workspaceRoot string) (WorkspaceCha
 	}
 	untracked := []string{}
 	for _, entry := range entries {
+		out.Files = append(out.Files, WorkspaceChangeView{
+			Path:      normalizeWorkspaceRelPath(base, entry.Path),
+			OldPath:   normalizeWorkspaceRelPath(base, entry.OldPath),
+			Sources:   []string{"git"},
+			GitStatus: entry.Status,
+		})
 		if entry.Status == "??" {
 			untracked = append(untracked, entry.Path)
 		}
 	}
+	sort.Slice(out.Files, func(i, j int) bool {
+		return strings.ToLower(out.Files[i].Path) < strings.ToLower(out.Files[j].Path)
+	})
 	out.Added, out.Removed, out.Incomplete = workspaceGitDiffTally(ctx, base, untracked)
 	return out, nil
 }
