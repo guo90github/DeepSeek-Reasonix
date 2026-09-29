@@ -10,6 +10,7 @@ import type { GitCommitView } from "../lib/types";
 import { workspaceFormatCommitDate } from "../lib/workspacePanelFormat";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
 import { PanelRowButton } from "./FooterPanelDetail";
+import { PanelDiff } from "./FooterPanelDiff";
 
 export const FOOTER_COMMITS_INITIAL = 5;
 export const FOOTER_COMMITS_PAGE = 5;
@@ -104,6 +105,8 @@ export function FooterGitHistoryModule({ tabId }: FooterPanelModuleProps) {
                     detail={{
                       title: commit.message,
                       meta: [commit.hash, commit.author, workspaceFormatCommitDate(commit.date)],
+                      body: <PanelDiff tabId={tabId} path="" commit={commit.hash} />,
+                      bodyStyle: "raw",
                     }}
                   >
                     <span className="footer-git__hash">{commit.hash.slice(0, 7)}</span>

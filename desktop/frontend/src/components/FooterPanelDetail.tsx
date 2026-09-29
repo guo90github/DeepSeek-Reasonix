@@ -6,7 +6,6 @@
 
 import {
   createContext,
-  createElement,
   useCallback,
   useContext,
   useEffect,
@@ -25,10 +24,10 @@ export type PanelDetail = {
   title: string;
   /** Short facts under the headline: branch, status, author, scope… */
   meta?: string[];
-  /** The part the row truncates: a path, a description, a body, a message. */
-  body?: string;
-  /** The body is a path/hash, not prose. */
-  mono?: boolean;
+  /** The part the row truncates: a path, a description, or a live element. */
+  body?: ReactNode;
+  /** prose (default) wraps text; mono boxes a path/hash; raw leaves it alone. */
+  bodyStyle?: "prose" | "mono" | "raw";
 };
 
 type PanelDetailSink = (detail: PanelDetail) => void;
@@ -112,7 +111,13 @@ export function DetailModal({
           </div>
         ) : null}
         {detail.body ? (
-          <div className={detail.mono ? "modal__subject footer-detail__body" : "footer-detail__body"}>{detail.body}</div>
+          detail.bodyStyle === "raw" ? (
+            <div className="footer-detail__raw">{detail.body}</div>
+          ) : (
+            <div className={detail.bodyStyle === "mono" ? "modal__subject footer-detail__body" : "footer-detail__body"}>
+              {detail.body}
+            </div>
+          )
         ) : null}
       </div>
     </div>,
@@ -125,13 +130,11 @@ export function PanelDetailProvider({ children, container }: { children: ReactNo
   const [detail, setDetail] = useState<PanelDetail | null>(null);
   const open = useCallback<PanelDetailSink>((next) => setDetail(next), []);
   const close = useCallback(() => setDetail(null), []);
-  // Created through createElement (not JSX) so this file stays a .ts module like
-  // the rest of the panel's plumbing.
-  return createElement(
-    PanelDetailContext.Provider,
-    { value: open },
-    children,
-    createElement(DetailModal, { detail, onClose: close, container }),
+  return (
+    <PanelDetailContext.Provider value={open}>
+      {children}
+      <DetailModal detail={detail} onClose={close} container={container} />
+    </PanelDetailContext.Provider>
   );
 }
 

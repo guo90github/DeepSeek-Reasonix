@@ -15,6 +15,7 @@ import { loadWorkspaceGitStats } from "../lib/workspaceGitStats";
 import { workspaceBasename } from "../lib/workspacePanelFormat";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
 import { PanelRowButton } from "./FooterPanelDetail";
+import { PanelDiff } from "./FooterPanelDiff";
 
 export const FOOTER_GIT_UNCOMMITTED_INITIAL = 5;
 export const FOOTER_GIT_UNCOMMITTED_PAGE = 5;
@@ -107,8 +108,8 @@ export function FooterGitUncommittedModule({ tabId, workspaceRoot }: FooterPanel
                     detail={{
                       title: file.path,
                       meta: [workspaceLabel, changes.gitBranch ?? "", file.gitStatus?.trim() || "·"].filter(Boolean),
-                      body: file.path,
-                      mono: true,
+                      body: <PanelDiff tabId={tabId} path={file.path} />,
+                      bodyStyle: "raw",
                     }}
                   >
                     <span className="footer-changed__status">{file.gitStatus?.trim() || "·"}</span>

@@ -597,6 +597,12 @@
   color: var(--fg-dim);
 }
 
+/* A live element (a diff) scrolls itself; only the box is ours. */
+.footer-detail__raw {
+  max-height: 56vh;
+  overflow: auto;
+}
+
 /* ── shared badge (type / scope markers) ────────────────────────────────── */
 
 .footer-panel__badge {

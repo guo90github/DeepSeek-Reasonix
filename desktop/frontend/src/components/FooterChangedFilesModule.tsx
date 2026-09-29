@@ -14,6 +14,7 @@ import { useWorkspaceChangesResource } from "../lib/useWorkspaceChangesResource"
 import { workspaceBasename } from "../lib/workspacePanelFormat";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
 import { PanelRowButton } from "./FooterPanelDetail";
+import { PanelDiff } from "./FooterPanelDiff";
 
 export const FOOTER_CHANGED_FILES_INITIAL = 5;
 export const FOOTER_CHANGED_FILES_PAGE = 5;
@@ -93,8 +94,8 @@ export function FooterChangedFilesModule({ tabId, workspaceScopeKey, workspaceRo
                     detail={{
                       title: file.path,
                       meta: [workspaceLabel, file.gitStatus?.trim() || "·", ...(file.sources ?? [])].filter(Boolean),
-                      body: file.path,
-                      mono: true,
+                      body: <PanelDiff tabId={tabId} path={file.path} />,
+                      bodyStyle: "raw",
                     }}
                   >
                     <span className="footer-changed__status">{file.gitStatus?.trim() || "·"}</span>

@@ -1,8 +1,8 @@
 // Run: tsx src/__tests__/footer-panel-detail.test.tsx
 
 // The row-detail modal: a card row is one ellipsised line, so clicking it must
-// open the whole record — over the document, closable three ways, and without
-// stealing the row's own affordances (a suggestion row keeps its accept button).
+// open the whole record — over the document, closable three ways — and a file row
+// opens that file's patch, not just its name.
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -43,6 +43,7 @@ async function render(element: React.ReactElement, install?: () => void) {
 }
 
 const longPath = "desktop/frontend/src/components/FooterPanelDetail.tsx";
+const patch = "@@ -1,1 +1,2 @@\n-old line\n+new line\n";
 
 function installSessionChanges(): void {
   const changes: WorkspaceChangesView = {
@@ -51,7 +52,12 @@ function installSessionChanges(): void {
     gitBranch: "dev-2",
   };
   installDesktopHostStub(({
-    main: { App: { WorkspaceChanges: async () => changes } as Partial<AppBindings> as AppBindings },
+    main: {
+      App: {
+        WorkspaceChanges: async () => changes,
+        WorkspaceChangeDetail: async () => ({ diff: patch, source: "git" as const, added: 1, removed: 1 }),
+      } as Partial<AppBindings> as AppBindings,
+    },
   }).main.App);
 }
 
@@ -73,7 +79,7 @@ console.log("\nfooter panel row detail");
         <li>
           <PanelRowButton
             className="footer-changed__row"
-            detail={{ title: "src/deep/file.ts", meta: ["dev-2", "M"], body: "src/deep/file.ts", mono: true }}
+            detail={{ title: "src/deep/file.ts", meta: ["dev-2", "M"], body: "src/deep/file.ts", bodyStyle: "mono" }}
           >
             <span>src/deep/file.ts</span>
           </PanelRowButton>
@@ -116,8 +122,8 @@ console.log("\nfooter panel row detail");
 }
 
 {
-  // The row a user clicks is the one the card truncates: the modal must show the
-  // path in full, and the module must keep listing it in the row itself.
+  // A file row carries the file's patch: the row truncates a path, the dialog
+  // answers with the change itself.
   const { dom, root } = await renderSessionChanges();
   await act(async () => {
     await waitFor("session changes answer", () => document.querySelector(".footer-panel__row") !== null);
@@ -129,7 +135,8 @@ console.log("\nfooter panel row detail");
     await flushPromises();
   });
   ok(document.querySelector('[role="dialog"]') !== null, "the module's row opens the dialog");
-  ok(document.querySelector(".footer-detail__body")?.textContent === longPath, "the dialog carries the untruncated path");
+  ok(document.querySelector(".footer-detail__raw") !== null, "the patch body is a raw element, not pre-wrapped text");
+  ok(document.body.textContent?.includes("+new line") === true, "the dialog carries the file's patch");
   ok(document.querySelectorAll(".footer-detail__tag").length === 3, "workspace, branch and status ride as tags");
   await act(async () => {
     root.unmount();
