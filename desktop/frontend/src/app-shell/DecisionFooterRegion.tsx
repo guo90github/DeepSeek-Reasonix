@@ -60,6 +60,7 @@ export type DecisionFooterRegionProps = {
     modules: readonly FooterPanelModule[];
     tabId?: string;
     workspaceScopeKey: string;
+    workspaceRoot?: string;
   } | null;
 };
 

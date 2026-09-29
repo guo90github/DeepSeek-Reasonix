@@ -391,7 +391,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             todo={footerTodo}
             undo={footerUndo}
             decision={decisionFooterSurface}
-            footerPanel={splitSurface ? { modules: FOOTER_PANEL_MODULES, tabId: activeTabId, workspaceScopeKey: session.workspaceScopeKey } : null}
+            footerPanel={splitSurface ? { modules: FOOTER_PANEL_MODULES, tabId: activeTabId, workspaceScopeKey: session.workspaceScopeKey, workspaceRoot: activeTab?.workspaceRoot } : null}
             composer={buildComposerSurface({
               view: {
                 hidden: composerSurfaceHidden,

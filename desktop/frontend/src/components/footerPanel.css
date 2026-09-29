@@ -282,6 +282,30 @@
   white-space: nowrap;
 }
 
+/* The workspace this list describes. A session bound to the global scratch dir
+   reads 0 changes here, and which directory that is must be legible — the
+   per-session difference is the point, a bare "0" reads as "your project is
+   clean". */
+.footer-changed__workspace {
+  flex: 0 0 auto;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-faint, var(--fg-dim));
+}
+
+/* A row this session touched but git has not reported (checkpoint-only). */
+.footer-changed__source {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-faint, var(--fg-dim));
+  font-size: var(--text-2xs, 10px);
+  line-height: 1.5;
+}
+
 /* ── shared bar refresh (every module's bar may carry one) ──────────────── */
 
 .footer-panel__refresh {

@@ -11,6 +11,8 @@ import { useT, type DictKey } from "../lib/i18n";
 export type FooterPanelModuleProps = {
   tabId?: string;
   workspaceScopeKey: string;
+  /** The workspace this session's modules describe, so a list can name it. */
+  workspaceRoot?: string;
 };
 
 export type FooterPanelModule = {

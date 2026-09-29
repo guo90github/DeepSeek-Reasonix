@@ -2,17 +2,23 @@
 // dock's WorkspaceChanges resource instead of a second git reader. Reloads on
 // session switch and on demand; it never polls. It renders nothing at all where
 // git does not back the workspace.
+//
+// The list is per SESSION, not per project: the host unions this tab's session
+// checkpoints with `git status` of this tab's workspace root. A session bound to
+// a different root (the global scratch dir) therefore reads 0, so the bar names
+// the workspace it inspected instead of leaving a bare count to be misread.
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, RotateCw } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { useWorkspaceChangesResource } from "../lib/useWorkspaceChangesResource";
+import { workspaceBasename } from "../lib/workspacePanelFormat";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
 
 export const FOOTER_CHANGED_FILES_INITIAL = 5;
 export const FOOTER_CHANGED_FILES_PAGE = 5;
 
-export function FooterChangedFilesModule({ tabId, workspaceScopeKey }: FooterPanelModuleProps) {
+export function FooterChangedFilesModule({ tabId, workspaceScopeKey, workspaceRoot }: FooterPanelModuleProps) {
   const t = useT();
   const [revision, setRevision] = useState(0);
   const [gitBacked, setGitBacked] = useState(false);
@@ -52,11 +58,15 @@ export function FooterChangedFilesModule({ tabId, workspaceScopeKey }: FooterPan
   const shown = files.slice(0, visibleCount);
   const remaining = files.length - shown.length;
   const step = Math.min(FOOTER_CHANGED_FILES_PAGE, remaining);
+  const workspaceLabel = workspaceRoot ? workspaceBasename(workspaceRoot) : "";
 
   return (
     <FooterPanelSection title="footerPanel.changedFiles">
       <div className="footer-changed">
         <div className="footer-changed__bar">
+          {workspaceLabel ? (
+            <span className="footer-changed__workspace" title={workspaceRoot}>{workspaceLabel}</span>
+          ) : null}
           {workspaceChanges?.gitBranch ? <span className="footer-changed__branch">{workspaceChanges.gitBranch}</span> : null}
           <span className="footer-changed__count">{t("footerPanel.fileCount", { n: files.length })}</span>
           {typeof workspaceChanges?.added === "number" && workspaceChanges.added > 0 ? (
@@ -90,6 +100,9 @@ export function FooterChangedFilesModule({ tabId, workspaceScopeKey }: FooterPan
                 <li className="footer-changed__row" key={file.path} title={file.path}>
                   <span className="footer-changed__status">{file.gitStatus?.trim() || "·"}</span>
                   <span className="footer-changed__path">{file.path}</span>
+                  {file.sources?.includes("session") && !file.sources.includes("git") ? (
+                    <span className="footer-changed__source">{t("workspace.sourceSession")}</span>
+                  ) : null}
                 </li>
               ))}
             </ul>
