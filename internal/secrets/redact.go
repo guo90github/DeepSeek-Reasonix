@@ -10,6 +10,23 @@ import (
 	"reasonix/internal/provider"
 )
 
+// ipv4OctetExpr matches one dotted-decimal octet without leading zeros, so a
+// private-range match cannot start mid-number (10.x never matches inside 100.x).
+const ipv4OctetExpr = `(?:25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])`
+
+// internalHostExpr matches the hosts an internal-network scrub must mask:
+// RFC1918 IPv4 (10/8, 172.16/12, 192.168/16), the 127.0.0.1 loopback, the
+// localhost name, and mDNS / private-use hostname suffixes. Every branch is
+// anchored on a private prefix or suffix, so public IPs and public domains
+// stay untouched.
+const internalHostExpr = `(?:` +
+	`10\.` + ipv4OctetExpr + `\.` + ipv4OctetExpr + `\.` + ipv4OctetExpr +
+	`|172\.(?:1[6-9]|2[0-9]|3[01])\.` + ipv4OctetExpr + `\.` + ipv4OctetExpr +
+	`|192\.168\.` + ipv4OctetExpr + `\.` + ipv4OctetExpr +
+	`|127\.0\.0\.1` +
+	`|localhost` +
+	`|(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+(?:local|internal|corp|lan))`
+
 var (
 	// secretKeyNamePattern matches environment-variable / key names that are
 	// likely to carry credentials. Bare "pwd" is intentionally excluded: it
@@ -30,6 +47,20 @@ var (
 	// Match through the final @ before a path/whitespace so raw @ characters
 	// inside userinfo cannot leave a password suffix visible.
 	urlUserInfoPattern = regexp.MustCompile(`(?i)\b([a-z][a-z0-9+.-]*://)([^/\s]+)@`)
+
+	// internalURLPattern masks a whole http(s) URL whose host is an internal
+	// address, keeping scheme, port, and path out of the summary. It runs
+	// before internalAddressPattern so the host is consumed with the URL.
+	internalURLPattern = regexp.MustCompile(`(?i)\bhttps?://(?:` + internalHostExpr + `|\[::1\])(?::[0-9]{1,5})?(?:[/?#][^\s"'<>\x60]*)?`)
+	// internalAddressPattern masks a bare internal host (optionally with port):
+	// private/loopback IPv4, localhost, and internal-suffix hostnames. The
+	// bracketed IPv6 loopback has no word boundary at "[" so it is listed
+	// separately here and via internalIPv6LoopbackPattern below.
+	internalAddressPattern = regexp.MustCompile(`(?i)(?:\b` + internalHostExpr + `(?::[0-9]{1,5})?|\[::1\])`)
+	// internalIPv6LoopbackPattern masks the bare IPv6 loopback ::1, whose
+	// leading ":" is not a word character and so needs explicit non-hex guards.
+	// The guards are captured so the surrounding characters survive the match.
+	internalIPv6LoopbackPattern = regexp.MustCompile(`(^|[^0-9A-Fa-f:])::1($|[^0-9A-Fa-f:])`)
 
 	// maskedCredentialPattern collapses partially masked credentials and any
 	// visible prefix/suffix around the stars ("****ae54", "sk-ab****").
@@ -159,6 +190,9 @@ func Redact(s string) string {
 		return s
 	}
 	s = urlUserInfoPattern.ReplaceAllString(s, "$1"+redactedValue+"@")
+	s = internalURLPattern.ReplaceAllString(s, redactedValue)
+	s = internalAddressPattern.ReplaceAllString(s, redactedValue)
+	s = internalIPv6LoopbackPattern.ReplaceAllString(s, "${1}"+redactedValue+"${2}")
 	s = redactKeyValues(s)
 	s = cookieHeaderPattern.ReplaceAllStringFunc(s, func(match string) string {
 		parts := cookieHeaderPattern.FindStringSubmatch(match)

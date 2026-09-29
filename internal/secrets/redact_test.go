@@ -336,3 +336,72 @@ func TestRedactMessagesDoesNotMutateInput(t *testing.T) {
 		t.Fatalf("RedactMessages mutated the caller's Content: %q", msgs[1].Content)
 	}
 }
+
+func TestRedactMasksInternalAddresses(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "private 10/8", in: "dialing 10.0.0.5 now", want: "dialing [redacted] now"},
+		{name: "private 172.16/12", in: "peer 172.16.4.4", want: "peer [redacted]"},
+		{name: "private 192.168/16", in: "host 192.168.1.100", want: "host [redacted]"},
+		{name: "loopback ip", in: "listening on 127.0.0.1", want: "listening on [redacted]"},
+		{name: "loopback name", in: "listening on localhost", want: "listening on [redacted]"},
+		{name: "loopback ipv6", in: "listening on ::1 (v6)", want: "listening on [redacted] (v6)"},
+		{name: "suffix local", in: "printer.local refused", want: "[redacted] refused"},
+		{name: "suffix internal", in: "db.internal timed out", want: "[redacted] timed out"},
+		{name: "suffix corp", in: "build.corp timed out", want: "[redacted] timed out"},
+		{name: "suffix lan", in: "nas.lan unreachable", want: "[redacted] unreachable"},
+		{name: "private ip with port", in: "cache 10.0.0.5:6379 down", want: "cache [redacted] down"},
+		{name: "internal url ip", in: "GET http://10.0.0.5:8080/admin failed", want: "GET [redacted] failed"},
+		{name: "internal url suffix host", in: "GET https://svc.internal/v1/health?x=1 failed", want: "GET [redacted] failed"},
+		{name: "localhost url", in: "GET http://localhost:3000/ failed", want: "GET [redacted] failed"},
+		{name: "ipv6 loopback url", in: "GET http://[::1]:8080/x failed", want: "GET [redacted] failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Redact(tt.in)
+			if got != tt.want {
+				t.Fatalf("Redact(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+			if again := Redact(got); again != got {
+				t.Fatalf("internal-address redaction not idempotent: once %q, twice %q", got, again)
+			}
+		})
+	}
+}
+
+func TestRedactPreservesPublicAddresses(t *testing.T) {
+	// The load-bearing half of this change: public IPs, public domains, and
+	// public URLs must survive byte-for-byte so summaries stay useful.
+	for _, in := range []string{
+		"resolve 8.8.8.8 for dns",
+		"public dns 1.1.1.1 and 93.184.216.34",
+		"just below the 172.16 range: 172.15.0.1",
+		"just above the 172.31 range: 172.32.0.1",
+		"not private because of a length: 172.160.0.1",
+		"public domain api.deepseek.com",
+		"public host my-host.example.org",
+		"public url https://api.deepseek.com/v1/chat/completions",
+		"public ip url https://8.8.8.8/dns-query",
+		"public ip url https://172.15.0.1/health",
+	} {
+		if got := Redact(in); got != in {
+			t.Fatalf("public address mangled: Redact(%q) = %q", in, got)
+		}
+	}
+}
+
+func TestInternalAddressRedactionReachesEntryPoints(t *testing.T) {
+	if got := RedactError(errors.New("dial tcp 10.0.0.5:5432: connection refused")); strings.Contains(got, "10.0.0.5") {
+		t.Fatalf("RedactError leaked internal address: %q", got)
+	}
+	msg := RedactMessage(provider.Message{
+		Role:    provider.RoleTool,
+		Content: "curl http://svc.corp/health -> ok host=db.internal",
+	})
+	if strings.Contains(msg.Content, "svc.corp") || strings.Contains(msg.Content, "db.internal") {
+		t.Fatalf("RedactMessage leaked internal address: %q", msg.Content)
+	}
+}
