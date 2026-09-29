@@ -3,11 +3,21 @@
 // module returns; nothing in the shell or the card changes.
 
 import { FooterChangedFilesModule } from "./FooterChangedFilesModule";
+import { FooterGitHistoryModule } from "./FooterGitHistoryModule";
+import { FooterMemoryModule } from "./FooterMemoryModule";
 import type { FooterPanelModule } from "./FooterPanel";
 
 export const FOOTER_PANEL_MODULES: readonly FooterPanelModule[] = [
   {
     id: "changed-files",
     render: (props) => <FooterChangedFilesModule {...props} />,
+  },
+  {
+    id: "git-history",
+    render: (props) => <FooterGitHistoryModule {...props} />,
+  },
+  {
+    id: "memory",
+    render: (props) => <FooterMemoryModule {...props} />,
   },
 ];

@@ -4,6 +4,10 @@
 // section, and switching project blanked the section while its answer was in
 // flight. Both are asserted on the section's presence and on the answer having
 // arrived — not on the panel's box, which is CSS and jsdom has no layout for.
+//
+// The registry's memory module is parked with a never-settling stub: it is not
+// under test here, and a module that has no answer renders nothing, so every
+// assertion below still belongs to the changed-files module alone.
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -28,6 +32,10 @@ function ok(value: boolean, label: string) {
   }
 }
 
+function parkMemoryModule(_tabID: string): Promise<never> {
+  return new Promise(() => {});
+}
+
 // The tabId default is deliberately absent: passing `undefined` must mean "no
 // session", not "use tab-a" (a default parameter would swallow it).
 async function renderPanel(changes: WorkspaceChangesView, tabId: string | undefined) {
@@ -40,6 +48,7 @@ async function renderPanel(changes: WorkspaceChangesView, tabId: string | undefi
           answers.count += 1;
           return changes;
         },
+        MemoryForTab: parkMemoryModule,
       } as Partial<AppBindings> as AppBindings,
     },
   }).main.App);
@@ -73,7 +82,7 @@ console.log("\nfooter panel module visibility");
   await act(async () => {
     await waitFor("changed files answer", () => answers.count === 1);
   });
-  ok(document.querySelector(".footer-panel__section") !== null, "a git-backed workspace renders the changed-files section");
+  ok(document.querySelector(".footer-changed") !== null, "a git-backed workspace renders the changed-files section");
   ok(document.body.textContent?.includes("src/a.ts") === true, "the section lists the changed file paths");
   ok(document.body.textContent?.includes("dev-2") === true, "the section shows the branch");
   await act(async () => {
@@ -87,7 +96,7 @@ console.log("\nfooter panel module visibility");
   await act(async () => {
     await waitFor("changes answer without git", () => answers.count === 1);
   });
-  ok(document.querySelector(".footer-panel__section") === null, "a workspace without git renders no section at all");
+  ok(document.querySelector(".footer-changed") === null, "a workspace without git renders no changed-files section");
   await act(async () => {
     root.unmount();
   });
@@ -100,7 +109,7 @@ console.log("\nfooter panel module visibility");
     await flushPromises();
   });
   ok(answers.count === 0, "no session tab asks for changes at all");
-  ok(document.querySelector(".footer-panel__section") === null, "no session tab renders no section");
+  ok(document.querySelector(".footer-changed") === null, "no session tab renders no changed-files section");
   await act(async () => {
     root.unmount();
   });
@@ -125,6 +134,7 @@ console.log("\nfooter panel module visibility");
           });
           return { files: [{ path: "src/b.ts", sources: ["git"] }], gitAvailable: true, gitBranch: "dev-3" };
         },
+        MemoryForTab: parkMemoryModule,
       } as Partial<AppBindings> as AppBindings,
     },
   }).main.App);
@@ -148,7 +158,7 @@ console.log("\nfooter panel module visibility");
     root.render(renderAt("tab-b", "scope-b"));
     await flushPromises();
   });
-  ok(document.querySelector(".footer-panel__section") !== null, "a scope switch keeps the section while its reload is in flight");
+  ok(document.querySelector(".footer-changed") !== null, "a scope switch keeps the section while its reload is in flight");
 
   await act(async () => {
     releaseSecond?.();

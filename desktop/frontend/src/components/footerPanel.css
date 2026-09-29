@@ -281,3 +281,197 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ── shared bar refresh (every module's bar may carry one) ──────────────── */
+
+.footer-panel__refresh {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-dim);
+  cursor: pointer;
+}
+
+.footer-panel__refresh:hover {
+  background: color-mix(in srgb, var(--fg) 10%, transparent);
+  color: var(--fg);
+}
+
+.footer-panel__spin {
+  animation: footer-changed-spin 0.9s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer-panel__spin { animation: none; }
+}
+
+/* ── memory module ──────────────────────────────────────────────────────── */
+
+.footer-memory {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footer-memory__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs, 11px);
+  color: var(--fg-dim);
+}
+
+.footer-memory__recall {
+  color: var(--fg-faint, var(--fg-dim));
+  font-variant-numeric: tabular-nums;
+}
+
+.footer-memory__warn {
+  color: var(--warn, #d97706);
+}
+
+.footer-memory__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Type and scope badges ride the same baseline as the text they qualify. */
+.footer-memory__row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+  min-width: 0;
+  font-size: var(--text-sm, 12px);
+}
+
+.footer-memory__type {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-size: var(--text-2xs, 10px);
+  line-height: 1.5;
+}
+
+.footer-memory__name {
+  flex: 0 0 auto;
+  max-width: 44%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.footer-memory__note {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-dim);
+}
+
+.footer-memory__tag {
+  flex: 0 0 auto;
+  font-size: var(--text-2xs, 10px);
+  color: var(--fg-faint, var(--fg-dim));
+}
+
+.footer-memory__row--stale .footer-memory__note {
+  color: var(--warn, #d97706);
+}
+
+/* ── shared module chrome (kept alongside the memory module's own names) ── */
+
+.footer-panel__bar,
+.footer-memory__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs, 11px);
+  color: var(--fg-dim);
+}
+
+.footer-panel__warn,
+.footer-memory__warn {
+  color: var(--warn, #d97706);
+}
+
+/* ── git history module ─────────────────────────────────────────────────── */
+
+.footer-git {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footer-git__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.footer-git__row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+  min-width: 0;
+  font-size: var(--text-sm, 12px);
+}
+
+.footer-git__hash {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: var(--text-2xs, 10px);
+  color: var(--accent);
+}
+
+.footer-git__message {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.footer-git__date {
+  flex: 0 0 auto;
+  font-size: var(--text-2xs, 10px);
+  color: var(--fg-faint, var(--fg-dim));
+  font-variant-numeric: tabular-nums;
+}
+
+.footer-git__more {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+
+.footer-git__more:hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
