@@ -1,7 +1,7 @@
 // Run: tsx src/__tests__/footer-changed-files-paging.test.tsx
 
-// A large working tree must not push the band out of shape: the changed-files
-// list starts with five rows and pages the rest in on demand, like the commits.
+// A long session must not push the band out of shape: the session-changes list
+// starts with five rows and pages the rest in on demand, like the commits.
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -26,7 +26,7 @@ function ok(value: boolean, label: string) {
 }
 
 const changes: WorkspaceChangesView = {
-  files: [1, 2, 3, 4, 5, 6, 7].map((index) => ({ path: `src/f${index}.ts`, sources: ["git"], gitStatus: "M" })),
+  files: [1, 2, 3, 4, 5, 6, 7].map((index) => ({ path: `src/f${index}.ts`, sources: ["session"], gitStatus: "M" })),
   gitAvailable: true,
   gitBranch: "dev-2",
 };
@@ -50,12 +50,12 @@ async function renderModule() {
   return { dom, root };
 }
 
-console.log("\nfooter changed-files paging");
+console.log("\nfooter session-changes paging");
 
 {
   const { dom, root } = await renderModule();
   await act(async () => {
-    await waitFor("changed files answer", () => document.querySelector(".footer-changed__row") !== null);
+    await waitFor("session changes answer", () => document.querySelector(".footer-changed__row") !== null);
   });
   ok(
     document.querySelectorAll(".footer-changed__row").length === FOOTER_CHANGED_FILES_INITIAL,
@@ -64,7 +64,7 @@ console.log("\nfooter changed-files paging");
   ok(document.body.textContent?.includes("src/f7.ts") === false, "files past the initial window stay hidden");
 
   const more = document.querySelector<HTMLButtonElement>(".footer-panel__more");
-  ok(more !== null, "a larger working tree offers a show-more control");
+  ok(more !== null, "a longer session offers a show-more control");
 
   await act(async () => {
     more?.click();

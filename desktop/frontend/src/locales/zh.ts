@@ -340,7 +340,8 @@ export const zh: Record<DictKey, string> = {
 
   // 底部面板（分栏底部横带）
   "footerPanel.title": "面板",
-  "footerPanel.changedFiles": "改动文件",
+  "footerPanel.sessionChanges": "本会话改动",
+  "footerPanel.gitUncommitted": "Git 未提交",
   "footerPanel.fileCount": "{n} 个文件",
   "footerPanel.refresh": "刷新改动",
   "footerPanel.resize": "调整底部面板宽度",

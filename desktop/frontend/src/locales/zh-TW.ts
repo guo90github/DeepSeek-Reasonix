@@ -260,7 +260,8 @@ export const zhTW: Record<DictKey, string> = {
 
   // 底部面板（分欄底部橫帶）
   "footerPanel.title": "面板",
-  "footerPanel.changedFiles": "改動檔案",
+  "footerPanel.sessionChanges": "本工作階段改動",
+  "footerPanel.gitUncommitted": "Git 未提交",
   "footerPanel.fileCount": "{n} 個檔案",
   "footerPanel.refresh": "重新整理改動",
   "footerPanel.resize": "調整底部面板寬度",

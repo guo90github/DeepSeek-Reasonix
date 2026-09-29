@@ -1,12 +1,11 @@
-// Sample footer-panel module: the session's working-tree changes, reusing the
-// dock's WorkspaceChanges resource instead of a second git reader. Reloads on
-// session switch and on demand; it never polls. It renders nothing at all where
-// git does not back the workspace.
+// Footer-panel module: the files THIS SESSION changed. The host's changes view
+// unions this tab's session checkpoints with `git status` of this tab's
+// workspace root (desktop/workspace_changes.go), so the rows are split by
+// source: this module keeps the session-sourced ones, and FooterGitUncommittedModule
+// owns the git-sourced ones — one list, two meanings, no ambiguity.
 //
-// The list is per SESSION, not per project: the host unions this tab's session
-// checkpoints with `git status` of this tab's workspace root. A session bound to
-// a different root (the global scratch dir) therefore reads 0, so the bar names
-// the workspace it inspected instead of leaving a bare count to be misread.
+// The bar names the session's workspace, because a session bound to the global
+// scratch dir is exactly why two sessions of one project disagree here.
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, RotateCw } from "lucide-react";
@@ -21,7 +20,7 @@ export const FOOTER_CHANGED_FILES_PAGE = 5;
 export function FooterChangedFilesModule({ tabId, workspaceScopeKey, workspaceRoot }: FooterPanelModuleProps) {
   const t = useT();
   const [revision, setRevision] = useState(0);
-  const [gitBacked, setGitBacked] = useState(false);
+  const [hadSessionRows, setHadSessionRows] = useState(false);
   const [visibleCount, setVisibleCount] = useState(FOOTER_CHANGED_FILES_INITIAL);
   const { workspaceChanges, loadingWorkspaceChanges, workspaceChangesErr, loadWorkspaceChanges } =
     useWorkspaceChangesResource(tabId ?? "", workspaceScopeKey, revision);
@@ -32,7 +31,8 @@ export function FooterChangedFilesModule({ tabId, workspaceScopeKey, workspaceRo
   }, [loadWorkspaceChanges, tabId]);
 
   useEffect(() => {
-    if (workspaceChanges) setGitBacked(workspaceChanges.gitAvailable);
+    if (!workspaceChanges) return;
+    setHadSessionRows(workspaceChanges.files.some((file) => file.sources?.includes("session")));
   }, [workspaceChanges]);
 
   // A new session starts its own page window; a refresh keeps the one in view.
@@ -50,31 +50,24 @@ export function FooterChangedFilesModule({ tabId, workspaceScopeKey, workspaceRo
   // generation, so a per-key memo could never hit and the section would blank out
   // on every project switch. A failure keeps the section (and its error line).
   if (!tabId) return null;
-  if (!gitBacked && !workspaceChangesErr) return null;
+  if (!hadSessionRows && !workspaceChangesErr) return null;
 
-  const files = workspaceChanges?.files ?? [];
-  // A big working tree would otherwise push the composer's own row off the band;
-  // the rest pages in five at a time, exactly like the commit list.
+  const files = (workspaceChanges?.files ?? []).filter((file) => file.sources?.includes("session"));
+  // A long session would otherwise push the composer's own row off the band; the
+  // rest pages in five at a time, exactly like the commit list.
   const shown = files.slice(0, visibleCount);
   const remaining = files.length - shown.length;
   const step = Math.min(FOOTER_CHANGED_FILES_PAGE, remaining);
   const workspaceLabel = workspaceRoot ? workspaceBasename(workspaceRoot) : "";
 
   return (
-    <FooterPanelSection title="footerPanel.changedFiles">
+    <FooterPanelSection title="footerPanel.sessionChanges">
       <div className="footer-changed">
         <div className="footer-changed__bar">
           {workspaceLabel ? (
             <span className="footer-changed__workspace" title={workspaceRoot}>{workspaceLabel}</span>
           ) : null}
-          {workspaceChanges?.gitBranch ? <span className="footer-changed__branch">{workspaceChanges.gitBranch}</span> : null}
           <span className="footer-changed__count">{t("footerPanel.fileCount", { n: files.length })}</span>
-          {typeof workspaceChanges?.added === "number" && workspaceChanges.added > 0 ? (
-            <span className="footer-changed__stat footer-changed__stat--add">{`+${workspaceChanges.added}`}</span>
-          ) : null}
-          {typeof workspaceChanges?.removed === "number" && workspaceChanges.removed > 0 ? (
-            <span className="footer-changed__stat footer-changed__stat--del">{`-${workspaceChanges.removed}`}</span>
-          ) : null}
           <button
             type="button"
             className="footer-changed__refresh"
@@ -87,10 +80,6 @@ export function FooterChangedFilesModule({ tabId, workspaceScopeKey, workspaceRo
         </div>
         {workspaceChangesErr ? (
           <p className="footer-panel__note footer-panel__note--error">{workspaceChangesErr}</p>
-        ) : workspaceChanges === null ? (
-          <p className="footer-panel__note">{t("common.loading")}</p>
-        ) : workspaceChanges.gitErr ? (
-          <p className="footer-panel__note">{workspaceChanges.gitErr}</p>
         ) : files.length === 0 ? (
           <p className="footer-panel__note">{t("footerPanel.noChanges")}</p>
         ) : (
@@ -100,9 +89,6 @@ export function FooterChangedFilesModule({ tabId, workspaceScopeKey, workspaceRo
                 <li className="footer-changed__row" key={file.path} title={file.path}>
                   <span className="footer-changed__status">{file.gitStatus?.trim() || "·"}</span>
                   <span className="footer-changed__path">{file.path}</span>
-                  {file.sources?.includes("session") && !file.sources.includes("git") ? (
-                    <span className="footer-changed__source">{t("workspace.sourceSession")}</span>
-                  ) : null}
                 </li>
               ))}
             </ul>

@@ -2,12 +2,15 @@
 
 // The reported defects: a workspace without git still showed a "changed files"
 // section, and switching project blanked the section while its answer was in
-// flight. Both are asserted on the section's presence and on the answer having
-// arrived — not on the panel's box, which is CSS and jsdom has no layout for.
+// flight. The section now belongs to the SESSION's own edits — git-sourced rows
+// are the git-uncommitted module's job — so presence is asserted against the
+// session rows, on the answer having arrived (not on the panel's box, which is
+// CSS and jsdom has no layout for).
 //
-// The registry's memory module is parked with a never-settling stub: it is not
-// under test here, and a module that has no answer renders nothing, so every
-// assertion below still belongs to the changed-files module alone.
+// The registry's other modules are parked: MemoryForTab never settles, git
+// history has no stub, and the git-uncommitted module needs a workspace root the
+// context does not pass — each of them therefore renders nothing, so every
+// assertion below belongs to the session-changes module alone.
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -71,20 +74,33 @@ console.log("\nfooter panel module visibility");
 {
   const { dom, root, answers } = await renderPanel({
     files: [
-      { path: "src/a.ts", sources: ["git"], gitStatus: "M" },
-      { path: "src/b.ts", sources: ["git"], gitStatus: "A" },
+      { path: "src/session-a.ts", sources: ["session"] },
+      { path: "src/both.ts", sources: ["git", "session"], gitStatus: "M" },
     ],
     gitAvailable: true,
     gitBranch: "dev-2",
-    added: 7,
-    removed: 1,
   }, "tab-a");
   await act(async () => {
-    await waitFor("changed files answer", () => answers.count === 1);
+    await waitFor("session changes answer", () => answers.count === 1);
   });
-  ok(document.querySelector(".footer-changed") !== null, "a git-backed workspace renders the changed-files section");
-  ok(document.body.textContent?.includes("src/a.ts") === true, "the section lists the changed file paths");
-  ok(document.body.textContent?.includes("dev-2") === true, "the section shows the branch");
+  ok(document.querySelector(".footer-changed") !== null, "a session that changed files renders its section");
+  ok(document.body.textContent?.includes("src/session-a.ts") === true, "the section lists the session's file paths");
+  await act(async () => {
+    root.unmount();
+  });
+  dom.window.close();
+}
+
+{
+  const { dom, root, answers } = await renderPanel({
+    files: [{ path: "src/git-only.ts", sources: ["git"], gitStatus: "M" }],
+    gitAvailable: true,
+    gitBranch: "dev-2",
+  }, "tab-a");
+  await act(async () => {
+    await waitFor("git-only answer", () => answers.count === 1);
+  });
+  ok(document.querySelector(".footer-changed") === null, "a file only git reports is left to the git-uncommitted module");
   await act(async () => {
     root.unmount();
   });
@@ -94,9 +110,9 @@ console.log("\nfooter panel module visibility");
 {
   const { dom, root, answers } = await renderPanel({ files: [], gitAvailable: false }, "tab-a");
   await act(async () => {
-    await waitFor("changes answer without git", () => answers.count === 1);
+    await waitFor("empty answer", () => answers.count === 1);
   });
-  ok(document.querySelector(".footer-changed") === null, "a workspace without git renders no changed-files section");
+  ok(document.querySelector(".footer-changed") === null, "a session that changed nothing renders no section");
   await act(async () => {
     root.unmount();
   });
@@ -109,7 +125,7 @@ console.log("\nfooter panel module visibility");
     await flushPromises();
   });
   ok(answers.count === 0, "no session tab asks for changes at all");
-  ok(document.querySelector(".footer-changed") === null, "no session tab renders no changed-files section");
+  ok(document.querySelector(".footer-changed") === null, "no session tab renders no section");
   await act(async () => {
     root.unmount();
   });
@@ -128,11 +144,11 @@ console.log("\nfooter panel module visibility");
       App: {
         WorkspaceChanges: async () => {
           calls += 1;
-          if (calls === 1) return { files: [{ path: "src/a.ts", sources: ["git"] }], gitAvailable: true, gitBranch: "dev-2" };
+          if (calls === 1) return { files: [{ path: "src/a.ts", sources: ["session"] }], gitAvailable: true, gitBranch: "dev-2" };
           await new Promise<void>((resolve) => {
             releaseSecond = resolve;
           });
-          return { files: [{ path: "src/b.ts", sources: ["git"] }], gitAvailable: true, gitBranch: "dev-3" };
+          return { files: [{ path: "src/b.ts", sources: ["session"] }], gitAvailable: true, gitBranch: "dev-3" };
         },
         MemoryForTab: parkMemoryModule,
       } as Partial<AppBindings> as AppBindings,
@@ -152,7 +168,7 @@ console.log("\nfooter panel module visibility");
     await flushPromises();
   });
   await act(async () => {
-    await waitFor("first changed files answer", () => document.body.textContent?.includes("src/a.ts") === true);
+    await waitFor("first session changes answer", () => document.body.textContent?.includes("src/a.ts") === true);
   });
   await act(async () => {
     root.render(renderAt("tab-b", "scope-b"));
@@ -165,9 +181,9 @@ console.log("\nfooter panel module visibility");
     await flushPromises();
   });
   await act(async () => {
-    await waitFor("second changed files answer", () => document.body.textContent?.includes("src/b.ts") === true);
+    await waitFor("second session changes answer", () => document.body.textContent?.includes("src/b.ts") === true);
   });
-  ok(document.body.textContent?.includes("src/b.ts") === true, "the section repaints with the new workspace's files");
+  ok(document.body.textContent?.includes("src/b.ts") === true, "the section repaints with the new session's files");
 
   await act(async () => {
     root.unmount();

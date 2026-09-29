@@ -339,7 +339,8 @@ export const en = {
 
   // footer panel (split layout bottom band)
   "footerPanel.title": "Panel",
-  "footerPanel.changedFiles": "Changed files",
+  "footerPanel.sessionChanges": "Session changes",
+  "footerPanel.gitUncommitted": "Git uncommitted",
   "footerPanel.fileCount": "{n} files",
   "footerPanel.refresh": "Refresh changes",
   "footerPanel.resize": "Resize footer panel",

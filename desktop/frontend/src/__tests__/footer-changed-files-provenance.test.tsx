@@ -1,9 +1,10 @@
 // Run: tsx src/__tests__/footer-changed-files-provenance.test.tsx
 
-// Real-machine report: the same project's sessions disagreed (23 files vs 0) and
-// refresh could not help. The list is per SESSION (the host unions this tab's
-// checkpoints with git of this tab's root), so the module must name the
-// workspace it inspected and mark the rows this session alone touched.
+// The session module lists what THIS session changed, and nothing else: the
+// host's answer unions the tab's checkpoints with git of its workspace root, so
+// the git-sourced rows belong to FooterGitUncommittedModule instead. The bar
+// names the workspace, because a session bound elsewhere is exactly why two
+// sessions of one project used to disagree.
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -29,9 +30,9 @@ function ok(value: boolean, label: string) {
 
 const changes: WorkspaceChangesView = {
   files: [
-    { path: "src/a.ts", sources: ["git"], gitStatus: "M" },
-    { path: "src/b.ts", sources: ["session"] },
-    { path: "src/c.ts", sources: ["git", "session"], gitStatus: "A" },
+    { path: "src/git-only.ts", sources: ["git"], gitStatus: "M" },
+    { path: "src/session-only.ts", sources: ["session"] },
+    { path: "src/both.ts", sources: ["git", "session"], gitStatus: "A" },
   ],
   gitAvailable: true,
   gitBranch: "dev-2",
@@ -56,20 +57,23 @@ async function renderModule(workspaceRoot: string | undefined) {
   return { dom, root };
 }
 
-console.log("\nfooter changed-files provenance");
+console.log("\nfooter session-changes provenance");
 
 {
   const { dom, root } = await renderModule("/Users/guosj/Reasonix/global-workspace");
   await act(async () => {
-    await waitFor("changes answer", () => document.querySelector(".footer-changed__row") !== null);
+    await waitFor("session changes answer", () => document.querySelector(".footer-changed__row") !== null);
   });
+  const rows = Array.from(document.querySelectorAll(".footer-changed__row"));
+  ok(rows.length === 2, "only the rows this session touched are listed");
+  ok(document.body.textContent?.includes("src/session-only.ts") === true, "a checkpoint-only file is listed");
+  ok(document.body.textContent?.includes("src/both.ts") === true, "a file both git and this session touched is listed");
+  ok(document.body.textContent?.includes("src/git-only.ts") === false, "a git-only file belongs to the git module, not here");
+
   const workspace = document.querySelector(".footer-changed__workspace");
-  ok(workspace !== null, "the bar names the workspace the list came from");
-  ok(workspace?.textContent === "global-workspace", "the name is the workspace's own directory, not the project's");
-  ok(workspace?.getAttribute("title") === "/Users/guosj/Reasonix/global-workspace", "the full inspected path rides the tooltip");
-  ok(document.querySelectorAll(".footer-changed__row").length === 3, "every row still renders");
-  ok(document.querySelectorAll(".footer-changed__source").length === 1, "only the session-only row is marked as this session's");
-  ok(document.querySelectorAll(".footer-changed__row")[0]?.querySelector(".footer-changed__source") === null, "a git-reported row carries no session mark");
+  ok(workspace !== null, "the bar names the workspace the session ran in");
+  ok(workspace?.textContent === "global-workspace", "the name is the session's own workspace directory");
+  ok(workspace?.getAttribute("title") === "/Users/guosj/Reasonix/global-workspace", "the full path rides the tooltip");
   await act(async () => {
     root.unmount();
   });
@@ -79,7 +83,7 @@ console.log("\nfooter changed-files provenance");
 {
   const { dom, root } = await renderModule(undefined);
   await act(async () => {
-    await waitFor("changes answer without a root", () => document.querySelector(".footer-changed__row") !== null);
+    await waitFor("session changes answer without a root", () => document.querySelector(".footer-changed__row") !== null);
   });
   ok(document.querySelector(".footer-changed__workspace") === null, "no workspace name is invented when the host does not report one");
   await act(async () => {

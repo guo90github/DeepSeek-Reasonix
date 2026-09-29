@@ -34,7 +34,7 @@ const commits: GitCommitView[] = Array.from({ length: TOTAL }, (_unused, index) 
   message: `提交 ${index}`,
 }));
 const changes: WorkspaceChangesView = {
-  files: Array.from({ length: TOTAL }, (_unused, index) => ({ path: `src/p${index}.ts`, sources: ["git"], gitStatus: "M" })),
+  files: Array.from({ length: TOTAL }, (_unused, index) => ({ path: `src/p${index}.ts`, sources: ["session"], gitStatus: "M" })),
   gitAvailable: true,
   gitBranch: "dev-2",
 };
@@ -92,10 +92,10 @@ console.log("\nfooter list paging steps");
 {
   const { dom, root } = await renderModule(<FooterChangedFilesModule tabId="tab-a" workspaceScopeKey="scope-a" />);
   await act(async () => {
-    await waitFor("changes answer", () => document.querySelector(".footer-changed__row") !== null);
+    await waitFor("session changes answer", () => document.querySelector(".footer-changed__row") !== null);
   });
   const rowCount = () => document.querySelectorAll(".footer-changed__row").length;
-  ok(rowCount() === FOOTER_CHANGED_FILES_INITIAL, "changed files start at the initial page");
+  ok(rowCount() === FOOTER_CHANGED_FILES_INITIAL, "session changes start at the initial page");
   await clickMore();
   ok(rowCount() === FOOTER_CHANGED_FILES_INITIAL + FOOTER_CHANGED_FILES_PAGE, "one click pages in exactly one more page");
   await clickMore();
