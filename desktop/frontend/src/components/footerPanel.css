@@ -514,6 +514,89 @@
   color: var(--fg);
 }
 
+/* ── rows are buttons: the whole record is one click away ───────────────── */
+
+.footer-panel__row {
+  width: 100%;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.footer-panel__row:hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+}
+
+.footer-panel__row:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: -2px;
+}
+
+/* A suggestion row keeps its own accept button, so only its text opens. */
+.footer-suggest__open {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* ── the row-detail modal (unbound: it portals into the document) ───────── */
+
+.footer-detail-backdrop {
+  --reasonix-draggable: no-drag;
+  z-index: var(--z-overlay-backdrop);
+}
+
+.footer-detail {
+  max-width: 560px;
+  color: var(--fg);
+}
+
+.footer-detail__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.footer-detail__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin-bottom: 0;
+  overflow-wrap: anywhere;
+}
+
+.footer-detail__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.footer-detail__tag {
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--fg-faint, var(--fg-dim));
+  font-size: var(--text-2xs, 10px);
+}
+
+/* Mono bodies also carry .modal__subject, which supplies the box. */
+.footer-detail__body {
+  max-height: 46vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--text-md, 13px);
+  line-height: 1.55;
+  color: var(--fg-dim);
+}
+
 /* ── shared badge (type / scope markers) ────────────────────────────────── */
 
 .footer-panel__badge {

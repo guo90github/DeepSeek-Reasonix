@@ -13,6 +13,7 @@ import { useT } from "../lib/i18n";
 import { useWorkspaceChangesResource } from "../lib/useWorkspaceChangesResource";
 import { workspaceBasename } from "../lib/workspacePanelFormat";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
+import { PanelRowButton } from "./FooterPanelDetail";
 
 export const FOOTER_CHANGED_FILES_INITIAL = 5;
 export const FOOTER_CHANGED_FILES_PAGE = 5;
@@ -86,9 +87,19 @@ export function FooterChangedFilesModule({ tabId, workspaceScopeKey, workspaceRo
           <>
             <ul className="footer-changed__list">
               {shown.map((file) => (
-                <li className="footer-changed__row" key={file.path} title={file.path}>
-                  <span className="footer-changed__status">{file.gitStatus?.trim() || "·"}</span>
-                  <span className="footer-changed__path">{file.path}</span>
+                <li key={file.path}>
+                  <PanelRowButton
+                    className="footer-changed__row"
+                    detail={{
+                      title: file.path,
+                      meta: [workspaceLabel, file.gitStatus?.trim() || "·", ...(file.sources ?? [])].filter(Boolean),
+                      body: file.path,
+                      mono: true,
+                    }}
+                  >
+                    <span className="footer-changed__status">{file.gitStatus?.trim() || "·"}</span>
+                    <span className="footer-changed__path">{file.path}</span>
+                  </PanelRowButton>
                 </li>
               ))}
             </ul>

@@ -9,6 +9,7 @@ import { useT } from "../lib/i18n";
 import type { GitCommitView } from "../lib/types";
 import { workspaceFormatCommitDate } from "../lib/workspacePanelFormat";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
+import { PanelRowButton } from "./FooterPanelDetail";
 
 export const FOOTER_COMMITS_INITIAL = 5;
 export const FOOTER_COMMITS_PAGE = 5;
@@ -97,14 +98,18 @@ export function FooterGitHistoryModule({ tabId }: FooterPanelModuleProps) {
           <>
             <ul className="footer-git__list">
               {shown.map((commit) => (
-                <li
-                  className="footer-git__row"
-                  key={commit.hash}
-                  title={`${workspaceFormatCommitDate(commit.date)} · ${commit.author}`}
-                >
-                  <span className="footer-git__hash">{commit.hash.slice(0, 7)}</span>
-                  <span className="footer-git__message">{commit.message}</span>
-                  <span className="footer-git__date">{compactCommitDate(commit.date)}</span>
+                <li key={commit.hash}>
+                  <PanelRowButton
+                    className="footer-git__row"
+                    detail={{
+                      title: commit.message,
+                      meta: [commit.hash, commit.author, workspaceFormatCommitDate(commit.date)],
+                    }}
+                  >
+                    <span className="footer-git__hash">{commit.hash.slice(0, 7)}</span>
+                    <span className="footer-git__message">{commit.message}</span>
+                    <span className="footer-git__date">{compactCommitDate(commit.date)}</span>
+                  </PanelRowButton>
                 </li>
               ))}
             </ul>

@@ -3,10 +3,14 @@
 // at all when it does not apply to the current workspace — an inapplicable
 // module must not leave a header that can never fill. The module list lives in
 // footerPanelModules.tsx.
+//
+// The card also hosts ONE row-detail modal for every module (PanelDetailProvider
+// in FooterPanelDetail), because a card row is one ellipsised line.
 
 import { Fragment, useCallback, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { useT, type DictKey } from "../lib/i18n";
+import { PanelDetailProvider } from "./FooterPanelDetail";
 
 export type FooterPanelModuleProps = {
   tabId?: string;
@@ -64,9 +68,11 @@ export function FooterPanel({
   return (
     <section className="footer-panel" aria-label={t("footerPanel.title")}>
       <header className="footer-panel__head">{t("footerPanel.title")}</header>
-      <div className="footer-panel__stack">
-        {modules.map((module) => <Fragment key={module.id}>{module.render(context)}</Fragment>)}
-      </div>
+      <PanelDetailProvider>
+        <div className="footer-panel__stack">
+          {modules.map((module) => <Fragment key={module.id}>{module.render(context)}</Fragment>)}
+        </div>
+      </PanelDetailProvider>
     </section>
   );
 }

@@ -14,6 +14,7 @@ import type { WorkspaceChangesView } from "../lib/types";
 import { loadWorkspaceGitStats } from "../lib/workspaceGitStats";
 import { workspaceBasename } from "../lib/workspacePanelFormat";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
+import { PanelRowButton } from "./FooterPanelDetail";
 
 export const FOOTER_GIT_UNCOMMITTED_INITIAL = 5;
 export const FOOTER_GIT_UNCOMMITTED_PAGE = 5;
@@ -67,12 +68,13 @@ export function FooterGitUncommittedModule({ tabId, workspaceRoot }: FooterPanel
   const shown = files.slice(0, visibleCount);
   const remaining = files.length - shown.length;
   const step = Math.min(FOOTER_GIT_UNCOMMITTED_PAGE, remaining);
+  const workspaceLabel = workspaceBasename(workspaceRoot);
 
   return (
     <FooterPanelSection title="footerPanel.gitUncommitted">
       <div className="footer-changed">
         <div className="footer-changed__bar">
-          <span className="footer-changed__workspace" title={workspaceRoot}>{workspaceBasename(workspaceRoot)}</span>
+          <span className="footer-changed__workspace" title={workspaceRoot}>{workspaceLabel}</span>
           {changes.gitBranch ? <span className="footer-changed__branch">{changes.gitBranch}</span> : null}
           <span className="footer-changed__count">{t("footerPanel.fileCount", { n: files.length })}</span>
           {typeof changes.added === "number" && changes.added > 0 ? (
@@ -99,9 +101,19 @@ export function FooterGitUncommittedModule({ tabId, workspaceRoot }: FooterPanel
           <>
             <ul className="footer-changed__list">
               {shown.map((file) => (
-                <li className="footer-changed__row" key={file.path} title={file.path}>
-                  <span className="footer-changed__status">{file.gitStatus?.trim() || "·"}</span>
-                  <span className="footer-changed__path">{file.path}</span>
+                <li key={file.path}>
+                  <PanelRowButton
+                    className="footer-changed__row"
+                    detail={{
+                      title: file.path,
+                      meta: [workspaceLabel, changes.gitBranch ?? "", file.gitStatus?.trim() || "·"].filter(Boolean),
+                      body: file.path,
+                      mono: true,
+                    }}
+                  >
+                    <span className="footer-changed__status">{file.gitStatus?.trim() || "·"}</span>
+                    <span className="footer-changed__path">{file.path}</span>
+                  </PanelRowButton>
                 </li>
               ))}
             </ul>

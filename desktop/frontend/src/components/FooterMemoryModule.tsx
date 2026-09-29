@@ -8,6 +8,7 @@ import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import type { MemoryView } from "../lib/types";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
+import { PanelRowButton } from "./FooterPanelDetail";
 
 function compactChars(chars: number): string {
   return chars >= 1000 ? `${(chars / 1000).toFixed(1)}k` : String(chars);
@@ -44,9 +45,9 @@ export function FooterMemoryModule({ tabId }: FooterPanelModuleProps) {
 
   const refresh = useCallback(() => setRevision((current) => current + 1), []);
 
-  // Same rule as the changed-files module: an unanswered or empty store renders
-  // nothing rather than a header that can never fill. The loaded answer survives
-  // a session switch, so a refresh never blanks what the user is reading.
+  // Same rule as the session-changes module: an unanswered or empty store renders
+  // nothing rather than a header that can never fill. The loaded answer survives a
+  // session switch, so a refresh never blanks what the user is reading.
   if (!tabId) return null;
   if (!view && !error) return null;
   if (view && !view.available && view.facts.length === 0 && view.docs.length === 0) return null;
@@ -86,15 +87,20 @@ export function FooterMemoryModule({ tabId }: FooterPanelModuleProps) {
           ) : (
             <ul className="footer-memory__list">
               {facts.map((fact) => (
-                <li
-                  className={`footer-memory__row${fact.freshness === "stale" ? " footer-memory__row--stale" : ""}`}
-                  key={fact.name}
-                  title={fact.description}
-                >
-                  <span className="footer-memory__type">{fact.type}</span>
-                  <span className="footer-memory__name">{fact.title || fact.name}</span>
-                  <span className="footer-memory__note">{fact.description}</span>
-                  {fact.scope === "global" ? <span className="footer-memory__tag">G</span> : null}
+                <li key={fact.name}>
+                  <PanelRowButton
+                    className={`footer-memory__row${fact.freshness === "stale" ? " footer-memory__row--stale" : ""}`}
+                    detail={{
+                      title: fact.title || fact.name,
+                      meta: [fact.name, fact.type, fact.scope, fact.freshness],
+                      body: [fact.description, fact.body].filter(Boolean).join("\n\n"),
+                    }}
+                  >
+                    <span className="footer-memory__type">{fact.type}</span>
+                    <span className="footer-memory__name">{fact.title || fact.name}</span>
+                    <span className="footer-memory__note">{fact.description}</span>
+                    {fact.scope === "global" ? <span className="footer-memory__tag">G</span> : null}
+                  </PanelRowButton>
                 </li>
               ))}
             </ul>
@@ -112,10 +118,19 @@ export function FooterMemoryModule({ tabId }: FooterPanelModuleProps) {
           ) : (
             <ul className="footer-memory__list">
               {docs.map((doc) => (
-                <li className="footer-memory__row" key={`${doc.scope}:${doc.path}`} title={doc.path}>
-                  <span className="footer-memory__type">{doc.scope}</span>
-                  <span className="footer-memory__note">{doc.path}</span>
-                  {doc.imports.length > 0 ? <span className="footer-memory__tag">{`+${doc.imports.length}`}</span> : null}
+                <li key={`${doc.scope}:${doc.path}`}>
+                  <PanelRowButton
+                    className="footer-memory__row"
+                    detail={{
+                      title: doc.path,
+                      meta: [doc.scope, ...doc.imports.map((entry) => entry.path)],
+                      body: doc.body,
+                    }}
+                  >
+                    <span className="footer-memory__type">{doc.scope}</span>
+                    <span className="footer-memory__note">{doc.path}</span>
+                    {doc.imports.length > 0 ? <span className="footer-memory__tag">{`+${doc.imports.length}`}</span> : null}
+                  </PanelRowButton>
                 </li>
               ))}
             </ul>

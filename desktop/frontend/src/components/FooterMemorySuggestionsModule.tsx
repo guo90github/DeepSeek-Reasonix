@@ -9,9 +9,10 @@ import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import type { MemorySuggestion, SkillSuggestion } from "../lib/types";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
+import { PanelRowButton } from "./FooterPanelDetail";
 
 type Suggestions = { memories: MemorySuggestion[]; skills: SkillSuggestion[] };
-type Candidate = { key: string; candidate: MemorySuggestion | SkillSuggestion; kind: "memory" | "skill"; label: string };
+type Candidate = { key: string; candidate: MemorySuggestion | SkillSuggestion; kind: "memory" | "skill"; label: string; badge: string };
 
 export function FooterMemorySuggestionsModule({ tabId }: FooterPanelModuleProps) {
   const t = useT();
@@ -71,8 +72,20 @@ export function FooterMemorySuggestionsModule({ tabId }: FooterPanelModuleProps)
   if (!suggestions || suggestions.memories.length + suggestions.skills.length === 0) return null;
 
   const candidates: Candidate[] = [
-    ...suggestions.memories.map((candidate) => ({ key: `memory:${candidate.id}`, candidate, kind: "memory" as const, label: candidate.title || candidate.name })),
-    ...suggestions.skills.map((candidate) => ({ key: `skill:${candidate.id}`, candidate, kind: "skill" as const, label: candidate.name })),
+    ...suggestions.memories.map((candidate) => ({
+      key: `memory:${candidate.id}`,
+      candidate,
+      kind: "memory" as const,
+      label: candidate.title || candidate.name,
+      badge: candidate.type,
+    })),
+    ...suggestions.skills.map((candidate) => ({
+      key: `skill:${candidate.id}`,
+      candidate,
+      kind: "skill" as const,
+      label: candidate.name,
+      badge: candidate.scope,
+    })),
   ];
 
   return (
@@ -91,13 +104,20 @@ export function FooterMemorySuggestionsModule({ tabId }: FooterPanelModuleProps)
           </button>
         </div>
         <ul className="footer-suggest__list">
-          {candidates.map(({ key, candidate, kind, label }) => (
-            <li className="footer-suggest__row" key={key} title={candidate.description}>
-              <span className="footer-panel__badge">
-                {kind === "memory" ? (candidate as MemorySuggestion).type : (candidate as SkillSuggestion).scope}
-              </span>
-              <span className="footer-suggest__title">{label}</span>
-              <span className="footer-suggest__desc">{candidate.description}</span>
+          {candidates.map(({ key, candidate, kind, label, badge }) => (
+            <li className="footer-suggest__row" key={key}>
+              <PanelRowButton
+                className="footer-suggest__open"
+                detail={{
+                  title: label,
+                  meta: [badge, candidate.scope],
+                  body: [candidate.description, candidate.body, candidate.reason, ...candidate.evidence].filter(Boolean).join("\n\n"),
+                }}
+              >
+                <span className="footer-panel__badge">{badge}</span>
+                <span className="footer-suggest__title">{label}</span>
+                <span className="footer-suggest__desc">{candidate.description}</span>
+              </PanelRowButton>
               {accepted[candidate.id] ? (
                 <span className="footer-suggest__accepted">
                   <Check size={11} aria-hidden="true" />
