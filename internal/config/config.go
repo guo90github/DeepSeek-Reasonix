@@ -1263,6 +1263,10 @@ type AgentConfig struct {
 	// empty means off. Like PromptOptimizeModel it must never run on the session
 	// model, and it is an independent provider instance via AuditProviderResolver.
 	AuditModel string `toml:"audit_model"`
+	// SessionRecapModel is the fallback model for session-recap generation, used
+	// only when the session's own recorded model can no longer be resolved;
+	// empty means no fallback (the session is then marked pending).
+	SessionRecapModel string `toml:"session_recap_model"`
 	// AuditThreshold is the score (0..1) below which an audit result surfaces
 	// for attention. Auditing itself is always available.
 	AuditThreshold float64 `toml:"audit_threshold"`

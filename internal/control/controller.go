@@ -187,6 +187,7 @@ type Controller struct {
 	shell                             sandbox.Shell                    // interpreter for user-invoked "!" commands; zero = auto
 	startedOnce                       bool                             // guards the one-shot SessionStart hook on first turn
 	closeOnce                         sync.Once                        // makes close idempotent under racing teardown paths
+	sessionEndObserver                func(reason, sessionPath string) // set by the composition root; must never block
 	onRemember                        func(rule string) RememberResult // set via Options; invoked when user picks "always allow"
 	onRememberPlanModeReadOnlyCommand func(prefix string) PlanModeReadOnlyCommandTrustResult
 	writeAccess                       controllerWriteAccess
@@ -3134,6 +3135,7 @@ func (c *Controller) NewSession() error {
 	}
 	c.hooks.SessionEnd(context.Background(), "clear")
 	c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, oldPath)
+	c.notifySessionEnd("clear", oldPath)
 	freshPath := oldPath
 	if c.sessionDir != "" {
 		freshPath = agent.NewSessionPath(c.sessionDir, c.label)
@@ -3241,6 +3243,7 @@ func (c *Controller) ClearSession() error {
 	}
 	c.hooks.SessionEnd(context.Background(), "clear")
 	c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, oldPath)
+	c.notifySessionEnd("clear", oldPath)
 	commitTransition.publish()
 	c.bindExecutorProjection(c.SessionPath(), false)
 	if c.guardianSess != nil {
@@ -5077,6 +5080,7 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		if fireSessionEnd && started {
 			c.hooks.SessionEnd(context.Background(), "other")
 			c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, c.SessionPath())
+			c.notifySessionEnd("other", c.SessionPath())
 		}
 		if c.jobs != nil {
 			switch jobsMode {

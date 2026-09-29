@@ -150,6 +150,44 @@ func (c *Config) SetAuditModel(name string) error {
 	return nil
 }
 
+// SetSessionRecapModel sets (or clears) the fallback model behind session-recap
+// generation. The primary model is the one the session itself recorded; this
+// value is consulted only when that model can no longer be resolved.
+func (c *Config) SetSessionRecapModel(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		c.Agent.SessionRecapModel = ""
+		return nil
+	}
+	entry, ok := c.ResolveModel(name)
+	if !ok {
+		return fmt.Errorf("set session recap model: no such model %q (configured: %s)", name, c.providerNames())
+	}
+	if !entry.Configured() {
+		return fmt.Errorf("set session recap model: provider %q has no key", entry.Name)
+	}
+	c.Agent.SessionRecapModel = entry.Name + "/" + entry.Model
+	return nil
+}
+
+// ResolveSessionRecapModel resolves the configured fallback. It never substitutes
+// the session model: an unset or unresolvable value returns false so the caller
+// can mark the session pending instead of guessing a model.
+func (c *Config) ResolveSessionRecapModel() (*ProviderEntry, bool) {
+	if c == nil {
+		return nil, false
+	}
+	ref := strings.TrimSpace(c.Agent.SessionRecapModel)
+	if ref == "" {
+		return nil, false
+	}
+	entry, ok := c.ResolveModel(ref)
+	if !ok || !entry.Configured() {
+		return nil, false
+	}
+	return entry, true
+}
+
 // SetAuditThreshold sets the quality score (0..1) below which an audit result
 // is flagged for attention.
 func (c *Config) SetAuditThreshold(threshold float64) error {

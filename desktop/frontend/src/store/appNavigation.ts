@@ -4,12 +4,13 @@ import type { SettingsInitialFocus } from "../components/SettingsPanel";
 import type { SettingsTab } from "../lib/types";
 import { applySetState } from "./setState";
 
-export type AppPage = { kind: "workspace" } | { kind: "settings"; tab: SettingsTab } | { kind: "trash" } | { kind: "automation" };
+export type AppPage = { kind: "workspace" } | { kind: "settings"; tab: SettingsTab } | { kind: "trash" } | { kind: "recap" } | { kind: "automation" };
 type NavigationState = {
   page: AppPage;
   workspaceFocus: HTMLElement | null;
   generation: number;
   visitedTrash: boolean;
+  visitedRecap: boolean;
   visitedAutomation: boolean;
   lastSettingsTarget: SettingsTab;
   settingsFocus: SettingsInitialFocus | null;
@@ -22,13 +23,14 @@ type NavigationState = {
   returnFromAutomationLink: (generation: number) => void;
 };
 export const useAppNavigationStore = create<NavigationState>((set, get) => ({
-  page: { kind: "workspace" }, workspaceFocus: null, generation: 0, visitedTrash: false, visitedAutomation: false,
+  page: { kind: "workspace" }, workspaceFocus: null, generation: 0, visitedTrash: false, visitedRecap: false, visitedAutomation: false,
   lastSettingsTarget: "general", settingsFocus: null, automationReturn: false,
   openPage: (page) => set((state) => ({
     page,
     workspaceFocus: state.page.kind === "workspace" && page.kind !== "workspace" && typeof document !== "undefined" ? document.activeElement as HTMLElement | null : state.workspaceFocus,
     generation: state.generation + 1,
     visitedTrash: state.visitedTrash || page.kind === "trash",
+    visitedRecap: state.visitedRecap || page.kind === "recap",
     visitedAutomation: state.visitedAutomation || page.kind === "automation",
     lastSettingsTarget: page.kind === "settings" ? page.tab : state.lastSettingsTarget,
     automationReturn: false,

@@ -5747,6 +5747,28 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/session_recap.go",
+      "name": "ListSessionRecaps",
+      "owner": "App.ListSessionRecaps",
+      "params": [],
+      "result": {
+        "elem": {
+          "kind": "object",
+          "ref": "main.SessionRecapView"
+        },
+        "kind": "array"
+      },
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.ListSessionRecaps"
+      },
+      "sources": [
+        "desktop/session_recap.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/app.go",
       "name": "ListSessions",
       "owner": "App.ListSessions",
@@ -30950,6 +30972,53 @@
           "optional": true,
           "type": {
             "kind": "boolean"
+          }
+        }
+      ]
+    },
+    "main.SessionRecapView": {
+      "fields": [
+        {
+          "name": "path",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "goal",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "actions",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "conclusion",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "todos",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "model",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "generatedAt",
+          "type": {
+            "kind": "string"
           }
         }
       ]

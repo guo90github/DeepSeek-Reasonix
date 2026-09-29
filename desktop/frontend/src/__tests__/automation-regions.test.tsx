@@ -17,7 +17,7 @@ for (const layout of ["workbench", "creation"]) {
       <SidebarRegion className="sidebar" workbench={layout === "workbench"}
         creation={layout === "creation"} collapsed={false} automation={automation}
         navTooltipDisabled searchOpen={false} togglePressed={false} toggleTitle="toggle" t={t}
-        onNewSession={noop} onOpenTrash={noop} onOpenAutomation={noop} onOpenSettings={noop}
+        onNewSession={noop} onOpenTrash={noop} onOpenRecap={noop} onOpenAutomation={noop} onOpenSettings={noop}
         onToggleSearch={noop} onToggle={noop}
         resize={{ min: 180, max: 400, value: 240, onPointerDown: noop, onKeyDown: noop, onReset: noop }}
         projectTree={{ onOpenTopic: noop, onCreateTopic: noop, onTopicsChanged: noop }} />

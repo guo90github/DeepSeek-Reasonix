@@ -126,6 +126,7 @@ import type {
   QuestionAnswer,
   ServerView,
   SessionMeta,
+  SessionRecap,
   SessionRecoveryFailedEvent,
   SessionRecoveryEvent,
   SettingsView,
@@ -395,6 +396,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   ListSessions(): Promise<SessionMeta[]>;
   ListSessionsForTab(tabID: string): Promise<SessionMeta[]>;
   ListTrashedSessions(): Promise<SessionMeta[]>;
+  ListSessionRecaps(): Promise<SessionRecap[]>;
   ResumeSession(path: string): Promise<HistoryMessage[]>;
   ResumeSessionForTab(tabID: string, path: string): Promise<HistoryMessage[]>;
   ResumeSessionPage(path: string, limit: number): Promise<HistoryPage>;
@@ -3305,6 +3307,9 @@ function makeMockApp(): AppBindings {
     ...makeMockHistoryCatalogBindings(sessions),
     async ListTrashedSessions() {
       return trashedSessions.map((s) => ({ ...s }));
+    },
+    async ListSessionRecaps() {
+      return [];
     },
     async ResumeSession(path: string) {
       sessions.forEach((s) => {

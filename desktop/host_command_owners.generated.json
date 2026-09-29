@@ -3077,6 +3077,18 @@
       "inputs": []
     }
   },
+  "ListSessionRecaps": {
+    "domain": "desktop/session_recap.go",
+    "owner": "App.ListSessionRecaps",
+    "sources": [
+      "desktop/session_recap.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.ListSessionRecaps",
+      "inputs": []
+    }
+  },
   "ListSessions": {
     "domain": "desktop/app.go",
     "owner": "App.ListSessions",

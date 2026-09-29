@@ -32,3 +32,14 @@ export interface SessionMeta {
   versionState?: "active" | "pending" | "resolved" | "trashed" | string;
   parentVersionId?: string;
 }
+
+// SessionRecap is one read-only recap written when a session closes.
+export interface SessionRecap {
+  path: string;
+  goal: string;
+  actions: string;
+  conclusion: string;
+  todos?: string;
+  model: string;
+  generatedAt: string; // RFC3339
+}

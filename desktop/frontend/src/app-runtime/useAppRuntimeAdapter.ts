@@ -53,6 +53,7 @@ export function useAppRuntimeAdapter() {
       newSession: controller.newSession,
       listSessions: controller.listSessions,
       listTrashedSessions: controller.listTrashedSessions,
+      listSessionRecaps: controller.listSessionRecaps,
       resumeSession: controller.resumeSession,
       openChannelSession: controller.openChannelSession,
       previewSession: controller.previewSession,

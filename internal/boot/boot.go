@@ -1926,6 +1926,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// reviewer. Controllers that want one inject it explicitly; otherwise Goal
 	// uses the deterministic host policy.
 	ctrl := control.New(ctrlOpts)
+	bindRecapLane(context.Background(), cfg, ctrl, sink, effectiveResolver, proxySpec)
 	// Bind a private host's children to the controller that owns them: one
 	// controller, one true session. A shared host serves several controllers, so
 	// its children learn their caller per MCP call instead.

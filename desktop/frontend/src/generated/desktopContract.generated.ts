@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:c5d934d1418d8ef55e33ef88d623729cd25b1601a2ff69eb6d40710aa7bd24eb";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:23d6f696611b7be009841bca2ecce79947c7a1eae8ffb7fb63795c2aaf217afe";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -222,6 +222,7 @@ export const DESKTOP_COMMANDS = [
   "ListProjectTree",
   "ListRemoteDir",
   "ListRemoteProjects",
+  "ListSessionRecaps",
   "ListSessions",
   "ListSessionsForTab",
   "ListTabs",
@@ -3431,6 +3432,16 @@ export interface SessionMeta {
   recoveryCanonical?: boolean;
 }
 
+export interface SessionRecapView {
+  path: string;
+  goal: string;
+  actions: string;
+  conclusion: string;
+  todos?: string;
+  model: string;
+  generatedAt: string;
+}
+
 export interface SessionRuntimeIssue {
   code: string;
   message: string;
@@ -4620,6 +4631,7 @@ export interface GeneratedDesktopCommands {
   ListProjectTree(): Promise<ProjectNode[]>;
   ListRemoteDir(arg0: string, arg1: string): Promise<RemoteDirEntry[]>;
   ListRemoteProjects(): Promise<RemoteProjectView[]>;
+  ListSessionRecaps(): Promise<SessionRecapView[]>;
   ListSessions(): Promise<SessionMeta[]>;
   ListSessionsForTab(arg0: string): Promise<SessionMeta[]>;
   ListTabs(): Promise<TabMeta[]>;

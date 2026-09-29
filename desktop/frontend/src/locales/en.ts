@@ -77,6 +77,7 @@ export const en = {
   // sidebar
   "sidebar.conversations": "Chats",
   "sidebar.trash": "Trash",
+  "sidebar.recap": "Session recap",
   "sidebar.automation": "Automation",
   "sidebar.memorySkills": "Memory & Skills",
   "sidebar.workspace": "Workspace",
@@ -1419,6 +1420,14 @@ export const en = {
   // history drawer
   "history.title": "History",
   "history.trashTitle": "Trash",
+  "history.recapTitle": "Session recap",
+  "history.recapEmpty": "No session recaps yet.",
+  "history.recapGeneratedAt": "Generated",
+  "history.recapModel": "Model",
+  "history.recapGoal": "Goal",
+  "history.recapActions": "Key actions",
+  "history.recapConclusion": "Conclusion",
+  "history.recapTodos": "Follow-ups",
   "history.empty": "No saved sessions yet.",
   "history.trashEmpty": "Trash is empty.",
   "history.namePlaceholder": "Session name…",

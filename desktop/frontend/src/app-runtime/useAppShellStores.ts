@@ -36,6 +36,7 @@ export function useAppShellStores() {
   const returnToWorkspace = useAppNavigationStore((s) => s.returnToWorkspace);
   const enterConversation = useAppNavigationStore((s) => s.enterConversation);
   const visitedTrash = useAppNavigationStore((s) => s.visitedTrash);
+  const visitedRecap = useAppNavigationStore((s) => s.visitedRecap);
   const visitedAutomation = useAppNavigationStore((s) => s.visitedAutomation);
   const automationReturn = useAppNavigationStore((s) => s.automationReturn);
   const setSettingsTarget = useAppNavigationStore((s) => s.setSettingsTarget);
@@ -84,7 +85,7 @@ export function useAppShellStores() {
     transientOverlayDismissSignal, setTransientOverlayDismissSignal,
     sidebarSearchOpen, setSidebarSearchOpen, sidebarSearchFocusSignal, setSidebarSearchFocusSignal,
     page, openPage, returnToWorkspace, enterConversation,
-    visitedTrash, visitedAutomation, automationReturn,
+    visitedTrash, visitedRecap, visitedAutomation, automationReturn,
     settingsTarget, settingsFocus, setSettingsTarget, setSettingsFocus,
     sidebarCollapsed, sidebarResizing, sidebarTogglePressed,
     workspacePanelOpen, rightDockTreeWidth, setRightDockTreeWidth, rightDockPreviewWidth,

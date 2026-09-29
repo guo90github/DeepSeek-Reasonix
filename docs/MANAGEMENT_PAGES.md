@@ -1,10 +1,10 @@
 # Full-window management pages
 
-Trash, Automation and Settings retain independent entries and share `ManagementPageShell`. They fill the application window without changing native fullscreen, maximize or close behavior. Each feature loads lazily; a failed chunk can be retried or exited.
+Trash, Session recap, Automation and Settings retain independent entries and share `ManagementPageShell`. They fill the application window without changing native fullscreen, maximize or close behavior. Each feature loads lazily; a failed chunk can be retried or exited.
 
 ## Navigation and workspace
 
-`useAppNavigationStore` owns workspace/settings/trash/automation navigation, the last settings category, focus restoration and the single automation-conversation return target. The legacy providers category resolves to models. Transient menus and dialogs remain independent overlays.
+`useAppNavigationStore` owns workspace/settings/trash/recap/automation navigation, the last settings category, focus restoration and the single automation-conversation return target. The legacy providers category resolves to models. Transient menus and dialogs remain independent overlays.
 
 The workspace stays mounted at its existing dimensions and becomes inert while a management page is active. Returning does not reactivate the current conversation, reload history, or introduce another transcript scroll writer. Background work continues. Entry focuses Back to workspace; exit restores the invoking entry. Escape closes child menus/dialogs, while the close-tab shortcut returns to the workspace. Hidden workspace shortcuts are suspended; command palette, settings and explicit conversation navigation remain available.
 
@@ -17,6 +17,10 @@ The wide layout places search, scope/date filters and grouped conversations on t
 Selection uses stable paths and advances to the nearest remaining row after a mutation. Preview request generations prevent late responses from replacing a newer selection. Loading failures are distinct from empty results. Restore and purge have explicit asynchronous outcomes.
 
 Permanent deletion requires confirmation with initial focus on Cancel. Empty Trash snapshots every ordinary deleted conversation, including filtered-out rows, and excludes system recovery copies. The batch runs sequentially, continues after individual failures, reports totals and offers an explicit failed-only retry. A successful mutation followed by a failed refresh is reported separately, so successful destructive operations are not resubmitted.
+
+## Session recap
+
+Session recap keeps its own entry and is deliberately not merged into Trash, which owns a session's restore and purge. The page is read-only: a recap is the four-element document written when a session closes, so it lists closed sessions only, and its subtitle states that session-level deletion and restore live in Trash. Rows come from the host's `ListSessionRecaps` newest first; sessions that left the visible set are dropped host-side, so the page shows exactly what retrieval still sees. Generating a recap never blocks a close: the lane is asynchronous and its own provider call.
 
 ## Automation drafts
 

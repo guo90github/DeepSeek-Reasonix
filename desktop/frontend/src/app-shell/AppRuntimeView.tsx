@@ -245,6 +245,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           commands: {
             onNewSession: () => void navigationCommands.handleNewTab(),
             onOpenTrash: () => void navigation.historyCommands.openTrash(),
+            onOpenRecap: () => void shell.openPage({ kind: "recap" }),
             onOpenAutomation: () => shell.openPage({ kind: "automation" }),
             onOpenSettings: chromeCommands.openSidebarSettings,
             onToggleSearch: chromeCommands.toggleSidebarSearch,
@@ -527,6 +528,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
         sessionActions: {
           previewSession: runtime.sessionActions.previewSession,
           listTrashedSessions: runtime.sessionActions.listTrashedSessions,
+          listSessionRecaps: runtime.sessionActions.listSessionRecaps,
           restoreSession: runtime.sessionActions.restoreSession,
           purgeTrashedSession: runtime.sessionActions.purgeTrashedSession,
         },

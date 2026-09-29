@@ -45,6 +45,7 @@ export function buildOverlayHostProps(input: {
   sessionActions: {
     previewSession: NonNullable<AppOverlayHostProps["history"]>["commands"]["onPreview"];
     listTrashedSessions: NonNullable<AppOverlayHostProps["trash"]>["commands"]["list"];
+    listSessionRecaps: NonNullable<AppOverlayHostProps["recap"]>["commands"]["list"];
     restoreSession: NonNullable<AppOverlayHostProps["trash"]>["commands"]["restore"];
     purgeTrashedSession: NonNullable<AppOverlayHostProps["trash"]>["commands"]["purge"];
   };
@@ -64,6 +65,8 @@ export function buildOverlayHostProps(input: {
     } : undefined,
     trash: shell.visitedTrash ? { view: { active: input.pageKind === "trash" },
       commands: { onBack: shell.returnToWorkspace, list: sessionActions.listTrashedSessions, restore: sessionActions.restoreSession, purge: sessionActions.purgeTrashedSession } } : undefined,
+    recap: shell.visitedRecap ? { view: { active: input.pageKind === "recap" },
+      commands: { onBack: shell.returnToWorkspace, list: sessionActions.listSessionRecaps } } : undefined,
     automation: shell.visitedAutomation ? { view: { active: input.pageKind === "automation" },
       commands: { onBack: shell.returnToWorkspace, onOpenTopic: input.automationTopic } } : undefined,
     recovery: {

@@ -78,6 +78,7 @@ export const zh: Record<DictKey, string> = {
   // 侧边栏
   "sidebar.conversations": "会话",
   "sidebar.trash": "回收站",
+  "sidebar.recap": "会话回顾",
   "sidebar.automation": "自动化",
   "sidebar.memorySkills": "记忆与技能",
   "sidebar.workspace": "工作区",
@@ -1420,6 +1421,14 @@ export const zh: Record<DictKey, string> = {
   // 历史抽屉
   "history.title": "历史",
   "history.trashTitle": "回收站",
+  "history.recapTitle": "会话回顾",
+  "history.recapEmpty": "还没有会话回顾",
+  "history.recapGeneratedAt": "生成时间",
+  "history.recapModel": "模型",
+  "history.recapGoal": "目标",
+  "history.recapActions": "关键动作",
+  "history.recapConclusion": "结论",
+  "history.recapTodos": "待办",
   "history.empty": "还没有已保存的会话。",
   "history.trashEmpty": "回收站为空。",
   "history.namePlaceholder": "会话名称…",

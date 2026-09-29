@@ -80,6 +80,7 @@ import type {
   QuestionAnswer,
   RewindResultView,
   SessionMeta,
+  SessionRecap,
   TabMeta,
   ToolApprovalMode,
   TopicActivationEvent,
@@ -4524,6 +4525,7 @@ export function useController() {
     return asArray<SessionMeta>(page.items);
   }, []);
   const listTrashedSessions = useCallback(async (): Promise<SessionMeta[]> => asArray<SessionMeta>(await app.ListTrashedSessions()), []);
+  const listSessionRecaps = useCallback(async (): Promise<SessionRecap[]> => asArray<SessionRecap>(await app.ListSessionRecaps()), []);
   const retrySessionHistory = useCallback(async (tabId?: string) => {
     const id = tabId || activeTabIdRef.current; if (!id) return;
     // A failed hydrate at startup usually means the tab controller build has
@@ -5309,7 +5311,7 @@ export function useController() {
     answerMCPInteraction, answerMCPInteractionForTab, setControllerMode, setControllerModeForTab,
     dismissExtensionForm, drainExtensionNotifications,
     setCollaborationMode, setCollaborationModeForTab, setToolApprovalMode, setToolApprovalModeForTab, setQualityFloor, setComposerProfileForTab, setGoal, setGoalForTab, clearGoal, clearGoalForTab, resumeGoal, resumeGoalForTab, pauseGoal, pauseGoalForTab,
-    newSession, clearSession, listSessions, listTrashedSessions, retrySessionHistory, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
+    newSession, clearSession, listSessions, listTrashedSessions, listSessionRecaps, retrySessionHistory, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
     loadOlderHistory,
     requestHistoryFullContent,
     refreshMeta, pickWorkspace, switchWorkspace, compact, rewind, rewindForTab, rewindForTabDetailed, undoRewindForTab, setModel, setModelForTab, setEffort, setEffortForTab, cancelJob,

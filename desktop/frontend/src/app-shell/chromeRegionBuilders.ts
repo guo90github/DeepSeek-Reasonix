@@ -41,6 +41,7 @@ export function buildSidebarRegionProps(input: {
   commands: {
     onNewSession: () => void;
     onOpenTrash: () => void;
+    onOpenRecap: () => void;
     onOpenAutomation: () => void;
     onOpenSettings: SidebarRegionProps["onOpenSettings"];
     onToggleSearch: () => void;
@@ -63,6 +64,7 @@ export function buildSidebarRegionProps(input: {
     t: input.t,
     onNewSession: commands.onNewSession,
     onOpenTrash: commands.onOpenTrash,
+    onOpenRecap: commands.onOpenRecap,
     onOpenAutomation: commands.onOpenAutomation,
     onOpenSettings: commands.onOpenSettings,
     onToggleSearch: commands.onToggleSearch,

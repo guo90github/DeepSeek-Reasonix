@@ -9,6 +9,7 @@ const HistoryPanel = lazy(() => import("../components/HistoryPanel").then((modul
 const SessionRecoveryVersionsHost = lazy(() => import("../components/SessionRecoveryVersionsHost").then((module) => ({ default: module.SessionRecoveryVersionsHost })));
 const loadSettingsPage = () => import("../components/SettingsPanelEntry").then((module) => ({ default: module.SettingsPanel }));
 const loadTrashPage = () => import("../components/TrashPage").then((module) => ({ default: module.TrashPage }));
+const loadRecapPage = () => import("../components/SessionRecapPage").then((module) => ({ default: module.SessionRecapPage }));
 const loadAutomationPage = () => import("../custom/features/heartbeat/HeartbeatPanel").then((module) => ({ default: module.HeartbeatView }));
 type LoadedProps<T> = T extends () => Promise<{ default: React.ComponentType<infer Props> }> ? Props : never;
 const CommandPalette = lazy(() => import("../components/CommandPalette").then((module) => ({ default: module.CommandPalette })));
@@ -25,6 +26,7 @@ export type AppOverlayHostProps = {
   recovery: Region<ComponentProps<typeof SessionRecoveryVersionsHost>, "sessions">;
   settings?: Region<LoadedProps<typeof loadSettingsPage>, "initialTab" | "initialFocus" | "agentRunning" | "desktopPlatform" | "activeWorkspaceKey">;
   trash?: Region<LoadedProps<typeof loadTrashPage>, "active">;
+  recap?: Region<LoadedProps<typeof loadRecapPage>, "active">;
   automation?: Region<LoadedProps<typeof loadAutomationPage>, "active">;
   palette?: Region<ComponentProps<typeof CommandPalette>, "open" | "items" | "placeholder" | "emptyText">;
   shortcuts: Region<ComponentProps<typeof ShortcutsCheatsheet>, "open" | "platform" | "t">;
@@ -34,13 +36,15 @@ export type AppOverlayHostProps = {
 };
 
 /** Presentation-only overlay region. Async ownership stays in feature owners. */
-export function AppOverlayHost({ history, recovery, settings, trash, automation, palette, shortcuts, startup, selection, worktree }: AppOverlayHostProps) {
+export function AppOverlayHost({ history, recovery, settings, trash, recap, automation, palette, shortcuts, startup, selection, worktree }: AppOverlayHostProps) {
   return (
     <>
       {history && <Suspense fallback={null}><HistoryPanel {...history.view} {...history.commands} /></Suspense>}
       <Suspense fallback={null}><SessionRecoveryVersionsHost {...recovery.view} {...recovery.commands} /></Suspense>
       {trash && <ManagementSurface loader={loadTrashPage} active={trash.view.active} onBack={trash.commands.onBack}
         surfaceProps={{ ...trash.view, ...trash.commands }} />}
+      {recap && <ManagementSurface loader={loadRecapPage} active={recap.view.active} onBack={recap.commands.onBack}
+        surfaceProps={{ ...recap.view, ...recap.commands }} />}
       {automation && <ManagementSurface loader={loadAutomationPage} active={automation.view.active !== false} onBack={automation.commands.onBack!}
         surfaceProps={{ ...automation.view, ...automation.commands }} />}
       {settings && <ManagementSurface loader={loadSettingsPage} active onBack={settings.commands.onClose}

@@ -501,6 +501,7 @@ const (
 	UsageSourceCapabilityRouter = "capability-router"
 	UsageSourceRecoveryReviewer = "recovery-reviewer"
 	UsageSourceGoalEvaluator    = "goal-evaluator"
+	UsageSourceSessionRecap     = "session-recap"
 )
 
 // Event is one increment in a turn's event stream. Read the field(s) documented

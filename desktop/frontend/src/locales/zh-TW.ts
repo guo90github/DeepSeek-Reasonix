@@ -64,6 +64,7 @@ export const zhTW: Record<DictKey, string> = {
 
   // 側邊欄
   "sidebar.trash": "回收站",
+  "sidebar.recap": "工作階段回顧",
   "sidebar.automation": "自動化",
   "sidebar.navigation": "Reasonix 導航",
   "sidebar.utilityActions": "側邊欄工具",
@@ -1068,6 +1069,14 @@ export const zhTW: Record<DictKey, string> = {
   // 歷史抽屜
   "history.title": "歷史",
   "history.trashTitle": "回收站",
+  "history.recapTitle": "工作階段回顧",
+  "history.recapEmpty": "還沒有工作階段回顧",
+  "history.recapGeneratedAt": "產生時間",
+  "history.recapModel": "模型",
+  "history.recapGoal": "目標",
+  "history.recapActions": "關鍵動作",
+  "history.recapConclusion": "結論",
+  "history.recapTodos": "待辦",
   "history.empty": "還沒有已儲存的會話。",
   "history.trashEmpty": "回收站為空。",
   "history.namePlaceholder": "會話名稱…",

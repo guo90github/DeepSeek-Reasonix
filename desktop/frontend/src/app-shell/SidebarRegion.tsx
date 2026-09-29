@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentProps, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
-import { AlarmClock, Brain, Command, MessageSquare, PanelLeft, PanelRight, Search, Settings, SquarePen, Trash2 } from "lucide-react";
+import { AlarmClock, Brain, Command, History, MessageSquare, PanelLeft, PanelRight, Search, Settings, SquarePen, Trash2 } from "lucide-react";
 import { Tooltip } from "../components/Tooltip";
 import type { Translator } from "../lib/i18n";
 import type { SettingsTab } from "../lib/types";
@@ -29,6 +29,7 @@ export type SidebarRegionProps = {
   t: Translator;
   onNewSession: () => void;
   onOpenTrash: () => void;
+  onOpenRecap: () => void;
   onOpenAutomation: () => void;
   onOpenSettings: (tab: SettingsTab) => void;
   onToggleSearch: () => void;
@@ -82,6 +83,7 @@ export function SidebarRegion(props: SidebarRegionProps) {
           <nav className="sidebar__nav sidebar__nav--footer">
             <div className="sidebar__utility-row" aria-label={t("sidebar.utilityActions")}>
               <UtilityButton label={t("sidebar.trash")} icon={<Trash2 size={16} />} onClick={props.onOpenTrash} />
+              <UtilityButton label={t("sidebar.recap")} icon={<History size={16} />} onClick={props.onOpenRecap} />
               <UtilityButton label={t("heartbeat.scheduler")} icon={<AlarmClock size={16} />} onClick={props.onOpenAutomation} />
               <UtilityButton label={t("topbar.settings")} icon={<Settings size={16} />} onClick={() => props.onOpenSettings("general")} />
             </div>
@@ -97,6 +99,7 @@ export function SidebarRegion(props: SidebarRegionProps) {
               </Tooltip>
             )}
             <NavButton label={t("sidebar.trash")} icon={<Trash2 size={15} />} disabledTooltip={props.navTooltipDisabled} onClick={props.onOpenTrash} />
+            <NavButton label={t("sidebar.recap")} icon={<History size={15} />} disabledTooltip={props.navTooltipDisabled} onClick={props.onOpenRecap} />
             {!props.creation && <NavButton active={props.automation} label={t("heartbeat.scheduler")} icon={<AlarmClock size={15} />} disabledTooltip={props.navTooltipDisabled} onClick={props.onOpenAutomation} />}
             <NavButton label={t("topbar.settings")} icon={<Settings size={15} />} disabledTooltip={props.navTooltipDisabled} onClick={() => props.onOpenSettings("general")} />
           </nav>
