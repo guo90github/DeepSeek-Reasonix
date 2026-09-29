@@ -5,6 +5,7 @@
 import { FooterChangedFilesModule } from "./FooterChangedFilesModule";
 import { FooterGitHistoryModule } from "./FooterGitHistoryModule";
 import { FooterMemoryModule } from "./FooterMemoryModule";
+import { FooterMemorySuggestionsModule } from "./FooterMemorySuggestionsModule";
 import type { FooterPanelModule } from "./FooterPanel";
 
 export const FOOTER_PANEL_MODULES: readonly FooterPanelModule[] = [
@@ -19,5 +20,9 @@ export const FOOTER_PANEL_MODULES: readonly FooterPanelModule[] = [
   {
     id: "memory",
     render: (props) => <FooterMemoryModule {...props} />,
+  },
+  {
+    id: "memory-suggestions",
+    render: (props) => <FooterMemorySuggestionsModule {...props} />,
   },
 ];

@@ -357,7 +357,7 @@ export const en = {
   "footerPanel.gitHistory": "Recent commits",
   "footerPanel.commitCount": "{n} commits",
   "footerPanel.noCommits": "No commits",
-  "footerPanel.showMore": "{n} more commits",
+  "footerPanel.showMore": "{n} more",
   "footerPanel.showLess": "Show less",
 
   // topic bar

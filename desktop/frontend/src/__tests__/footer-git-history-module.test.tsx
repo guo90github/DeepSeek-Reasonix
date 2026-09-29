@@ -1,8 +1,8 @@
 // Run: tsx src/__tests__/footer-git-history-module.test.tsx
 
-// The git-history module: five commits to start, the rest behind one button, and
-// nothing at all where git cannot answer (a workspace without git fails the
-// `git log` call the module makes).
+// The git-history module: five commits to start, and nothing at all where git
+// cannot answer (a workspace without git fails the `git log` call the module
+// makes). Paging itself lives in footer-paging-steps.test.tsx.
 
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -72,21 +72,20 @@ console.log("\nfooter git history module");
   ok(document.querySelectorAll(".footer-git__row").length === FOOTER_COMMITS_INITIAL, `the section starts with ${FOOTER_COMMITS_INITIAL} commits`);
   ok(document.body.textContent?.includes("第 1 次提交") === true, "the first entry of the answer is on screen");
   ok(document.body.textContent?.includes("第 6 次提交") === false, "entries past the initial window stay hidden");
-  const more = document.querySelector<HTMLButtonElement>(".footer-git__more");
-  ok(more !== null, "a workspace with more commits offers a show-more control");
-
+  ok(document.querySelector(".footer-panel__more") !== null, "a workspace with more commits offers a show-more control");
   await act(async () => {
-    more?.click();
-    await flushPromises();
+    root.unmount();
   });
-  ok(document.querySelectorAll(".footer-git__row").length === 7, "show more reveals every commit");
-  ok(document.body.textContent?.includes("第 7 次提交") === true, "the last entry of the answer is revealed");
+  dom.window.close();
+}
 
+{
+  const { dom, root, asked } = await renderModule(async () => [1, 2, 3].map(commit));
   await act(async () => {
-    document.querySelector<HTMLButtonElement>(".footer-git__more")?.click();
-    await flushPromises();
+    await waitFor("short history answer", () => asked.count === 1);
   });
-  ok(document.querySelectorAll(".footer-git__row").length === FOOTER_COMMITS_INITIAL, "the control collapses back again");
+  ok(document.querySelectorAll(".footer-git__row").length === 3, "a short history lists every commit");
+  ok(document.querySelector(".footer-panel__more") === null, "a history that fits offers no paging control");
   await act(async () => {
     root.unmount();
   });

@@ -1,5 +1,6 @@
 // Footer-panel module: the workspace's recent commits, the same `git log` the
-// dock's changes overview reads. Five rows to start, the rest one click away.
+// dock's changes overview reads. Five rows to start, five more per click, and the
+// control collapses once the whole answer is on screen.
 
 import { useCallback, useEffect, useState } from "react";
 import { ChevronDown, RotateCw } from "lucide-react";
@@ -10,6 +11,7 @@ import { workspaceFormatCommitDate } from "../lib/workspacePanelFormat";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
 
 export const FOOTER_COMMITS_INITIAL = 5;
+export const FOOTER_COMMITS_PAGE = 5;
 
 // The dock's formatter ("29 Sep 2026 13:20") is too wide for a card row; the full
 // form rides the row's tooltip instead.
@@ -23,9 +25,9 @@ function compactCommitDate(value: string): string {
 export function FooterGitHistoryModule({ tabId }: FooterPanelModuleProps) {
   const t = useT();
   const [commits, setCommits] = useState<GitCommitView[] | null>(null);
+  const [visibleCount, setVisibleCount] = useState(FOOTER_COMMITS_INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [expanded, setExpanded] = useState(false);
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -54,16 +56,24 @@ export function FooterGitHistoryModule({ tabId }: FooterPanelModuleProps) {
     };
   }, [tabId, revision]);
 
+  // A new session starts its own page window; a refresh keeps the one in view.
+  useEffect(() => {
+    setVisibleCount(FOOTER_COMMITS_INITIAL);
+  }, [tabId]);
+
   const refresh = useCallback(() => setRevision((current) => current + 1), []);
-  const toggle = useCallback(() => setExpanded((current) => !current), []);
+  const togglePage = useCallback((total: number) => {
+    setVisibleCount((current) => (current >= total ? FOOTER_COMMITS_INITIAL : Math.min(current + FOOTER_COMMITS_PAGE, total)));
+  }, []);
 
   if (!tabId) return null;
   // Unanswered, or a workspace where git has nothing: the section stays away
   // rather than reporting an empty history it never read.
   if (!commits) return null;
 
-  const shown = expanded ? commits : commits.slice(0, FOOTER_COMMITS_INITIAL);
-  const hiddenCount = commits.length - shown.length;
+  const shown = commits.slice(0, visibleCount);
+  const remaining = commits.length - shown.length;
+  const step = Math.min(FOOTER_COMMITS_PAGE, remaining);
 
   return (
     <FooterPanelSection title="footerPanel.gitHistory">
@@ -99,13 +109,13 @@ export function FooterGitHistoryModule({ tabId }: FooterPanelModuleProps) {
               ))}
             </ul>
             {commits.length > FOOTER_COMMITS_INITIAL ? (
-              <button type="button" className="footer-git__more" onClick={toggle}>
+              <button type="button" className="footer-panel__more" onClick={() => togglePage(commits.length)}>
                 <ChevronDown
-                  className={`footer-panel__chevron${expanded ? " footer-panel__chevron--closed" : ""}`}
+                  className={`footer-panel__chevron${remaining > 0 ? " footer-panel__chevron--closed" : ""}`}
                   size={12}
                   aria-hidden="true"
                 />
-                <span>{expanded ? t("footerPanel.showLess") : t("footerPanel.showMore", { n: hiddenCount })}</span>
+                <span>{remaining > 0 ? t("footerPanel.showMore", { n: step }) : t("footerPanel.showLess")}</span>
               </button>
             ) : null}
           </>

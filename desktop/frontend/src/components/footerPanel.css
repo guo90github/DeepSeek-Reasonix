@@ -475,3 +475,114 @@
   background: color-mix(in srgb, var(--fg) 8%, transparent);
   color: var(--fg);
 }
+
+/* ── shared "show more" control (any module's list) ─────────────────────── */
+
+.footer-panel__more,
+.footer-git__more {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: var(--text-xs, 11px);
+  cursor: pointer;
+}
+
+.footer-panel__more:hover,
+.footer-git__more:hover {
+  background: color-mix(in srgb, var(--fg) 8%, transparent);
+  color: var(--fg);
+}
+
+/* ── shared badge (type / scope markers) ────────────────────────────────── */
+
+.footer-panel__badge {
+  flex: 0 0 auto;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-size: var(--text-2xs, 10px);
+  line-height: 1.5;
+}
+
+/* ── memory suggestions module ──────────────────────────────────────────── */
+
+.footer-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.footer-suggest__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.footer-suggest__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  min-width: 0;
+  font-size: var(--text-sm, 12px);
+}
+
+.footer-suggest__title {
+  flex: 0 0 auto;
+  max-width: 38%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.footer-suggest__desc {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg-dim);
+}
+
+.footer-suggest__accept {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: var(--text-2xs, 10px);
+  cursor: pointer;
+}
+
+.footer-suggest__accept:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.footer-suggest__accept:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.footer-suggest__accepted {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ok, #16a34a);
+  font-size: var(--text-2xs, 10px);
+}
