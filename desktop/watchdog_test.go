@@ -1,10 +1,16 @@
 package main
 
 import (
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/config"
+	"reasonix/internal/installlayout"
 )
 
 func TestWatchdogOnlyRestoresAFreshUnattendedCrash(t *testing.T) {
@@ -160,5 +166,171 @@ func TestWatchdogScriptIsOneFileThatComesAndGoes(t *testing.T) {
 	}
 	if _, err := os.Stat(watchdogScriptPath()); !os.IsNotExist(err) {
 		t.Fatalf("the script must be gone, got %v", err)
+	}
+}
+
+// watchdogRunnerCalls is the fake scheduler: it records the two commands the
+// watchdog management issues and can refuse them like a locked-down machine.
+type watchdogRunnerCalls struct {
+	created bool
+	deleted bool
+	fail    bool
+}
+
+func (c *watchdogRunnerCalls) run(name string, args ...string) ([]byte, error) {
+	if c.fail {
+		return []byte("access denied"), errors.New("exit status 1")
+	}
+	joined := strings.Join(append([]string{name}, args...), " ")
+	if strings.Contains(joined, "/Create") {
+		c.created = true
+	}
+	if strings.Contains(joined, "/Delete") {
+		c.deleted = true
+	}
+	return nil, nil
+}
+
+// watchdogTestHarness points every OS-facing seam at temp paths, so a test can
+// never reach the machine's own scheduler, state directory or desktop.
+func watchdogTestHarness(t *testing.T) (*watchdogRunnerCalls, string) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("REASONIX_STATE_HOME", home)
+	t.Setenv("REASONIX_DEV", "")
+	// The switch and the policy both live in the user state directory, so the
+	// harness has to own it before anything reads or writes it.
+	if got := config.MemoryUserDir(); got != home {
+		t.Fatalf("the harness home must be the state directory: %q != %q", got, home)
+	}
+
+	root := t.TempDir()
+	versionDir := filepath.Join(root, "versions", "v0.0.0-dev.1")
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		t.Fatalf("seed the version directory: %v", err)
+	}
+	for _, seed := range []struct{ dir, name string }{
+		{versionDir, installlayout.DesktopBinaryName()},
+		{root, installlayout.LauncherBinaryName()},
+	} {
+		if strings.TrimSpace(seed.name) == "" {
+			continue
+		}
+		if err := os.WriteFile(filepath.Join(seed.dir, seed.name), []byte("x"), 0o755); err != nil {
+			t.Fatalf("seed %s: %v", filepath.Join(seed.dir, seed.name), err)
+		}
+	}
+	pointer := `{"schemaVersion":1,"activeVersion":"v0.0.0-dev.1","activeDir":"versions/v0.0.0-dev.1"}`
+	if err := os.WriteFile(filepath.Join(root, "current.json"), []byte(pointer), 0o644); err != nil {
+		t.Fatalf("seed current.json: %v", err)
+	}
+
+	calls := &watchdogRunnerCalls{}
+	previousRoot, previousDir, previousRunner := portableInstallRootFunc, watchdogDirFunc, watchdogPlatformRunner
+	portableInstallRootFunc = func() string { return root }
+	watchdogDirFunc = func() string { return filepath.Join(home, "watchdog") }
+	watchdogPlatformRunner = calls.run
+	t.Cleanup(func() {
+		portableInstallRootFunc = previousRoot
+		watchdogDirFunc = previousDir
+		watchdogPlatformRunner = previousRunner
+	})
+	return calls, home
+}
+
+func TestWatchdogFollowsTheMasterSwitchBothWays(t *testing.T) {
+	if !watchdogSupportedPlatform() {
+		t.Skip("this platform has no OS entry to register")
+	}
+	calls, home := watchdogTestHarness(t)
+
+	if err := syncWatchdogWithUnattended(true); err != nil {
+		t.Fatalf("turning the switch on must register the watchdog: %v", err)
+	}
+	if policy := readWatchdogPolicy(); !watchdogPolicyEnabled(policy) {
+		t.Fatalf("the switch on must leave an enabled policy, got %+v", policy)
+	}
+	if !calls.created {
+		t.Fatal("the switch on must register the OS entry")
+	}
+	if _, err := os.Stat(watchdogScriptPath()); err != nil {
+		t.Fatalf("the switch on must publish the desktop file: %v", err)
+	}
+	if !strings.HasPrefix(watchdogScriptPath(), home) {
+		t.Fatalf("the desktop file must live in the harness home, got %s", watchdogScriptPath())
+	}
+
+	calls.created = false
+	if err := syncWatchdogWithUnattended(false); err != nil {
+		t.Fatalf("turning the switch off must remove the entry: %v", err)
+	}
+	if policy := readWatchdogPolicy(); watchdogPolicyEnabled(policy) {
+		t.Fatalf("the switch off must leave a disabled policy, got %+v", policy)
+	}
+	if !calls.deleted {
+		t.Fatal("the switch off must unregister the OS entry")
+	}
+	if _, err := os.Stat(watchdogScriptPath()); !os.IsNotExist(err) {
+		t.Fatalf("the switch off must remove the desktop file, got %v", err)
+	}
+}
+
+func TestWatchdogSyncSkipsWithoutAnInstallToWatch(t *testing.T) {
+	t.Setenv("REASONIX_DEV", "")
+	if watchdogSyncSkipReason("") == "" || watchdogSyncSkipReason("   ") == "" {
+		t.Fatal("no versioned install must keep the switch away from the OS entry")
+	}
+	if !watchdogSupportedPlatform() {
+		return
+	}
+	root := t.TempDir()
+	if reason := watchdogSyncSkipReason(root); reason != "" {
+		t.Fatalf("a versioned install must let the switch own the entry, got %q", reason)
+	}
+	t.Setenv("REASONIX_DEV", "1")
+	if watchdogSyncSkipReason(root) == "" {
+		t.Fatal("a dev run must never touch the machine's scheduler")
+	}
+}
+
+func TestWatchdogEntryFollowsTheSwitchOnStart(t *testing.T) {
+	if !watchdogSupportedPlatform() {
+		t.Skip("this platform has no OS entry to register")
+	}
+	calls, home := watchdogTestHarness(t)
+
+	// A switch that is on while the stored policy is off converges at start.
+	writeHeartbeatSwitch(t, home, true)
+	applyWatchdogPolicyOnStart()
+	if !calls.created || !watchdogPolicyEnabled(readWatchdogPolicy()) {
+		t.Fatal("a start with the switch on must register the entry")
+	}
+
+	// And one that is off while the policy is on is taken away again.
+	writeHeartbeatSwitch(t, home, false)
+	calls.created, calls.deleted = false, false
+	applyWatchdogPolicyOnStart()
+	if !calls.deleted || watchdogPolicyEnabled(readWatchdogPolicy()) {
+		t.Fatal("a start with the switch off must take the entry away")
+	}
+}
+
+func writeHeartbeatSwitch(t *testing.T, home string, on bool) {
+	t.Helper()
+	body := fmt.Sprintf(`{"schemaVersion":2,"unattended":%t,"tasks":[]}`, on)
+	if err := os.WriteFile(filepath.Join(home, "heartbeat-tasks.json"), []byte(body), 0o644); err != nil {
+		t.Fatalf("seed heartbeat-tasks.json: %v", err)
+	}
+}
+
+func TestWatchdogRefusalIsReportedNotSwallowed(t *testing.T) {
+	if !watchdogSupportedPlatform() {
+		t.Skip("this platform has no OS entry to register")
+	}
+	calls, _ := watchdogTestHarness(t)
+	calls.fail = true
+	if err := syncWatchdogWithUnattended(true); err == nil {
+		t.Fatal("a refused registration must be reported to the caller")
 	}
 }

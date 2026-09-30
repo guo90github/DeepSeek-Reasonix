@@ -163,7 +163,8 @@ reasonix-desktop.exe --watchdog-disable  # 关：写策略 + 立刻注销 + 删�
   `~/Library/LaunchAgents/io.reasonix.desktop.watchdog.plist`（RunAtLoad + StartInterval
   300）。两者都**只指向那个脚本，从不指向某个版本**。
 - **策略**：`<home>/desktop-autostart.json`（`enabled` + `watchdog`，默认跟随 enabled），
-  它同时管登录项（Electron 的 login item，只在登录时拉起）。
+  它是总开关的**镜像**，同时管登录项（Electron 的 login item，只在登录时拉起）——
+  **开总开关会连登录项一起打开**，关掉则一起注销。
 - **唯一那一个管理文件**：`C:\Users\guosj\Desktop\$\watchdog.cmd`——看门狗的可见副本：
   双击=巡检一次、打开=看清它干什么、删掉=停用。它**不做版本判断**，只启动**稳定 launcher**
   并把模式用 `REASONIX_WATCHDOG=1` 传下去；launcher 每次运行自己解析 `current.json`，所以

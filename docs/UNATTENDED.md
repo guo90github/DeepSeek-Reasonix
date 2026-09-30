@@ -192,7 +192,8 @@ reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desk
   minutes), or `~/Library/LaunchAgents/io.reasonix.desktop.watchdog.plist` (RunAtLoad
   + StartInterval 300). Both point at **that script only, never at a version**.
 - **Policy**: `<home>/desktop-autostart.json` (`enabled` + `watchdog`, defaulting to the
-  policy's `enabled`), which also drives the Electron login item.
+  policy's `enabled`) is the switch's **mirror**, and it also drives the Electron login
+  item — so turning the switch on turns the login item on with it, and off takes both away.
 - **The one management file**: `C:\Users\guosj\Desktop\$\watchdog.cmd` — the watchdog's
   visible twin: run it by hand, read it, or delete it. It makes **no version decision**:
   it starts the **stable launcher** with `REASONIX_WATCHDOG=1` in the environment, and

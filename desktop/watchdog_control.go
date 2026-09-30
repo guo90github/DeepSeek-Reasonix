@@ -272,21 +272,88 @@ func setWatchdogEnabled(enabled bool) (WatchdogStatusView, error) {
 	return view, nil
 }
 
-// applyWatchdogPolicyOnStart refreshes the OS entry from the stored policy, so a
-// version switch or a reinstall cannot leave the scheduler pointing at nothing.
+// applyWatchdogPolicyOnStart aligns the OS entry with the master switch on every
+// start, so the entry follows the one gate a person touches: a switch written by
+// an older host, or a policy edited by hand, converges here, and a version switch
+// cannot leave the scheduler pointing at nothing.
 func applyWatchdogPolicyOnStart() {
-	policy := readWatchdogPolicy()
-	if !policy.Enabled {
+	unattended, known := unattendedSwitchOnDisk()
+	if !known {
 		return
 	}
-	enabled := watchdogPolicyEnabled(policy)
-	if _, err := applyWatchdogRegistration(enabled); err != nil {
+	if watchdogPolicyEnabled(readWatchdogPolicy()) != unattended {
+		_ = syncWatchdogWithUnattended(unattended)
+		return
+	}
+	if unattended {
+		refreshWatchdogEntry()
+	}
+}
+
+// unattendedSwitchOnDisk reads the master switch straight from the config file,
+// which is all this needs: it runs before the engine exists, and the switch is
+// the configured value, not the crash-degraded one. known=false (unreadable or
+// invalid config) leaves the OS entry exactly as it is.
+func unattendedSwitchOnDisk() (bool, bool) {
+	root := config.MemoryUserDir()
+	if root == "" {
+		return false, false
+	}
+	body, err := os.ReadFile(filepath.Join(root, "heartbeat-tasks.json"))
+	if err != nil {
+		return false, false
+	}
+	var cfg struct {
+		Unattended bool `json:"unattended"`
+	}
+	if err := json.Unmarshal(body, &cfg); err != nil {
+		return false, false
+	}
+	return cfg.Unattended, true
+}
+
+// syncWatchdogWithUnattended makes the master switch the only command a person
+// has to remember: turning unattended on registers the OS entry, turning it off
+// takes it away. Best effort by design — an OS that refuses the registration
+// must not fail the switch itself, so the failure is logged instead.
+func syncWatchdogWithUnattended(unattended bool) error {
+	if reason := watchdogSyncSkipReason(portableInstallRoot()); reason != "" {
+		slog.Debug("desktop watchdog: not following the unattended switch", "reason", reason)
+		return nil
+	}
+	if _, err := setWatchdogEnabled(unattended); err != nil {
+		slog.Warn("desktop watchdog: the unattended switch could not apply it", "unattended", unattended, "err", err)
+		return err
+	}
+	slog.Info("desktop watchdog: followed the unattended switch", "unattended", unattended)
+	return nil
+}
+
+// watchdogSyncSkipReason says why the switch must leave the OS entry alone, or
+// "" when it owns it.
+func watchdogSyncSkipReason(installRoot string) string {
+	if strings.TrimSpace(os.Getenv("REASONIX_DEV")) != "" {
+		return "this is a dev run"
+	}
+	if !watchdogSupportedPlatform() {
+		return "this platform has no watchdog integration"
+	}
+	// Without a versioned install there is nothing to restore, and this also
+	// keeps a unit-test run from touching the machine's real scheduler.
+	if strings.TrimSpace(installRoot) == "" {
+		return "no versioned install to watch"
+	}
+	return ""
+}
+
+// refreshWatchdogEntry re-applies registration and the desktop file without
+// touching the policy, so a moved install converges on every start.
+func refreshWatchdogEntry() {
+	if _, err := applyWatchdogRegistration(true); err != nil {
 		slog.Warn("desktop watchdog: could not refresh registration", "err", err)
 	}
-	if enabled {
-		if err := writeWatchdogScript(); err != nil {
-			slog.Warn("desktop watchdog: could not refresh the desktop script", "err", err)
-		}
+	if err := writeWatchdogScript(); err != nil {
+		slog.Warn("desktop watchdog: could not refresh the desktop script", "err", err)
 	}
 }
 
