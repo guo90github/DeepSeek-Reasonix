@@ -121,6 +121,10 @@ ok(
   "Trash and existing session search remain available",
 );
 ok(
+  paletteOwnerSource.includes('id: "cmd-recap"') && paletteOwnerSource.includes('kind: "recap"'),
+  "The command palette opens the session recap page",
+);
+ok(
   /\.sidebar--workbench\s+\.sidebar__utility-row\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/s.test(stylesSource),
   "Workbench footer distributes its three utility actions evenly",
 );

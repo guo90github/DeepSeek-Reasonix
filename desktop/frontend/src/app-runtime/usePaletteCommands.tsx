@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { AlarmClock, Activity, BarChart3, Brain, Cpu, Palette, Puzzle, RotateCw, Server, Settings as SettingsIcon, SquarePen, TerminalSquare, Trash2 } from "lucide-react";
+import { AlarmClock, Activity, BarChart3, Brain, Cpu, History, Palette, Puzzle, RotateCw, Server, Settings as SettingsIcon, SquarePen, TerminalSquare, Trash2 } from "lucide-react";
 import { app } from "../lib/bridge";
 import { useCommittedCommand } from "../lib/useCommittedCommand";
 import { useGlobalShortcut } from "../lib/keyboardShortcuts";
@@ -87,6 +87,7 @@ export function usePaletteCommands(input: PaletteCommandsInput) {
     const cmds: PaletteItem[] = [
       { id: "cmd-new", group: t("palette.group.commands"), title: t("palette.cmd.newSession"), icon: <SquarePen size={15} />, compact: true, keywords: ["new", "新建"], run: () => void ports.handleNewTab() },
       { id: "cmd-automation", group: t("palette.group.commands"), title: t("sidebar.automation"), icon: <AlarmClock size={15} />, compact: true, keywords: ["automation", "自动化"], run: () => navigation.openPage({ kind: "automation" }) },
+      { id: "cmd-recap", group: t("palette.group.commands"), title: t("sidebar.recap"), icon: <History size={15} />, compact: true, keywords: ["recap", "retrospective", "回顾", "回顧"], run: () => navigation.openPage({ kind: "recap" }) },
       { id: "cmd-trash", group: t("palette.group.commands"), title: t("palette.cmd.trash"), icon: <Trash2 size={15} />, compact: true, keywords: ["trash", "回收站"], run: () => void ports.openTrash() },
       { id: "cmd-settings", group: t("palette.group.commands"), title: t("palette.cmd.settings"), icon: <SettingsIcon size={15} />, compact: true, keywords: ["settings", "设置"], run: () => navigation.setSettingsTarget(navigation.lastSettingsTarget) },
       { id: "cmd-appearance", group: t("palette.group.commands"), title: t("palette.cmd.appearance"), icon: <Palette size={15} />, compact: true, keywords: ["theme", "appearance", "外观", "主题"], run: () => navigation.setSettingsTarget("appearance") },
