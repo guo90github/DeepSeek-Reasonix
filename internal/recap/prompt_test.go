@@ -99,3 +99,9 @@ func TestButtonPromptsOverrideAndFallBackAlike(t *testing.T) {
 		t.Fatalf("an empty file must fall back with a reason: %+v", broken)
 	}
 }
+
+// writePromptFile drops one prompt override into a temporary state directory.
+func writePromptFile(t *testing.T, dir, name, body string) error {
+	t.Helper()
+	return os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644)
+}
