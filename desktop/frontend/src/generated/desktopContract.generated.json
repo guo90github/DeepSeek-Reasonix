@@ -33761,6 +33761,16 @@
             },
             "kind": "array"
           }
+        },
+        {
+          "name": "purposes",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "stats.PurposeUsage"
+            },
+            "kind": "array"
+          }
         }
       ]
     },
@@ -35118,6 +35128,28 @@
       "fields": [
         {
           "name": "provider",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "tokens",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "percent",
+          "type": {
+            "kind": "number"
+          }
+        }
+      ]
+    },
+    "stats.PurposeUsage": {
+      "fields": [
+        {
+          "name": "purpose",
           "type": {
             "kind": "string"
           }

@@ -1926,6 +1926,16 @@ export interface UsageStatsRange {
   daily: DailyTokenUsage[];
   models: ModelTokenUsage[];
   providers: ProviderTokenUsage[];
+  purposes: PurposeTokenUsage[];
+}
+
+// PurposeTokenUsage is one usage_source bucket within the selected range: what
+// a request was for (executor, title, compaction, session-recap, ...), which is
+// a different axis from the entry point that issued it.
+export interface PurposeTokenUsage {
+  purpose: string;
+  tokens: number;
+  percent: number;
 }
 
 // JobView is one running background job (desktop/app.go Jobs) for the status bar.

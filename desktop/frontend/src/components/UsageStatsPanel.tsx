@@ -1,17 +1,13 @@
 import { SettingsOptions } from "./SettingsOptions";
+import { PurposeTokenUsageSection } from "./PurposeTokenUsageSection";
 // UsageStatsPanel renders the "usage statistics" subtab inside the Models
-// settings page. It reads aggregated stats from the Go backend (App.UsageStats)
-// and draws three charts by hand in SVG — a GitHub-style activity heatmap, a
-// stacked per-day token trend, and a per-model donut — so no chart library is
-// needed and theme variables (--accent, --fg, --bg-elev-*) drive
-// the palette for both stock themes and theme packs. Model colours come from
-// a fixed two-set categorical palette (--chart-1..5 plus the gray
-// --chart-other, light/dark variants defined in styles.css from GitHub
-// Primer's data-viz tokens): a model's colour is its rank among the top five
-// by token volume, and everything beyond the top five collapses into one gray
-// "Other" step.
-// The component's styles live in UsageStatsPanel.css (loaded on demand with
-// this chunk), so the ~7 KB rule block never inflates the settings bundle.
+// settings page: totals, an activity heatmap, a stacked per-day trend, a
+// per-model donut, and per-purpose totals, all hand-drawn in SVG so no chart
+// library is needed and the theme variables drive the palette. Model colours
+// come from a fixed categorical palette (--chart-1..5 plus --chart-other,
+// light/dark variants in styles.css): a model's colour is its rank among the
+// top five by token volume, and the rest collapse into one gray "Other" step.
+// Styles live in UsageStatsPanel.css, loaded with this chunk.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Activity, CalendarDays, ChevronDown, ChevronRight, Coins, Cpu, MessageSquare, MessagesSquare } from "lucide-react";
 import { useI18n } from "../lib/i18n";
@@ -71,6 +67,7 @@ const USAGE_STATS_TRANSLATIONS = {
     "settings.stats.dailyTrend": "Daily token trend",
     "settings.stats.trendLimited": "Showing the latest 180 days",
     "settings.stats.modelUsage": "Model usage",
+    "settings.stats.purpose": "By purpose",
     "settings.stats.other": "Other",
     "settings.stats.moreModels": "more models",
     "settings.stats.total": "Total",
@@ -113,6 +110,7 @@ const USAGE_STATS_TRANSLATIONS = {
     "settings.stats.dailyTrend": "按天 Token 趋势",
     "settings.stats.trendLimited": "仅显示最近 180 天",
     "settings.stats.modelUsage": "模型用量",
+    "settings.stats.purpose": "按用途",
     "settings.stats.other": "其他",
     "settings.stats.moreModels": "个其他模型",
     "settings.stats.total": "总用量",
@@ -155,6 +153,7 @@ const USAGE_STATS_TRANSLATIONS = {
     "settings.stats.dailyTrend": "按天 Token 趨勢",
     "settings.stats.trendLimited": "僅顯示最近 180 天",
     "settings.stats.modelUsage": "模型用量",
+    "settings.stats.purpose": "按用途",
     "settings.stats.other": "其他",
     "settings.stats.moreModels": "個其他模型",
     "settings.stats.total": "總用量",
@@ -390,6 +389,7 @@ export function UsageStatsPanel() {
           <Heatmap daily={heatDaily} from={heatWindow.from} to={heatWindow.to} t={t} />
           <DailyTrend daily={dailyGrouped} modelOrder={groupedModels.map((m) => m.model)} t={t} colorForModel={colorForModel} />
           <ModelUsage models={groupedModels} t={t} colorForModel={colorForModel} />
+          <PurposeTokenUsageSection purposes={stats.purposes} t={t} />
           {stats.to && (
             <div className="usage-stats__foot">
               {t("settings.stats.asOf")} {stats.to}

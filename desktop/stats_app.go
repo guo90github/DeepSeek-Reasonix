@@ -37,6 +37,7 @@ type UsageStatsRange struct {
 	Daily       []stats.DailyTokens   `json:"daily"`
 	Models      []stats.ModelUsage    `json:"models"`
 	Providers   []stats.ProviderUsage `json:"providers"`
+	Purposes    []stats.PurposeUsage  `json:"purposes"`
 }
 
 // UsageStats aggregates recorded usage over the requested range. It is a pure
@@ -58,6 +59,12 @@ func (a *App) UsageStats(req UsageStatsRequest) (UsageStatsRange, error) {
 	if err != nil {
 		return UsageStatsRange{}, err
 	}
+	// The rollup catalog drops usage_source, so the purpose split always comes
+	// from the daily files. They carry one line per provider request.
+	purposes, err := w.QueryPurposes(stats.SourceFilter{From: from, To: to, Source: req.Source})
+	if err != nil {
+		return UsageStatsRange{}, err
+	}
 	return UsageStatsRange{
 		From:        res.From,
 		To:          res.To,
@@ -72,6 +79,7 @@ func (a *App) UsageStats(req UsageStatsRequest) (UsageStatsRange, error) {
 		Daily:       res.Daily,
 		Models:      res.Models,
 		Providers:   res.Providers,
+		Purposes:    purposes,
 	}, nil
 }
 

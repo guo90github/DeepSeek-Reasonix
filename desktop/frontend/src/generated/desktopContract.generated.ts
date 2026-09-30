@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:23d6f696611b7be009841bca2ecce79947c7a1eae8ffb7fb63795c2aaf217afe";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:d7b9f76a95cdf6bb3bccc8a929cb5ec13d0fe4c00e9cd686aeae4b9be58dd35d";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3953,6 +3953,7 @@ export interface UsageStatsRange {
   daily: DailyTokens[];
   models: ModelUsage[];
   providers: ProviderUsage[];
+  purposes: PurposeUsage[];
 }
 
 export interface UsageStatsRequest {
@@ -4223,6 +4224,12 @@ export interface ModelUsage {
 
 export interface ProviderUsage {
   provider: string;
+  tokens: number;
+  percent: number;
+}
+
+export interface PurposeUsage {
+  purpose: string;
   tokens: number;
   percent: number;
 }

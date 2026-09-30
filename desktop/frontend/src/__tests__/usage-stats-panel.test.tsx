@@ -31,7 +31,7 @@ function emptyStats(overrides: Partial<UsageStatsRange> = {}): UsageStatsRange {
     from: "", to: "", tokens: 1, requests: 1, turns: 1,
     cacheHit: 0, cacheMiss: 1, activeDays: 1,
     topModel: "deepseek/model", topProvider: "deepseek",
-    daily: [], models: [], providers: [], ...overrides,
+    daily: [], models: [], providers: [], purposes: [], ...overrides,
   };
 }
 
