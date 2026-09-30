@@ -28,13 +28,19 @@ var (
 	}
 )
 
+// historyRecapEntryView is one distilled note; Target is where it belongs once
+// a person accepts it.
+type historyRecapEntryView struct {
+	Kind     string `json:"kind"`
+	Body     string `json:"body"`
+	Evidence string `json:"evidence,omitempty"`
+	Target   string `json:"target"`
+}
+
 type historyRecapView struct {
-	Goal        string `json:"goal"`
-	Actions     string `json:"actions"`
-	Conclusion  string `json:"conclusion"`
-	FollowUps   string `json:"followUps,omitempty"`
-	GeneratedAt string `json:"generatedAt,omitempty"`
-	Model       string `json:"model,omitempty"`
+	Entries     []historyRecapEntryView `json:"entries"`
+	GeneratedAt string                  `json:"generatedAt,omitempty"`
+	Model       string                  `json:"model,omitempty"`
 }
 
 type historyHitView struct {
@@ -239,10 +245,14 @@ func historyRecapFor(ctx context.Context, store *recap.Store, path string, cache
 	}
 	var view *historyRecapView
 	if rec, ok, err := store.Get(ctx, path); err == nil && ok {
-		out := historyRecapView{
-			Goal: rec.Goal, Actions: rec.Actions, Conclusion: rec.Conclusion,
-			FollowUps: rec.FollowUps, Model: rec.Model,
+		entries := make([]historyRecapEntryView, 0, len(rec.Entries))
+		for _, entry := range rec.Entries {
+			entries = append(entries, historyRecapEntryView{
+				Kind: entry.Kind, Body: entry.Body,
+				Evidence: entry.Evidence, Target: recap.Sink(entry.Kind),
+			})
 		}
+		out := historyRecapView{Entries: entries, Model: rec.Model}
 		if !rec.GeneratedAt.IsZero() {
 			out.GeneratedAt = rec.GeneratedAt.Format("2006-01-02 15:04")
 		}
@@ -250,6 +260,21 @@ func historyRecapFor(ctx context.Context, store *recap.Store, path string, cache
 	}
 	cache[path] = view
 	return view
+}
+
+// historyRecapKindLabel names the four note kinds for the terminal report.
+func historyRecapKindLabel(kind string) string {
+	switch kind {
+	case recap.KindFact:
+		return "事实"
+	case recap.KindRootCause:
+		return "根因—修法"
+	case recap.KindRefuted:
+		return "否证结论"
+	case recap.KindHandoff:
+		return "交接与未解坑"
+	}
+	return kind
 }
 
 func printHistoryReport(report historyReport, w io.Writer) {
@@ -273,13 +298,15 @@ func printHistoryReport(report historyReport, w io.Writer) {
 		}
 		if hit.Recap == nil {
 			fmt.Fprintf(w, "\n   会话回顾: （尚无回顾）")
+		} else if len(hit.Recap.Entries) == 0 {
+			fmt.Fprintf(w, "\n   会话回顾: （无可沉淀结论）")
 		} else {
 			fmt.Fprintf(w, "\n   会话回顾:")
-			fmt.Fprintf(w, "\n     目标: %s", hit.Recap.Goal)
-			fmt.Fprintf(w, "\n     关键动作: %s", hit.Recap.Actions)
-			fmt.Fprintf(w, "\n     结论: %s", hit.Recap.Conclusion)
-			if strings.TrimSpace(hit.Recap.FollowUps) != "" {
-				fmt.Fprintf(w, "\n     待办: %s", hit.Recap.FollowUps)
+			for _, entry := range hit.Recap.Entries {
+				fmt.Fprintf(w, "\n     %s: %s", historyRecapKindLabel(entry.Kind), entry.Body)
+				if strings.TrimSpace(entry.Evidence) != "" {
+					fmt.Fprintf(w, "（%s）", entry.Evidence)
+				}
 			}
 		}
 		fmt.Fprintln(w)

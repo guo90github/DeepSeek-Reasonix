@@ -20,12 +20,12 @@ func TestStoreRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	store := openTestStore(t)
 	rec := Record{
-		Path:          "/sessions/a.jsonl",
-		Fingerprint:   "abc123",
-		Goal:          "fix the parser",
-		Actions:       "read, patch, test",
-		Conclusion:    "green",
-		FollowUps:     "none",
+		Path:        "/sessions/a.jsonl",
+		Fingerprint: "abc123",
+		Entries: []Entry{
+			{Kind: KindFact, Body: "the parser moved", Evidence: "internal/parser.go"},
+			{Kind: KindHandoff, Body: "the docs still describe the old syntax"},
+		},
 		Model:         "deepseek/deepseek-v4",
 		PromptVersion: PromptVersion,
 		GeneratedAt:   time.Unix(1700000000, 0),
@@ -37,7 +37,9 @@ func TestStoreRoundTrip(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("get: ok=%v err=%v", ok, err)
 	}
-	if got.Goal != rec.Goal || got.Fingerprint != rec.Fingerprint || !got.GeneratedAt.Equal(rec.GeneratedAt) {
+	if len(got.Entries) != 2 || got.Entries[0].Kind != KindFact || got.Entries[0].Body != "the parser moved" ||
+		got.Entries[0].Evidence != "internal/parser.go" || got.Entries[1].Kind != KindHandoff ||
+		got.Fingerprint != rec.Fingerprint || !got.GeneratedAt.Equal(rec.GeneratedAt) {
 		t.Fatalf("round trip mismatch: %+v", got)
 	}
 	list, err := store.List(ctx)

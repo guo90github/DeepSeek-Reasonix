@@ -47,6 +47,13 @@ export function buildOverlayHostProps(input: {
     listTrashedSessions: NonNullable<AppOverlayHostProps["trash"]>["commands"]["list"];
     listSessionRecaps: NonNullable<AppOverlayHostProps["recap"]>["commands"]["list"];
     listSessions: NonNullable<AppOverlayHostProps["recap"]>["commands"]["listSessions"];
+    acceptRecapEntry: NonNullable<AppOverlayHostProps["recap"]>["commands"]["accept"];
+    rejectRecapEntry: NonNullable<AppOverlayHostProps["recap"]>["commands"]["reject"];
+    undoRecapEntry: NonNullable<AppOverlayHostProps["recap"]>["commands"]["undo"];
+    listRecapOpenItems: NonNullable<AppOverlayHostProps["recap"]>["commands"]["listOpenItems"];
+    keepRecapHandoff: NonNullable<AppOverlayHostProps["recap"]>["commands"]["keep"];
+    closeRecapHandoff: NonNullable<AppOverlayHostProps["recap"]>["commands"]["close"];
+    reopenRecapHandoff: NonNullable<AppOverlayHostProps["recap"]>["commands"]["reopen"];
     restoreSession: NonNullable<AppOverlayHostProps["trash"]>["commands"]["restore"];
     purgeTrashedSession: NonNullable<AppOverlayHostProps["trash"]>["commands"]["purge"];
   };
@@ -68,7 +75,11 @@ export function buildOverlayHostProps(input: {
       commands: { onBack: shell.returnToWorkspace, list: sessionActions.listTrashedSessions, restore: sessionActions.restoreSession, purge: sessionActions.purgeTrashedSession } } : undefined,
     recap: shell.visitedRecap ? { view: { active: input.pageKind === "recap" },
       commands: { onBack: shell.returnToWorkspace, list: sessionActions.listSessionRecaps,
-        listSessions: sessionActions.listSessions, resume: navigation.onResumeSession } } : undefined,
+        listSessions: sessionActions.listSessions, resume: navigation.onResumeSession,
+        accept: sessionActions.acceptRecapEntry, reject: sessionActions.rejectRecapEntry,
+        undo: sessionActions.undoRecapEntry, listOpenItems: sessionActions.listRecapOpenItems,
+        keep: sessionActions.keepRecapHandoff, close: sessionActions.closeRecapHandoff,
+        reopen: sessionActions.reopenRecapHandoff } } : undefined,
     automation: shell.visitedAutomation ? { view: { active: input.pageKind === "automation" },
       commands: { onBack: shell.returnToWorkspace, onOpenTopic: input.automationTopic } } : undefined,
     recovery: {

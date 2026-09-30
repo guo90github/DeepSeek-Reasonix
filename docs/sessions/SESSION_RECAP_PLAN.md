@@ -28,7 +28,7 @@ PRD 的 §4.2/§4.6/§10/§13 已把触发点、幂等键、存放位置、模�
 
 ### P1-2 · `internal/recap` 包骨架（新包，内核层）
 
-- `Record`：四要素（目标 / 关键动作 / 结论 / 待办）+ 元数据（模型、提示词版本、内容指纹、生成时间）。
+- `Record`：候选条目（事实 / 根因—修法 / 否证结论 / 交接与未解坑，每条含正文、出处、建议落点）+ 元数据（模型、提示词版本、内容指纹、生成时间）。2026-09-30 起四要素已被候选条目取代（`recap-v3`）。
 - `Key`：会话路径 + 内容指纹（轮次数或 transcript 哈希）——幂等的唯一依据，**不用"关闭次数"**。
 - `Store`：可弃投影，落 `cache/session-recap/v1.sqlite`，走 `internal/projectiondb.Open`（WAL / `synchronous=NORMAL` / 私有权限 / 短 busy timeout / 远端回退内存 / quarantine 后重建）。
 - `Admissible(path)`：可见性护栏 —— `agent.IsVisibleSession` ∧ 非 `<id>-recovery-<16hex>` ∧ 未被移除（`IsDestroyingSession` 由调用侧传入，内核不依赖 control）。

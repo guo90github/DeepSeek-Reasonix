@@ -2,6 +2,7 @@ package recap
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,39 @@ type fakeProvider struct {
 	active  int
 	maxSeen int
 	calls   int
+}
+
+// emptyFirstProvider returns empty leading answers (the zero value means one),
+// then a usable array: this is what a reasoning model that spends its whole
+// completion budget on thinking looks like.
+type emptyFirstProvider struct {
+	mu    sync.Mutex
+	empty int
+	calls int
+}
+
+func (p *emptyFirstProvider) Name() string { return "fake" }
+
+func (p *emptyFirstProvider) Stream(_ context.Context, _ provider.Request) (<-chan provider.Chunk, error) {
+	p.mu.Lock()
+	p.calls++
+	call := p.calls
+	p.mu.Unlock()
+	text := goodAnswer
+	if call <= max(p.empty, 1) {
+		text = ""
+	}
+	ch := make(chan provider.Chunk, 2)
+	ch <- provider.Chunk{Type: provider.ChunkText, Text: text}
+	ch <- provider.Chunk{Type: provider.ChunkUsage, Usage: &provider.Usage{}}
+	close(ch)
+	return ch, nil
+}
+
+func (p *emptyFirstProvider) callsMade() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.calls
 }
 
 func (p *fakeProvider) Name() string { return p.name }
@@ -95,10 +129,10 @@ type fakeTranscript struct{ text string }
 
 func (r fakeTranscript) Read(context.Context, string) (string, error) { return r.text, nil }
 
-const goodAnswer = "Goal: make the parser accept the new syntax\n" +
-	"Actions: read the grammar, patched it, ran the tests\n" +
-	"Conclusion: green and verified with go test\n" +
-	"Follow-ups: none\n"
+const goodAnswer = `[
+  {"kind":"fact","body":"the parser accepts the new syntax","evidence":"internal/parser.go"},
+  {"kind":"handoff","body":"the grammar docs still describe the old syntax"}
+]`
 
 type harness struct {
 	generator *Generator
@@ -144,8 +178,11 @@ func TestGenerateStoresAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
-	if !first.Stored || first.Record.Goal == "" {
-		t.Fatalf("first generate did not store a recap: %+v", first)
+	if !first.Stored || len(first.Record.Entries) != 2 {
+		t.Fatalf("first generate did not store two notes: %+v", first)
+	}
+	if first.Record.Entries[0].Kind != KindFact || first.Record.Entries[1].Kind != KindHandoff {
+		t.Fatalf("kinds not preserved: %+v", first.Record.Entries)
 	}
 	if first.Record.PromptVersion != PromptVersion || first.Record.Model != "fake/model" {
 		t.Fatalf("record provenance missing: %+v", first.Record)
@@ -160,6 +197,76 @@ func TestGenerateStoresAndIsIdempotent(t *testing.T) {
 	}
 	if calls, _ := h.provider.counters(); calls != 1 {
 		t.Fatalf("provider called %d times for an unchanged session, want 1", calls)
+	}
+}
+
+func TestGenerateStoresAnEmptyAnswerOnce(t *testing.T) {
+	ctx := context.Background()
+	prov := &fakeProvider{name: "fake", answer: "[]"}
+	h := newHarness(t, func(o *GeneratorOptions) {
+		o.Models = fakeModels{prov: prov, ref: "fake/model", ok: true}
+	})
+	path := h.session(t, "20260101-000000.000000000-fake.jsonl", "one\n")
+
+	first, err := h.generator.Generate(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !first.Stored || len(first.Record.Entries) != 0 {
+		t.Fatalf("an empty answer must be stored as a recap without notes: %+v", first)
+	}
+	second, err := h.generator.Generate(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !second.Skipped || second.Reason != "current" {
+		t.Fatalf("an empty recap must not be recomputed: %+v", second)
+	}
+	if calls, _ := prov.counters(); calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", calls)
+	}
+}
+
+func TestGenerateRetriesAnEmptyAnswer(t *testing.T) {
+	ctx := context.Background()
+	prov := &emptyFirstProvider{}
+	h := newHarness(t, func(o *GeneratorOptions) {
+		o.Models = fakeModels{prov: prov, ref: "fake/model", ok: true}
+	})
+	path := h.session(t, "20260101-000000.000000000-fake.jsonl", "one\n")
+
+	res, err := h.generator.Generate(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.Stored || len(res.Record.Entries) != 2 {
+		t.Fatalf("the retry's answer must be stored: %+v", res)
+	}
+	if calls := prov.callsMade(); calls != 2 {
+		t.Fatalf("provider calls = %d, want 2 (one retry)", calls)
+	}
+}
+
+func TestGenerateGivesUpAfterASecondEmptyAnswer(t *testing.T) {
+	ctx := context.Background()
+	prov := &emptyFirstProvider{empty: 2}
+	h := newHarness(t, func(o *GeneratorOptions) {
+		o.Models = fakeModels{prov: prov, ref: "fake/model", ok: true}
+	})
+	path := h.session(t, "20260101-000000.000000000-fake.jsonl", "one\n")
+
+	res, err := h.generator.Generate(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Stored || res.Reason != "unparseable answer" {
+		t.Fatalf("two empty answers must leave the session pending: %+v", res)
+	}
+	if calls := prov.callsMade(); calls != 2 {
+		t.Fatalf("provider calls = %d, want 2 and no more", calls)
+	}
+	if _, pending, _ := h.store.Counts(ctx); pending != 1 {
+		t.Fatalf("pending = %d, want 1", pending)
 	}
 }
 
@@ -200,9 +307,9 @@ func TestGenerateEmitsItsOwnUsageSource(t *testing.T) {
 
 func TestGenerateRedactsInternalAddresses(t *testing.T) {
 	ctx := context.Background()
-	prov := &fakeProvider{name: "fake", answer: "Goal: call the service\n" +
-		"Actions: curl http://10.0.0.5:8080/admin failed\n" +
-		"Conclusion: fixed\nFollow-ups: none\n"}
+	prov := &fakeProvider{name: "fake", answer: `[
+		{"kind":"fact","body":"the admin call to http://10.0.0.5:8080/admin failed","evidence":"curl http://10.0.0.5:8080/admin"}
+	]`}
 	h := newHarness(t, func(o *GeneratorOptions) {
 		o.Models = fakeModels{prov: prov, ref: "fake/model", ok: true}
 	})
@@ -212,14 +319,15 @@ func TestGenerateRedactsInternalAddresses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !res.Stored {
-		t.Fatalf("expected a stored recap: %+v", res)
+	if !res.Stored || len(res.Record.Entries) != 1 {
+		t.Fatalf("expected one stored note: %+v", res)
 	}
-	if strings.Contains(res.Record.Actions, "10.0.0.5") {
-		t.Fatalf("internal address survived redaction: %q", res.Record.Actions)
+	entry := res.Record.Entries[0]
+	if strings.Contains(entry.Body, "10.0.0.5") || strings.Contains(entry.Evidence, "10.0.0.5") {
+		t.Fatalf("internal address survived redaction: %+v", entry)
 	}
-	if !strings.Contains(res.Record.Actions, "[redacted]") {
-		t.Fatalf("expected the redaction placeholder: %q", res.Record.Actions)
+	if !strings.Contains(entry.Body, "[redacted]") {
+		t.Fatalf("expected the redaction placeholder: %+v", entry)
 	}
 }
 
@@ -302,13 +410,81 @@ func TestGenerateSkipsInadmissible(t *testing.T) {
 	}
 }
 
-func TestParseElements(t *testing.T) {
-	got, ok := parseElements("Goal: g\nActions: a\nConclusion: c\nFollow-ups: f\n")
-	if !ok || got.Goal != "g" || got.Actions != "a" || got.Conclusion != "c" || got.FollowUps != "f" {
+func TestParseEntries(t *testing.T) {
+	got, ok := parseEntries("```json\n[{\"kind\":\"fact\",\"body\":\"b1\",\"evidence\":\"e1\"}," +
+		"{\"kind\":\"follow-up\",\"body\":\"b2\"}]\n```")
+	if !ok || len(got) != 2 {
 		t.Fatalf("parse = %+v ok=%v", got, ok)
 	}
-	if _, ok := parseElements("Goal: only one line"); ok {
-		t.Fatal("a partial answer must not parse")
+	if got[0].Kind != KindFact || got[0].Evidence != "e1" || got[1].Kind != KindHandoff {
+		t.Fatalf("entries = %+v", got)
+	}
+	if empty, ok := parseEntries("[]"); !ok || len(empty) != 0 {
+		t.Fatalf("an empty array is a valid answer: %+v ok=%v", empty, ok)
+	}
+	if _, ok := parseEntries("sorry, no idea"); ok {
+		t.Fatal("an answer carrying no array must not parse")
+	}
+	if _, ok := parseEntries(`[{"kind":"fact","body"`); ok {
+		t.Fatal("truncated JSON must not parse")
+	}
+}
+
+func TestParseEntriesDropsUnknownKindsAndCapsTheList(t *testing.T) {
+	var b strings.Builder
+	b.WriteString(`[{"kind":"fact","body":"kept"},{"kind":"gibberish","body":"dropped"},{"body":"kindless"},`)
+	for i := 0; i < maxEntries+4; i++ {
+		fmt.Fprintf(&b, `{"kind":"refuted","body":"r%d"},`, i)
+	}
+	b.WriteString(`{"kind":"refuted","body":"r0"}]`)
+	got, ok := parseEntries(b.String())
+	if !ok {
+		t.Fatal("a mixed answer must still parse")
+	}
+	if len(got) != maxEntries {
+		t.Fatalf("got %d entries, want the cap %d", len(got), maxEntries)
+	}
+	if got[0].Kind != KindFact || got[0].Body != "kept" {
+		t.Fatalf("the first valid note was lost: %+v", got[0])
+	}
+}
+
+func TestParseEntriesSalvagesATruncatedAnswer(t *testing.T) {
+	got, ok := parseEntries(`[{"kind":"fact","body":"kept","evidence":"a.go"},` +
+		`{"kind":"handoff","body":"cut off mid-`)
+	if !ok || len(got) != 1 || got[0].Body != "kept" || got[0].Evidence != "a.go" {
+		t.Fatalf("a truncated answer must keep the notes it finished: %+v ok=%v", got, ok)
+	}
+}
+
+func TestParseEntriesKeepsBracesInsideAValue(t *testing.T) {
+	got, ok := parseEntries(`[{"kind":"fact","body":"emits {\"a\":1} on start"},{"kind":"refuted","body":"cu`)
+	if !ok || len(got) != 1 || !strings.Contains(got[0].Body, `{"a":1}`) {
+		t.Fatalf("a brace inside a string must not end the object: %+v ok=%v", got, ok)
+	}
+}
+
+func TestAnswerExcerptRedactsAndClips(t *testing.T) {
+	excerpt := answerExcerpt("prose reply\nsee http://10.0.0.5:8080 and " + strings.Repeat("字", 300))
+	if strings.Contains(excerpt, "10.0.0.5") || !strings.Contains(excerpt, "[redacted]") {
+		t.Fatalf("the excerpt kept an internal address: %q", excerpt)
+	}
+	if strings.Contains(excerpt, "\n") {
+		t.Fatalf("the excerpt kept a newline: %q", excerpt)
+	}
+	if runes := []rune(excerpt); len(runes) > 121 {
+		t.Fatalf("the excerpt ran to %d runes", len(runes))
+	}
+}
+
+func TestSinkFollowsTheKind(t *testing.T) {
+	if Sink(KindHandoff) != SinkDisplay {
+		t.Fatalf("a handoff is shown but not stored, got %q", Sink(KindHandoff))
+	}
+	for _, kind := range []string{KindFact, KindRootCause, KindRefuted} {
+		if Sink(kind) != SinkMemory {
+			t.Fatalf("%s must land in memory, got %q", kind, Sink(kind))
+		}
 	}
 }
 

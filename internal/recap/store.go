@@ -47,6 +47,24 @@ var migrations = []projectiondb.Migration{{
 		_, err := tx.ExecContext(ctx, schemaV3)
 		return err
 	},
+}, {
+	Version: 4,
+	Apply: func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, schemaV4)
+		return err
+	},
+}, {
+	Version: 5,
+	Apply: func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, schemaV5)
+		return err
+	},
+}, {
+	Version: 6,
+	Apply: func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, schemaV6)
+		return err
+	},
 }}
 
 // schemaV2 adds the lane's decision log: it is what makes a missing recap
@@ -70,6 +88,52 @@ CREATE TABLE IF NOT EXISTS recap_resume (
     content_digest TEXT NOT NULL DEFAULT '',
     head_text TEXT NOT NULL DEFAULT '',
     user_turns INTEGER NOT NULL DEFAULT 0
+);
+`
+
+// schemaV4 replaces the four free-text elements with distilled candidate
+// entries. Rows written by v2 are dropped rather than carried: they hold the old
+// shape, the prompt version bump regenerates them, and an empty card is worse
+// than an absent one.
+const schemaV4 = `
+CREATE TABLE recap_records_v4 (
+    path TEXT PRIMARY KEY,
+    fingerprint TEXT NOT NULL DEFAULT '',
+    entries_json TEXT NOT NULL DEFAULT '[]',
+    model TEXT NOT NULL DEFAULT '',
+    prompt_version TEXT NOT NULL DEFAULT '',
+    generated_at INTEGER NOT NULL DEFAULT 0
+);
+DROP TABLE recap_records;
+ALTER TABLE recap_records_v4 RENAME TO recap_records;
+`
+
+// schemaV5 records what a person did with each note. It is keyed by content, not
+// by session, so a rejected note stays rejected when the session is recapped
+// again: dropping a bad note once has to be enough.
+const schemaV5 = `
+CREATE TABLE IF NOT EXISTS recap_decisions (
+    kind TEXT NOT NULL,
+    body_hash TEXT NOT NULL,
+    choice TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    decided_at INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (kind, body_hash)
+);
+`
+
+// schemaV6 keeps the handoff notes a person chose to carry forward. They belong
+// to a project and stay open until someone closes them, because the session that
+// continues the work is often not the next one.
+const schemaV6 = `
+CREATE TABLE IF NOT EXISTS recap_open_items (
+    id TEXT PRIMARY KEY,
+    project TEXT NOT NULL DEFAULT '',
+    body TEXT NOT NULL DEFAULT '',
+    evidence TEXT NOT NULL DEFAULT '',
+    from_path TEXT NOT NULL DEFAULT '',
+    opened_at INTEGER NOT NULL DEFAULT 0,
+    closed_at INTEGER NOT NULL DEFAULT 0
 );
 `
 
@@ -127,17 +191,19 @@ func (s *Store) Get(ctx context.Context, path string) (Record, bool, error) {
 	if s == nil || s.handle == nil {
 		return Record{}, false, nil
 	}
-	row := s.handle.DB.QueryRowContext(ctx, `SELECT path,fingerprint,goal,actions,conclusion,follow_ups,model,prompt_version,generated_at
+	row := s.handle.DB.QueryRowContext(ctx, `SELECT path,fingerprint,entries_json,model,prompt_version,generated_at
 		FROM recap_records WHERE path = ?`, path)
 	var rec Record
+	var entriesJSON string
 	var generatedAt int64
-	if err := row.Scan(&rec.Path, &rec.Fingerprint, &rec.Goal, &rec.Actions, &rec.Conclusion,
-		&rec.FollowUps, &rec.Model, &rec.PromptVersion, &generatedAt); err != nil {
+	if err := row.Scan(&rec.Path, &rec.Fingerprint, &entriesJSON, &rec.Model,
+		&rec.PromptVersion, &generatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Record{}, false, nil
 		}
 		return Record{}, false, err
 	}
+	rec.Entries = decodeEntries(entriesJSON)
 	rec.GeneratedAt = time.Unix(0, generatedAt)
 	return rec, true, nil
 }
@@ -153,12 +219,12 @@ func (s *Store) Put(ctx context.Context, rec Record) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.ExecContext(ctx, `INSERT INTO recap_records
-		(path,fingerprint,goal,actions,conclusion,follow_ups,model,prompt_version,generated_at)
-		VALUES (?,?,?,?,?,?,?,?,?)
-		ON CONFLICT(path) DO UPDATE SET fingerprint=excluded.fingerprint,goal=excluded.goal,
-		actions=excluded.actions,conclusion=excluded.conclusion,follow_ups=excluded.follow_ups,
-		model=excluded.model,prompt_version=excluded.prompt_version,generated_at=excluded.generated_at`,
-		rec.Path, rec.Fingerprint, rec.Goal, rec.Actions, rec.Conclusion, rec.FollowUps,
+		(path,fingerprint,entries_json,model,prompt_version,generated_at)
+		VALUES (?,?,?,?,?,?)
+		ON CONFLICT(path) DO UPDATE SET fingerprint=excluded.fingerprint,
+		entries_json=excluded.entries_json,model=excluded.model,
+		prompt_version=excluded.prompt_version,generated_at=excluded.generated_at`,
+		rec.Path, rec.Fingerprint, encodeEntries(rec.Entries),
 		rec.Model, rec.PromptVersion, rec.GeneratedAt.UnixNano()); err != nil {
 		return err
 	}
@@ -281,7 +347,7 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 	if s == nil || s.handle == nil {
 		return nil, nil
 	}
-	rows, err := s.handle.DB.QueryContext(ctx, `SELECT path,fingerprint,goal,actions,conclusion,follow_ups,model,prompt_version,generated_at
+	rows, err := s.handle.DB.QueryContext(ctx, `SELECT path,fingerprint,entries_json,model,prompt_version,generated_at
 		FROM recap_records ORDER BY generated_at DESC, path ASC`)
 	if err != nil {
 		return nil, err
@@ -290,11 +356,13 @@ func (s *Store) List(ctx context.Context) ([]Record, error) {
 	out := []Record{}
 	for rows.Next() {
 		var rec Record
+		var entriesJSON string
 		var generatedAt int64
-		if err := rows.Scan(&rec.Path, &rec.Fingerprint, &rec.Goal, &rec.Actions, &rec.Conclusion,
-			&rec.FollowUps, &rec.Model, &rec.PromptVersion, &generatedAt); err != nil {
+		if err := rows.Scan(&rec.Path, &rec.Fingerprint, &entriesJSON, &rec.Model,
+			&rec.PromptVersion, &generatedAt); err != nil {
 			return nil, err
 		}
+		rec.Entries = decodeEntries(entriesJSON)
 		rec.GeneratedAt = time.Unix(0, generatedAt)
 		out = append(out, rec)
 	}

@@ -80,6 +80,22 @@
       ]
     }
   },
+  "AcceptRecapEntry": {
+    "domain": "desktop/recap_review.go",
+    "owner": "App.AcceptRecapEntry",
+    "sources": [
+      "desktop/recap_review.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.AcceptRecapEntry",
+      "inputs": [
+        "kind",
+        "body",
+        "editedBody"
+      ]
+    }
+  },
   "AcceptSkillSuggestion": {
     "domain": "desktop/memory_suggestions.go",
     "owner": "App.AcceptSkillSuggestion",
@@ -1142,6 +1158,20 @@
       "resolver": "App.CloseMergedWorktreeTab",
       "inputs": [
         "request"
+      ]
+    }
+  },
+  "CloseRecapHandoff": {
+    "domain": "desktop/recap_open_items.go",
+    "owner": "App.CloseRecapHandoff",
+    "sources": [
+      "desktop/recap_open_items.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.CloseRecapHandoff",
+      "inputs": [
+        "id"
       ]
     }
   },
@@ -2966,6 +2996,22 @@
       ]
     }
   },
+  "KeepRecapHandoff": {
+    "domain": "desktop/recap_open_items.go",
+    "owner": "App.KeepRecapHandoff",
+    "sources": [
+      "desktop/recap_open_items.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.KeepRecapHandoff",
+      "inputs": [
+        "sessionPath",
+        "body",
+        "evidence"
+      ]
+    }
+  },
   "ListDir": {
     "domain": "desktop/app.go",
     "owner": "App.ListDir",
@@ -3047,6 +3093,18 @@
     "scope": {
       "kind": "owner-state",
       "resolver": "App.ListProjectTree",
+      "inputs": []
+    }
+  },
+  "ListRecapOpenItems": {
+    "domain": "desktop/recap_open_items.go",
+    "owner": "App.ListRecapOpenItems",
+    "sources": [
+      "desktop/recap_open_items.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.ListRecapOpenItems",
       "inputs": []
     }
   },
@@ -4433,6 +4491,21 @@
       ]
     }
   },
+  "RejectRecapEntry": {
+    "domain": "desktop/recap_review.go",
+    "owner": "App.RejectRecapEntry",
+    "sources": [
+      "desktop/recap_review.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RejectRecapEntry",
+      "inputs": [
+        "kind",
+        "body"
+      ]
+    }
+  },
   "ReloadCommands": {
     "domain": "desktop/app.go",
     "owner": "App.ReloadCommands",
@@ -4933,6 +5006,20 @@
       "inputs": [
         "topicID",
         "title"
+      ]
+    }
+  },
+  "ReopenRecapHandoff": {
+    "domain": "desktop/recap_open_items.go",
+    "owner": "App.ReopenRecapHandoff",
+    "sources": [
+      "desktop/recap_open_items.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.ReopenRecapHandoff",
+      "inputs": [
+        "id"
       ]
     }
   },
@@ -8267,6 +8354,21 @@
       "inputs": [
         "tabID",
         "afterSeq"
+      ]
+    }
+  },
+  "UndoRecapEntry": {
+    "domain": "desktop/recap_review.go",
+    "owner": "App.UndoRecapEntry",
+    "sources": [
+      "desktop/recap_review.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.UndoRecapEntry",
+      "inputs": [
+        "kind",
+        "body"
       ]
     }
   },

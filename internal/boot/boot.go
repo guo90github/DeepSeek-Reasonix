@@ -1806,6 +1806,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		ImageCapabilityChanged:         runtimeImageCapabilityReader(root, modelName, imageSnapshot, opts.ModelSettings),
 		TaskBudget:                     taskBudgetFromConfig(cfg),
 		GoalTokenBudget:                cfg.Agent.GoalTokenBudget,
+		OpenHandoffs:                   recapOpenHandoffs,
 		Runner:                         runner,
 		Executor:                       executor,
 		Sink:                           sink,

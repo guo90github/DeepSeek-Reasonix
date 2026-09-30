@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:d7b9f76a95cdf6bb3bccc8a929cb5ec13d0fe4c00e9cd686aeae4b9be58dd35d";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:4513dbc11bfd37ddec566f241b15356516a9ac4e65c99cf3266aaaa2c97c7261";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -12,6 +12,7 @@ export const DESKTOP_COMMANDS = [
   "AcceptDeliveryToTab",
   "AcceptMemorySuggestion",
   "AcceptMemorySuggestionForTab",
+  "AcceptRecapEntry",
   "AcceptSkillSuggestion",
   "AcceptSkillSuggestionForTab",
   "ActivateBaseStyle",
@@ -85,6 +86,7 @@ export const DESKTOP_COMMANDS = [
   "ClearSessionForTab",
   "CloseMainWindow",
   "CloseMergedWorktreeTab",
+  "CloseRecapHandoff",
   "CloseRemoteTab",
   "CloseTab",
   "CloseTabWithPolicy",
@@ -214,12 +216,14 @@ export const DESKTOP_COMMANDS = [
   "IsolatedWorktreeAvailability",
   "Jobs",
   "JobsForTab",
+  "KeepRecapHandoff",
   "ListDir",
   "ListDirForTab",
   "ListHistorySessions",
   "ListProjectGroups",
   "ListProjectTopics",
   "ListProjectTree",
+  "ListRecapOpenItems",
   "ListRemoteDir",
   "ListRemoteProjects",
   "ListSessionRecaps",
@@ -320,6 +324,7 @@ export const DESKTOP_COMMANDS = [
   "RefreshInboxItem",
   "RefreshSkills",
   "RegisterNavigationIntent",
+  "RejectRecapEntry",
   "ReloadCommands",
   "ReloadRuntime",
   "ReloadSettings",
@@ -355,6 +360,7 @@ export const DESKTOP_COMMANDS = [
   "RenameSessionHead",
   "RenameTerminalForTab",
   "RenameTopic",
+  "ReopenRecapHandoff",
   "ReorderProjects",
   "ReorderTabs",
   "ReorderTopics",
@@ -581,6 +587,7 @@ export const DESKTOP_COMMANDS = [
   "TrySubagentProfile",
   "TurnCheckLog",
   "TurnEventsForTab",
+  "UndoRecapEntry",
   "UndoRewindForTab",
   "UnpinFileForTab",
   "UpdateInboxItem",
@@ -3007,6 +3014,15 @@ export interface QuestionAnswer {
   selected: string[];
 }
 
+export interface RecapOpenItemView {
+  id: string;
+  body: string;
+  evidence?: string;
+  from?: string;
+  openedAt: string;
+  closed: boolean;
+}
+
 export interface RecoveryCleanupItem {
   path: string;
   headId?: string;
@@ -3432,12 +3448,18 @@ export interface SessionMeta {
   recoveryCanonical?: boolean;
 }
 
+export interface SessionRecapEntry {
+  id: string;
+  kind: string;
+  body: string;
+  evidence?: string;
+  target: string;
+  decision?: string;
+}
+
 export interface SessionRecapView {
   path: string;
-  goal: string;
-  actions: string;
-  conclusion: string;
-  todos?: string;
+  entries: SessionRecapEntry[];
   model: string;
   generatedAt: string;
 }
@@ -4428,6 +4450,7 @@ export interface GeneratedDesktopCommands {
   AcceptDeliveryToTab(arg0: string): Promise<void>;
   AcceptMemorySuggestion(arg0: MemorySuggestion): Promise<string>;
   AcceptMemorySuggestionForTab(arg0: string, arg1: MemorySuggestion): Promise<string>;
+  AcceptRecapEntry(arg0: string, arg1: string, arg2: string): Promise<string>;
   AcceptSkillSuggestion(arg0: SkillSuggestion): Promise<string>;
   AcceptSkillSuggestionForTab(arg0: string, arg1: SkillSuggestion): Promise<string>;
   ActivateBaseStyle(arg0: string): Promise<void>;
@@ -4501,6 +4524,7 @@ export interface GeneratedDesktopCommands {
   ClearSessionForTab(arg0: string): Promise<SessionClearResult>;
   CloseMainWindow(): Promise<void>;
   CloseMergedWorktreeTab(arg0: CloseMergedWorktreeTabRequest): Promise<CloseMergedWorktreeTabResult>;
+  CloseRecapHandoff(arg0: string): Promise<void>;
   CloseRemoteTab(arg0: string): Promise<void>;
   CloseTab(arg0: string): Promise<void>;
   CloseTabWithPolicy(arg0: string, arg1: string): Promise<void>;
@@ -4630,12 +4654,14 @@ export interface GeneratedDesktopCommands {
   IsolatedWorktreeAvailability(arg0: string): Promise<Availability>;
   Jobs(): Promise<JobView[]>;
   JobsForTab(arg0: string): Promise<JobView[]>;
+  KeepRecapHandoff(arg0: string, arg1: string, arg2: string): Promise<string>;
   ListDir(arg0: string): Promise<DirEntry[]>;
   ListDirForTab(arg0: string, arg1: string): Promise<DirEntry[]>;
   ListHistorySessions(arg0: HistorySessionPageRequest): Promise<HistorySessionPage>;
   ListProjectGroups(arg0: string, arg1: string): Promise<desktopGroup[]>;
   ListProjectTopics(arg0: ProjectTopicPageRequest): Promise<ProjectTopicPage>;
   ListProjectTree(): Promise<ProjectNode[]>;
+  ListRecapOpenItems(): Promise<RecapOpenItemView[]>;
   ListRemoteDir(arg0: string, arg1: string): Promise<RemoteDirEntry[]>;
   ListRemoteProjects(): Promise<RemoteProjectView[]>;
   ListSessionRecaps(): Promise<SessionRecapView[]>;
@@ -4736,6 +4762,7 @@ export interface GeneratedDesktopCommands {
   RefreshInboxItem(arg0: string, arg1: string): Promise<void>;
   RefreshSkills(): Promise<void>;
   RegisterNavigationIntent(arg0: string): Promise<void>;
+  RejectRecapEntry(arg0: string, arg1: string): Promise<void>;
   ReloadCommands(): Promise<void>;
   ReloadRuntime(arg0: string): Promise<void>;
   ReloadSettings(): Promise<void>;
@@ -4771,6 +4798,7 @@ export interface GeneratedDesktopCommands {
   RenameSessionHead(arg0: string, arg1: string, arg2: string): Promise<void>;
   RenameTerminalForTab(arg0: string, arg1: string, arg2: string): Promise<void>;
   RenameTopic(arg0: string, arg1: string): Promise<void>;
+  ReopenRecapHandoff(arg0: string): Promise<void>;
   ReorderProjects(arg0: string[]): Promise<void>;
   ReorderTabs(arg0: string[]): Promise<void>;
   ReorderTopics(arg0: string, arg1: string, arg2: string[]): Promise<void>;
@@ -4997,6 +5025,7 @@ export interface GeneratedDesktopCommands {
   TrySubagentProfile(arg0: SubagentProfileInput, arg1: string): Promise<string>;
   TurnCheckLog(arg0: string, arg1: string, arg2: string, arg3: string): Promise<TurnCheckLogView | null>;
   TurnEventsForTab(arg0: string, arg1: number): Promise<TurnEventReplayView>;
+  UndoRecapEntry(arg0: string, arg1: string): Promise<void>;
   UndoRewindForTab(arg0: string, arg1: string): Promise<RewindResultView>;
   UnpinFileForTab(arg0: string, arg1: string): Promise<void>;
   UpdateInboxItem(arg0: string, arg1: string, arg2: string, arg3: string): Promise<void>;

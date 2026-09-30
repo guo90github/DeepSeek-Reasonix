@@ -14,10 +14,8 @@ import (
 	"reasonix/internal/recap"
 )
 
-const recapTestAnswer = "Goal: wire the batch command\n" +
-	"Actions: enumerated the roots and called the lane\n" +
-	"Conclusion: recaps stored\n" +
-	"Follow-ups: none\n"
+const recapTestAnswer = `[{"kind":"fact","body":"wire the batch command"},` +
+	`{"kind":"handoff","body":"the lane is called once per admissible session"}]`
 
 type recapTestProvider struct {
 	calls int

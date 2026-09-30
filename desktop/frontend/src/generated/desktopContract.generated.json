@@ -137,6 +137,39 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recap_review.go",
+      "name": "AcceptRecapEntry",
+      "owner": "App.AcceptRecapEntry",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "string"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "kind",
+          "body",
+          "editedBody"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.AcceptRecapEntry"
+      },
+      "sources": [
+        "desktop/recap_review.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/memory_suggestions.go",
       "name": "AcceptSkillSuggestion",
       "owner": "App.AcceptSkillSuggestion",
@@ -2130,6 +2163,28 @@
       },
       "sources": [
         "desktop/delivery_worktree.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/recap_open_items.go",
+      "name": "CloseRecapHandoff",
+      "owner": "App.CloseRecapHandoff",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "id"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.CloseRecapHandoff"
+      },
+      "sources": [
+        "desktop/recap_open_items.go"
       ]
     },
     {
@@ -5523,6 +5578,39 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recap_open_items.go",
+      "name": "KeepRecapHandoff",
+      "owner": "App.KeepRecapHandoff",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "string"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "sessionPath",
+          "body",
+          "evidence"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.KeepRecapHandoff"
+      },
+      "sources": [
+        "desktop/recap_open_items.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/app.go",
       "name": "ListDir",
       "owner": "App.ListDir",
@@ -5687,6 +5775,28 @@
       },
       "sources": [
         "desktop/session_catalog_runtime.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/recap_open_items.go",
+      "name": "ListRecapOpenItems",
+      "owner": "App.ListRecapOpenItems",
+      "params": [],
+      "result": {
+        "elem": {
+          "kind": "object",
+          "ref": "main.RecapOpenItemView"
+        },
+        "kind": "array"
+      },
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.ListRecapOpenItems"
+      },
+      "sources": [
+        "desktop/recap_open_items.go"
       ]
     },
     {
@@ -8210,6 +8320,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recap_review.go",
+      "name": "RejectRecapEntry",
+      "owner": "App.RejectRecapEntry",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "kind",
+          "body"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RejectRecapEntry"
+      },
+      "sources": [
+        "desktop/recap_review.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/app.go",
       "name": "ReloadCommands",
       "owner": "App.ReloadCommands",
@@ -9103,6 +9239,28 @@
       },
       "sources": [
         "desktop/tabs.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/recap_open_items.go",
+      "name": "ReopenRecapHandoff",
+      "owner": "App.ReopenRecapHandoff",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "id"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.ReopenRecapHandoff"
+      },
+      "sources": [
+        "desktop/recap_open_items.go"
       ]
     },
     {
@@ -15140,6 +15298,32 @@
       },
       "sources": [
         "desktop/turn_runtime_api.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/recap_review.go",
+      "name": "UndoRecapEntry",
+      "owner": "App.UndoRecapEntry",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "kind",
+          "body"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.UndoRecapEntry"
+      },
+      "sources": [
+        "desktop/recap_review.go"
       ]
     },
     {
@@ -28680,6 +28864,48 @@
         }
       ]
     },
+    "main.RecapOpenItemView": {
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "body",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "evidence",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "from",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "openedAt",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "closed",
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ]
+    },
     "main.RecoveryCleanupItem": {
       "fields": [
         {
@@ -30976,6 +31202,48 @@
         }
       ]
     },
+    "main.SessionRecapEntry": {
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "kind",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "body",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "evidence",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "target",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "decision",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "main.SessionRecapView": {
       "fields": [
         {
@@ -30985,28 +31253,13 @@
           }
         },
         {
-          "name": "goal",
+          "name": "entries",
           "type": {
-            "kind": "string"
-          }
-        },
-        {
-          "name": "actions",
-          "type": {
-            "kind": "string"
-          }
-        },
-        {
-          "name": "conclusion",
-          "type": {
-            "kind": "string"
-          }
-        },
-        {
-          "name": "todos",
-          "optional": true,
-          "type": {
-            "kind": "string"
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionRecapEntry"
+            },
+            "kind": "array"
           }
         },
         {

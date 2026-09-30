@@ -127,6 +127,7 @@ import type {
   ServerView,
   SessionMeta,
   SessionRecap,
+  RecapOpenItem,
   SessionRecoveryFailedEvent,
   SessionRecoveryEvent,
   SettingsView,
@@ -397,6 +398,13 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   ListSessionsForTab(tabID: string): Promise<SessionMeta[]>;
   ListTrashedSessions(): Promise<SessionMeta[]>;
   ListSessionRecaps(): Promise<SessionRecap[]>;
+  AcceptRecapEntry(kind: string, body: string, editedBody: string): Promise<string>;
+  RejectRecapEntry(kind: string, body: string): Promise<void>;
+  UndoRecapEntry(kind: string, body: string): Promise<void>;
+  KeepRecapHandoff(sessionPath: string, body: string, evidence: string): Promise<string>;
+  CloseRecapHandoff(id: string): Promise<void>;
+  ReopenRecapHandoff(id: string): Promise<void>;
+  ListRecapOpenItems(): Promise<RecapOpenItem[]>;
   ResumeSession(path: string): Promise<HistoryMessage[]>;
   ResumeSessionForTab(tabID: string, path: string): Promise<HistoryMessage[]>;
   ResumeSessionPage(path: string, limit: number): Promise<HistoryPage>;
@@ -3309,6 +3317,30 @@ function makeMockApp(): AppBindings {
       return trashedSessions.map((s) => ({ ...s }));
     },
     async ListSessionRecaps() {
+      return [];
+    },
+    async AcceptRecapEntry(kind: string, body: string, editedBody: string) {
+      const text = editedBody.trim() || body;
+      emit({ kind: "notice", level: "info", text: `(mock) accepted a ${kind} note → ${text.slice(0, 40)}` });
+      return "recap-note.md";
+    },
+    async RejectRecapEntry(kind: string, body: string) {
+      emit({ kind: "notice", level: "info", text: `(mock) dropped a ${kind} note → ${body.slice(0, 40)}` });
+    },
+    async UndoRecapEntry(kind: string) {
+      emit({ kind: "notice", level: "info", text: `(mock) undid a ${kind} note` });
+    },
+    async KeepRecapHandoff(_sessionPath: string, body: string) {
+      emit({ kind: "notice", level: "info", text: `(mock) kept an unfinished item → ${body.slice(0, 40)}` });
+      return "handoff-mock";
+    },
+    async CloseRecapHandoff(id: string) {
+      emit({ kind: "notice", level: "info", text: `(mock) handled unfinished item ${id}` });
+    },
+    async ReopenRecapHandoff(id: string) {
+      emit({ kind: "notice", level: "info", text: `(mock) reopened unfinished item ${id}` });
+    },
+    async ListRecapOpenItems() {
       return [];
     },
     async ResumeSession(path: string) {

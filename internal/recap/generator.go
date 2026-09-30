@@ -13,30 +13,41 @@ import (
 	"reasonix/internal/secrets"
 )
 
-// Elements is the parsed four-element body of one recap.
-type Elements struct {
-	Goal       string
-	Actions    string
-	Conclusion string
-	FollowUps  string
-}
+const recapSystemPrompt = `You distill one finished coding session into reusable notes for the next session.
+Answer with a JSON array and nothing else, like this:
+[{"kind":"fact","body":"one or two sentences","evidence":"where in the session it came from"}]
 
-const recapSystemPrompt = `You write a short retrospective of one finished coding session for the person who ran it.
-Answer with exactly four lines, in this order, and nothing else:
-Goal: what the session set out to do, one sentence
-Actions: the key steps taken, in order, at most two sentences
-Conclusion: what was achieved or learned, and how it was verified
-Follow-ups: what is still unfinished, or "none"
+Kinds, and what earns a note:
+- fact: something durable about the project as it now stands — where a thing
+  lives, a path that matters later, a protocol, a schema, a field's meaning.
+- root-cause: a defect that was actually diagnosed — the symptom, the root cause,
+  and the fix, one clause each. No verification log, no command output.
+- refuted: an option that was raised and then ruled out — the reason it was
+  ruled out, and whether the user or a measurement ruled it out. An option still
+  under discussion is not refuted.
+- handoff: work left unfinished and what the next session must do about it.
 
-Report the session's final state, not what it merely discussed:
-- Names, identifiers, file paths, decision numbers, version strings and field
-  values are copied verbatim from the transcript. Never paraphrase, translate,
-  shorten or round them (a range stays a range: "O1-O9" is not "O1-O6").
-- An option that was raised and rejected is not a decision. Report what the
-  session settled on; if the transcript does not show a settled answer, leave
-  that detail out instead of guessing.
-- The transcript may be trimmed, so never invent detail to fill a gap.
-Never include secrets, credentials, hostnames, or internal addresses.`
+How to write one body:
+- At most two sentences, and at most 120 characters. The next session reads this
+  as a list, not as a report: a note that needs more room is two notes.
+- At most two identifiers per note (a path, a command, an id). The rest belongs
+  in "evidence" — a file, a command, a turn, or the user's own words. Never
+  "turn N's step evidence" or any other reference to this session's bookkeeping.
+- A note must stand without this session: no "as decided above", no "the earlier
+  fix", no recounting of what was run, committed, or checked — unless the next
+  session would break something without knowing it.
+- Write each body in the session's own language.
+- Copy names, identifiers, file paths, decision numbers, version strings and
+  field values verbatim. Never paraphrase, translate, shorten or round them
+  (a range stays a range: "O1-O9" is not "O1-O6").
+- Report what the session settled on, never what it merely discussed.
+- The transcript may be trimmed: never invent detail to fill a gap.
+- No greetings, no restating the request, no narrating the conversation.
+- Cover every kind that applies: an option the session ruled out is a note, and
+  so is work it left unfinished. Never drop one because the list is getting long.
+- Aim for three to six notes, never more than 8. A session that produced nothing
+  reusable answers [].
+- Never include secrets, credentials, hostnames, or internal addresses.`
 
 // ModelResolver returns the provider used for one recap: the model the session
 // itself recorded, then the configured fallback. ok=false marks the session
@@ -105,7 +116,7 @@ func NewGenerator(opts GeneratorOptions) *Generator {
 		opts.Timeout = 90 * time.Second
 	}
 	if opts.MaxTokens <= 0 {
-		opts.MaxTokens = 700
+		opts.MaxTokens = 3000
 	}
 	if opts.MaxInputBytes <= 0 {
 		opts.MaxInputBytes = 96 * 1024
@@ -152,6 +163,8 @@ func describeResult(result Result, err error) string {
 	switch {
 	case err != nil:
 		return "error: " + err.Error()
+	case result.Stored && len(result.Record.Entries) == 0:
+		return "stored: no reusable entries"
 	case result.Stored:
 		return "stored"
 	case result.Skipped:
@@ -203,7 +216,77 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 		_ = store.MarkPending(ctx, path, "no usable model", g.opts.Now())
 		return Result{Skipped: true, Reason: "no usable model"}, nil
 	}
-	raw, err := boundedllm.Call(ctx, boundedllm.Config{
+	raw, err := g.call(ctx, prov, ref, text)
+	if err != nil {
+		_ = store.MarkPending(ctx, path, err.Error(), g.opts.Now())
+		return Result{Skipped: true, Reason: "call failed"}, nil
+	}
+	if strings.TrimSpace(raw) == "" {
+		// A reasoning model can spend the whole completion budget thinking and
+		// return nothing at all; one immediate retry beats leaving the session
+		// pending for a later sweep.
+		raw, err = g.call(ctx, prov, ref, text)
+		if err != nil {
+			_ = store.MarkPending(ctx, path, err.Error(), g.opts.Now())
+			return Result{Skipped: true, Reason: "call failed"}, nil
+		}
+	}
+	entries, ok := parseEntries(raw)
+	if !ok {
+		_ = store.MarkPending(ctx, path, "unparseable answer: "+answerExcerpt(raw), g.opts.Now())
+		return Result{Skipped: true, Reason: "unparseable answer"}, nil
+	}
+	// Redaction runs first: a decision is keyed by the text a person actually
+	// saw, which is the redacted body.
+	entries = redactEntries(entries)
+	if rejected, err := store.Rejected(ctx); err == nil {
+		entries = dropRejected(entries, rejected)
+	}
+	rec := Record{
+		Path:          path,
+		Fingerprint:   fingerprint,
+		Entries:       entries,
+		Model:         ref,
+		PromptVersion: PromptVersion,
+		GeneratedAt:   g.opts.Now(),
+	}
+	if err := store.Put(ctx, rec); err != nil {
+		return Result{}, err
+	}
+	return Result{Record: rec, Stored: true}, nil
+}
+
+// dropRejected removes the notes someone already ruled out, so recapping the
+// same session does not resurface them.
+func dropRejected(entries []Entry, rejected map[string]bool) []Entry {
+	if len(rejected) == 0 {
+		return entries
+	}
+	out := make([]Entry, 0, len(entries))
+	for _, entry := range entries {
+		if rejected[HashEntry(entry.Kind, entry.Body)] {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
+// answerExcerpt keeps a short, redacted head of a rejected answer: without it a
+// session that never recaps reports only "unparseable", and nothing says whether
+// the model answered in prose or in a shape nothing here recognizes.
+func answerExcerpt(raw string) string {
+	text := strings.TrimSpace(strings.ReplaceAll(raw, "\n", " "))
+	if runes := []rune(text); len(runes) > 120 {
+		text = string(runes[:120]) + "…"
+	}
+	return secrets.Redact(text)
+}
+
+// call runs the lane's one bounded request: no tools, its own usage source, and
+// a completion budget the model's reasoning also has to fit inside.
+func (g *Generator) call(ctx context.Context, prov provider.Provider, ref, text string) (string, error) {
+	return boundedllm.Call(ctx, boundedllm.Config{
 		Provider:       prov,
 		ModelRef:       ref,
 		Sink:           g.opts.Sink,
@@ -215,30 +298,20 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 		MaxTotalBytes:  g.opts.MaxInputBytes + 4*1024,
 		EffortOverride: provider.PreferredReasoning(prov, "low"),
 	}, recapSystemPrompt, text)
-	if err != nil {
-		_ = store.MarkPending(ctx, path, err.Error(), g.opts.Now())
-		return Result{Skipped: true, Reason: "call failed"}, nil
+}
+
+// redactEntries scrubs both halves of a note: the body and the provenance it
+// quotes can each carry an address or a credential.
+func redactEntries(entries []Entry) []Entry {
+	out := make([]Entry, 0, len(entries))
+	for _, entry := range entries {
+		out = append(out, Entry{
+			Kind:     entry.Kind,
+			Body:     secrets.Redact(entry.Body),
+			Evidence: secrets.Redact(entry.Evidence),
+		})
 	}
-	elements, ok := parseElements(raw)
-	if !ok {
-		_ = store.MarkPending(ctx, path, "unparseable answer", g.opts.Now())
-		return Result{Skipped: true, Reason: "unparseable answer"}, nil
-	}
-	rec := Record{
-		Path:          path,
-		Fingerprint:   fingerprint,
-		Goal:          secrets.Redact(elements.Goal),
-		Actions:       secrets.Redact(elements.Actions),
-		Conclusion:    secrets.Redact(elements.Conclusion),
-		FollowUps:     secrets.Redact(elements.FollowUps),
-		Model:         ref,
-		PromptVersion: PromptVersion,
-		GeneratedAt:   g.opts.Now(),
-	}
-	if err := store.Put(ctx, rec); err != nil {
-		return Result{}, err
-	}
-	return Result{Record: rec, Stored: true}, nil
+	return out
 }
 
 // storeFor resolves the projection for one attempt. A factory opens and closes
@@ -305,33 +378,6 @@ func (g *Generator) acquire(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
-}
-
-// parseElements reads the four labelled lines. An answer missing the first
-// three labels is rejected rather than stored half-formed.
-func parseElements(raw string) (Elements, bool) {
-	var out Elements
-	for _, line := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
-		label, value, ok := strings.Cut(strings.TrimSpace(line), ":")
-		if !ok {
-			continue
-		}
-		value = strings.TrimSpace(value)
-		switch strings.ToLower(strings.TrimSpace(label)) {
-		case "goal":
-			out.Goal = value
-		case "actions", "key actions":
-			out.Actions = value
-		case "conclusion":
-			out.Conclusion = value
-		case "follow-ups", "follow ups", "followups", "todos":
-			out.FollowUps = value
-		}
-	}
-	if strings.TrimSpace(out.Goal) == "" || strings.TrimSpace(out.Actions) == "" || strings.TrimSpace(out.Conclusion) == "" {
-		return Elements{}, false
-	}
-	return out, true
 }
 
 // clipForRecap keeps the head and the tail of an over-long transcript: the head

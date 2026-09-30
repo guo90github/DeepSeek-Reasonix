@@ -14,7 +14,7 @@ import (
 	"reasonix/internal/provider"
 )
 
-const recapPromptMarker = "short retrospective of one finished coding session"
+const recapPromptMarker = "distill one finished coding session"
 
 type recapRecordingProvider struct {
 	mu   sync.Mutex
@@ -28,7 +28,7 @@ func (p *recapRecordingProvider) Stream(_ context.Context, req provider.Request)
 	p.reqs = append(p.reqs, req)
 	p.mu.Unlock()
 	ch := make(chan provider.Chunk, 2)
-	ch <- provider.Chunk{Type: provider.ChunkText, Text: "Goal: g\nActions: a\nConclusion: c\nFollow-ups: none\n"}
+	ch <- provider.Chunk{Type: provider.ChunkText, Text: `[{"kind":"fact","body":"the thing is done"}]`}
 	ch <- provider.Chunk{Type: provider.ChunkUsage, Usage: &provider.Usage{}}
 	close(ch)
 	return ch, nil

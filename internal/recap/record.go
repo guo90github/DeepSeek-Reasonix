@@ -14,7 +14,7 @@ import (
 
 // PromptVersion tags the prompt that produced a record so a prompt change can
 // invalidate stored records without touching session content.
-const PromptVersion = "recap-v2"
+const PromptVersion = "recap-v5"
 
 // ErrNoTranscript reports that a session has no authoritative file to read.
 var ErrNoTranscript = fmt.Errorf("recap: session has no transcript")
@@ -24,10 +24,7 @@ var ErrNoTranscript = fmt.Errorf("recap: session has no transcript")
 type Record struct {
 	Path          string    `json:"path"`
 	Fingerprint   string    `json:"fingerprint"`
-	Goal          string    `json:"goal"`
-	Actions       string    `json:"actions"`
-	Conclusion    string    `json:"conclusion"`
-	FollowUps     string    `json:"followUps,omitempty"`
+	Entries       []Entry   `json:"entries"`
 	Model         string    `json:"model"`
 	PromptVersion string    `json:"promptVersion"`
 	GeneratedAt   time.Time `json:"generatedAt"`

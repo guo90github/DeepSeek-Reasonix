@@ -38,9 +38,12 @@ func writeHistoryRecap(t *testing.T, recapPath, sessionPath string) {
 	}
 	defer func() { _ = store.Close() }()
 	if err := store.Put(context.Background(), recap.Record{
-		Path: sessionPath, Goal: "wire the user entry", Actions: "registered history",
-		Conclusion: "hits show recaps", FollowUps: "none", Model: "fake/model",
-		PromptVersion: recap.PromptVersion, GeneratedAt: time.Now(),
+		Path: sessionPath,
+		Entries: []recap.Entry{
+			{Kind: recap.KindFact, Body: "wire the user entry"},
+			{Kind: recap.KindHandoff, Body: "hits show recaps"},
+		},
+		Model: "fake/model", PromptVersion: recap.PromptVersion, GeneratedAt: time.Now(),
 	}); err != nil {
 		t.Fatalf("put recap: %v", err)
 	}
@@ -132,7 +135,13 @@ func TestHistoryCommandJSONCarriesHitsAndRecap(t *testing.T) {
 			recapped = &report.Hits[i]
 		}
 	}
-	if recapped == nil || recapped.Recap == nil || recapped.Recap.Goal != "wire the user entry" {
+	if recapped == nil || recapped.Recap == nil || len(recapped.Recap.Entries) != 2 {
 		t.Fatalf("recap not embedded for the recapped session: %+v", report.Hits)
+	}
+	if recapped.Recap.Entries[0].Kind != recap.KindFact || recapped.Recap.Entries[0].Body != "wire the user entry" {
+		t.Fatalf("embedded note lost its kind or body: %+v", recapped.Recap.Entries)
+	}
+	if recapped.Recap.Entries[1].Target != recap.SinkDisplay {
+		t.Fatalf("a handoff note is shown but not stored: %+v", recapped.Recap.Entries[1])
 	}
 }

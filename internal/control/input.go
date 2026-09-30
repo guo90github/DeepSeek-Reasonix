@@ -221,6 +221,11 @@ func (c *Controller) composeWithGoal(
 				Suppressed: "memory update already supplies the new fact",
 			})
 		}
+		// Unfinished items a person kept from earlier sessions are offered on a
+		// session's first turn and on turns that say they continue something.
+		if !c.ablation.Off(ablation.Retrieval) {
+			text = c.offerOpenHandoffs(text, source)
+		}
 	}
 	return text
 }

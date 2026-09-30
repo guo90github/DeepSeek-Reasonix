@@ -34,6 +34,7 @@ globalThis.Node = dom.window.Node;
 globalThis.Element = dom.window.Element;
 globalThis.HTMLElement = dom.window.HTMLElement;
 globalThis.HTMLInputElement = dom.window.HTMLInputElement;
+globalThis.HTMLTextAreaElement = dom.window.HTMLTextAreaElement;
 globalThis.Event = dom.window.Event;
 globalThis.InputEvent = dom.window.InputEvent;
 globalThis.KeyboardEvent = dom.window.KeyboardEvent;
@@ -45,15 +46,24 @@ function meta(path: string, title: string, turns: number): SessionMeta {
   } as SessionMeta;
 }
 
+// Each recap carries one reviewable note and one handoff note, both embedding the
+// goal text so the ordering and search assertions still key on the recap they
+// mean. The handoff note keeps the id the host returns for it once it is kept as
+// an unfinished item, which is what the page matches on.
 function recap(path: string, goal: string, generatedAt: string): SessionRecap {
   return {
-    path, goal, actions: `${goal} 的步骤`, conclusion: `${goal} 的结论`, model: "deepseek/test", generatedAt,
+    path, model: "deepseek/test", generatedAt,
+    entries: [
+      { id: `fact-${goal}`, kind: "fact", body: `${goal} 的事实`, evidence: "internal/parser.go", target: "memory" },
+      { id: "handoff-mock", kind: "handoff", body: `${goal} 的交接`, target: "display" },
+    ],
   } as SessionRecap;
 }
 
 // Session titles sort by name in the opposite order to their dates, so each of
 // the three sort modes has its own order. The fourth recap has no session
-// metadata: it covers the file-name fallback and the missing jump target.
+// metadata: it covers the file-name fallback, the missing jump target, and the
+// read-only rule for another project's sessions.
 const unlistedPath = "C:\\sessions\\20260901-120000.000000000-deepseek-flash.jsonl";
 const earlyPath = "C:\\sessions\\20260901-090000.000000000-deepseek-flash.jsonl";
 const middlePath = "C:\\sessions\\20260902-090000.000000000-deepseek-flash.jsonl";
@@ -75,18 +85,43 @@ const sessions = [
 ];
 
 const resumed: SessionMeta[] = [];
+const accepted: { kind: string; body: string; edited: string }[] = [];
+const rejected: { kind: string; body: string }[] = [];
+const undone: { kind: string; body: string }[] = [];
+const kept: { path: string; body: string; evidence: string }[] = [];
+const closedItems: string[] = [];
+const reopenedItems: string[] = [];
 let backCount = 0;
+let failNextAccept = false;
 const [{ LocaleProvider }, { SessionRecapPage }] = await Promise.all([
   import("../lib/i18n"),
   import("../components/SessionRecapPage"),
 ]);
+
+const reviewProps = {
+  resume: (session: SessionMeta) => { resumed.push(session); },
+  accept: async (kind: string, body: string, edited: string) => {
+    if (failNextAccept) { failNextAccept = false; throw new Error("no writer"); }
+    accepted.push({ kind, body, edited });
+    return "recap-note.md";
+  },
+  reject: async (kind: string, body: string) => { rejected.push({ kind, body }); },
+  undo: async (kind: string, body: string) => { undone.push({ kind, body }); },
+  listOpenItems: async () => [],
+  keep: async (path: string, body: string, evidence: string) => {
+    kept.push({ path, body, evidence });
+    return "handoff-mock";
+  },
+  close: async (id: string) => { closedItems.push(id); },
+  reopen: async (id: string) => { reopenedItems.push(id); },
+};
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("missing root");
 const root = createRoot(rootEl);
 await act(async () => {
   root.render(<LocaleProvider><SessionRecapPage active onBack={() => { backCount += 1; }}
-    list={async () => recaps} listSessions={async () => sessions} resume={(session) => { resumed.push(session); }} /></LocaleProvider>);
+    list={async () => recaps} listSessions={async () => sessions} {...reviewProps} /></LocaleProvider>);
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 
@@ -110,15 +145,30 @@ const okOrder = (expected: string[], label: string) => {
 };
 okOrder([newest, middle, unlisted, early], "the newest recap comes first by default");
 
+// The notes are what the page now shows instead of four element paragraphs, and
+// each reviewable note carries its own actions.
+const notesOf = (card: Element) => [...card.querySelectorAll("p")];
+const rowWith = (card: Element | undefined, text: string) =>
+  [...(card?.querySelectorAll("p") ?? [])].find((row) => row.textContent?.includes(text));
+const buttonsOf = (row: Element | undefined) => [...(row?.querySelectorAll("button") ?? [])];
+ok(cards().every((card) => notesOf(card).length === 2), "each recap renders its two notes as separate lines");
+ok(cards().every((card) => card.textContent?.includes("internal/parser.go") === true),
+  "a note shows the evidence it cites");
+
+const alphaCard = () => cardWith("Alpha 会话");
+const clickButton = async (button: HTMLButtonElement | undefined) => {
+  await act(async () => {
+    button?.click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+};
+
 // Pills are [newest, oldest, by session name] in that order; they are clicked by
 // index so the assertions never depend on the UI language. The by-name order is
 // asserted over the titled cards only: the unlisted recap has a file name.
 const clickPill = async (index: number) => {
   const pill = rootEl.querySelectorAll<HTMLButtonElement>(".history-filter__pill")[index];
-  await act(async () => {
-    pill?.click();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
+  await clickButton(pill);
 };
 await clickPill(1);
 okOrder([early, unlisted, middle, newest], "sorting by oldest first reorders the list");
@@ -149,6 +199,8 @@ ok(reactProps(search)?.value === early, "the search box is bound to the typed qu
 okOrder([early], `search narrows the list to the matching recap: ${order().join(" | ")}`);
 await setQuery("Gamma 会话");
 okOrder([newest], "search matches the session title as well");
+await setQuery("internal/parser.go");
+ok(cards().length === 4, "search also covers the evidence a note cites");
 await setQuery("没有会话记录");
 okOrder([unlisted], "search also covers recaps whose session is not listed");
 await setQuery("nothing matches this query");
@@ -160,12 +212,89 @@ await setQuery("");
 const cardWith = (text: string) => cards().find((card) => card.textContent?.includes(text));
 ok(cards().filter((card) => card.querySelector("button") !== null).length === 3, "only recaps with a listed session can be opened");
 ok(cardWith(unlisted)?.querySelector("button") === null, "a recap without a listed session offers no jump");
-await act(async () => {
-  cardWith("Alpha 会话")?.querySelector<HTMLButtonElement>("button")?.click();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-});
+await clickButton(cardWith("Alpha 会话")?.querySelector<HTMLButtonElement>("button"));
 ok(resumed.length === 1 && resumed[0]?.path === middlePath, "opening a recap resumes its session");
 ok(backCount === 1, "opening a recap leaves the recap page");
+
+// ---- reviewing a note ----
+const factOf = (card: Element | undefined) => rowWith(card, "的事实");
+ok(buttonsOf(factOf(alphaCard())).length === 3, "a reviewable note offers accept, edit-and-accept, and drop");
+ok(buttonsOf(rowWith(alphaCard(), "的交接")).length === 1, "a handoff note offers keeping it as an unfinished item");
+ok(buttonsOf(factOf(cardWith(unlisted))).length === 0, "another project's session is read-only here");
+
+await clickButton(buttonsOf(factOf(alphaCard()))[0]);
+ok(accepted.length === 1 && accepted[0]?.kind === "fact" && accepted[0]?.body === `${middle} 的事实` && accepted[0]?.edited === "",
+  `accepting a note saves it unedited: ${JSON.stringify(accepted[0])}`);
+ok(buttonsOf(factOf(alphaCard())).length === 1, "an accepted note offers only the way back");
+
+await clickButton(buttonsOf(factOf(alphaCard()))[0]);
+ok(undone.length === 1 && undone[0]?.body === `${middle} 的事实`, "undo drops the recorded choice");
+ok(buttonsOf(factOf(alphaCard())).length === 3, "undoing restores the full set of actions");
+
+await clickButton(buttonsOf(factOf(alphaCard()))[2]);
+ok(rejected.length === 1 && rejected[0]?.kind === "fact", "dropping a note reports it as ruled out");
+ok(buttonsOf(factOf(alphaCard())).length === 1, "a dropped note offers only the way back");
+await clickButton(buttonsOf(factOf(alphaCard()))[0]);
+ok(undone.length === 2, "a dropped note can be taken back");
+
+// Editing before accepting: the edited text is what reaches memory.
+await clickButton(buttonsOf(factOf(alphaCard()))[1]);
+const editor = alphaCard()?.querySelector<HTMLTextAreaElement>("textarea");
+ok(editor !== null && editor !== undefined, "edit-and-accept opens an editor");
+await act(async () => {
+  reactProps(editor ?? null)?.onChange?.({ target: { value: `${middle} 的事实（改写）` } });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+await clickButton(editor?.parentElement?.querySelectorAll("button")[0]);
+ok(accepted.length === 2 && accepted[1]?.edited === `${middle} 的事实（改写）`,
+  `an edited note saves the edited text: ${JSON.stringify(accepted[1])}`);
+ok(alphaCard()?.querySelector("textarea") === null, "accepting closes the editor");
+
+// ---- keeping an unfinished item ----
+// A handoff note outlives its session: kept as an unfinished item, it belongs to
+// the project and is offered to a later session that continues the subject.
+const handoffRow = () => rowWith(alphaCard(), "的交接");
+const openSection = () => [...rootEl.querySelectorAll(".management-notice")]
+  .find((node) => !scroller?.contains(node) && node.querySelector("ul") !== null);
+await clickButton(buttonsOf(handoffRow())[0]);
+ok(kept.length === 1 && kept[0]?.path === middlePath && kept[0]?.body === `${middle} 的交接`,
+  `keeping an unfinished item records it for the session's project: ${JSON.stringify(kept[0])}`);
+ok(buttonsOf(handoffRow()).length === 0, "a kept note stops offering the action");
+ok(openSection() !== undefined, "the project's unfinished items get their own list");
+ok(openSection()?.querySelectorAll("li").length === 1, "the kept item is listed");
+
+await clickButton(openSection()?.querySelector<HTMLButtonElement>("li button"));
+ok(closedItems.length === 1 && closedItems[0] === "handoff-mock", "marking an item handled reports it");
+ok(openSection()?.querySelectorAll("li").length === 1, "a handled item stays visible");
+await clickButton(openSection()?.querySelector<HTMLButtonElement>("li button"));
+ok(reopenedItems.length === 1, "a handled item can be put back on the list");
+
+// A failed write must say so instead of pretending the note was settled.
+failNextAccept = true;
+const untouched = () => factOf(cardWith(early));
+const before = accepted.length;
+await clickButton(buttonsOf(untouched())[0]);
+ok(accepted.length === before && buttonsOf(untouched()).length === 3,
+  "a failed write leaves the note unsettled");
+ok(rootEl.querySelectorAll('[role="alert"]').length > 0, "a failed write is reported");
+
+// A session that yielded nothing reusable must say so rather than render an
+// empty card: one line, and no note line at all. It mounts on its own host so
+// the assertion never depends on the reused root already having state.
+const quietPath = "C:\\sessions\\20260904-090000.000000000-deepseek-flash.jsonl";
+const quietHost = document.createElement("div");
+document.body.appendChild(quietHost);
+const quietRoot = createRoot(quietHost);
+await act(async () => {
+  quietRoot.render(<LocaleProvider><SessionRecapPage active onBack={() => {}}
+    list={async () => [{ path: quietPath, model: "deepseek/test", generatedAt: "2026-09-04T09:00:00Z", entries: [] } as SessionRecap]}
+    listSessions={async () => []} {...reviewProps} /></LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+const quiet = [...quietHost.querySelectorAll("li")];
+ok(quiet.length === 1 && notesOf(quiet[0]).length === 1 && quiet[0].textContent?.includes("的事实") !== true,
+  "a recap with no notes says so instead of listing notes");
+await act(async () => { quietRoot.unmount(); });
 
 await act(async () => { root.unmount(); });
 process.stdout.write(`\n${failed === 0 ? "OK" : "FAILED"}: ${failed} failed\n`);

@@ -52,6 +52,7 @@ import (
 	"reasonix/internal/permission"
 	"reasonix/internal/plugin"
 	"reasonix/internal/provider"
+	"reasonix/internal/recap"
 	"reasonix/internal/recovery"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/sessioncontext"
@@ -194,6 +195,7 @@ type Controller struct {
 	sessionRecoveryMeta               func(SessionRecoveryRequest) agent.BranchMeta
 	onSessionRecovered                func(SessionRecoveryInfo) error
 	onSessionTransition               func(SessionTransitionInfo) error
+	openHandoffs                      func(project string) []recap.OpenItem
 
 	// balanceURL/balanceKey target the active provider's optional wallet-balance
 	// endpoint (empty when the provider declares none). Captured at build so a
@@ -690,6 +692,9 @@ type Options struct {
 	// Ablation switches subsystems off for a benchmark arm. The zero value runs
 	// everything.
 	Ablation ablation.Set
+	// OpenHandoffs returns one project's unfinished items, so a turn that picks
+	// earlier work back up can be offered them. Nil disables the offer.
+	OpenHandoffs func(project string) []recap.OpenItem
 	// SessionTemp is the logical-session private temporary directory manager
 	// shared by sandboxed Bash calls. Nil creates a fresh Manager owned by this
 	// Controller. Hot rebuilds pass the previous Controller's Manager so the
@@ -793,6 +798,7 @@ func New(opts Options) *Controller {
 		mcpConfigureSpec:                  opts.MCPConfigureSpec,
 		capabilityRuntime:                 opts.CapabilityRuntime,
 		ablation:                          opts.Ablation,
+		openHandoffs:                      opts.OpenHandoffs,
 		workspaceRoot:                     opts.WorkspaceRoot,
 		externalFolderToolRefs:            opts.ExternalFolderToolRefs,
 		providerResolver:                  opts.ProviderResolver,

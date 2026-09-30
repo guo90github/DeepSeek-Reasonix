@@ -1,5 +1,7 @@
-// Package recap keeps one recap per closed session: the four elements (goal,
-// key actions, conclusion, follow-ups) that answer "what did I do here".
+// Package recap keeps one recap per closed session: the reusable notes (facts,
+// root causes, refutations, handoffs) the next session can build on instead of
+// re-deriving them. A note stays a candidate until a person accepts it, so this
+// package never writes memory itself.
 //
 // A recap is a disposable projection of the authoritative transcript, never a
 // replacement for it. It is produced by one independent bounded call that does

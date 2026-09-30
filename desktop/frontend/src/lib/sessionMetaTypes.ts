@@ -33,13 +33,33 @@ export interface SessionMeta {
   parentVersionId?: string;
 }
 
+// SessionRecapEntry is one distilled note. It stays a candidate until a person
+// accepts it; target is where it goes once accepted, id names it for a review
+// action, and decision is the choice already recorded (absent when untouched).
+export interface SessionRecapEntry {
+  id: string;
+  kind: "fact" | "root-cause" | "refuted" | "handoff" | string;
+  body: string;
+  evidence?: string;
+  target: "memory" | "display" | string;
+  decision?: "accept" | "reject" | string;
+}
+
 // SessionRecap is one read-only recap written when a session closes.
 export interface SessionRecap {
   path: string;
-  goal: string;
-  actions: string;
-  conclusion: string;
-  todos?: string;
+  entries: SessionRecapEntry[];
   model: string;
   generatedAt: string; // RFC3339
+}
+
+// RecapOpenItem is one unfinished item kept from a handoff note. It belongs to a
+// project and stays listed until someone marks it handled.
+export interface RecapOpenItem {
+  id: string;
+  body: string;
+  evidence?: string;
+  from?: string;
+  openedAt: string; // RFC3339
+  closed: boolean;
 }
