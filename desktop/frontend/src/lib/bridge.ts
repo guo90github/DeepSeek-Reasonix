@@ -224,6 +224,8 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   HeartbeatSaveConfig(update: unknown): Promise<unknown>;
   HeartbeatTriggerNow(id: string): Promise<void>;
   HeartbeatGenerateID(): Promise<string>;
+  WatchdogStatus(): Promise<import("../generated/desktopContract.generated").WatchdogStatusView>;
+  SetWatchdogEnabled(enabled: boolean): Promise<import("../generated/desktopContract.generated").WatchdogStatusView>;
   Submit(input: string): Promise<void>;
   SubmitToTab(tabID: string, input: string): Promise<void>;
   SubmitToTabWithID(tabID: string, input: string, submissionID: string): Promise<void>;
@@ -5125,6 +5127,8 @@ function makeMockApp(): AppBindings {
       return { revision: mockHeartbeatRevision, etag: `mock-${mockHeartbeatRevision}`, tasks: mockHeartbeatTasks };
     },
     async HeartbeatTriggerNow(_id: string) {},
+    async WatchdogStatus() { return { supported: true, policy: false, registered: false, platform: "win32", entryPoint: "" }; },
+    async SetWatchdogEnabled(enabled: boolean) { return { supported: true, policy: enabled, registered: enabled, platform: "win32", entryPoint: "" }; },
     async HeartbeatGenerateID() { return "mock-" + Date.now().toString(36); },
     async ListTasks() { return []; },
     async CurrentTaskSessionID() { return ""; },

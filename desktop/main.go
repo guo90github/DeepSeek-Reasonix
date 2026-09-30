@@ -54,6 +54,11 @@ func main() {
 	capturePreviousFatalCrash()
 	installFatalCrashOutput()
 	exitIfHostLaunchMode(os.Args[1:])
+	// The OS scheduler's watchdog runs before any shell: it either restores a
+	// crashed unattended host or exits without touching the app.
+	if handled, exitCode := maybeRunDesktopWatchdog(os.Args[1:]); handled {
+		os.Exit(exitCode)
+	}
 	if maybeRelaunchIfSuperseded() {
 		return
 	}

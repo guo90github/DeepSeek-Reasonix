@@ -7608,6 +7608,20 @@
       ]
     }
   },
+  "SetWatchdogEnabled": {
+    "domain": "desktop/watchdog_control.go",
+    "owner": "App.SetWatchdogEnabled",
+    "sources": [
+      "desktop/watchdog_control.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SetWatchdogEnabled",
+      "inputs": [
+        "enabled"
+      ]
+    }
+  },
   "SetWebSearchModel": {
     "domain": "desktop/settings_web_search_model.go",
     "owner": "App.SetWebSearchModel",
@@ -8617,6 +8631,18 @@
     "scope": {
       "kind": "owner-state",
       "resolver": "App.Version",
+      "inputs": []
+    }
+  },
+  "WatchdogStatus": {
+    "domain": "desktop/watchdog_control.go",
+    "owner": "App.WatchdogStatus",
+    "sources": [
+      "desktop/watchdog_control.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.WatchdogStatus",
       "inputs": []
     }
   },

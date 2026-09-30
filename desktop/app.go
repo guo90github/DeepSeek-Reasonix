@@ -511,6 +511,9 @@ func (a *App) startup(ctx context.Context) {
 	// A switch this host made last run is healthy once this process is the
 	// version it asked for; until then the shell keeps the rollback target.
 	markPortableUpgradeHealthy()
+	// The OS watchdog entry is refreshed from its policy on every start, so a
+	// version switch cannot leave the scheduler pointing at nothing.
+	applyWatchdogPolicyOnStart()
 
 	a.mu.Lock()
 	a.tabsRestored = make(chan struct{})

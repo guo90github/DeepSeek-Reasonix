@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:6b1d26e93a0e319a26b0edcdf97e891d0af8d98d61e2279fc1541fce4fb186a6";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:a0fc4f14edb0b17a4529359ba59ddb345a25ca0c7a0afac4b206787dd578a081";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -538,6 +538,7 @@ export const DESKTOP_COMMANDS = [
   "SetTopicPinned",
   "SetTrayLocale",
   "SetVisionModel",
+  "SetWatchdogEnabled",
   "SetWebSearchModel",
   "Settings",
   "SkillsSettings",
@@ -605,6 +606,7 @@ export const DESKTOP_COMMANDS = [
   "UpgradeDeepSeekProviderAccess",
   "UsageStats",
   "Version",
+  "WatchdogStatus",
   "WorkspaceChangeDetail",
   "WorkspaceChanges",
   "WorkspaceConflictForTab",
@@ -4046,6 +4048,16 @@ export interface UsageStatsRequest {
   source?: string;
 }
 
+export interface WatchdogStatusView {
+  supported: boolean;
+  policy: boolean;
+  registered: boolean;
+  entryPoint?: string;
+  platform: string;
+  lastError?: string;
+  note?: string;
+}
+
 export interface WeixinBotView {
   enabled: boolean;
   accountId: string;
@@ -5037,6 +5049,7 @@ export interface GeneratedDesktopCommands {
   SetTopicPinned(arg0: string, arg1: boolean): Promise<void>;
   SetTrayLocale(arg0: string): Promise<void>;
   SetVisionModel(arg0: string): Promise<void>;
+  SetWatchdogEnabled(arg0: boolean): Promise<WatchdogStatusView>;
   SetWebSearchModel(arg0: string): Promise<void>;
   Settings(): Promise<SettingsView>;
   SkillsSettings(): Promise<SkillsSettingsView>;
@@ -5104,6 +5117,7 @@ export interface GeneratedDesktopCommands {
   UpgradeDeepSeekProviderAccess(arg0: string): Promise<string>;
   UsageStats(arg0: UsageStatsRequest): Promise<UsageStatsRange>;
   Version(): Promise<string>;
+  WatchdogStatus(): Promise<WatchdogStatusView>;
   WorkspaceChangeDetail(arg0: string, arg1: string): Promise<WorkspaceChangeDetailView>;
   WorkspaceChanges(arg0: string): Promise<WorkspaceChangesView>;
   WorkspaceConflictForTab(arg0: string): Promise<WorkspaceConflictView>;

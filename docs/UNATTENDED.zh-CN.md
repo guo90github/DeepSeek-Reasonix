@@ -135,12 +135,41 @@ go run ./tools/repolint                                              # 注释/�
    连不上服务，就把 `current.json` 写回上一个版本并重启回旧版内层 exe（3 次/15 分钟预算）。
 6. **绝不删改已装版本**（与 SOP 的禁忌一致）：只新增指针与标记，不覆盖、不清理旧目录。
 
-## 10. 边界与未做
+## 10. OS 级看门狗（整棵树被杀 / 断电后自动拉起）
+
+进程自己死了就没有代码在跑，所以这一层只能由 OS 常驻者负责。看门狗 = 宿主二进制的一个
+**shell 之前的模式**，由系统计划器周期调用：
+
+```bash
+reasonix-desktop.exe --watchdog          # 计划器每 5 分钟调一次（宿主日志留痕）
+reasonix-desktop.exe --watchdog-status   # 查：策略 / 机器上是否已注册 / 入口 exe
+reasonix-desktop.exe --watchdog-enable   # 开：写策略 + 立刻注册（不等重启）
+reasonix-desktop.exe --watchdog-disable  # 关：写策略 + 立刻注销 + 删除桌面那份文件
+```
+
+- **判据（只有这一条）**：印记存在 ∧ `unattended=true` ∧ 记录里的进程已不在 ∧ 崩溃在 24
+  小时以内 → 用 `current.json` 的 active 版本内层 exe 拉起。干净退出会删掉印记，所以**人主动
+  关掉永远不会被拉回来**。
+- **注册**：Windows 计划任务 `ReasonixDesktopWatchdog`（每 5 分钟）；macOS
+  `~/Library/LaunchAgents/io.reasonix.desktop.watchdog.plist`（RunAtLoad + StartInterval
+  300）。两者都**只指向那个脚本，从不指向某个版本**。
+- **策略**：`<home>/desktop-autostart.json`（`enabled` + `watchdog`，默认跟随 enabled），
+  它同时管登录项（Electron 的 login item，只在登录时拉起）。
+- **唯一那一个管理文件**：`C:\Users\guosj\Desktop\$\watchdog.cmd`——看门狗的可见副本：
+  双击=巡检一次、打开=看清它干什么、删掉=停用。它**不做版本判断**，只启动**稳定 launcher**
+  并把模式用 `REASONIX_WATCHDOG=1` 传下去；launcher 每次运行自己解析 `current.json`，所以
+  **打完包/切版本后拉起的必然是新版本**，不需要重写这个文件。应用每次启动与开关仍会重写它
+  （路径可能变），关掉看门狗会删掉它；桌面目录里**只有这一个文件**，巡检记录写
+  `<home>/desktop-watchdog.log`（每次一行：时间/动作/原因）。
+
+## 11. 边界与未做
 
 - **不迁移**旧会话的 `scopeID` / DeliveryCheckpoint / todos：新会话以同一 `goal` 文本
   重新锚定，交付证据链会断一截。
-- 未做 macOS `LaunchAgent KeepAlive`：Electron main 自身崩溃且 relaunch 预算耗尽时会停在
-  失败页（不会无限循环，这是有意的）。
-- 面板尚未显示开关的当前值（配置文件的 `unattended` 是权威位）。
+- macOS 用 LaunchAgent 的**周期巡检**（RunAtLoad + StartInterval），不用 `KeepAlive`；
+  Electron main 自身崩溃且 relaunch 预算耗尽时会停在失败页（不会无限循环，这是有意的）——
+  下一轮巡检会把它拉回来。
+- 面板尚未显示总开关的当前值（配置文件的 `unattended` 是权威位）；看门狗有 CLI 与绑定，
+  但还没有 UI 开关。
 - 「异常杀进程 → 自主拉起 → 继续长任务」与「打包后自动切版本 → 继续推进」两条链都还没在
-  真机跑过一次完整验收（切换只做过单元级验证）。
+  真机跑过一次完整验收（均只做过单元级验证）。

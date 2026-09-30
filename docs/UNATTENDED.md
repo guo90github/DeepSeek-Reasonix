@@ -159,15 +159,46 @@ numbers**, and a version's **only launch entry is its own inner
 6. **Installed versions are never deleted or overwritten** (matching the SOP's
    prohibition): only a pointer and a marker are added.
 
-## 10. Limits and open items
+## 10. OS watchdog (restores the app after the tree died or the machine rebooted)
+
+A process that is gone cannot restart itself, so this layer needs an OS resident. The
+watchdog is a **pre-shell mode** of the host binary, called on a schedule:
+
+```bash
+reasonix-desktop.exe --watchdog          # the scheduler calls this every 5 minutes
+reasonix-desktop.exe --watchdog-status   # policy / registered on this machine / entry point
+reasonix-desktop.exe --watchdog-enable   # write the policy and register at once
+reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desktop file
+```
+
+- **One criterion**: a marker exists ∧ `unattended=true` ∧ its process is gone ∧ the
+  crash is under 24 hours old → launch the active version's inner desktop binary. A
+  clean exit removes the marker, so a deliberate quit is never undone.
+- **Registration**: a Windows scheduled task `ReasonixDesktopWatchdog` (every 5
+  minutes), or `~/Library/LaunchAgents/io.reasonix.desktop.watchdog.plist` (RunAtLoad
+  + StartInterval 300). Both point at **that script only, never at a version**.
+- **Policy**: `<home>/desktop-autostart.json` (`enabled` + `watchdog`, defaulting to the
+  policy's `enabled`), which also drives the Electron login item.
+- **The one management file**: `C:\Users\guosj\Desktop\$\watchdog.cmd` — the watchdog's
+  visible twin: run it by hand, read it, or delete it. It makes **no version decision**:
+  it starts the **stable launcher** with `REASONIX_WATCHDOG=1` in the environment, and
+  that launcher resolves `current.json` on every run — so after a build or a version
+  switch the watchdog necessarily brings up the **newest** version, without rewriting
+  the file. The app still rewrites it on every start and toggle (its paths can change)
+  and removes it when the watchdog is disabled. That directory holds only this file;
+  the inspection trail goes to `<home>/desktop-watchdog.log` (one line
+  per run: time, action, reason).
+
+## 11. Limits and open items
 
 - The old session's `scopeID`, DeliveryCheckpoint and todos are **not** migrated:
   the new session re-anchors by the same `goal` text, so the delivery-evidence
   chain loses one link.
-- No macOS `LaunchAgent KeepAlive`: if Electron main itself dies and the relaunch
-  budget is spent, the shell parks on the failure page (deliberate — never loop).
-- The panel does not yet display the switch's current value (the config file is
-  authoritative).
+- macOS uses a LaunchAgent **sweep** (RunAtLoad + StartInterval), not `KeepAlive`; an
+  Electron main crash that exhausts the relaunch budget parks on the failure page
+  (deliberate — never loop) and the next sweep brings it back.
+- The panel does not display the master switch's current value yet, and the watchdog
+  has a CLI plus bindings but no UI toggle.
 - Neither full chain has been accepted on a real machine yet: neither kill the
   process abnormally → relaunch → the long task continues, nor build → switch
-  versions → continue (the switch is unit-verified only).
+  versions → continue (both are unit-verified only).

@@ -100,7 +100,13 @@ func writePortableUpgradeState(state portableUpgradeState) error {
 
 // portableInstallRoot returns the install root that owns current.json, or "" for
 // an install this feature does not manage (dev builds, flat layouts).
-func portableInstallRoot() string {
+func portableInstallRoot() string { return portableInstallRootFunc() }
+
+// portableInstallRootFunc is a seam for tests; production locates the root from
+// the running executable.
+var portableInstallRootFunc = defaultPortableInstallRoot
+
+func defaultPortableInstallRoot() string {
 	exe, err := os.Executable()
 	if err != nil {
 		return ""

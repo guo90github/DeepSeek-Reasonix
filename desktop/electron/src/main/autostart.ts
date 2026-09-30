@@ -12,6 +12,8 @@ export interface AutostartPolicy {
   enabled: boolean;
   /** Kept as a login item only while this many launches have been clean. */
   args?: string[];
+  /** OS watchdog registration; absent means on whenever the policy is enabled. */
+  watchdog?: boolean;
 }
 
 export interface LoginItemApp {
@@ -23,7 +25,11 @@ export function readAutostartPolicy(home: string): AutostartPolicy {
   if (!home) return { enabled: false };
   try {
     const parsed = JSON.parse(readFileSync(join(home, AUTOSTART_FILE), "utf8")) as Partial<AutostartPolicy>;
-    return { enabled: parsed?.enabled === true, ...(Array.isArray(parsed?.args) ? { args: parsed.args } : {}) };
+    return {
+      enabled: parsed?.enabled === true,
+      ...(Array.isArray(parsed?.args) ? { args: parsed.args } : {}),
+      ...(typeof parsed?.watchdog === "boolean" ? { watchdog: parsed.watchdog } : {}),
+    };
   } catch {
     return { enabled: false };
   }

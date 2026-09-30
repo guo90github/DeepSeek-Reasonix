@@ -13858,6 +13858,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/watchdog_control.go",
+      "name": "SetWatchdogEnabled",
+      "owner": "App.SetWatchdogEnabled",
+      "params": [
+        {
+          "kind": "boolean"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.WatchdogStatusView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "enabled"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SetWatchdogEnabled"
+      },
+      "sources": [
+        "desktop/watchdog_control.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/settings_web_search_model.go",
       "name": "SetWebSearchModel",
       "owner": "App.SetWebSearchModel",
@@ -15797,6 +15823,25 @@
       },
       "sources": [
         "desktop/updater_app.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/watchdog_control.go",
+      "name": "WatchdogStatus",
+      "owner": "App.WatchdogStatus",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.WatchdogStatusView"
+      },
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.WatchdogStatus"
+      },
+      "sources": [
+        "desktop/watchdog_control.go"
       ]
     },
     {
@@ -34519,6 +34564,55 @@
         },
         {
           "name": "source",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.WatchdogStatusView": {
+      "fields": [
+        {
+          "name": "supported",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "policy",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "registered",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "entryPoint",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "platform",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "lastError",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "note",
           "optional": true,
           "type": {
             "kind": "string"
