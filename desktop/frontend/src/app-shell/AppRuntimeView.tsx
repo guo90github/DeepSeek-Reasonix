@@ -529,6 +529,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           previewSession: runtime.sessionActions.previewSession,
           listTrashedSessions: runtime.sessionActions.listTrashedSessions,
           listSessionRecaps: runtime.sessionActions.listSessionRecaps,
+          listSessions: runtime.sessionActions.listSessions,
           restoreSession: runtime.sessionActions.restoreSession,
           purgeTrashedSession: runtime.sessionActions.purgeTrashedSession,
         },
