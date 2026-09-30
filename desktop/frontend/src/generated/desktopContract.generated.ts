@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:46288ccef32aa0f56662116661cc16441f4b8d64a6e66c2304213bd1f7b79ab9";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:b14d4e5e1160855dd06c5208ccc100026d11163fc54012151a5aad1186e470d6";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3477,6 +3477,7 @@ export interface SessionRecapInsight {
   body: string;
   evidence?: string;
   projects: string[];
+  occurrences: number;
   seenAt: string;
 }
 

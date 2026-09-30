@@ -21,11 +21,17 @@ type Insight struct {
 	// Projects names every project that reached it, so "how many" is checkable
 	// without opening the projection.
 	Projects []string
-	SeenAt   time.Time
+	// Occurrences counts the records that reached it inside one project: the second
+	// evidence an insight can rest on, for work that keeps coming back inside a
+	// single codebase instead of turning up elsewhere.
+	Occurrences int
+	SeenAt      time.Time
 }
 
-// Insights returns the conclusions at least two projects reached independently,
-// newest first, limited to those seen since the given time.
+// Insights returns the conclusions worth reporting: those at least two projects
+// reached independently, and those one project reached more than once — the
+// second pass over the projection, read as a list. Newest first, limited to those
+// seen since the given time.
 //
 // Two projects state one conclusion in their own words, so copies that share the
 // same evidence are folded together: the report is about what recurred, not about
@@ -46,6 +52,26 @@ func (s *Store) Insights(ctx context.Context, since time.Time, limit int) ([]Ins
 		insight Insight
 		ids     []string
 	}
+	// How many records inside one project reached the same conclusion. It is the
+	// other way a note earns a report: recurring inside a codebase says as much
+	// about what is worth remembering as recurring across projects does.
+	occurrences := map[string]map[string]int{}
+	for _, record := range records {
+		bucket := ProjectOf(record.Path)
+		if bucket == "" {
+			continue
+		}
+		for _, entry := range record.Entries {
+			if strings.TrimSpace(entry.Body) == "" {
+				continue
+			}
+			key := HashEntry(entry.Kind, entry.Body)
+			if occurrences[key] == nil {
+				occurrences[key] = map[string]int{}
+			}
+			occurrences[key][bucket]++
+		}
+	}
 	raw := []copyOfInsight{}
 	for _, record := range records {
 		if ProjectOf(record.Path) == "" {
@@ -55,13 +81,15 @@ func (s *Store) Insights(ctx context.Context, since time.Time, limit int) ([]Ins
 			if strings.TrimSpace(entry.Body) == "" {
 				continue
 			}
-			buckets := recurrences[HashEntry(entry.Kind, entry.Body)]
-			if len(buckets) < 2 {
+			key := HashEntry(entry.Kind, entry.Body)
+			seen := occurrences[key][ProjectOf(record.Path)]
+			buckets := recurrences[key]
+			if len(buckets) < 2 && seen < 2 {
 				continue
 			}
 			raw = append(raw, copyOfInsight{
 				insight: Insight{Kind: entry.Kind, Body: entry.Body, Evidence: entry.Evidence,
-					Projects: labels(buckets), SeenAt: record.GeneratedAt},
+					Projects: labels(buckets), Occurrences: seen, SeenAt: record.GeneratedAt},
 				ids: unique(entryTokens(entry).identifiers),
 			})
 		}
@@ -84,6 +112,9 @@ func (s *Store) Insights(ctx context.Context, since time.Time, limit int) ([]Ins
 			if candidate.insight.SeenAt.After(merged[i].insight.SeenAt) {
 				merged[i].insight.Body = candidate.insight.Body
 				merged[i].insight.SeenAt = candidate.insight.SeenAt
+			}
+			if candidate.insight.Occurrences > merged[i].insight.Occurrences {
+				merged[i].insight.Occurrences = candidate.insight.Occurrences
 			}
 			merged[i].ids = unionTokens(merged[i].ids, candidate.ids)
 			placed = true

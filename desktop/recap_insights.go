@@ -16,7 +16,10 @@ type SessionRecapInsight struct {
 	Body     string   `json:"body"`
 	Evidence string   `json:"evidence,omitempty"`
 	Projects []string `json:"projects"`
-	SeenAt   string   `json:"seenAt"`
+	// Occurrences counts how many records of one project reached it: the second way
+	// a conclusion earns a report, for work that keeps coming back to one codebase.
+	Occurrences int    `json:"occurrences"`
+	SeenAt      string `json:"seenAt"`
 }
 
 // insightWindow is how far back the report looks: a period, not a dump of
@@ -44,11 +47,12 @@ func (a *App) ListRecapInsights() []SessionRecapInsight {
 	out := make([]SessionRecapInsight, 0, len(insights))
 	for _, insight := range insights {
 		out = append(out, SessionRecapInsight{
-			Kind:     insight.Kind,
-			Body:     secrets.Redact(insight.Body),
-			Evidence: secrets.Redact(insight.Evidence),
-			Projects: append([]string(nil), insight.Projects...),
-			SeenAt:   insight.SeenAt.Format(time.RFC3339),
+			Kind:        insight.Kind,
+			Body:        secrets.Redact(insight.Body),
+			Evidence:    secrets.Redact(insight.Evidence),
+			Projects:    append([]string(nil), insight.Projects...),
+			Occurrences: insight.Occurrences,
+			SeenAt:      insight.SeenAt.Format(time.RFC3339),
 		})
 	}
 	return out

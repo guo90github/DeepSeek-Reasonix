@@ -78,6 +78,9 @@ export interface SessionRecapInsight {
   body: string;
   evidence?: string;
   projects: string[];
+  // occurrences counts the records of one project that reached it; projects has
+  // two or more when the conclusion turned up somewhere else as well.
+  occurrences: number;
   seenAt: string; // RFC3339
 }
 

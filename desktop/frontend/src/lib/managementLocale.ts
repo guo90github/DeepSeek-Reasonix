@@ -56,6 +56,7 @@ const messages = {
   recapOutcomePlaceholder: ["结局（可选）：这条最后是怎么解决的？", "結局（可選）：這條最後是怎麼解決的？", "Outcome (optional): how did this end?"],
   recapOutcomeSave: ["记录并标记已处理", "記錄並標記已處理", "Record and mark handled"],
   recapOutcomeCancel: ["取消", "取消", "Cancel"],
+  recapInsightsRepeat: ["本项目独立得出 {n} 次", "本專案獨立得出 {n} 次", "Reached {n} times inside this project"],
   recapInsightsLine: ["{n} 个项目：{list}", "{n} 個專案：{list}", "{n} projects: {list}"],
   recapSkillDrafted: ["已起草（手动触发）：{path} —— 审过再去编辑 invocation", "已起草（手動觸發）：{path} —— 審過再去編輯 invocation", "Drafted (manual only): {path} — review it, then edit its invocation"],
   recapCount: ["显示 {shown} / 共 {total} 条", "顯示 {shown} / 共 {total} 條", "{shown} of {total} shown"],

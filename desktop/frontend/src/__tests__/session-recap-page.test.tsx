@@ -125,7 +125,7 @@ const reviewProps = {
   draftSkill: async (_kind: string, body: string) => ({
     name: `recap-mock-${body.length}`, path: `.reasonix/skills/recap-mock-${body.length}/SKILL.md`,
   }),
-  listInsights: async () => [{ kind: "refuted", body: "只取分支统计未提交数会漏掉 CJK 路径", projects: ["alpha", "beta"], seenAt: new Date().toISOString() }],
+  listInsights: async () => [{ kind: "refuted", body: "只取分支统计未提交数会漏掉 CJK 路径", projects: ["alpha", "beta"], occurrences: 1, seenAt: new Date().toISOString() }],
 };
 
 const rootEl = document.getElementById("root");

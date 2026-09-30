@@ -62,4 +62,28 @@ func TestInsightsListConclusionsMoreThanOneProjectReached(t *testing.T) {
 	if older, err := store.Insights(ctx, now.Add(-15*time.Minute), 10); err != nil || len(older) != 0 {
 		t.Fatalf("insights inside the last 15m = %+v (%v), want none", older, err)
 	}
+
+	// A conclusion that keeps coming back inside one project earns the report too:
+	// "this project reached it twice" is the second kind of evidence, and it needs
+	// no other project to hold.
+	sameBucket := Entry{Kind: KindRootCause, Body: "面板恒显示 0 个文件：从不填充 Files",
+		Evidence: "desktop/workspace_git_branches.go"}
+	put(alpha, "d.jsonl", now.Add(-10*time.Minute), sameBucket)
+	repeat, err := store.Insights(ctx, time.Time{}, 10)
+	if err != nil {
+		t.Fatalf("insights after the repeat: %v", err)
+	}
+	found := false
+	for _, insight := range repeat {
+		if insight.Body == sameBucket.Body {
+			found = true
+			if insight.Occurrences != 2 || len(insight.Projects) != 1 {
+				t.Fatalf("a repeat inside one project must report twice in one project: %+v", insight)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("a conclusion two records of one project reached must be reported: %+v", repeat)
+	}
+
 }

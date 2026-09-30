@@ -3346,7 +3346,7 @@ function makeMockApp(): AppBindings {
       return { name, path: `.reasonix/skills/${name}/SKILL.md` };
     },
     async ListRecapInsights() {
-      return [{ kind: "refuted", body: "(mock) 只取分支统计未提交数会漏掉 CJK 路径", projects: ["alpha", "beta"], seenAt: new Date().toISOString() }];
+      return [{ kind: "refuted", body: "(mock) 只取分支统计未提交数会漏掉 CJK 路径", projects: ["alpha", "beta"], occurrences: 1, seenAt: new Date().toISOString() }];
     },
     async KeepRecapHandoff(_sessionPath: string, body: string) {
       emit({ kind: "notice", level: "info", text: `(mock) kept an unfinished item → ${body.slice(0, 40)}` });

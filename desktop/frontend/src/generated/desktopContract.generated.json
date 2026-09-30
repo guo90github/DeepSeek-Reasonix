@@ -31450,6 +31450,12 @@
           }
         },
         {
+          "name": "occurrences",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
           "name": "seenAt",
           "type": {
             "kind": "string"

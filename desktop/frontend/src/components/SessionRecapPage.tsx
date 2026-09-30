@@ -231,7 +231,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             <div key={`${insight.kind}:${insight.body}`}>
               <span style={{ ...labelStyle, fontSize: 12 }}>{insight.kind}</span> {insight.body}{" "}
               <span style={{ ...labelStyle, fontSize: 12 }}>
-                {m("recapInsightsLine", { n: insight.projects.length, list: insight.projects.join("、") })}
+                {insight.projects.length >= 2
+                  ? m("recapInsightsLine", { n: insight.projects.length, list: insight.projects.join("、") })
+                  : m("recapInsightsRepeat", { n: insight.occurrences })}
               </span>
             </div>
           ))}
