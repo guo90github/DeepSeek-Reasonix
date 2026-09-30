@@ -1,6 +1,6 @@
 // Unattended master switch, rendered in the tab strip left of the new-session
-// button. It writes the config at once; the running app keeps its startup
-// value, so the tooltip is what tells the user a restart applies the change.
+// button. It writes the config at once; the running app keeps its startup value,
+// so both the label and the hover hint say that a restart applies the change.
 import { useCallback, useEffect, useState } from "react";
 import { Tooltip } from "../../../components/Tooltip";
 import { heartbeatSetUnattended, heartbeatUnattended } from "./heartbeat.bridge";
@@ -35,18 +35,24 @@ export function UnattendedToggle() {
   }, [on, pending]);
 
   if (on === null) return null;
-  const label = t("heartbeat.unattended");
+  const state = on ? t("heartbeat.unattendedOn") : t("heartbeat.unattendedOff");
+  const hint = on ? t("heartbeat.unattendedOnHint") : t("heartbeat.unattendedOffHint");
   return (
-    <Tooltip label={t("heartbeat.unattendedHint")}>
+    <Tooltip label={`${t("heartbeat.unattended")} · ${state} — ${hint}`}>
       <button
         type="button"
-        className={`tabbar__mode-badge tabbar__mode-badge--${on ? "yolo" : "plan"}`}
-        aria-label={label}
-        aria-pressed={on}
+        className="tabbar__unattended"
+        role="switch"
+        aria-checked={on}
+        aria-label={`${t("heartbeat.unattended")}：${state}`}
         data-unattended={on ? "on" : "off"}
+        disabled={pending}
         onClick={flip}
       >
-        {label}
+        <span className="tabbar__unattended-track" aria-hidden="true">
+          <span className="tabbar__unattended-knob" />
+        </span>
+        <span className="tabbar__unattended-label">{state}</span>
       </button>
     </Tooltip>
   );
