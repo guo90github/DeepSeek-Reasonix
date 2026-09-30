@@ -5518,13 +5518,13 @@ button.reasoning-summary:focus-visible {
    process-styled. Paint-only — no margin/padding/border-width/font change —
    so Virtuoso's live row measurements stay valid. */
 
-.conversation-pane .md :where(h1, h2, h3),
-.transcript .msg--assistant .md :where(h1, h2, h3) {
+.conversation-pane .msg__body .md :where(h1, h2, h3),
+.transcript .msg__body .md :where(h1, h2, h3) {
   position: relative;
   color: var(--fg);
 }
-.conversation-pane .md :where(h1, h2, h3)::before,
-.transcript .msg--assistant .md :where(h1, h2, h3)::before {
+.conversation-pane .msg__body .md :where(h1, h2, h3)::before,
+.transcript .msg__body .md :where(h1, h2, h3)::before {
   content: "";
   position: absolute;
   left: -4px;
@@ -5537,26 +5537,26 @@ button.reasoning-summary:focus-visible {
 }
 /* Three rail tiers, so a long answer's outline is readable without reading:
    h1 carries the warning hue, h2 the full accent, h3 the quiet base rail. */
-.conversation-pane .md h1::before,
-.transcript .msg--assistant .md h1::before {
+.conversation-pane .msg__body .md h1::before,
+.transcript .msg__body .md h1::before {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 72%, transparent), color-mix(in srgb, var(--warn) 45%, transparent));
   box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 26%, transparent);
 }
-.conversation-pane .md h2::before,
-.transcript .msg--assistant .md h2::before {
+.conversation-pane .msg__body .md h2::before,
+.transcript .msg__body .md h2::before {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 62%, transparent), color-mix(in srgb, var(--accent) 16%, transparent));
   box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 /* A section rule takes the accent instead of the plain border, so the seams of
    a long answer stay findable while scrolling. Color only: width is untouched. */
-.conversation-pane .md hr,
-.transcript .msg--assistant .md hr {
+.conversation-pane .msg__body .md hr,
+.transcript .msg__body .md hr {
   border-top-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 /* Marker-pen band under the words: soft edges at both ends so it reads as one
    stroke of a highlighter, and a gradient so no box metrics move. */
-.conversation-pane .md strong,
-.transcript .msg--assistant .md strong {
+.conversation-pane .msg__body .md strong,
+.transcript .msg__body .md strong {
   color: var(--fg);
   background-image: linear-gradient(180deg, transparent 50%, color-mix(in srgb, var(--accent) 48%, transparent) 58%, color-mix(in srgb, var(--accent) 42%, transparent) 90%, transparent 100%);
   background-repeat: no-repeat;
@@ -5565,18 +5565,18 @@ button.reasoning-summary:focus-visible {
 /* One signal per structure: where the block already marks the text — a heading
    rail, a labeled-bullet rail, a quote's own tint — a second stroke only blurs
    which part the author called out. */
-.conversation-pane .md :where(h1, h2, h3) strong,
-.conversation-pane .md li.md-li--label strong,
-.conversation-pane .md blockquote strong,
-.transcript .msg--assistant .md :where(h1, h2, h3) strong,
-.transcript .msg--assistant .md li.md-li--label strong,
-.transcript .msg--assistant .md blockquote strong {
+.conversation-pane .msg__body .md :where(h1, h2, h3) strong,
+.conversation-pane .msg__body .md li.md-li--label strong,
+.conversation-pane .msg__body .md blockquote strong,
+.transcript .msg__body .md :where(h1, h2, h3) strong,
+.transcript .msg__body .md li.md-li--label strong,
+.transcript .msg__body .md blockquote strong {
   background-image: none;
 }
 /* A paragraph the author bolded end to end is a headline claim, not prose, so
    the block itself takes the accent — still paint-only, no text moves. */
-.conversation-pane .md p.md-p--claim,
-.transcript .msg--assistant .md p.md-p--claim {
+.conversation-pane .msg__body .md p.md-p--claim,
+.transcript .msg__body .md p.md-p--claim {
   color: var(--fg);
   background-color: color-mix(in srgb, var(--accent) 8%, transparent);
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 62%, transparent);
@@ -5585,37 +5585,37 @@ button.reasoning-summary:focus-visible {
 /* Evidence, not a decision: the chip loses its box and the accent so a
    paragraph full of identifiers still reads as prose. The 1px border stays
    (transparent) because removing it would move text. */
-.conversation-pane .md-code,
-.transcript .msg--assistant .md-code {
+.conversation-pane .msg__body .md-code,
+.transcript .msg__body .md-code {
   color: var(--fg-dim);
   background: color-mix(in srgb, var(--fg) 7%, transparent);
   border-color: transparent;
 }
 /* Code blocks keep their readability palette (lib/codeReadability.ts); only the
    competing edge is softened. */
-.conversation-pane .md .code,
-.transcript .msg--assistant .md .code {
+.conversation-pane .msg__body .md .code,
+.transcript .msg__body .md .code {
   border-color: color-mix(in srgb, var(--code-border, var(--border-soft)) 40%, transparent);
 }
-.conversation-pane .md li::marker,
-.transcript .msg--assistant .md li::marker {
+.conversation-pane .msg__body .md li::marker,
+.transcript .msg__body .md li::marker {
   color: var(--fg-faint);
 }
 /* A bullet that opens with the author's own bolded label is a decision or a
    criterion, not an enumeration item. The mark comes from
    rehypeEmphasisMarks.ts, which sees text nodes and so leaves a bullet whose
    bold sits mid-sentence alone. */
-.conversation-pane .md li.md-li--label,
-.transcript .msg--assistant .md li.md-li--label {
+.conversation-pane .msg__body .md li.md-li--label,
+.transcript .msg__body .md li.md-li--label {
   color: var(--fg);
   box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 46%, transparent);
 }
-.conversation-pane .md li.md-li--label::marker,
-.transcript .msg--assistant .md li.md-li--label::marker {
+.conversation-pane .msg__body .md li.md-li--label::marker,
+.transcript .msg__body .md li.md-li--label::marker {
   color: var(--accent);
 }
-.conversation-pane .md blockquote,
-.transcript .msg--assistant .md blockquote {
+.conversation-pane .msg__body .md blockquote,
+.transcript .msg__body .md blockquote {
   border-left-color: color-mix(in srgb, var(--accent) 58%, transparent);
   border-radius: 0 6px 6px 0;
   background: color-mix(in srgb, var(--accent) 6%, transparent);
@@ -5623,8 +5623,8 @@ button.reasoning-summary:focus-visible {
 }
 /* Links stay findable without shouting: a permanent faint rule under the
    words, accent and a brighter rule on hover/focus. */
-.conversation-pane .md a,
-.transcript .msg--assistant .md a {
+.conversation-pane .msg__body .md a,
+.transcript .msg__body .md a {
   color: var(--fg-dim);
   text-decoration: none;
   background-image: linear-gradient(90deg, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 34%, transparent));
@@ -5633,25 +5633,25 @@ button.reasoning-summary:focus-visible {
   background-size: 100% 1px;
   transition: background-image 0.18s ease, color 0.18s ease;
 }
-.conversation-pane .md a:hover,
-.conversation-pane .md a:focus-visible,
-.transcript .msg--assistant .md a:hover,
-.transcript .msg--assistant .md a:focus-visible {
+.conversation-pane .msg__body .md a:hover,
+.conversation-pane .msg__body .md a:focus-visible,
+.transcript .msg__body .md a:hover,
+.transcript .msg__body .md a:focus-visible {
   color: var(--accent);
   text-decoration: none;
   background-image: linear-gradient(90deg, var(--accent), var(--accent));
   background-size: 100% 1px;
 }
-.conversation-pane .md .md-rich-link svg,
-.transcript .msg--assistant .md .md-rich-link svg {
+.conversation-pane .msg__body .md .md-rich-link svg,
+.transcript .msg__body .md .md-rich-link svg {
   opacity: 0.55;
 }
-.conversation-pane .md .md-rich-link--local .md-rich-link__label,
-.transcript .msg--assistant .md .md-rich-link--local .md-rich-link__label {
+.conversation-pane .msg__body .md .md-rich-link--local .md-rich-link__label,
+.transcript .msg__body .md .md-rich-link--local .md-rich-link__label {
   color: color-mix(in srgb, var(--fg-dim) 74%, transparent);
 }
-.conversation-pane .md th,
-.transcript .msg--assistant .md th {
+.conversation-pane .msg__body .md th,
+.transcript .msg__body .md th {
   color: var(--fg-dim);
   background-image: linear-gradient(180deg, color-mix(in srgb, var(--fg) 6%, transparent), transparent);
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 38%, transparent);
@@ -5659,8 +5659,8 @@ button.reasoning-summary:focus-visible {
 /* Background-position keeps the sweep clipped to the tail's own box, so it can
    never paint into the turn gutter; the keyframe is defined in this sheet, so
    one definition serves both surfaces. */
-.conversation-pane .md--stream-tail,
-.transcript .msg--assistant .md--stream-tail {
+.conversation-pane .msg__body .md--stream-tail,
+.transcript .msg__body .md--stream-tail {
   background-image: linear-gradient(90deg, transparent, var(--accent), transparent);
   background-repeat: no-repeat;
   background-size: 45% 2px;
@@ -5685,10 +5685,60 @@ button.reasoning-summary:focus-visible {
   color: var(--ok);
 }
 @media (prefers-reduced-motion: reduce) {
-  .conversation-pane .md--stream-tail,
-  .transcript .msg--assistant .md--stream-tail {
+  .conversation-pane .msg__body .md--stream-tail,
+  .transcript .msg__body .md--stream-tail {
     animation: none !important;
   }
+}
+
+/* ── answer key points: the answer's own marks, lifted above its body ──────
+   Chrome, not content: it sits outside .msg__body, so copying the answer never
+   picks these lines up. */
+
+.answer-points {
+  margin: 0 0 6px;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+.answer-points__head {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 11px;
+  color: color-mix(in srgb, var(--accent) 70%, var(--fg-dim));
+}
+.answer-points__list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.answer-points__item {
+  display: grid;
+  grid-template-columns: 8px 1fr;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+.answer-points__item--claim {
+  color: var(--fg);
+}
+.answer-points__mark {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--fg-faint) 80%, transparent);
+}
+.answer-points__item--claim .answer-points__mark {
+  background: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.answer-points__text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 /* ── code (editor seam fallback) ─────────────────────────────────────────── */

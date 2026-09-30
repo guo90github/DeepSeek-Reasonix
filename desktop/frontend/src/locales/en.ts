@@ -332,6 +332,7 @@ export const en = {
 
   // split layout
   "split.emptyTurn": "(empty turn)",
+  "answer.pointsHead": "{n} key points",
   "split.awaitingAnswer": "Waiting for answer…",
   "split.awaitingElapsed": "waited {s}s",
   "split.resizeProcessPane": "Resize process pane",

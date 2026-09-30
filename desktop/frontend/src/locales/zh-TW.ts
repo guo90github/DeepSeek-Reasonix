@@ -253,6 +253,7 @@ export const zhTW: Record<DictKey, string> = {
 
   // 分欄布局
   "split.emptyTurn": "（空回合）",
+  "answer.pointsHead": "{n} 個重點",
   "split.awaitingAnswer": "正在等待回答…",
   "split.awaitingElapsed": "已等待 {s} 秒",
   "split.resizeProcessPane": "調整過程欄寬度",

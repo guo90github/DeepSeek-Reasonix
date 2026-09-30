@@ -18,6 +18,8 @@ import { messageActionLabelKey, type MessageActionScope } from "../lib/messageAc
 import type { Item } from "../lib/useController";
 import type { CheckpointMeta } from "../lib/types";
 import { InvocationBadge } from "./InvocationBadge";
+import { AnswerKeyPoints } from "./AnswerKeyPoints";
+import { collectAnswerKeyPoints, sameAnswerKeyPoints, type AnswerKeyPoint } from "../lib/answerKeyPoints";
 import { CodeViewer } from "./CodeViewer";
 import { formatSelectionLabels, languageFor, parseSelectedTextContext, stripSelectionLabels } from "../lib/selectedTextContext";
 const AuditInlineCard = lazy(() => import("./AuditInlineCard").then((module) => ({ default: module.AuditInlineCard })));
@@ -801,6 +803,44 @@ export const AssistantMessage = memo(function AssistantMessage({
   const processOnly = Boolean(item.reasoning) && !hasText && !hasFootnotes;
   const processWithText = Boolean(item.reasoning) && (hasText || hasFootnotes);
   const reasoningFallback = <div className="reasoning reasoning--loading" data-expanded={defaultExpanded || presentation.keepExpandedAfterCompletion || (item.streaming && (presentation.showWhileRunning || expandWhileStreaming)) ? "" : undefined} aria-hidden />;
+  // The key-point strip reads the emphasis marks out of the answer body. All
+  // three markdown paths swap their DOM in without a React signal — the worker
+  // owns the settled parse — so the marks are observed, not passed up.
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [keyPoints, setKeyPoints] = useState<readonly AnswerKeyPoint[]>([]);
+  useEffect(() => {
+    if (item.streaming) {
+      setKeyPoints((current) => (current.length === 0 ? current : []));
+      return;
+    }
+    const root = bodyRef.current;
+    if (!root) return;
+    // The scheduler and the observer come from the document that owns the row:
+    // jsdom-based suites expose them on the window, not as globals.
+    const view = root.ownerDocument?.defaultView;
+    const defer: (run: () => void) => number = typeof requestAnimationFrame === "function"
+      ? (run) => requestAnimationFrame(run)
+      : (run) => view?.setTimeout(run, 0) ?? 0;
+    const drop: (handle: number) => void = typeof cancelAnimationFrame === "function"
+      ? (handle) => cancelAnimationFrame(handle)
+      : (handle) => view?.clearTimeout(handle);
+    let frame = 0;
+    const read = () => {
+      frame = 0;
+      const next = collectAnswerKeyPoints(root);
+      setKeyPoints((current) => (sameAnswerKeyPoints(current, next) ? current : next));
+    };
+    const schedule = () => {
+      if (frame === 0) frame = defer(read);
+    };
+    read();
+    const observer = view?.MutationObserver ? new view.MutationObserver(schedule) : null;
+    observer?.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+    return () => {
+      observer?.disconnect();
+      if (frame !== 0) drop(frame);
+    };
+  }, [item.id, item.streaming, item.text]);
   return (
     <div className={`msg msg--assistant${processOnly ? " msg--process-only" : ""}${processWithText ? " msg--process-with-text" : ""}`} data-history-restore={item.id.startsWith("h") ? "" : undefined} data-entrance={item.id}>
       {item.reasoning && (
@@ -813,8 +853,9 @@ export const AssistantMessage = memo(function AssistantMessage({
           <AuditInlineCard reasoning={item.reasoning} />
         </Suspense>
       )}
+      {keyPoints.length > 1 && <AnswerKeyPoints points={keyPoints} />}
       {(hasText || hasFootnotes) && (
-        <div className="msg__body" data-transcript-selectable="message">
+        <div className="msg__body" ref={bodyRef} data-transcript-selectable="message">
           {hasText && (
             <Markdown
               text={item.text}
