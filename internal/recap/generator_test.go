@@ -43,6 +43,26 @@ type fakeProvider struct {
 	active  int
 	maxSeen int
 	calls   int
+	last    string
+}
+
+// lastEvidence is what the lane actually asked with: the budget failure this
+// guards is about the request, not the answer.
+// lastMessageText is the request's last user-role message: what the lane actually
+// asked with.
+func lastMessageText(req provider.Request) string {
+	for i := len(req.Messages) - 1; i >= 0; i-- {
+		if req.Messages[i].Role == provider.RoleUser {
+			return req.Messages[i].Content
+		}
+	}
+	return ""
+}
+
+func (p *fakeProvider) lastEvidence() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.last
 }
 
 // emptyFirstProvider returns empty leading answers (the zero value means one),
@@ -80,10 +100,11 @@ func (p *emptyFirstProvider) callsMade() int {
 
 func (p *fakeProvider) Name() string { return p.name }
 
-func (p *fakeProvider) Stream(ctx context.Context, _ provider.Request) (<-chan provider.Chunk, error) {
+func (p *fakeProvider) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
 	p.mu.Lock()
 	p.active++
 	p.calls++
+	p.last = lastMessageText(req)
 	if p.active > p.maxSeen {
 		p.maxSeen = p.active
 	}
@@ -632,5 +653,36 @@ func TestTheLaneYieldsToARunningSessionAndGivesUpAtItsBudget(t *testing.T) {
 	res, err = h.generator.Generate(ctx, path)
 	if err != nil || !res.Stored {
 		t.Fatalf("an idle session must let the lane through: %+v (%v)", res, err)
+	}
+}
+
+// A long session fills the transcript budget right up to its cap, so whatever the
+// request spends on its own policy has to be budgeted for. The failure this guards
+// was "bounded reviewer request exceeds 102400 bytes" on the longest sessions.
+func TestGenerateHandlesASessionThatFillsTheTranscriptBudget(t *testing.T) {
+	ctx := context.Background()
+	h := newHarness(t)
+	// CJK, because that is what this user's sessions look like and a rune is three
+	// bytes: a budget counted in either one must still fit.
+	line := "这一轮我在查打包脚本里的路径处理，顺便核对了 NSIS 与 portable 目录的约定。\n"
+	// 96 KiB is the lane's default transcript budget; the session below is far past
+	// it, so the clip fills the budget and the request's own policy has to fit too.
+	const transcriptBudget = 96 * 1024
+	body := strings.Repeat(line, (transcriptBudget/len(line))+500)
+	path := h.session(t, "20260101-000000.000000000-fake.jsonl", body)
+
+	res, err := h.generator.Generate(ctx, path)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	if !res.Stored {
+		t.Fatalf("a long session must still be recapped: %+v", res)
+	}
+	asked := h.provider.lastEvidence()
+	if len(asked) > transcriptBudget {
+		t.Fatalf("evidence sent = %d bytes, want the transcript budget or less", len(asked))
+	}
+	if len(asked) == 0 {
+		t.Fatal("the lane must send evidence")
 	}
 }

@@ -329,7 +329,12 @@ func (g *Generator) callWith(ctx context.Context, prov provider.Provider, ref, t
 		// this lane kept hitting. The timeout still bounds the call.
 		MaxOutputBytes: -1,
 		MaxSystemBytes: 6 * 1024,
-		MaxTotalBytes:  g.opts.MaxInputBytes + 4*1024,
+		// The transcript budget is spent on the evidence; the system policy sits on
+		// top of it. Four kilobytes was enough until the prompt grew to ask for
+		// pointers and a tier, at which point the longest sessions — the ones the
+		// clip fills right up to the budget — started failing the total cap instead
+		// of being recapped.
+		MaxTotalBytes:  g.opts.MaxInputBytes + 16*1024,
 		EffortOverride: provider.PreferredReasoning(prov, "low"),
 	}, recapSystemPrompt, text)
 }
