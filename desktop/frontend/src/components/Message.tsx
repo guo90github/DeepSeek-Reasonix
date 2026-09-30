@@ -19,10 +19,14 @@ import type { Item } from "../lib/useController";
 import type { CheckpointMeta } from "../lib/types";
 import { InvocationBadge } from "./InvocationBadge";
 import { AnswerKeyPoints } from "./AnswerKeyPoints";
-import { collectAnswerKeyPoints, sameAnswerKeyPoints, type AnswerKeyPoint } from "../lib/answerKeyPoints";
+import { EMPTY_ANSWER_MARKS, collectAnswerKeyPoints, sameAnswerKeyPoints, type AnswerKeyPoint, type AnswerMarkSummary } from "../lib/answerKeyPoints";
+import { useAnswerJump } from "../lib/answerJump";
 import { CodeViewer } from "./CodeViewer";
 import { formatSelectionLabels, languageFor, parseSelectedTextContext, stripSelectionLabels } from "../lib/selectedTextContext";
 const AuditInlineCard = lazy(() => import("./AuditInlineCard").then((module) => ({ default: module.AuditInlineCard })));
+// The jump says "here": a short accent ring on the landed mark, then it goes.
+const LANDED_MARK_CLASS = "md--landed";
+const LANDED_MARK_MS = 1200;
 
 const AssistantReasoningPanel = lazy(() => import("./AssistantReasoningPanel").then((module) => ({ default: module.AssistantReasoningPanel })));
 const MemoryCitations = lazy(() => import("./MemoryCitations").then((module) => ({ default: module.MemoryCitations })));
@@ -807,10 +811,22 @@ export const AssistantMessage = memo(function AssistantMessage({
   // three markdown paths swap their DOM in without a React signal — the worker
   // owns the settled parse — so the marks are observed, not passed up.
   const bodyRef = useRef<HTMLDivElement | null>(null);
-  const [keyPoints, setKeyPoints] = useState<readonly AnswerKeyPoint[]>([]);
+  const [keyPoints, setKeyPoints] = useState<AnswerMarkSummary>(EMPTY_ANSWER_MARKS);
+  const answerJump = useAnswerJump();
+  // A point names the mark by address, so the target is looked up inside this
+  // answer's own body — never globally (another answer also has a "0"). No
+  // mark means no jump: the strip never guesses a destination.
+  const jumpToPoint = useCallback((point: AnswerKeyPoint) => {
+    if (!answerJump) return;
+    const target = bodyRef.current?.querySelector(`[data-md-point="${point.ordinal}"]`) as HTMLElement | null;
+    if (!target) return;
+    target.classList.add(LANDED_MARK_CLASS);
+    window.setTimeout(() => target.classList.remove(LANDED_MARK_CLASS), LANDED_MARK_MS);
+    answerJump(target);
+  }, [answerJump]);
   useEffect(() => {
     if (item.streaming) {
-      setKeyPoints((current) => (current.length === 0 ? current : []));
+      setKeyPoints((current) => (current === EMPTY_ANSWER_MARKS ? current : EMPTY_ANSWER_MARKS));
       return;
     }
     const root = bodyRef.current;
@@ -853,7 +869,9 @@ export const AssistantMessage = memo(function AssistantMessage({
           <AuditInlineCard reasoning={item.reasoning} />
         </Suspense>
       )}
-      {keyPoints.length > 1 && <AnswerKeyPoints points={keyPoints} />}
+      {keyPoints.points.length > 1 && (
+        <AnswerKeyPoints points={keyPoints.points} total={keyPoints.total} onJump={answerJump ? jumpToPoint : undefined} />
+      )}
       {(hasText || hasFootnotes) && (
         <div className="msg__body" ref={bodyRef} data-transcript-selectable="message">
           {hasText && (

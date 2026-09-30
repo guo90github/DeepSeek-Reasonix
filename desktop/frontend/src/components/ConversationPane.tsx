@@ -10,6 +10,7 @@ import { useT } from "../lib/i18n";
 import { usePaneTailFollow } from "../lib/usePaneTailFollow";
 import { useTranscriptVirtuosoFirstItemIndex } from "../lib/transcriptVirtuosoIndex";
 import { isSteerNoticeText } from "../lib/useController";
+import { AnswerJumpContext } from "../lib/answerJump";
 import type { WireCompletionSummary } from "../lib/types";
 import { conversationPaneTurnIsBlank, paneTurnDefaultOpen, paneTurnShowsHeader, type ConversationPaneTurn } from "../lib/transcriptPanes";
 import { UserMessage } from "./Message";
@@ -311,7 +312,7 @@ export function ConversationPane({
     scrollerRef?.(node);
   }, [scrollerRef]);
   const virtuosoObjectRef = listRef && typeof listRef === "object" ? listRef : null;
-  const { onUserGesture, reaim } = usePaneTailFollow({
+  const { onUserGesture, reaim, aimAt } = usePaneTailFollow({
     virtuosoRef: virtuosoObjectRef,
     scrollerRef: scrollerElRef,
     contentVersion: turns,
@@ -321,22 +322,27 @@ export function ConversationPane({
     onUserGesture();
     onUserInteract?.();
   }, [onUserGesture, onUserInteract]);
+  // A key point only names a mark; the pane owns its scroller, so the jump is
+  // performed here, through the pane's own writer (see usePaneTailFollow).
+  const answerJump = useCallback((element: HTMLElement) => aimAt(element), [aimAt]);
 
   return (
-    <Virtuoso<ConversationPaneTurn>
-      ref={listRef}
-      className="conversation-pane"
-      data={turns}
-      computeItemKey={(_index, turn) => turn.key}
-      itemContent={itemContent}
-      components={listComponents}
-      firstItemIndex={firstItemIndex}
-      increaseViewportBy={{ top: 320, bottom: 320 }}
-      totalListHeightChanged={reaim}
-      onWheelCapture={onUserGestureCapture}
-      onTouchStartCapture={onUserGestureCapture}
-      onPointerDownCapture={onUserGestureCapture}
-      scrollerRef={setScroller}
-    />
+    <AnswerJumpContext.Provider value={answerJump}>
+      <Virtuoso<ConversationPaneTurn>
+        ref={listRef}
+        className="conversation-pane"
+        data={turns}
+        computeItemKey={(_index, turn) => turn.key}
+        itemContent={itemContent}
+        components={listComponents}
+        firstItemIndex={firstItemIndex}
+        increaseViewportBy={{ top: 320, bottom: 320 }}
+        totalListHeightChanged={reaim}
+        onWheelCapture={onUserGestureCapture}
+        onTouchStartCapture={onUserGestureCapture}
+        onPointerDownCapture={onUserGestureCapture}
+        scrollerRef={setScroller}
+      />
+    </AnswerJumpContext.Provider>
   );
 }

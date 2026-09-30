@@ -41,16 +41,18 @@ export function usePaneTailFollow({
   enabledRef.current = enabled;
   const wasEnabledRef = useRef(enabled);
 
+  const writerRef = useRef<ReturnType<typeof createTranscriptScrollWriter> | null>(null);
+  const settleWriter = (writerRef.current ??= createTranscriptScrollWriter({
+    virtuosoRef: virtuosoRef ?? { current: null },
+    scrollRef: scrollerRef,
+    modeRef,
+    generationRef,
+    ownershipEpochRef,
+    geometryRevisionRef,
+  }));
   const settleRef = useRef<TranscriptTailSettle | null>(null);
   settleRef.current ??= createTranscriptTailSettle({
-    writer: createTranscriptScrollWriter({
-      virtuosoRef: virtuosoRef ?? { current: null },
-      scrollRef: scrollerRef,
-      modeRef,
-      generationRef,
-      ownershipEpochRef,
-      geometryRevisionRef,
-    }),
+    writer: settleWriter,
     scrollRef: scrollerRef,
     modeRef,
     generationRef,
@@ -204,5 +206,29 @@ export function usePaneTailFollow({
     settle.cancel();
   }, [settle]);
 
-  return { onUserGesture, reaim };
+  // A jump is a reader gesture, not a tail write: it goes through the pane's own
+  // writer, and an accepted jump releases the tail until the reader returns to
+  // the bottom (the scroll listener re-arms it there).
+  const aimAt = useCallback((element: HTMLElement | null): boolean => {
+    const scroller = scrollerRef.current;
+    const writer = writerRef.current;
+    if (!element || !scroller || !writer) return false;
+    // Land the mark just below the top edge: the sentence and what precedes it
+    // both stay readable.
+    const leadingGapPx = 12;
+    const offset = scroller.scrollTop + element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - leadingGapPx;
+    const accepted = writer.write({
+      owner: "answer-point-jump",
+      operation: "scrollTo",
+      reason: "answer-point",
+      top: Math.max(0, offset),
+      expectedSurfaceGeneration: generationRef.current,
+      expectedOwnershipEpoch: ownershipEpochRef.current,
+      expectedGeometryRevision: geometryRevisionRef.current,
+    });
+    if (accepted) modeRef.current = "manual";
+    return accepted;
+  }, [scrollerRef]);
+
+  return { onUserGesture, reaim, aimAt };
 }

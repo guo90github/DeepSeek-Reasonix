@@ -5,7 +5,15 @@
 
 export type AnswerKeyPointKind = "claim" | "label";
 
-export type AnswerKeyPoint = { kind: AnswerKeyPointKind; text: string };
+// `ordinal` is the mark's address: its position among the answer body's marks in
+// document order, written to the DOM as data-md-point. Dedupe and the display
+// cap below never change it, so a jump target stays exact even when the same
+// sentence is bolded twice.
+export type AnswerKeyPoint = { ordinal: number; kind: AnswerKeyPointKind; text: string };
+
+export type AnswerMarkSummary = { points: AnswerKeyPoint[]; total: number };
+
+export const EMPTY_ANSWER_MARKS: AnswerMarkSummary = { points: [], total: 0 };
 
 const CLAIM_CLASS = "md-p--claim";
 const LABEL_CLASS = "md-li--label";
@@ -28,21 +36,34 @@ function labelText(node: Element): string {
   return collapse(strong?.textContent ?? node.textContent);
 }
 
-export function collectAnswerKeyPoints(root: ParentNode | null | undefined): AnswerKeyPoint[] {
-  if (!root?.querySelectorAll) return [];
+export function collectAnswerKeyPoints(root: ParentNode | null | undefined): AnswerMarkSummary {
+  if (!root?.querySelectorAll) return EMPTY_ANSWER_MARKS;
   const points: AnswerKeyPoint[] = [];
   const seen = new Set<string>();
+  let mark = 0;
+  let total = 0;
   for (const node of root.querySelectorAll(SELECTOR)) {
+    // Every mark gets its address before the strip decides what to list, so the
+    // DOM and the strip agree on which mark "3" means. `total` counts reportable
+    // points instead, so the header never overstates the answer.
+    const ordinal = mark;
+    mark += 1;
+    node.setAttribute("data-md-point", String(ordinal));
     const kind: AnswerKeyPointKind = node.classList.contains(CLAIM_CLASS) ? "claim" : "label";
     const text = truncate(kind === "label" ? labelText(node) : collapse(node.textContent));
     if (!text || seen.has(text)) continue;
     seen.add(text);
-    points.push({ kind, text });
-    if (points.length >= MAX_POINTS) break;
+    total += 1;
+    if (points.length < MAX_POINTS) points.push({ ordinal, kind, text });
   }
-  return points;
+  return { points, total };
 }
 
-export function sameAnswerKeyPoints(a: readonly AnswerKeyPoint[], b: readonly AnswerKeyPoint[]): boolean {
-  return a.length === b.length && a.every((point, index) => point.kind === b[index].kind && point.text === b[index].text);
+export function sameAnswerKeyPoints(a: AnswerMarkSummary, b: AnswerMarkSummary): boolean {
+  return a.total === b.total
+    && a.points.length === b.points.length
+    && a.points.every((point, index) => {
+      const other = b.points[index];
+      return point.ordinal === other.ordinal && point.kind === other.kind && point.text === other.text;
+    });
 }
