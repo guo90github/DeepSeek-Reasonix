@@ -40,7 +40,11 @@ var recapLanes = struct {
 // bindRecapLane attaches the process-wide recap lane to this controller's
 // session-end seam. The lane is optional: a failure only costs recaps.
 func bindRecapLane(ctx context.Context, cfg *config.Config, ctrl *control.Controller, sink event.Sink, resolver provider.Resolver, proxy netclient.ProxySpec) {
-	runner, created, err := sharedRecapLane(ctx, cfg, sink, recapResolverFor(resolver, cfg, proxy))
+	// The lane yields while a turn is in flight: a recap must never compete with
+	// the conversation it belongs to. The controller is the only thing that knows,
+	// so its Running is what the generator asks.
+	busy := func() bool { return ctrl != nil && ctrl.Running() }
+	runner, created, err := sharedRecapLane(ctx, cfg, sink, recapResolverFor(resolver, cfg, proxy), busy)
 	if err != nil {
 		slog.Warn("session recap lane unavailable", "err", err.Error())
 		return
@@ -105,7 +109,7 @@ func CloseRecapLanes() {
 // sharedRecapLane builds the lane for the current projection path once, then
 // hands the same one to every later controller. A created lane is reported so the
 // caller can run the projection's maintenance exactly once per process.
-func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, resolve resolveRecapModel) (*recap.Runner, bool, error) {
+func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, resolve resolveRecapModel, busy func() bool) (*recap.Runner, bool, error) {
 	key := recap.DefaultPath()
 	recapLanes.mu.Lock()
 	defer recapLanes.mu.Unlock()
@@ -133,6 +137,7 @@ func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, r
 		Models:     models,
 		Transcript: recap.FileTranscript{},
 		Sink:       sink,
+		Busy:       busy,
 	})
 	runner := recap.NewRunner(generator)
 	recapLanes.byKey[key] = runner

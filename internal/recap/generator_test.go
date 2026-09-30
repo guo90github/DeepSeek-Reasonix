@@ -593,3 +593,41 @@ func TestClipForRecapDigestsTheOmittedTurns(t *testing.T) {
 		t.Fatalf("a tight clip blew the input budget: %d bytes", len(tight))
 	}
 }
+
+// The lane yields while a session turn is in flight instead of competing with the
+// conversation it belongs to — but only for so long: a lane that yields forever
+// starves every later recap behind one busy session. Both halves are the point.
+func TestTheLaneYieldsToARunningSessionAndGivesUpAtItsBudget(t *testing.T) {
+	ctx := context.Background()
+	busy := true
+	h := newHarness(t, func(o *GeneratorOptions) {
+		o.Busy = func() bool { return busy }
+		o.YieldInterval = time.Millisecond
+		o.YieldBudget = 5 * time.Millisecond
+	})
+	path := h.session(t, "20260101-000000.000000000-fake.jsonl", "one\n")
+
+	res, err := h.generator.Generate(ctx, path)
+	if err != nil {
+		t.Fatalf("a busy session must leave the recap pending, not fail the lane: %v", err)
+	}
+	if !res.Skipped || res.Reason != "session busy" {
+		t.Fatalf("result = %+v, want a skip that says why", res)
+	}
+	pending, err := h.store.PendingMap(ctx)
+	if err != nil {
+		t.Fatalf("pending map: %v", err)
+	}
+	// A pending marker is what a later sweep retries; without one the yield is
+	// indistinguishable from silence.
+	if entry, ok := pending[path]; !ok || entry.Attempts == 0 || !strings.Contains(entry.Reason, "session busy") {
+		t.Fatalf("the yielded recap must be marked pending with its reason: %+v", pending)
+	}
+
+	// The same lane runs the moment the session is idle again.
+	busy = false
+	res, err = h.generator.Generate(ctx, path)
+	if err != nil || !res.Stored {
+		t.Fatalf("an idle session must let the lane through: %+v (%v)", res, err)
+	}
+}
