@@ -44,7 +44,14 @@ func bindRecapLane(ctx context.Context, cfg *config.Config, ctrl *control.Contro
 		slog.Warn("session recap lane unavailable", "err", err.Error())
 		return
 	}
-	ctrl.SetSessionEndObserver(func(_, sessionPath string) { runner.Submit(sessionPath) })
+	// /clear and a new chat rotate away content the user dropped, so they owe no
+	// recap; only an ordinary close ends a session worth keeping.
+	ctrl.SetSessionEndObserver(func(reason, sessionPath string) {
+		if reason == "clear" {
+			return
+		}
+		runner.Submit(sessionPath)
+	})
 }
 
 // recapResolverFor builds the lane's independent provider instances, so boot's

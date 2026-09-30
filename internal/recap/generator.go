@@ -136,6 +136,7 @@ func (g *Generator) Generate(ctx context.Context, sessionPath string) (Result, e
 
 	text, err := g.opts.Transcript.Read(ctx, path)
 	if err != nil {
+		_ = store.MarkPending(ctx, path, "transcript unreadable: "+err.Error(), g.opts.Now())
 		return Result{Skipped: true, Reason: err.Error()}, nil
 	}
 	text = clipForRecap(text, g.opts.MaxInputBytes)

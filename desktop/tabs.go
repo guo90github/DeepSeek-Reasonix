@@ -3153,10 +3153,10 @@ func (a *App) closeTabRuntime(tabID string, allowDetach bool) error {
 			// clear the path or drain for them.
 			return nil
 		}
-		closeCtrl.SetSessionPath("") // future snapshots become no-ops
-		a.quiesceTabAutosave(tab)    // wait for any in-flight snapshot to finish
+		a.quiesceTabAutosave(tab) // wait for any in-flight snapshot to finish
 		closeCtrl.Cancel()
 		closeCtrl.Close()
+		closeCtrl.SetSessionPath("") // cleared after Close so the end event names the session
 		// Release the shared plugin host reference. The host stays alive as
 		// long as any other tab for the same workspace root holds a reference;
 		// on the last release the host is closed and its subprocesses exit.
@@ -3444,10 +3444,10 @@ func (a *App) closeTabRuntimeAdmissionHeld(tab *WorkspaceTab) {
 	sink := tab.sink
 	a.mu.RUnlock()
 	if ctrl != nil {
-		ctrl.SetSessionPath("") // future snapshots become no-ops
 		a.quiesceTabAutosave(tab)
 		ctrl.Cancel()
 		ctrl.Close()
+		ctrl.SetSessionPath("") // cleared after Close so the end event names the session
 		a.releaseTabSharedHost(tab)
 	}
 	if sink != nil {
