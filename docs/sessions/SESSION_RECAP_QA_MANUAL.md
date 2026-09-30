@@ -146,6 +146,8 @@ RECAP_CALIB_DB=<临时目录>\v1.sqlite go test ./internal/recap/ -run ReportRec
 - **隔离**：`REASONIX_HOME` 指向被评测笔记所属的**项目桶**（本机为 `Temp/recap-probe`），投递判据因此天然匹配，不用造数据；新会话只落 Temp，不碰 `%APPDATA%\reasonix`。
 - **两组对照**：有沉淀 = `REASONIX_CACHE_HOME=<home>/cache`（投影副本）；无沉淀 = 空 cache home。两者只差投影这一个变量。
 - **反向对照**：同项目一道无关题，看背景块会不会乱冒（端到端误放行）。
+- **`--dir` 是代码根，不是桶**（2026-09-30 用户指出并修正）：桶由 `REASONIX_HOME` 决定（`ProjectOf` = `sessions/` 的父目录），`--dir` 只决定文件/命令工具的根。第一版把 `--dir` 指向空目录 ⇒ 模型看不到代码、**没法核对笔记**，答不出就变成"证据不足"，那是空工作区的噪声而不是真基线。`--dir` 必须是**当前项目**。
+- **判据别泄漏**：出题时不要把笔记里的结论词写进问题（第一版问了"为什么不再用 `:only-child` 判断**整段加粗**"，而"整段加粗"正是笔记里的结论词 ⇒ 这个字样的出现不能算命中，只有"渲染期插件"能算）。
 - **凭据（务必先看）**：provider 取 key 走的是 **`<REASONIX_HOME>/.env`**，**不是进程环境变量**——`export DEEPSEEK_API_KEY=…` 完全无效，报错 `missing env DEEPSEEK_API_KEY` 说的是"Reasonix 的 .env 里没有"。假 key 验证：`.env` 就位后错误变成 **HTTP 401**（不产生 token）。脚本会把本机 `.env` 复制进隔离 home；**跑完记得删掉那份副本**（临时目录里的明文 key）。
 - **非交互会话**只能用 `--permission-mode dontAsk`；`plan` 档被 CLI 直接拒（"requires an interactive session"）。
 - **判据**：① 先单独验**投递层**（本地、零模型，`MatchNotes`/`PriorNotes` 一跑就知道），别让"答案不对"掩盖"根本没送到"；② 答案层逐题对着笔记的**关键事实**读，不看"答得像不像"；③ **无沉淀组必须答不出来**，否则说明该事实模型本来就会，这题作废。
