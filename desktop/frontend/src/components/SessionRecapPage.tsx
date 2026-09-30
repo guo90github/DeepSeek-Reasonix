@@ -4,6 +4,7 @@ import type { RecapOpenItem, RecapSkillDraft, SessionMeta, SessionRecap, Session
 import { useT } from "../lib/i18n";
 import { useManagementT } from "../lib/managementLocale";
 import { ManagementPageShell } from "./ManagementPageShell";
+import { groupByTopic } from "../lib/recapTopics";
 
 type RecapSort = "newest" | "oldest" | "session";
 
@@ -64,6 +65,8 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const [failure, setFailure] = useState("");
   const [queued, setQueued] = useState<string[]>([]);
   const [drafted, setDrafted] = useState<Record<string, string>>({});
+  // Which notes of a same-topic group a bulk write should take; unset means yes.
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [insights, setInsights] = useState<SessionRecapInsight[]>([]);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [closing, setClosing] = useState<{ id: string; text: string } | null>(null);
@@ -136,6 +139,25 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
 
   // keepHandoff records one handoff note as an unfinished item of its project.
   // The item keeps the note's own id, so the entry and the list entry agree.
+  // One button per topic writes every selected note of it, and each note still
+  // lands on its own: the group is a render-time row, never a merged note.
+  const runGroup = useCallback(async (groupId: string, choice: string, list: SessionRecapEntry[]) => {
+    if (list.length === 0) return;
+    setBusy(groupId);
+    setFailure("");
+    try {
+      for (const entry of list) {
+        if (choice === "accept") await accept(entry.kind, entry.body, "");
+        else await reject(entry.kind, entry.body);
+        settle(entry.id, choice);
+      }
+    } catch {
+      setFailure(m("operationFailed"));
+    } finally {
+      setBusy("");
+    }
+  }, [accept, m, reject, settle]);
+
   const keepHandoff = useCallback(async (sessionPath: string, entry: SessionRecapEntry) => {
     setBusy(entry.id);
     setFailure("");
@@ -333,7 +355,19 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             {/* A failed attempt has no notes to speak of; "nothing reusable" would
                 be the wrong one of the two silences. */}
             {recap.entries.length === 0 && recap.state !== "pending" && <p style={{ margin: 0, ...labelStyle }}>{m("recapNoEntries")}</p>}
-            {recap.entries.map((entry) => {
+            {groupByTopic(recap.entries).map((group) => {
+              const grouped = group.entries.length > 1;
+              const open = group.entries.filter((entry) => (entry.decision ?? "") === "" && entry.target !== "display" && meta !== undefined);
+              const chosen = open.filter((entry) => selected[entry.id] ?? true);
+              return <div key={group.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {grouped && <p style={{ margin: 0, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+                <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapTopicGroup", { n: group.entries.length })}</span>
+                {chosen.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  onClick={() => void runGroup(group.key, "accept", chosen)}>{m("recapAccept")}</button>}
+                {open.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  onClick={() => void runGroup(group.key, "reject", open)}>{m("recapReject")}</button>}
+              </p>}
+            {group.entries.map((entry) => {
               const key = kindKey(entry.kind);
               const reviewable = meta !== undefined && entry.target !== "display";
               // The host omits an unset decision, so anything but an explicit
@@ -355,7 +389,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                   )}
                   {decision === "accept" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapAccepted")}</span>}
                   {decision === "reject" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapRejected")}</span>}
-                  {reviewable && <span style={{ display: "flex", gap: 6 }}>
+                  {reviewable && !grouped && <span style={{ display: "flex", gap: 6 }}>
                     {decision === "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
                       onClick={() => void run(entry.id, "accept", async () => { await accept(entry.kind, entry.body, ""); })}>{m("recapAccept")}</button>}
                     {decision === "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
@@ -364,6 +398,12 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                       onClick={() => void run(entry.id, "reject", async () => { await reject(entry.kind, entry.body); })}>{m("recapReject")}</button>}
                     {decision !== "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
                       onClick={() => void run(entry.id, "", async () => { await undo(entry.kind, entry.body); })}>{m("recapUndo")}</button>}
+                  </span>}
+                  {reviewable && grouped && <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input type="checkbox" aria-label={m("recapAccept")} checked={selected[entry.id] ?? true}
+                      onChange={(event) => setSelected((current) => ({ ...current, [entry.id]: event.target.checked }))} />
+                    <button className="btn btn--small" type="button" disabled={busy !== ""}
+                      onClick={() => setEditing({ id: entry.id, text: entry.body })}>{m("recapAcceptEdited")}</button>
                   </span>}
                   {meta !== undefined && entry.kind === "handoff" && <span style={{ display: "flex", gap: 6 }}>
                     {item === undefined
@@ -398,6 +438,8 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                   </span>
                 </div>}
               </div>;
+            })}
+            </div>;
             })}
           </li>;
         })}
