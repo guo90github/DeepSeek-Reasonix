@@ -333,7 +333,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             <li key={group.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {group.entries.length > 1 && (
                 <span style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapTopicGroupSessions", { n: group.entries.length })}</span>
+                  <span style={{ ...labelStyle, fontSize: 12 }} title={m("recapTopicGroupHint")}>{m("recapTopicGroupSessions", { n: group.entries.length })}</span>
                   <button className="btn btn--small" type="button" disabled={busy !== ""}
                     onClick={() => void askGenerateAll(group.entries.map((item) => item.id))}>{m("recapGenerate")}</button>
                 </span>
@@ -380,7 +380,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
               const chosen = open.filter((entry) => selected[entry.id] ?? true);
               return <div key={group.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {grouped && <p style={{ margin: 0, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-                <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapTopicGroup", { n: group.entries.length })}</span>
+                <span style={{ ...labelStyle, fontSize: 12 }} title={m("recapTopicGroupHint")}>{m("recapTopicGroup", { n: group.entries.length })}</span>
                 {chosen.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   onClick={() => void runGroup(group.key, "accept", chosen)}>{m("recapAccept")}</button>}
                 {open.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
