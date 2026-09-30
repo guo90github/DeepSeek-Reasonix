@@ -155,6 +155,15 @@ const okOrder = (expected: string[], label: string) => {
   process.stdout.write(`  FAIL  ${label}\n    saw: ${seen.join(" | ")}\n`);
   failed += 1;
 };
+// Cards start folded except the newest one; the rest of this suite is about what a
+// recap contains, so it expands them all once, here.
+const expandedCards = () => cards().filter((card) => [...card.querySelectorAll("[data-recap-row]")].length > 0);
+ok(expandedCards().length === 1, "only the newest recap starts expanded");
+await act(async () => {
+  rootEl.querySelector<HTMLButtonElement>(".recap-expand-all")?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+ok(expandedCards().length === cards().length, "the expand-all control opens every card");
 okOrder([newest, middle, unlisted, early], "the newest recap comes first by default");
 
 // The notes are what the page now shows instead of four element paragraphs, and

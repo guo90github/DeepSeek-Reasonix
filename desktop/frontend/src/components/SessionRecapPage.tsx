@@ -68,6 +68,10 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const [drafted, setDrafted] = useState<Record<string, string>>({});
   // Which notes of a same-topic group a bulk write should take; unset means yes.
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  // Session cards start folded except the newest one: a page of cards is a list
+  // first, and the reader's attention is at the top. Explicit toggles win.
+  const [openCards, setOpenCards] = useState<Record<string, boolean>>({});
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const [insights, setInsights] = useState<SessionRecapInsight[]>([]);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [closing, setClosing] = useState<{ id: string; text: string } | null>(null);
@@ -209,6 +213,8 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const waiting = openItems.filter((item) => !item.closed).length;
   const stale = openItems.filter((item) => !item.closed && item.stale === true).length;
   const failed = recaps.filter((recap) => recap.state === "pending").length;
+  // The card the page opens by itself: the first row under the default sort.
+  const newestPath = rows[0]?.path ?? "";
   // A session that never produced a recap appears in neither the record list nor
   // the failure list, so the newest few are offered here: yielding nothing must
   // still leave it one click from a retry. Older ones stay a bulk job
@@ -320,6 +326,12 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
           ))}
         </div>
         <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapCount", { shown: rows.length, total: recaps.length })}</span>
+        <span style={{ display: "flex", gap: 6 }}>
+          <button className="btn btn--small recap-expand-all" type="button"
+            onClick={() => setOpenCards(Object.fromEntries(rows.map((recap) => [recap.path, true])))}>{m("recapExpandAll")}</button>
+          <button className="btn btn--small recap-collapse-all" type="button"
+            onClick={() => setOpenCards(Object.fromEntries(rows.map((recap) => [recap.path, false])))}>{m("recapCollapseAll")}</button>
+        </span>
       </div>
     )}
     {!loading && recaps.length > 0 && rows.length === 0 && (
@@ -343,12 +355,13 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                 </span>
               )}
               {group.entries.map((item) => (
-                <span key={item.id} style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <span>{item.body}</span>
-                  <button className="btn btn--small" type="button" disabled={busy !== ""}
-                    onClick={() => void askGenerate(item.id)}>{m("recapGenerate")}</button>
-                  {queued.includes(item.id) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
-                </span>
+                <RecapRow key={item.id} badge={m("recapUngeneratedBadge")}
+                  text={item.body}
+                  actions={<>
+                    <button className="btn btn--small" type="button" disabled={busy !== ""}
+                      onClick={() => void askGenerate(item.id)}>{m("recapGenerate")}</button>
+                    {queued.includes(item.id) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
+                  </>} />
               ))}
             </li>
           ))}
@@ -372,12 +385,13 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                 </span>
               )}
               {group.entries.map((item) => (
-                <span key={item.id} style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <span>{item.body}</span>
-                  <button className="btn btn--small" type="button" disabled={busy !== ""}
-                    onClick={() => void askGenerate(item.id)}>{m("recapGenerate")}</button>
-                  {queued.includes(item.id) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
-                </span>
+                <RecapRow key={item.id} badge={m("recapStaleBadge")}
+                  text={item.body}
+                  actions={<>
+                    <button className="btn btn--small" type="button" disabled={busy !== ""}
+                      onClick={() => void askGenerate(item.id)}>{m("recapGenerate")}</button>
+                    {queued.includes(item.id) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
+                  </>} />
               ))}
             </li>
           ))}
@@ -390,7 +404,11 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
           const meta = byPath.get(recap.path);
           return <li key={recap.path} className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap", fontSize: 12 }}>
-              <strong>{titleOf(recap)}</strong>
+              <span role="button" tabIndex={0} data-recap-toggle="" title={m("recapFoldHint")}
+                onClick={() => setOpenCards((current) => ({ ...current, [recap.path]: !(current[recap.path] ?? recap.path === newestPath) }))}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpenCards((current) => ({ ...current, [recap.path]: !(current[recap.path] ?? recap.path === newestPath) })); } }}
+                style={{ cursor: "pointer" }}><strong>{titleOf(recap)}</strong></span>
+              {recap.entries.length > 0 && <span style={labelStyle}>{m("recapNoteCount", { n: recap.entries.length })}</span>}
               {meta && <span style={labelStyle}>{t(meta.turns === 1 ? "history.turnOne" : "history.turnOther", { n: meta.turns })}</span>}
               {recap.generatedAt !== "" && <span style={labelStyle}>{t("history.recapGeneratedAt")}：{formatStamp(recap.generatedAt)}</span>}
               {recap.model !== "" && <span style={labelStyle}>{t("history.recapModel")}：{recap.model}</span>}
@@ -404,6 +422,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                 onClick={() => void askGenerate(recap.path)}>{m("recapRetryGenerate")}</button>
               {queued.includes(recap.path) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
             </p>}
+            {/* Notes fold away; the pending line above does not, because a failed
+                attempt is a state the reader has to see without expanding. */}
+            {(openCards[recap.path] ?? recap.path === newestPath) && <>
             {/* A failed attempt has no notes to speak of; "nothing reusable" would
                 be the wrong one of the two silences. */}
             {recap.entries.length === 0 && recap.state !== "pending" && <p style={{ margin: 0, ...labelStyle }}>{m("recapNoEntries")}</p>}
@@ -419,7 +440,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                 {open.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   onClick={() => void runGroup(group.key, "reject", open)}>{m("recapReject")}</button>}
               </p>}
-            {group.entries.map((entry) => {
+            {(openGroups[group.key] || group.entries.length <= 6 ? group.entries : group.entries.slice(0, 6)).map((entry) => {
               const key = kindKey(entry.kind);
               const reviewable = meta !== undefined && entry.target !== "display";
               // The host omits an unset decision, so anything but an explicit
@@ -487,8 +508,12 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                   </span>
                 </div> : undefined} />;
             })}
+            {group.entries.length > 6 && !openGroups[group.key] && (
+              <button className="btn btn--small" type="button" style={{ alignSelf: "flex-start" }}
+                onClick={() => setOpenGroups((current) => ({ ...current, [group.key]: true }))}>{m("recapMoreNotes", { n: group.entries.length - 6 })}</button>)}
             </div>;
             })}
+            </>}
           </li>;
         })}
       </ul>
