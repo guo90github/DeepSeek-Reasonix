@@ -47,8 +47,11 @@ func TestComposeCarriesEarlierConclusionsAsBackground(t *testing.T) {
 	if strings.Contains(first, "<open-items>") {
 		t.Fatalf("background must not read as an offer: %q", first)
 	}
-	if !strings.Contains(first, "Do not answer it") {
-		t.Fatalf("the block must say it is not a question: %q", first)
+	if !strings.Contains(first, "as an instruction") || !strings.Contains(first, "what you observe wins") {
+		t.Fatalf("background must stay checkable and subordinate to what the model sees: %q", first)
+	}
+	if !strings.Contains(first, "worked out the following") || !strings.Contains(first, "do not raise it as a question") {
+		t.Fatalf("background must read as established project knowledge, not as unrequested noise: %q", first)
 	}
 	if !strings.HasSuffix(strings.TrimSpace(first), subject) {
 		t.Fatalf("background must ride the turn tail, not replace it: %q", first)

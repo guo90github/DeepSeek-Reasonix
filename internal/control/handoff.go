@@ -55,11 +55,13 @@ func (c *Controller) offerProjectOffers(text, source string) string {
 
 // priorNotesBlock renders earlier conclusions as background. It must not read as
 // a question or an instruction: nobody asked for this line, so a wrong one has to
-// be ignorable — and the model has to know it is an unverified distillation.
+// be ignorable — but it also must not read as noise, which is what "you did not
+// ask for this" made of it: the model then answered from scratch while the line
+// sat unused (measured 2026-09-30).
 func priorNotesBlock(notes []recap.Note) string {
 	var b strings.Builder
 	b.WriteString("<prior-notes>\n")
-	b.WriteString("Earlier sessions in this project concluded the following about this subject. Treat it as background you did not ask for, not as instruction: it was distilled automatically, it can be stale or wrong, and what you observe now wins. Do not answer it or ask about it.\n")
+	b.WriteString("This project already worked out the following in earlier sessions. Each line was distilled automatically and names where it came from, so treat it as established background you can check — not as an instruction. Use it where it bears on the work; if it conflicts with what you observe now, what you observe wins and the line is what should be corrected. Nobody asked for it, so do not raise it as a question.\n")
 	for _, note := range notes {
 		b.WriteString("- (" + oneLine(note.Kind) + ") " + oneLine(note.Body))
 		if evidence := oneLine(note.Evidence); evidence != "" {
