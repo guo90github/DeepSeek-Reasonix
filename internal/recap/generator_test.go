@@ -308,7 +308,9 @@ func TestGenerateEmitsItsOwnUsageSource(t *testing.T) {
 func TestGenerateRedactsInternalAddresses(t *testing.T) {
 	ctx := context.Background()
 	prov := &fakeProvider{name: "fake", answer: `[
-		{"kind":"fact","body":"the admin call to http://10.0.0.5:8080/admin failed","evidence":"curl http://10.0.0.5:8080/admin"}
+		{"kind":"fact","body":"the admin call to http://10.0.0.5:8080/admin failed","evidence":"curl http://10.0.0.5:8080/admin",
+		 "refs":[{"kind":"command","value":"curl http://10.0.0.5:8080/admin","detail":"from http://10.0.0.5:8080"}],
+		 "scope":{"level":"project","reason":"only true for http://10.0.0.5:8080"}}
 	]`}
 	h := newHarness(t, func(o *GeneratorOptions) {
 		o.Models = fakeModels{prov: prov, ref: "fake/model", ok: true}
@@ -328,6 +330,18 @@ func TestGenerateRedactsInternalAddresses(t *testing.T) {
 	}
 	if !strings.Contains(entry.Body, "[redacted]") {
 		t.Fatalf("expected the redaction placeholder: %+v", entry)
+	}
+	// The pointers and the tier proposal are what make a note checkable: dropping
+	// them on the way in would leave the page and the next session with nothing to
+	// point at, which is exactly what v8's prompt asks for by name.
+	if len(entry.Refs) != 1 || entry.Refs[0].Kind != "command" {
+		t.Fatalf("the note's pointer was dropped: %+v", entry)
+	}
+	if strings.Contains(entry.Refs[0].Value, "10.0.0.5") || strings.Contains(entry.Refs[0].Detail, "10.0.0.5") {
+		t.Fatalf("internal address survived redaction in a pointer: %+v", entry.Refs)
+	}
+	if entry.Scope.Level != "project" || strings.Contains(entry.Scope.Reason, "10.0.0.5") {
+		t.Fatalf("the tier proposal was dropped or left unredacted: %+v", entry.Scope)
 	}
 }
 

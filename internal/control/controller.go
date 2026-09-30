@@ -692,9 +692,7 @@ type Options struct {
 	// Ablation switches subsystems off for a benchmark arm. The zero value runs
 	// everything.
 	Ablation ablation.Set
-	// ProjectOffers returns what one project carries into a turn: unfinished
-	// items a turn can be asked about, and earlier conclusions it can carry as
-	// background. Nil disables both.
+	// ProjectOffers returns a project's items and its earlier conclusions.
 	ProjectOffers func(project string) recap.Offers
 	// SessionTemp is the logical-session private temporary directory manager
 	// shared by sandboxed Bash calls. Nil creates a fresh Manager owned by this

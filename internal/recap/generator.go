@@ -31,6 +31,19 @@ Kinds, and what earns a note:
   including anything the session deferred with "later", "next time", or a TODO.
 
 How to write one body:
+- Prefer what only this session knows. The repo, its docs and its history answer
+  their own questions on demand, so a note that restates a file, a commit or a
+  document spends the next session's attention and returns nothing. What earns a
+  note is what nothing else records: what the person decided or ruled out, a dead
+  end already walked, the cause of something that went wrong, a constraint nobody
+  wrote down. A fact the code already states plainly is not worth a note.
+- Never state a term you cannot point at with "refs". If the session does not
+  contain the wording verbatim, write the body so the uncertainty shows instead
+  of asserting it: a note that is confidently a little wrong costs more than no
+  note, because the next session quotes it as fact.
+- Machines re-read their own state: a version, a path, a timestamp or a process
+  count is worth a note only when the next session would otherwise re-derive it
+  wrongly. Never dress such a thing as a root-cause.
 - At most two sentences, and at most 120 characters. The next session reads this
   as a list, not as a report: a note that needs more room is two notes.
 - At most two identifiers per note (a path, a command, an id). The rest belongs
@@ -298,14 +311,16 @@ func (g *Generator) call(ctx context.Context, prov provider.Provider, ref, text 
 		Timeout:        g.opts.Timeout,
 		MaxTokens:      g.opts.MaxTokens,
 		MaxOutputBytes: 8 * 1024,
-		MaxSystemBytes: 4 * 1024,
+		MaxSystemBytes: 6 * 1024,
 		MaxTotalBytes:  g.opts.MaxInputBytes + 4*1024,
 		EffortOverride: provider.PreferredReasoning(prov, "low"),
 	}, recapSystemPrompt, text)
 }
 
-// redactEntries scrubs both halves of a note: the body and the provenance it
-// quotes can each carry an address or a credential.
+// redactEntries scrubs a whole note: the body, the provenance it quotes, and the
+// pointers it offers can each carry an address or a credential. Refs and Scope
+// ride along — a note whose pointers are dropped on the way in cannot be checked
+// by the next session, and v8 asks for those pointers by name.
 func redactEntries(entries []Entry) []Entry {
 	out := make([]Entry, 0, len(entries))
 	for _, entry := range entries {
@@ -313,9 +328,31 @@ func redactEntries(entries []Entry) []Entry {
 			Kind:     entry.Kind,
 			Body:     secrets.Redact(entry.Body),
 			Evidence: secrets.Redact(entry.Evidence),
+			Refs:     redactRefs(entry.Refs),
+			Scope:    redactScope(entry.Scope),
 		})
 	}
 	return out
+}
+
+func redactRefs(refs []Ref) []Ref {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]Ref, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, Ref{
+			Kind:   ref.Kind,
+			Value:  secrets.Redact(ref.Value),
+			Detail: secrets.Redact(ref.Detail),
+		})
+	}
+	return out
+}
+
+func redactScope(scope Scope) Scope {
+	scope.Reason = secrets.Redact(scope.Reason)
+	return scope
 }
 
 // storeFor resolves the projection for one attempt. A factory opens and closes

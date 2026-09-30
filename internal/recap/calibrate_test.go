@@ -112,11 +112,8 @@ func TestCalibrateOfferRule(t *testing.T) {
 				Body: entry.Body, Evidence: entry.Evidence, OpenedAt: now}
 			single := []OpenItem{item}
 			tokens := tokensOf(item)
-			// How many of the bucket's other texts name each of this item's
-			// identifiers: a file the whole project talks about cannot say "this is
-			// the work we were discussing". Measuring it here decides whether a
-			// corpus for a document-frequency filter would be worth keeping — and
-			// the titles are the corpus the product already has.
+			// A file the whole project talks about cannot say "this is the work we
+			// were discussing": count the other texts naming each identifier here.
 			df := dfOver(tokens.identifiers, others)
 			ownTitles := make([]string, 0, len(titles[project]))
 			for path, title := range titles[project] {
