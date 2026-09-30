@@ -50,6 +50,12 @@ type TranscriptReader interface {
 	Read(ctx context.Context, sessionPath string) (string, error)
 }
 
+// ShadowTranscript is implemented by readers that can also render through the
+// authoritative path, so the lane can verify a fast read on a real machine.
+type ShadowTranscript interface {
+	ReadAuthoritative(ctx context.Context, sessionPath string) (string, error)
+}
+
 // GeneratorOptions wires the recap lane. Sink, Models, and Transcript are
 // supplied by the composition root so this package never reaches a controller.
 type GeneratorOptions struct {
@@ -72,13 +78,21 @@ type GeneratorOptions struct {
 	MaxInputBytes int
 	YieldInterval time.Duration
 	YieldBudget   time.Duration
+	// ShadowChecks verifies the first N fast reads of a process against the
+	// authoritative render; 0 keeps the default and a negative value disables it.
+	ShadowChecks int
 }
+
+// defaultShadowChecks bounds in-the-field verification of the fast read: enough
+// to prove it on a real machine, far from every close.
+const defaultShadowChecks = 2
 
 // Generator produces recaps on a lane of its own: one call at a time, its own
 // usage source, and no session context.
 type Generator struct {
-	opts GeneratorOptions
-	gate chan struct{}
+	opts         GeneratorOptions
+	gate         chan struct{}
+	shadowBudget chan struct{}
 }
 
 // NewGenerator builds the lane. The gate is what keeps recaps from running in
@@ -102,7 +116,18 @@ func NewGenerator(opts GeneratorOptions) *Generator {
 	if opts.YieldBudget <= 0 {
 		opts.YieldBudget = 5 * time.Second
 	}
-	return &Generator{opts: opts, gate: make(chan struct{}, 1)}
+	if opts.ShadowChecks == 0 {
+		opts.ShadowChecks = defaultShadowChecks
+	}
+	budget := opts.ShadowChecks
+	if budget < 0 {
+		budget = 0
+	}
+	shadowBudget := make(chan struct{}, budget)
+	for i := 0; i < budget; i++ {
+		shadowBudget <- struct{}{}
+	}
+	return &Generator{opts: opts, gate: make(chan struct{}, 1), shadowBudget: shadowBudget}
 }
 
 // Result reports what one Generate attempt did.
@@ -168,6 +193,7 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 		_ = store.MarkPending(ctx, path, "transcript unreadable: "+err.Error(), g.opts.Now())
 		return Result{Skipped: true, Reason: err.Error()}, nil
 	}
+	text = verifyFastPath(ctx, g, store, path, text)
 	text = clipForRecap(text, g.opts.MaxInputBytes)
 	if strings.TrimSpace(text) == "" {
 		return Result{Skipped: true, Reason: "empty transcript"}, nil

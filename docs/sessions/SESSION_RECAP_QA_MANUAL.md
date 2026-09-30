@@ -114,6 +114,9 @@ rg -o '\{[^{]*"usage_source":"session-recap"[^}]*\}' "C:\Users\guosj\AppData\Roa
 | `generate` + `skip: empty transcript` | 该会话没有可回顾的正文 |
 | `generate` + `skip: <其他>` | 见 `recap_pending.last_error` |
 | `generate` + `stored` | 已落盘；若页面仍空则是展示面问题（看 §3.1 的可见集合口径） |
+| `fastpath` + `verified` | 每进程前 2 次关闭会把"直读转录"与"权威重放"对一次账：一致 |
+| `fastpath` + `mismatch: took the replay` | 两者不一致 ⇒ 已改用重放结果（并留痕），据此可判定直读不可信 |
+| `fastpath` + `authoritative read failed` | 对账时重放失败，沿用了直读结果 |
 
 ---
 
