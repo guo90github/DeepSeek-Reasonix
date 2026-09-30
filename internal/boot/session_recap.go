@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -131,6 +132,9 @@ func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, r
 		return nil, "", false
 	})
 	generator := recap.NewGenerator(recap.GeneratorOptions{
+		// The override lives beside the projection, which is the one directory this
+		// lane already knows: a prompt nobody can find is a prompt nobody edits.
+		PromptDir: filepath.Dir(key),
 		StoreFactory: func(ctx context.Context) (*recap.Store, error) {
 			return recap.Open(ctx, recap.Options{Path: key})
 		},

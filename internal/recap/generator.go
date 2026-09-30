@@ -104,6 +104,9 @@ type GeneratorOptions struct {
 	Timeout       time.Duration
 	MaxTokens     int
 	MaxInputBytes int
+	// PromptDir holds an optional recap-prompt.md that replaces the built-in rules.
+	// Read per generation, so editing it takes effect without a restart.
+	PromptDir     string
 	YieldInterval time.Duration
 	YieldBudget   time.Duration
 	// ShadowChecks verifies the first N fast reads of a process against the
@@ -133,10 +136,9 @@ func NewGenerator(opts GeneratorOptions) *Generator {
 		opts.Timeout = 90 * time.Second
 	}
 	if opts.MaxTokens == 0 {
-		// Long sessions are the normal case, and a reasoning model that runs out of
-		// completion budget answers nothing at all. So the lane asks for no cap of
-		// its own: the model's own output budget is the ceiling, and the lane's
-		// timeout is what keeps a runaway call from running forever.
+		// Long sessions are the norm and a reasoning model that runs out of completion
+		// budget answers nothing, so the lane asks for no cap of its own: the model's
+		// budget is the ceiling and the lane's timeout keeps a runaway call bounded.
 		opts.MaxTokens = -1
 	}
 	if opts.MaxInputBytes <= 0 {
@@ -210,7 +212,7 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 	defer release()
 	if current, ok, err := store.Get(ctx, path); err != nil {
 		return Result{}, err
-	} else if ok && current.Fingerprint == fingerprint && current.PromptVersion == PromptVersion {
+	} else if ok && current.Fingerprint == fingerprint && current.PromptVersion == g.promptSource().Tag {
 		return Result{Skipped: true, Reason: "current"}, nil
 	}
 	if err := g.acquire(ctx); err != nil {
@@ -274,7 +276,7 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 		Fingerprint:   fingerprint,
 		Entries:       entries,
 		Model:         ref,
-		PromptVersion: PromptVersion,
+		PromptVersion: g.promptSource().Tag,
 		GeneratedAt:   g.opts.Now(),
 	}
 	if err := store.Put(ctx, rec); err != nil {
@@ -310,6 +312,12 @@ func answerExcerpt(raw string) string {
 	return secrets.Redact(text)
 }
 
+// promptSource resolves the rules for this generation: the override when it is
+// usable, the built-in rules otherwise.
+func (g *Generator) promptSource() PromptSource {
+	return LoadPromptOverride(g.opts.PromptDir)
+}
+
 // call runs the lane's one bounded request: no tools, its own usage source, and
 // a completion budget the model's reasoning also has to fit inside.
 func (g *Generator) call(ctx context.Context, prov provider.Provider, ref, text string) (string, error) {
@@ -329,14 +337,12 @@ func (g *Generator) callWith(ctx context.Context, prov provider.Provider, ref, t
 		// this lane kept hitting. The timeout still bounds the call.
 		MaxOutputBytes: -1,
 		MaxSystemBytes: 6 * 1024,
-		// The transcript budget is spent on the evidence; the system policy sits on
-		// top of it. Four kilobytes was enough until the prompt grew to ask for
-		// pointers and a tier, at which point the longest sessions — the ones the
-		// clip fills right up to the budget — started failing the total cap instead
-		// of being recapped.
+		// The transcript budget is spent on the evidence, and the system policy sits on
+		// top of it: four kilobytes stopped fitting once the prompt asked for pointers
+		// and a tier, and the longest sessions failed the total cap instead.
 		MaxTotalBytes:  g.opts.MaxInputBytes + 16*1024,
 		EffortOverride: provider.PreferredReasoning(prov, "low"),
-	}, recapSystemPrompt, text)
+	}, g.promptSource().Text, text)
 }
 
 // redactEntries scrubs a whole note: the body, the provenance it quotes, and the
