@@ -38,7 +38,7 @@ func (a *App) AcceptRecapEntry(kind, body, editedBody string) (string, error) {
 	}
 	// The tier decides where an accepted note lands only when a person has turned
 	// that on: the proposal is the model's, so it stays a display until the switch
-	// says otherwise (Settings > General > 会话回顾分档).
+	// says otherwise (设置 → 通用 → 让回顾条目自己决定分档).
 	scope := memory.FactScope(recap.MemoryScopeFor(""))
 	if cfg, err := config.Load(); err == nil && cfg.DesktopSessionRecapTier() {
 		scope = memory.FactScope(recap.MemoryScopeFor(entry.Scope.Level))

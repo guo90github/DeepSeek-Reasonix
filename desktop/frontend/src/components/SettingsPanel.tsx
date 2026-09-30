@@ -511,7 +511,6 @@ export function SettingsPanel({
                       checkUpdates={s.checkUpdates}
                       telemetry={s.telemetry !== false}
                       metrics={s.metrics !== false}
-                      sessionRecapTier={s.sessionRecapTier === true}
                       settingsBusy={busy}
                       applySettings={apply}
                     />
@@ -1833,6 +1832,10 @@ function GeneralSection({ s, busy, apply, agentRunning }: SectionProps & { agent
       <SessionExperienceSettings snapshot={s} busy={busy} apply={apply} />
 
       <SettingsSection title={t("settings.general.sectionSystem")} description={t("settings.general.sectionSystemHint")}>
+      <SettingsField label={t("settings.recapTierLabel")} hint={t("settings.recapTierHint")}>
+        <ToggleSegment value={s.sessionRecapTier === true} disabled={busy}
+          onChange={(enabled) => void apply(() => app.SetSessionRecapTier(enabled))} />
+      </SettingsField>
       {graphics && <SettingsField label={<span className="settings-graphics-label"><span>{t("settings.hardwareAcceleration")}</span>{graphics.restartRequired && graphics.override === "none" && <span className="settings-graphics-status">{t("settings.hardwareAccelerationRestartShort")}</span>}{graphics.override !== "none" && <span className="settings-graphics-status settings-graphics-status--warning">{t("settings.hardwareAccelerationOverride")}</span>}{graphicsError && <span className="settings-graphics-status settings-graphics-status--error" role="alert">{graphicsError}</span>}</span>} hint={t("settings.hardwareAccelerationHint")} icon={<Monitor size={18} />}>
         <div className="settings-graphics-control">
           <ToggleSegment value={graphics.hardwareAcceleration} disabled={graphicsBusy || !graphics.writable || graphics.override !== "none"} onChange={updateGraphics} />
@@ -7196,7 +7199,6 @@ function UpdatesSection({
   checkUpdates,
   telemetry,
   metrics,
-  sessionRecapTier,
   settingsBusy,
   applySettings,
 }: {
@@ -7205,7 +7207,6 @@ function UpdatesSection({
   checkUpdates: boolean;
   telemetry: boolean;
   metrics: boolean;
-  sessionRecapTier: boolean;
   settingsBusy: boolean;
   applySettings: (fn: () => Promise<void>) => Promise<boolean>;
 }) {
@@ -7460,17 +7461,6 @@ function UpdatesSection({
               value={metrics}
               disabled={settingsBusy}
               onChange={(enabled) => void applySettings(() => app.SetDesktopMetrics(enabled))}
-            />
-          </SettingsField>
-          <SettingsField
-            className="settings-field--wide-copy"
-            label={t("settings.recapTierLabel")}
-            hint={t("settings.recapTierHint")}
-          >
-            <ToggleSegment
-              value={sessionRecapTier}
-              disabled={settingsBusy}
-              onChange={(enabled) => void applySettings(() => app.SetSessionRecapTier(enabled))}
             />
           </SettingsField>
           {configPath && (
