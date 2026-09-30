@@ -146,3 +146,72 @@ Cache-guard: pnpm build (tsc) + go test ./internal/config/ 既有守卫
 System-prompt-review: <指定审查人> - internal/config/ 被触碰，仅新增 "split" 枚举值
 Documentation-impact: updated - docs/research/desktop-layout-refactor.md 新增
 ```
+
+## 9. 后续迭代：左栏回答的「重点信息」（2026-09）
+
+此后又迭代了三个提交（`71fca09f3` → `c265b4a62` → `7d45a10c0`），目标是让回答里的
+**判断**可扫读、可定位。它们都落在本节描述的文件上。
+
+### 9.1 阶梯收敛为一处单源
+
+原实现把同一套强调阶梯写了两份（`components/conversationPane.css` 给分栏、
+`styles.css` 里自注 "mirror" 的那份给单列），两侧已开始漂移。现在阶梯只存在于
+`desktop/frontend/src/styles.css`，两处作用域并列：分栏
+`.conversation-pane .msg__body .md …`、单列 `.transcript .msg__body .md …`；
+`components/conversationPane.css` 只留本栏的状态轨与动效。守卫
+`scripts/check-emphasis-ladder-single-source.mjs`（4 个精确声明串锚点 × 25 张样式表）
+接入 `pnpm build` 与 `pnpm check:css`：阶梯若在第二张样式表重现即失败。
+
+作用域同时收窄到**答案正文** `.msg__body`。此前单列用
+`.transcript .msg--assistant .md`，而推理面板也在 `.msg--assistant` 内
+（`.reasoning__body` 里同样是 `.md`），于是推理的小标题轨、荧光带、整段加粗主张
+都拿到"正式回答级"强调，答案的重点因此没有对比度。
+
+### 9.2 重点判定移到渲染期
+
+`src/components/rehypeEmphasisMarks.ts`（接入 `rehypeReasonixKatex.ts` 的
+`reasonixRehypePlugins`）给两类节点打标记：
+
+| 标记 | 条件 |
+|---|---|
+| `md-p--claim` | `strong` 是段落**唯一**有意义的子节点（整段加粗 = 标题性主张） |
+| `md-li--label` | `strong` 是列表项**首个**有意义的子节点（标签式条目） |
+
+这两件事 CSS 表达不了：`:only-child` / `:first-child` 只数元素、不数文本节点，
+`**要点**：说明` 会被误判成整段加粗。CSS 只负责给标记上色。
+
+### 9.3 要点条与跳转
+
+| 落点 | 作用 |
+|---|---|
+| `src/lib/answerKeyPoints.ts` | 从渲染后的 DOM 读标记；**采集时**按文档顺序给每个标记写 `data-md-point="k"`，要点带 `ordinal`；去重与上限 6 只影响展示，`total` 报去重后的真实要点数 |
+| `src/components/AnswerKeyPoints.tsx` | 呈现「N 个重点」；拿不到跳转能力时渲染纯文本（不做点了没用的按钮） |
+| `src/components/Message.tsx` | 挂点 = `AssistantMessage`（单列与分栏左栏共用同一处实现）；`MutationObserver` 观察三条 markdown 路径的 DOM 落地；要点条在 `.msg__body` **之外**，复制回答不会重复带出 |
+| `src/lib/answerJump.ts` + `ConversationPane.tsx` | 跳转意图的 context 与其注入点；落点闪 `md--landed` |
+| `src/lib/usePaneTailFollow.ts` | 滚动写者提到 `writerRef`，新增 `aimAt(element)`：经 `createTranscriptScrollWriter` 以 `operation:"scrollTo"` + `top` 写入（generation / ownershipEpoch / geometryRevision 三重围栏），被接受才把跟随模式置 `manual` |
+
+两条不可动摇的约束：
+
+1. **编号写在采集时的 DOM 上**，不在解析层编：同一次回答会被 `Markdown.tsx` 的
+   `sections` 分段多次解析，各段从 0 编号会在同一个正文里撞号。
+2. **滚动只经该表面的受肯写者**（`check-single-scroll-writer`）：分栏写者由
+   `usePaneTailFollow` 持有，单列走内核（`owner` 是联合类型 + `blockKey`）。
+
+验证：`test:transcript` exit 0 · `test:split` 13 passed ·
+`src/__tests__/answer-key-points.test.ts` 17 passed · `tsc --noEmit` 0 错 ·
+app-shell CSS 120.6 KiB / 122.6 · 初始 JS 471.5 KiB / 475.5。
+
+### 9.4 已知未做
+
+1. **单列的要点条不可点**（纯文本）：单列滚动写入是内核那条路，本次未接。
+2. 要点条超过 6 条时只列前 6，**没有 "+N" 提示**（表头报的是真实总数）。
+3. 落点观感与要点条观感**未经人眼验收**。
+
+### 9.5 上游输出风格的判定（关闭）
+
+曾考虑让答案天然长成"结论先行 + 只加粗判断 + 标签式列表项"（`internal/outputstyle`
+可加内置风格，或放 `<项目>/.reasonix/output-styles/*.md`）。**判定收益小、关闭**：
+它是唯一一条需要模型配合的路（其余已是确定性机制），而它最易失守的恰是否定式与
+计数式约束，失守还是静默的；代价却确定（进 system prompt、cache 影响 real、作用于
+该用户所有会话）。若重启，先量三个数字：平均加粗标记数／回答、有 ≥2 标记的回答占比、
+有 h2/h3 的回答占比。
