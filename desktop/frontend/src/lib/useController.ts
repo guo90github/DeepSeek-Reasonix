@@ -10,6 +10,7 @@ import { compactArchivedToolItems } from "./archivedToolItems";
 import { addBreadcrumb } from "./breadcrumbs";
 import { recordHistoryOlderRefusal } from "./historyPagingProbe";
 import { app, onEvent, onReady, onRuntimeRebuilt, onTabMeta, onTopicActivation } from "./bridge";
+import { useRecapSkillActions } from "./recapSkillActions";
 import { startControllerEventRecovery } from "./controllerEventRecovery";
 import { metaFromTab } from "./controllerTabMeta";
 import { tokensFromQuarters, unbilledOutputTokens } from "./turnMetrics";
@@ -82,7 +83,6 @@ import type {
   SessionMeta,
   SessionRecap,
   RecapOpenItem,
-  RecapSkillDraft,
   SessionRecapInsight,
   TabMeta,
   ToolApprovalMode,
@@ -4542,7 +4542,7 @@ export function useController() {
   const closeRecapHandoff = useCallback(async (id: string, body: string, evidence: string, resolution: string): Promise<void> => { await app.CloseRecapHandoff(id, body, evidence, resolution); }, [app]);
   const reopenRecapHandoff = useCallback(async (id: string): Promise<void> => { await app.ReopenRecapHandoff(id); }, [app]);
   const generateSessionRecap = useCallback(async (sessionPath: string): Promise<boolean> => app.GenerateSessionRecap(sessionPath), [app]);
-  const draftRecapSkill = useCallback(async (kind: string, body: string): Promise<RecapSkillDraft> => app.DraftRecapSkill(kind, body), [app]);
+  const { draftRecapSkill, draftRecapTopicSkill } = useRecapSkillActions();
   const listRecapInsights = useCallback(async (): Promise<SessionRecapInsight[]> => asArray<SessionRecapInsight>(await app.ListRecapInsights()), []);
   const retrySessionHistory = useCallback(async (tabId?: string) => {
     const id = tabId || activeTabIdRef.current; if (!id) return;
@@ -5329,7 +5329,7 @@ export function useController() {
     answerMCPInteraction, answerMCPInteractionForTab, setControllerMode, setControllerModeForTab,
     dismissExtensionForm, drainExtensionNotifications,
     setCollaborationMode, setCollaborationModeForTab, setToolApprovalMode, setToolApprovalModeForTab, setQualityFloor, setComposerProfileForTab, setGoal, setGoalForTab, clearGoal, clearGoalForTab, resumeGoal, resumeGoalForTab, pauseGoal, pauseGoalForTab,
-    newSession, clearSession, listSessions, listTrashedSessions, listSessionRecaps, acceptRecapEntry, rejectRecapEntry, undoRecapEntry, listRecapOpenItems, keepRecapHandoff, closeRecapHandoff, reopenRecapHandoff, generateSessionRecap, draftRecapSkill, listRecapInsights, retrySessionHistory, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
+    newSession, clearSession, listSessions, listTrashedSessions, listSessionRecaps, acceptRecapEntry, rejectRecapEntry, undoRecapEntry, listRecapOpenItems, keepRecapHandoff, closeRecapHandoff, reopenRecapHandoff, generateSessionRecap, draftRecapSkill, draftRecapTopicSkill, listRecapInsights, retrySessionHistory, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
     loadOlderHistory,
     requestHistoryFullContent,
     refreshMeta, pickWorkspace, switchWorkspace, compact, rewind, rewindForTab, rewindForTabDetailed, undoRewindForTab, setModel, setModelForTab, setEffort, setEffortForTab, cancelJob,

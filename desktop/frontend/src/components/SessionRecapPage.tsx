@@ -31,7 +31,7 @@ function kindKey(kind: string): RecapKindKey | null {
 // Only the current project can be settled: an accepted note becomes a fact in the
 // active project's memory, and an unfinished item belongs to the project its
 // session lives in. A session from another project is read-only here.
-export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill, listInsights }: {
+export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill, draftTopicSkill, listInsights }: {
   active: boolean;
   onBack: () => void;
   list: () => Promise<SessionRecap[]>;
@@ -50,6 +50,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // draftSkill has the host write a playbook draft into this project's skill
   // directory. Only the kinds that are procedures can become one.
   draftSkill: (kind: string, body: string) => Promise<RecapSkillDraft>;
+  // One call per topic: the host composes a single playbook from the notes the
+  // page grouped, so a batch is one file or several depending on the topic.
+  draftTopicSkill: (sources: { kind: string; body: string }[]) => Promise<RecapSkillDraft>;
   // listInsights is the projection read as a report: what more than one project
   // reached on its own. Read-only, and computed from the same evidence rule.
   listInsights: () => Promise<SessionRecapInsight[]>;
@@ -199,8 +202,21 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // good as the steps behind it: this reuses each note's own cited ground rather
   // than inventing a procedure.
   const draftGroupSkills = useCallback(async (list: SessionRecapEntry[]) => {
-    for (const entry of list) await makeDraft(entry);
-  }, [makeDraft]);
+    setBusy(list[0]?.id ?? "");
+    setFailure("");
+    try {
+      const draft = await draftTopicSkill(list.map((entry) => ({ kind: entry.kind, body: entry.body })));
+      setDrafted((current) => {
+        const next = { ...current };
+        for (const entry of list) next[entry.id] = draft.path;
+        return next;
+      });
+    } catch {
+      setFailure(m("operationFailed"));
+    } finally {
+      setBusy("");
+    }
+  }, [draftTopicSkill, m]);
 
   const setItemClosed = useCallback(async (item: RecapOpenItem, closed: boolean, resolution = "") => {
     setBusy(item.id);

@@ -86,6 +86,9 @@ export interface SessionRecapInsight {
 
 // RecapSkillDraft says where a drafted playbook landed, so the page can point the
 // person at the file instead of claiming the work is done.
+// One note handed to the host when a whole topic is drafted at once.
+export interface RecapSkillSource { kind: string; body: string }
+
 export interface RecapSkillDraft {
   name: string;
   path: string;

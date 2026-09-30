@@ -539,6 +539,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           reopenRecapHandoff: runtime.sessionActions.reopenRecapHandoff,
           generateSessionRecap: runtime.sessionActions.generateSessionRecap,
           draftRecapSkill: runtime.sessionActions.draftRecapSkill,
+          draftRecapTopicSkill: runtime.sessionActions.draftRecapTopicSkill,
           listRecapInsights: runtime.sessionActions.listRecapInsights,
           restoreSession: runtime.sessionActions.restoreSession,
           purgeTrashedSession: runtime.sessionActions.purgeTrashedSession,
