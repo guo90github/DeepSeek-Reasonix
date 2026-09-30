@@ -188,7 +188,7 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 	}
 	defer func() { <-g.gate }()
 
-	text, err := g.opts.Transcript.Read(ctx, path)
+	text, err := readCovered(ctx, g, store, path)
 	if err != nil {
 		_ = store.MarkPending(ctx, path, "transcript unreadable: "+err.Error(), g.opts.Now())
 		return Result{Skipped: true, Reason: err.Error()}, nil
@@ -340,15 +340,39 @@ func clipForRecap(text string, max int) string {
 	if max <= 0 || len(text) <= max {
 		return text
 	}
+	head, tail := headPiece(text, max), tailPiece(text, max)
+	return fmt.Sprintf("%s\n…[%d bytes omitted]…\n%s", head, len(text)-len(head)-len(tail), tail)
+}
+
+// headPiece is the head clipForRecap keeps, exposed on its own: a later read
+// stores it, and the head of head+tail is the head of both.
+func headPiece(text string, max int) string {
+	if max <= 0 {
+		return text
+	}
 	head := max * 3 / 5
-	tail := max - head
-	headCut := text[:head]
-	if i := strings.LastIndexByte(headCut, '\n'); i > 0 {
-		headCut = headCut[:i]
+	if head >= len(text) {
+		return text
 	}
-	tailCut := text[len(text)-tail:]
-	if i := strings.IndexByte(tailCut, '\n'); i >= 0 {
-		tailCut = tailCut[i+1:]
+	cut := text[:head]
+	if i := strings.LastIndexByte(cut, '\n'); i > 0 {
+		cut = cut[:i]
 	}
-	return fmt.Sprintf("%s\n…[%d bytes omitted]…\n%s", headCut, len(text)-head-tail, tailCut)
+	return cut
+}
+
+// tailPiece is the tail clipForRecap keeps.
+func tailPiece(text string, max int) string {
+	if max <= 0 {
+		return text
+	}
+	tail := max - max*3/5
+	if tail >= len(text) {
+		return text
+	}
+	cut := text[len(text)-tail:]
+	if i := strings.IndexByte(cut, '\n'); i >= 0 {
+		cut = cut[i+1:]
+	}
+	return cut
 }

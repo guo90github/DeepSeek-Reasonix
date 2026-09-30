@@ -41,6 +41,12 @@ var migrations = []projectiondb.Migration{{
 		_, err := tx.ExecContext(ctx, schemaV2)
 		return err
 	},
+}, {
+	Version: 3,
+	Apply: func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, schemaV3)
+		return err
+	},
 }}
 
 // schemaV2 adds the lane's decision log: it is what makes a missing recap
@@ -51,6 +57,19 @@ CREATE TABLE IF NOT EXISTS recap_activity (
     stage TEXT NOT NULL DEFAULT '',
     path TEXT NOT NULL DEFAULT '',
     detail TEXT NOT NULL DEFAULT ''
+);
+`
+
+// schemaV3 records how far a previous recap already read each session file, so a
+// later close reads only what is new instead of the whole session.
+const schemaV3 = `
+CREATE TABLE IF NOT EXISTS recap_resume (
+    path TEXT PRIMARY KEY,
+    resume_offset INTEGER NOT NULL DEFAULT 0,
+    prefix_hash TEXT NOT NULL DEFAULT '',
+    content_digest TEXT NOT NULL DEFAULT '',
+    head_text TEXT NOT NULL DEFAULT '',
+    user_turns INTEGER NOT NULL DEFAULT 0
 );
 `
 
@@ -157,7 +176,42 @@ func (s *Store) Delete(ctx context.Context, path string) error {
 	if _, err := s.handle.DB.ExecContext(ctx, `DELETE FROM recap_records WHERE path = ?`, path); err != nil {
 		return err
 	}
+	if _, err := s.handle.DB.ExecContext(ctx, `DELETE FROM recap_resume WHERE path = ?`, path); err != nil {
+		return err
+	}
 	_, err := s.handle.DB.ExecContext(ctx, `DELETE FROM recap_pending WHERE path = ?`, path)
+	return err
+}
+
+// Resume returns how far a previous close already read a session file.
+func (s *Store) Resume(ctx context.Context, path string) (Resume, bool, error) {
+	if s == nil || s.handle == nil {
+		return Resume{}, false, nil
+	}
+	row := s.handle.DB.QueryRowContext(ctx, `SELECT resume_offset,prefix_hash,content_digest,head_text,user_turns
+		FROM recap_resume WHERE path = ?`, path)
+	var out Resume
+	if err := row.Scan(&out.Offset, &out.Hash, &out.Digest, &out.Head, &out.UserTurns); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Resume{}, false, nil
+		}
+		return Resume{}, false, err
+	}
+	return out, true, nil
+}
+
+// PutResume records how far a read reached, replacing any earlier point.
+func (s *Store) PutResume(ctx context.Context, path string, r Resume) error {
+	if s == nil || s.handle == nil {
+		return nil
+	}
+	_, err := s.handle.DB.ExecContext(ctx, `INSERT INTO recap_resume
+		(path,resume_offset,prefix_hash,content_digest,head_text,user_turns)
+		VALUES (?,?,?,?,?,?)
+		ON CONFLICT(path) DO UPDATE SET resume_offset=excluded.resume_offset,
+		prefix_hash=excluded.prefix_hash,content_digest=excluded.content_digest,
+		head_text=excluded.head_text,user_turns=excluded.user_turns`,
+		path, r.Offset, r.Hash, r.Digest, r.Head, r.UserTurns)
 	return err
 }
 

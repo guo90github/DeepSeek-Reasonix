@@ -1,7 +1,7 @@
 package recap
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -49,70 +49,84 @@ func (FileTranscript) ReadAuthoritative(_ context.Context, sessionPath string) (
 	return renderMessages(ses.Snapshot()), nil
 }
 
-// transcriptFileOrNothing renders the compatibility transcript directly, but
-// only on positive proof that the file is the session: its rows must hash to the
-// digest the session sidecar recorded. A missing, empty, unparsable or
-// digest-less file, and any file carrying a pinned context revision (which the
-// replay may fold into state the file does not show), reports ok=false so the
-// caller keeps the replay.
-func transcriptFileOrNothing(sessionPath string) (string, bool) {
+// transcriptFileRows decodes the compatibility transcript directly, but only on
+// positive proof that the file is the session: its rows must hash to the digest
+// the session sidecar recorded. A missing, empty, unparsable or digest-less
+// file, and any file carrying a pinned context revision (which the replay may
+// fold into state the file does not show), reports ok=false so the caller keeps
+// the replay. covered counts the bytes of the rows it decoded, and content is the
+// file as read, so a caller may record what it has covered.
+func transcriptFileRows(sessionPath string) (rows []provider.Message, covered int64, content []byte, ok bool) {
 	path := strings.TrimSpace(sessionPath)
 	if path == "" {
-		return "", false
+		return nil, 0, nil, false
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return "", false
+		return nil, 0, nil, false
 	}
 	key := fastReadKey(path, info)
 	if fastReadUnproven(key) {
-		return "", false
+		return nil, 0, nil, false
 	}
 	// The sidecar digest costs one small read and comes before the parse: with no
 	// digest there is no proof to be had, so parsing could only waste time.
 	digest, recorded, err := agent.SessionContentDigest(path)
 	if err != nil || !recorded {
-		return "", false
+		return nil, 0, nil, false
 	}
-	msgs, err := readTranscriptRows(path)
+	content, err = os.ReadFile(path)
+	if err != nil {
+		return nil, 0, nil, false
+	}
+	msgs, covered, err := parseTranscriptRows(content)
 	if err != nil || len(msgs) == 0 {
 		markFastReadUnproven(key)
-		return "", false
+		return nil, 0, nil, false
 	}
 	if agent.TranscriptDigest(msgs) != digest {
 		markFastReadUnproven(key)
-		return "", false
+		return nil, 0, nil, false
 	}
-	return renderMessages(msgs), true
+	return msgs, covered, content, true
 }
 
-func readTranscriptRows(path string) ([]provider.Message, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return nil, err
+// transcriptFileOrNothing is the rendered form of transcriptFileRows.
+func transcriptFileOrNothing(sessionPath string) (string, bool) {
+	rows, _, _, ok := transcriptFileRows(sessionPath)
+	if !ok {
+		return "", false
 	}
-	defer func() { _ = f.Close() }()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 1<<20), 1<<26)
+	return renderMessages(rows), true
+}
+
+// parseTranscriptRows decodes the rows of a transcript file and reports how many
+// bytes its complete rows cover. A partial tail line is left out of both, so the
+// next read starts on a line boundary.
+func parseTranscriptRows(content []byte) ([]provider.Message, int64, error) {
 	msgs := make([]provider.Message, 0, 128)
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" {
+	var covered int64
+	for len(content) > 0 {
+		nl := bytes.IndexByte(content, '\n')
+		if nl < 0 {
+			break
+		}
+		line := bytes.TrimSpace(content[:nl])
+		content = content[nl+1:]
+		covered += int64(nl) + 1
+		if len(line) == 0 {
 			continue
 		}
 		var m provider.Message
-		if err := json.Unmarshal([]byte(line), &m); err != nil {
-			return nil, err
+		if err := json.Unmarshal(line, &m); err != nil {
+			return nil, 0, err
 		}
 		if agent.IsPinnedContextRevision(m) {
-			return nil, errPinnedRevisionInFile
+			return nil, 0, errPinnedRevisionInFile
 		}
 		msgs = append(msgs, m)
 	}
-	if err := sc.Err(); err != nil {
-		return nil, err
-	}
-	return msgs, nil
+	return msgs, covered, nil
 }
 
 // errPinnedRevisionInFile reports the one row kind that keeps the replay.
@@ -121,8 +135,14 @@ var errPinnedRevisionInFile = fmt.Errorf("recap: transcript file holds a pinned 
 // renderMessages is the single rendering policy, shared by both sources so they
 // cannot drift apart.
 func renderMessages(msgs []provider.Message) string {
+	return renderMessagesFrom(msgs, 0)
+}
+
+// renderMessagesFrom numbers turns from turnBase, so a reader that renders only
+// the part a previous read did not cover keeps one numbering across the session.
+func renderMessagesFrom(msgs []provider.Message, turnBase int) string {
 	var b strings.Builder
-	turn := 0
+	turn := turnBase
 	for _, m := range msgs {
 		if agent.IsPinnedContextRevision(m) {
 			continue
