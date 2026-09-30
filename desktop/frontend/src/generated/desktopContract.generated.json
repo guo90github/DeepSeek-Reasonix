@@ -3259,6 +3259,9 @@
             "ref": "main.RecapSkillSource"
           },
           "kind": "array"
+        },
+        {
+          "kind": "string"
         }
       ],
       "result": {
@@ -3268,7 +3271,8 @@
       "returnsError": true,
       "scope": {
         "inputs": [
-          "sources"
+          "sources",
+          "markdown"
         ],
         "kind": "owner-inputs",
         "resolver": "App.DraftRecapTopicSkill"

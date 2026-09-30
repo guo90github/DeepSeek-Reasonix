@@ -125,6 +125,12 @@ const reviewProps = {
   draftSkill: async (_kind: string, body: string) => ({
     name: `recap-mock-${body.length}`, path: `.reasonix/skills/recap-mock-${body.length}/SKILL.md`,
   }),
+  previewMemory: async (source: { kind: string; body: string }) => ({
+    kind: "memory", text: source.body, fallback: source.body, promptTag: "memory-v1", model: "mock/model",
+  }),
+  previewSkill: async () => ({
+    kind: "skill", text: "# Playbook", fallback: "1. step", promptTag: "skill-v1", model: "mock/model",
+  }),
   draftTopicSkill: async (sources: { kind: string; body: string }[]) => ({
     name: 'recap-topic-' + String(sources.length),
     path: '.reasonix/skills/recap-topic-' + String(sources.length) + '/SKILL.md',
@@ -198,6 +204,11 @@ const clickButton = async (button: HTMLButtonElement | undefined) => {
   });
 };
 
+// confirmPreview presses the preview panel's confirm button: the only place a
+// preview becomes a stored memory or a file on disk.
+const confirmPreview = async () => {
+  await clickButton(rootEl.querySelector<HTMLButtonElement>(".recap-preview-confirm") ?? undefined);
+};
 // Pills are [newest, oldest, by session name] in that order; they are clicked by
 // index so the assertions never depend on the UI language. The by-name order is
 // asserted over the titled cards only: the unlisted recap has a file name.
@@ -257,9 +268,14 @@ ok(buttonsOf(factOf(alphaCard())).length === 3, "a reviewable note offers accept
 ok(buttonsOf(rowWith(alphaCard(), "的交接")).length === 1, "a handoff note offers keeping it as an unfinished item");
 ok(buttonsOf(factOf(cardWith(unlisted))).length === 0, "another project's session is read-only here");
 
+// Accepting now goes through the preview: the button opens it, confirming writes.
 await clickButton(buttonsOf(factOf(alphaCard()))[0]);
-ok(accepted.length === 1 && accepted[0]?.kind === "fact" && accepted[0]?.body === `${middle} 的事实` && accepted[0]?.edited === "",
-  `accepting a note saves it unedited: ${JSON.stringify(accepted[0])}`);
+await confirmPreview();
+// What gets stored is exactly what the preview showed, which is why a confirmed
+// draft arrives as the edited body rather than an empty one.
+ok(accepted.length === 1 && accepted[0]?.kind === "fact" && accepted[0]?.body === `${middle} 的事实`
+  && accepted[0]?.edited === `${middle} 的事实`,
+  `accepting a note stores the reviewed text: ${JSON.stringify(accepted[0])}`);
 ok(buttonsOf(factOf(alphaCard())).length === 1, "an accepted note offers only the way back");
 
 await clickButton(buttonsOf(factOf(alphaCard()))[0]);
@@ -347,6 +363,7 @@ failNextAccept = true;
 const untouched = () => factOf(cardWith(early));
 const before = accepted.length;
 await clickButton(buttonsOf(untouched())[0]);
+await confirmPreview();
 ok(accepted.length === before && buttonsOf(untouched()).length === 3,
   "a failed write leaves the note unsettled");
 ok(rootEl.querySelectorAll('[role="alert"]').length > 0, "a failed write is reported");

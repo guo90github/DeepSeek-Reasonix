@@ -411,7 +411,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   ListRecapOpenItems(): Promise<RecapOpenItem[]>;
   GenerateSessionRecap(sessionPath: string): Promise<boolean>;
   DraftRecapSkill(kind: string, body: string): Promise<RecapSkillDraft>;
-  DraftRecapTopicSkill(sources: RecapSkillSource[]): Promise<RecapSkillDraft>;
+  DraftRecapTopicSkill(sources: RecapSkillSource[], markdown: string): Promise<RecapSkillDraft>;
   PreviewRecapMemory(source: RecapSkillSource): Promise<RecapPreviewView>;
   PreviewRecapSkill(sources: RecapSkillSource[]): Promise<RecapPreviewView>;
   ListRecapInsights(): Promise<SessionRecapInsight[]>;
@@ -3357,8 +3357,8 @@ function makeMockApp(): AppBindings {
       const steps = sources.map((source, index) => `${index + 1}. ${source.body}`).join("\n");
       return { kind: "skill", text: `# Playbook\n\n## Steps\n${steps}`, fallback: steps, promptTag: "skill-v1", model: "mock/model" };
     },
-    async DraftRecapTopicSkill(sources: RecapSkillSource[]) {
-      const joined = sources.map((source) => source.body).join(" ");
+    async DraftRecapTopicSkill(sources: RecapSkillSource[], markdown: string) {
+      const joined = markdown !== "" ? markdown : sources.map((source) => source.body).join(" ");
       const name = `recap-topic-mock-${joined.length}`;
       emit({ kind: "notice", level: "info", text: `(mock) drafted .reasonix/skills/${name}/SKILL.md from ${sources.length} note(s)` });
       return { name, path: `.reasonix/skills/${name}/SKILL.md` };

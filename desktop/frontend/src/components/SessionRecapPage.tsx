@@ -6,6 +6,7 @@ import { useManagementT } from "../lib/managementLocale";
 import { ManagementPageShell } from "./ManagementPageShell";
 import { groupByTopic } from "../lib/recapTopics";
 import { RecapRow } from "./RecapRow";
+import type { RecapPreviewView } from "../lib/types";
 
 type RecapSort = "newest" | "oldest" | "session";
 
@@ -31,7 +32,12 @@ function kindKey(kind: string): RecapKindKey | null {
 // Only the current project can be settled: an accepted note becomes a fact in the
 // active project's memory, and an unfinished item belongs to the project its
 // session lives in. A session from another project is read-only here.
-export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill, draftTopicSkill, listInsights }: {
+// A preview is one model-written draft per button press: memory keeps one draft per
+// note (each note becomes its own memory), a playbook is a single draft for the topic.
+type PreviewDraft = { entry: SessionRecapEntry; view: RecapPreviewView; text: string };
+type PreviewState = { kind: "memory" | "skill"; drafts: PreviewDraft[]; markdown: string; group: string };
+
+export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill, draftTopicSkill, previewMemory, previewSkill, listInsights }: {
   active: boolean;
   onBack: () => void;
   list: () => Promise<SessionRecap[]>;
@@ -52,7 +58,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   draftSkill: (kind: string, body: string) => Promise<RecapSkillDraft>;
   // One call per topic: the host composes a single playbook from the notes the
   // page grouped, so a batch is one file or several depending on the topic.
-  draftTopicSkill: (sources: { kind: string; body: string }[]) => Promise<RecapSkillDraft>;
+  draftTopicSkill: (sources: { kind: string; body: string }[], markdown: string) => Promise<RecapSkillDraft>;
+  previewMemory: (source: { kind: string; body: string }) => Promise<RecapPreviewView>;
+  previewSkill: (sources: { kind: string; body: string }[]) => Promise<RecapPreviewView>;
   // listInsights is the projection read as a report: what more than one project
   // reached on its own. Read-only, and computed from the same evidence rule.
   listInsights: () => Promise<SessionRecapInsight[]>;
@@ -75,6 +83,10 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // first, and the reader's attention is at the top. Explicit toggles win.
   const [openCards, setOpenCards] = useState<Record<string, boolean>>({});
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  // A preview is a draft the model wrote under one of the two prompts, waiting for a
+  // person to read it. Nothing is stored until it is confirmed, and the button's
+  // no-model behaviour is always offered as the way out of a failed generation.
+  const [preview, setPreview] = useState<PreviewState | null>(null);
   const [insights, setInsights] = useState<SessionRecapInsight[]>([]);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [closing, setClosing] = useState<{ id: string; text: string } | null>(null);
@@ -201,11 +213,77 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // One draft per playbook-worthy note in the topic, because a playbook is only as
   // good as the steps behind it: this reuses each note's own cited ground rather
   // than inventing a procedure.
+  const askMemoryPreview = useCallback(async (list: SessionRecapEntry[]) => {
+    setBusy(list[0]?.id ?? "");
+    setFailure("");
+    try {
+      const drafts: PreviewDraft[] = [];
+      for (const entry of list) {
+        const view = await previewMemory({ kind: entry.kind, body: entry.body });
+        drafts.push({ entry, view, text: view.text !== "" ? view.text : view.fallback });
+      }
+      setPreview({ kind: "memory", drafts, markdown: "", group: list.map((entry) => entry.id).join("|") });
+    } catch {
+      setFailure(m("operationFailed"));
+    } finally {
+      setBusy("");
+    }
+  }, [m, previewMemory]);
+
+  const askSkillPreview = useCallback(async (list: SessionRecapEntry[]) => {
+    setBusy(list[0]?.id ?? "");
+    setFailure("");
+    try {
+      const sources = list.map((entry) => ({ kind: entry.kind, body: entry.body }));
+      const view = await previewSkill(sources);
+      setPreview({
+        kind: "skill",
+        drafts: list.map((entry) => ({ entry, view, text: "" })),
+        markdown: view.text !== "" ? view.text : view.fallback,
+        group: list.map((entry) => entry.id).join("|"),
+      });
+    } catch {
+      setFailure(m("operationFailed"));
+    } finally {
+      setBusy("");
+    }
+  }, [m, previewSkill]);
+
+  // Confirming is the only place that writes: the memory path stores exactly what the
+  // preview shows (as an edited body), the skill path writes the reviewed markdown.
+  const confirmPreview = useCallback(async () => {
+    if (preview === null) return;
+    const current = preview;
+    setBusy(current.group);
+    setFailure("");
+    try {
+      if (current.kind === "memory") {
+        for (const draft of current.drafts) {
+          await accept(draft.entry.kind, draft.entry.body, draft.text);
+          settle(draft.entry.id, "accept");
+        }
+      } else {
+        const sources = current.drafts.map((draft) => ({ kind: draft.entry.kind, body: draft.entry.body }));
+        const written = await draftTopicSkill(sources, current.markdown);
+        setDrafted((existing) => {
+          const next = { ...existing };
+          for (const draft of current.drafts) next[draft.entry.id] = written.path;
+          return next;
+        });
+      }
+      setPreview(null);
+    } catch {
+      setFailure(m("operationFailed"));
+    } finally {
+      setBusy("");
+    }
+  }, [accept, draftTopicSkill, m, preview, settle]);
+
   const draftGroupSkills = useCallback(async (list: SessionRecapEntry[]) => {
     setBusy(list[0]?.id ?? "");
     setFailure("");
     try {
-      const draft = await draftTopicSkill(list.map((entry) => ({ kind: entry.kind, body: entry.body })));
+      const draft = await draftTopicSkill(list.map((entry) => ({ kind: entry.kind, body: entry.body })), "");
       setDrafted((current) => {
         const next = { ...current };
         for (const entry of list) next[entry.id] = draft.path;
@@ -361,6 +439,59 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       <div className="management-notice" role="status">{m("recapNoMatch")}
         <button className="btn btn--small" onClick={() => setQuery("")}>{m("clearFilters")}</button></div>
     )}
+    {!loading && preview !== null && (
+      <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+        <strong>{preview.kind === "memory" ? m("recapPreviewMemoryTitle") : m("recapPreviewSkillTitle")}</strong>
+        <span style={{ ...labelStyle, fontSize: 12 }}>
+          {preview.kind === "memory" ? m("recapPreviewMemoryHint") : m("recapPreviewSkillHint")}
+        </span>
+        {preview.kind === "memory" ? preview.drafts.map((draft) => (
+          <div key={draft.entry.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            <span style={{ ...labelStyle, fontSize: 12 }}>{draft.entry.body}</span>
+            {draft.view.reason !== undefined && draft.view.text === "" && (
+              <span style={{ ...labelStyle, fontSize: 12, color: "var(--warn, inherit)" }}>
+                {m("recapPreviewFailed", { reason: draft.view.reason })}</span>
+            )}
+            <textarea rows={2} value={draft.text} style={{ width: "100%" }}
+              onChange={(event) => setPreview((current) => current === null ? null : {
+                ...current,
+                drafts: current.drafts.map((item) => item.entry.id === draft.entry.id ? { ...item, text: event.target.value } : item),
+              })} />
+            {draft.view.promptTag !== "" && (
+              <span style={{ ...labelStyle, fontSize: 12 }}>
+                {m("recapPreviewProvenance", { tag: draft.view.promptTag, model: draft.view.model })}</span>
+            )}
+          </div>
+        )) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {preview.drafts[0] !== undefined && preview.drafts[0].view.reason !== undefined && preview.drafts[0].view.text === "" && (
+              <span style={{ ...labelStyle, fontSize: 12, color: "var(--warn, inherit)" }}>
+                {m("recapPreviewFailed", { reason: preview.drafts[0].view.reason })}</span>
+            )}
+            <textarea rows={14} value={preview.markdown} style={{ width: "100%", fontFamily: "monospace" }}
+              onChange={(event) => setPreview((current) => current === null ? null : { ...current, markdown: event.target.value })} />
+            {preview.drafts[0] !== undefined && preview.drafts[0].view.promptTag !== "" && (
+              <span style={{ ...labelStyle, fontSize: 12 }}>
+                {m("recapPreviewProvenance", { tag: preview.drafts[0].view.promptTag, model: preview.drafts[0].view.model })}</span>
+            )}
+          </div>
+        )}
+        <span style={{ display: "flex", gap: 6 }}>
+          <button className="btn btn--small recap-preview-confirm" type="button" disabled={busy !== ""}
+            onClick={() => void confirmPreview()}>{preview.kind === "memory" ? m("recapPreviewConfirmMemory") : m("recapPreviewConfirmSkill")}</button>
+          {preview.kind === "skill" && (
+            <button className="btn btn--small" type="button" disabled={busy !== ""}
+              onClick={() => {
+                const list = preview.drafts.map((draft) => draft.entry);
+                setPreview(null);
+                void (list.length === 1 ? makeDraft(list[0]) : draftGroupSkills(list));
+              }}>
+              {m("recapPreviewUseVerbatim")}</button>
+          )}
+          <button className="btn btn--small" type="button" onClick={() => setPreview(null)}>{m("cancel")}</button>
+        </span>
+      </div>
+    )}
     {!loading && ungenerated.length > 0 && (
       <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
         <strong>{m("recapUngeneratedTitle", { n: ungenerated.length })}</strong>
@@ -463,12 +594,12 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
               {grouped && <p style={{ margin: 0, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
                 <span style={{ ...labelStyle, fontSize: 12 }} title={m("recapTopicGroupHint")}>{m("recapTopicGroup", { n: group.entries.length })}</span>
                 {chosen.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
-                  onClick={() => void runGroup(group.key, "accept", chosen)}>{m("recapAccept")}</button>}
+                  onClick={() => void askMemoryPreview(chosen)}>{m("recapAccept")}</button>}
                 {open.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   onClick={() => void runGroup(group.key, "reject", open)}>{m("recapReject")}</button>}
                 {groupDraftable.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   title={m("recapDraftSkillBatchHint", { n: groupDraftable.length })}
-                  onClick={() => void draftGroupSkills(groupDraftable)}>{m("recapDraftSkill")}</button>}
+                  onClick={() => void askSkillPreview(groupDraftable)}>{m("recapDraftSkill")}</button>}
               </p>}
             {(openGroups[group.key] || group.entries.length <= 6 ? group.entries : group.entries.slice(0, 6)).map((entry) => {
               const key = kindKey(entry.kind);
@@ -482,7 +613,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                 {decision === "reject" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapRejected")}</span>}
                 {reviewable && !grouped && decision === "" && <>
                   <button className="btn btn--small" type="button" disabled={busy !== ""}
-                    onClick={() => void run(entry.id, "accept", async () => { await accept(entry.kind, entry.body, ""); })}>{m("recapAccept")}</button>
+                    onClick={() => void askMemoryPreview([entry])}>{m("recapAccept")}</button>
                   <button className="btn btn--small" type="button" disabled={busy !== ""}
                     onClick={() => setEditing({ id: entry.id, text: entry.body })}>{m("recapAcceptEdited")}</button>
                   <button className="btn btn--small" type="button" disabled={busy !== ""}
@@ -500,7 +631,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                     the button is offered only where it can do something. */}
                 {reviewable && (entry.kind === "root-cause" || entry.kind === "refuted") && <>
                   <button className="btn btn--small" type="button" disabled={busy !== ""}
-                    onClick={() => void makeDraft(entry)}>{m("recapDraftSkill")}</button>
+                    onClick={() => void askSkillPreview([entry])}>{m("recapDraftSkill")}</button>
                   {drafted[entry.id] !== undefined && (
                     <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapSkillDrafted", { path: drafted[entry.id] })}</span>
                   )}

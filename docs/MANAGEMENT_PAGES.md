@@ -30,6 +30,15 @@ Session recap keeps its own entry and is deliberately not merged into Trash, whi
 - **Session cards expand only the newest one by default** (following sort and search); the title is the fold control, the toolbar has expand-all/collapse-all, and the header shows the note count. A **failed attempt's line never folds away**: it is a state, and it has to stay visible.
 - **Rows are split by rule version**: every record carries the version that produced it, and sessions older than the running rules are listed under "N recaps were produced by an older rule set", regenerable one at a time or in bulk.
 
+### The two buttons go through a preview
+
+"Write to memory" and "draft a skill" now each ask their own prompt for a model-written draft and show it for **confirmation** before anything is stored (one extra call per press, accepted by the user, with no token ceiling of ours):
+
+- **Write to memory**: the panel shows each note and the model's rewrite beside it, one editable box per note; confirming stores **exactly the text shown** (it arrives through the same "edited body" path).
+- **Draft a skill**: the panel shows the whole markdown (monospaced, editable); confirming writes **the reviewed text as it stands**, adding only the frontmatter (`name` / `description` / `invocation: manual`). The verbatim composition stays as the way out: "use the verbatim composition instead" in the panel, and the fallback whenever no model answers.
+- The panel always names its **provenance** (prompt version and model), states the **reason** when generation failed or returned nothing, and keeps a no-model path — a failed generation never leaves the button unusable.
+- "Don't save", "edit and store" and "keep as an unfinished item" are unchanged (editing a note by hand still bypasses the model).
+
 ### Drafting a skill (playbook)
 
 Both the note row and the **topic group header** offer "draft a skill". One topic composes **one** playbook: every note is kept **verbatim** with its kind, its own pointers (`Where to check`) and its evidence line, and the file opens by saying it came from N notes on one topic with nothing rewritten or inferred — reliability comes from citable ground rather than from guessing a procedure out of several notes. **Different topics are different files**, so a batch is honestly one file or several. Drafts land in this project's `.reasonix/skills/recap-*/SKILL.md`, declare `invocation: manual`, **never overwrite an existing file**, and are only ever person-triggered; the host refuses anything that is not a procedure (facts, unfinished items).

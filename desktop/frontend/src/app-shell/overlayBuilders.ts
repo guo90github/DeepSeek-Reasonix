@@ -57,6 +57,8 @@ export function buildOverlayHostProps(input: {
     generateSessionRecap: NonNullable<AppOverlayHostProps["recap"]>["commands"]["generate"];
     draftRecapSkill: NonNullable<AppOverlayHostProps["recap"]>["commands"]["draftSkill"];
     draftRecapTopicSkill: NonNullable<AppOverlayHostProps["recap"]>["commands"]["draftTopicSkill"];
+    previewRecapMemory: NonNullable<AppOverlayHostProps["recap"]>["commands"]["previewMemory"];
+    previewRecapSkill: NonNullable<AppOverlayHostProps["recap"]>["commands"]["previewSkill"];
     listRecapInsights: NonNullable<AppOverlayHostProps["recap"]>["commands"]["listInsights"];
     restoreSession: NonNullable<AppOverlayHostProps["trash"]>["commands"]["restore"];
     purgeTrashedSession: NonNullable<AppOverlayHostProps["trash"]>["commands"]["purge"];
@@ -86,6 +88,8 @@ export function buildOverlayHostProps(input: {
         reopen: sessionActions.reopenRecapHandoff, generate: sessionActions.generateSessionRecap,
         draftSkill: sessionActions.draftRecapSkill,
         draftTopicSkill: sessionActions.draftRecapTopicSkill,
+        previewMemory: sessionActions.previewRecapMemory,
+        previewSkill: sessionActions.previewRecapSkill,
         listInsights: sessionActions.listRecapInsights } } : undefined,
     automation: shell.visitedAutomation ? { view: { active: input.pageKind === "automation" },
       commands: { onBack: shell.returnToWorkspace, onOpenTopic: input.automationTopic } } : undefined,

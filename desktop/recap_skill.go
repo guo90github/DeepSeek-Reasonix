@@ -25,10 +25,14 @@ type RecapSkillSource struct {
 
 // DraftRecapTopicSkill writes one playbook for a whole topic. A batch can honestly
 // be one skill or several, and what decides it is the topic, not a count: notes the
-// page grouped as one topic become one file with every note kept verbatim (nothing
-// rewritten, nothing inferred), while notes of other topics are other calls and
-// other files.
-func (a *App) DraftRecapTopicSkill(sources []RecapSkillSource) (RecapSkillDraft, error) {
+// page grouped as one topic become one file, while notes of other topics are other
+// calls and other files.
+//
+// A non-empty markdown is what the person reviewed and edited in the preview, and it
+// is written as it stands. An empty one composes the notes verbatim — what this
+// button did before a model was involved — so a failed preview leaves the action
+// usable.
+func (a *App) DraftRecapTopicSkill(sources []RecapSkillSource, markdown string) (RecapSkillDraft, error) {
 	if len(sources) == 0 {
 		return RecapSkillDraft{}, fmt.Errorf("a draft needs at least one note")
 	}
@@ -57,7 +61,13 @@ func (a *App) DraftRecapTopicSkill(sources []RecapSkillSource) (RecapSkillDraft,
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return RecapSkillDraft{}, err
 	}
-	if err := os.WriteFile(target, []byte(recapTopicSkillMarkdown(name, entries)), 0o644); err != nil {
+	body := strings.TrimSpace(markdown)
+	if body == "" {
+		body = recapTopicSkillMarkdown(name, entries)
+	} else {
+		body = withRecapSkillPreamble(name, body)
+	}
+	if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
 		return RecapSkillDraft{}, err
 	}
 	return RecapSkillDraft{Name: name, Path: target}, nil
@@ -116,6 +126,32 @@ func (a *App) projectRootForDrafting() string {
 	}
 	a.reconcileTabWithPinnedSessionMeta(tab)
 	return strings.TrimSpace(tab.WorkspaceRoot)
+}
+
+// withRecapSkillPreamble gives a reviewed playbook the frontmatter a skill needs.
+// The reviewed body is kept as it stands: this path never rewrites what a person read
+// and approved.
+func withRecapSkillPreamble(name, body string) string {
+	if strings.HasPrefix(strings.TrimSpace(body), "---") {
+		return body
+	}
+	description := ""
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(strings.TrimLeft(line, "# "))
+		if trimmed != "" {
+			description = trimmed
+			break
+		}
+	}
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("name: " + name + "\n")
+	b.WriteString("description: " + quoteYAMLScalar(oneLine(description)) + "\n")
+	b.WriteString("invocation: manual\n")
+	b.WriteString("---\n\n")
+	b.WriteString(body)
+	b.WriteString("\n")
+	return b.String()
 }
 
 // recapTopicSkillMarkdown keeps a single-note draft byte-identical to what the

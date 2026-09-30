@@ -1779,7 +1779,8 @@
       "kind": "owner-inputs",
       "resolver": "App.DraftRecapTopicSkill",
       "inputs": [
-        "sources"
+        "sources",
+        "markdown"
       ]
     }
   },
