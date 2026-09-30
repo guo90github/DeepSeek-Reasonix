@@ -274,6 +274,9 @@ func cliCompletionRootSpec() cliCompletionSpec {
 			completionFlag("--verbose --json", cliCompletionNoValue), help,
 		}),
 		completionSpec("docs-manifest", []cliCompletionFlag{help}),
+		completionSpec("history", []cliCompletionFlag{
+			completionFlag("--json", cliCompletionNoValue), completionFlag("--limit", cliCompletionStaticValue), help,
+		}),
 		completionSpec("help", []cliCompletionFlag{help}),
 	}
 	return root
