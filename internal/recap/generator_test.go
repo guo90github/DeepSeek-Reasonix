@@ -506,3 +506,42 @@ func TestClipForRecapKeepsHeadAndTail(t *testing.T) {
 		t.Fatalf("short transcript must pass through, got %q", short)
 	}
 }
+
+// The dropped middle is where conclusions get drawn in passing, so an over-long
+// session must still show what each of those turns was about rather than only
+// how many bytes were dropped.
+func TestClipForRecapDigestsTheOmittedTurns(t *testing.T) {
+	build := func(turns int) string {
+		var b strings.Builder
+		b.WriteString(strings.Repeat("filler\n", 300))
+		for turn := 1; turn <= turns; turn++ {
+			fmt.Fprintf(&b, "## User (turn %d)\nasked for thing %d\n%s\n", turn, turn, strings.Repeat("body\n", 30))
+		}
+		b.WriteString(strings.Repeat("filler\n", 300))
+		return b.String()
+	}
+	// Roomy: every dropped turn is mapped by its own first line.
+	got := clipForRecap(build(6), 3000)
+	for turn := 1; turn <= 6; turn++ {
+		if !strings.Contains(got, fmt.Sprintf("## User (turn %d) asked for thing %d", turn, turn)) {
+			t.Fatalf("turn %d vanished from the digest: %q", turn, got)
+		}
+	}
+	if !strings.Contains(got, "those turns came down to") || !strings.Contains(got, "end of omitted middle") {
+		t.Fatalf("the digest is not marked as an omission: %q", got)
+	}
+	if strings.Contains(got, strings.Repeat("body\n", 3)) {
+		t.Fatalf("the digest copied a turn's body instead of one line: %q", got)
+	}
+	if len(got) > 3000+700 {
+		t.Fatalf("the digest blew the input budget: %d bytes", len(got))
+	}
+	// Tight: the map stays short and says how many turns it left out.
+	tight := clipForRecap(build(40), 1000)
+	if !strings.Contains(tight, "more turns)") {
+		t.Fatalf("a short digest must count the turns it left out: %q", tight)
+	}
+	if len(tight) > 1000+1000 {
+		t.Fatalf("a tight clip blew the input budget: %d bytes", len(tight))
+	}
+}

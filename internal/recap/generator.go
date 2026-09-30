@@ -384,14 +384,79 @@ func (g *Generator) acquire(ctx context.Context) error {
 	}
 }
 
-// clipForRecap keeps the head and the tail of an over-long transcript: the head
-// states what the session set out to do, the tail holds the conclusion.
+// clipForRecap keeps the head and the tail of an over-long transcript — the head
+// states what the session set out to do, the tail holds the conclusion — and
+// turns the dropped middle into one line per turn. Losing the middle outright
+// loses exactly the conclusions that were drawn in passing, which is what a
+// person notices as "the recap missed the point".
 func clipForRecap(text string, max int) string {
 	if max <= 0 || len(text) <= max {
 		return text
 	}
 	head, tail := headPiece(text, max), tailPiece(text, max)
-	return fmt.Sprintf("%s\n…[%d bytes omitted]…\n%s", head, len(text)-len(head)-len(tail), tail)
+	middle := text[len(head) : len(text)-len(tail)]
+	note := fmt.Sprintf("…[%d bytes omitted]…", len(middle))
+	if digest := digestTurns(middle, omittedBudget(max)); digest != "" {
+		note = fmt.Sprintf("…[%d bytes omitted; those turns came down to:]\n%s\n…[end of omitted middle]…",
+			len(middle), digest)
+	}
+	return head + "\n" + note + "\n" + tail
+}
+
+// omittedBudget caps the digest well below the transcript budget: it is a map of
+// what was dropped, not a second copy of it.
+func omittedBudget(max int) int { return max / 5 }
+
+// digestTurns renders one line per turn: the turn's own marker plus the first
+// non-blank line of it. Markers come from the transcript renderer, so a text
+// without them (a raw fragment) falls back to saying how much was dropped.
+func digestTurns(middle string, budget int) string {
+	lines := strings.Split(middle, "\n")
+	turns := 0
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "## ") {
+			turns++
+		}
+	}
+	var out []string
+	used, kept := 0, 0
+	marker := ""
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "## ") {
+			marker = trimmed
+			continue
+		}
+		if trimmed == "" || marker == "" {
+			continue
+		}
+		entry := marker + " " + firstClause(trimmed)
+		if used+len(entry) > budget {
+			break
+		}
+		out = append(out, entry)
+		used += len(entry) + 1
+		kept++
+		marker = ""
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	if dropped := turns - kept; dropped > 0 {
+		out = append(out, fmt.Sprintf("(+%d more turns)", dropped))
+	}
+	return strings.Join(out, "\n")
+}
+
+// firstClause is the readable start of one turn's first line, in runes so a
+// multi-byte rune is never cut in half.
+func firstClause(line string) string {
+	const cap = 80
+	runes := []rune(line)
+	if len(runes) <= cap {
+		return line
+	}
+	return string(runes[:cap]) + "…"
 }
 
 // headPiece is the head clipForRecap keeps, exposed on its own: a later read
