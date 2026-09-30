@@ -29,7 +29,7 @@ function kindKey(kind: string): RecapKindKey | null {
 // Only the current project can be settled: an accepted note becomes a fact in the
 // active project's memory, and an unfinished item belongs to the project its
 // session lives in. A session from another project is read-only here.
-export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen }: {
+export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate }: {
   active: boolean;
   onBack: () => void;
   list: () => Promise<SessionRecap[]>;
@@ -42,6 +42,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   keep: (sessionPath: string, body: string, evidence: string) => Promise<string>;
   close: (id: string) => Promise<void>;
   reopen: (id: string) => Promise<void>;
+  // generate asks the host to (re)run one session's recap now. It queues into the
+  // same lane the close path uses, so it returns as soon as the work is accepted.
+  generate: (sessionPath: string) => Promise<boolean>;
 }) {
   const t = useT(); const m = useManagementT();
   const [recaps, setRecaps] = useState<SessionRecap[]>([]);
@@ -53,6 +56,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const [loadFailed, setLoadFailed] = useState(false);
   const [busy, setBusy] = useState("");
   const [failure, setFailure] = useState("");
+  const [queued, setQueued] = useState<string[]>([]);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const seq = useRef(0);
   const refresh = useCallback(async () => {
@@ -155,6 +159,30 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const waiting = openItems.filter((item) => !item.closed).length;
   const stale = openItems.filter((item) => !item.closed && item.stale === true).length;
   const failed = recaps.filter((recap) => recap.state === "pending").length;
+  // A session that never produced a recap appears in neither the record list nor
+  // the failure list, so the newest few are offered here: yielding nothing must
+  // still leave it one click from a retry. Older ones stay a bulk job
+  // (`reasonix catalogs reindex session-recap`).
+  const known = useMemo(() => new Set(recaps.map((recap) => recap.path)), [recaps]);
+  const ungenerated = useMemo(() => sessions
+    .filter((meta) => !known.has(meta.path))
+    .sort((left, right) => (right.lastActivityAt ?? right.modTime ?? 0) - (left.lastActivityAt ?? left.modTime ?? 0))
+    .slice(0, 5), [known, sessions]);
+  const askGenerate = useCallback(async (path: string) => {
+    setBusy(path); setFailure("");
+    try {
+      const accepted = await generate(path);
+      if (!accepted) { setFailure(m("operationFailed")); return; }
+      setQueued((current) => [path, ...current.filter((candidate) => candidate !== path)]);
+      // The lane is asynchronous, so the page cannot wait for the result: it says
+      // the work is queued and refreshes once, in case it is already done.
+      window.setTimeout(() => { void refresh(); }, 3000);
+    } catch {
+      setFailure(m("operationFailed"));
+    } finally {
+      setBusy("");
+    }
+  }, [generate, m, refresh]);
   const sorts: { id: RecapSort; label: string }[] = [
     { id: "newest", label: m("recapSortNewest") },
     { id: "oldest", label: m("recapSortOldest") },
@@ -207,6 +235,22 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       <div className="management-notice" role="status">{m("recapNoMatch")}
         <button className="btn btn--small" onClick={() => setQuery("")}>{m("clearFilters")}</button></div>
     )}
+    {!loading && ungenerated.length > 0 && (
+      <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+        <strong>{m("recapUngeneratedTitle", { n: ungenerated.length })}</strong>
+        <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapUngeneratedHint")}</span>
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+          {ungenerated.map((meta) => (
+            <li key={meta.path} style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+              <span>{titleOf({ path: meta.path } as SessionRecap)}</span>
+              <button className="btn btn--small" type="button" disabled={busy !== ""}
+                onClick={() => void askGenerate(meta.path)}>{m("recapGenerate")}</button>
+              {queued.includes(meta.path) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
     {!loading && <div className="history-list" style={{ flex: 1, minHeight: 0 }}>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
         {rows.map((recap) => {
@@ -221,7 +265,12 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
               {meta && <button className="btn btn--small" type="button" onClick={() => { void resume(meta); onBack(); }}>
                 <ExternalLink size={13} />{m("recapOpen")}</button>}
             </div>
-            {recap.pending && <p style={{ margin: 0, color: "var(--warn, inherit)" }}>{m("recapPendingLine", { n: recap.pending.attempts, reason: recap.pending.reason })}</p>}
+            {recap.pending && <p style={{ margin: 0, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap", color: "var(--warn, inherit)" }}>
+              <span>{m("recapPendingLine", { n: recap.pending.attempts, reason: recap.pending.reason })}</span>
+              <button className="btn btn--small" type="button" disabled={busy !== ""}
+                onClick={() => void askGenerate(recap.path)}>{m("recapRetryGenerate")}</button>
+              {queued.includes(recap.path) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
+            </p>}
             {/* A failed attempt has no notes to speak of; "nothing reusable" would
                 be the wrong one of the two silences. */}
             {recap.entries.length === 0 && recap.state !== "pending" && <p style={{ margin: 0, ...labelStyle }}>{m("recapNoEntries")}</p>}

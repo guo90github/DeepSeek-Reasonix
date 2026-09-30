@@ -61,6 +61,7 @@ export function useAppRuntimeAdapter() {
       keepRecapHandoff: controller.keepRecapHandoff,
       closeRecapHandoff: controller.closeRecapHandoff,
       reopenRecapHandoff: controller.reopenRecapHandoff,
+      generateSessionRecap: controller.generateSessionRecap,
       resumeSession: controller.resumeSession,
       openChannelSession: controller.openChannelSession,
       previewSession: controller.previewSession,

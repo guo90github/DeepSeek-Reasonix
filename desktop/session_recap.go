@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/boot"
 	"reasonix/internal/recap"
 	"reasonix/internal/secrets"
 )
@@ -132,4 +135,18 @@ func recapPendingView(pending recap.Pending) *SessionRecapPending {
 		Reason:    secrets.Redact(pending.Reason),
 		UpdatedAt: pending.UpdatedAt.Format(time.RFC3339),
 	}
+}
+
+// GenerateSessionRecap asks for one session's recap to be generated now, which
+// is what a person does when the one they expected never arrived. It queues into
+// boot's process-wide lane, so the manual path inherits the close path's
+// concurrency, usage source, redaction and retry semantics instead of growing a
+// second one. False means "not now": the lane is not running yet, the path is
+// already queued, or the queue is full.
+func (a *App) GenerateSessionRecap(sessionPath string) (bool, error) {
+	sessionPath = strings.TrimSpace(sessionPath)
+	if sessionPath == "" {
+		return false, fmt.Errorf("no session path given")
+	}
+	return boot.EnqueueSessionRecap(sessionPath), nil
 }

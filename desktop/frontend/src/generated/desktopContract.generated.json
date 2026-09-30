@@ -4067,6 +4067,31 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/session_recap.go",
+      "name": "GenerateSessionRecap",
+      "owner": "App.GenerateSessionRecap",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "boolean"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "sessionPath"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.GenerateSessionRecap"
+      },
+      "sources": [
+        "desktop/session_recap.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/theme_app.go",
       "name": "GetActiveThemePack",
       "owner": "App.GetActiveThemePack",

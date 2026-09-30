@@ -67,6 +67,25 @@ func recapResolverFor(resolver provider.Resolver, cfg *config.Config, proxy netc
 	}
 }
 
+// EnqueueSessionRecap asks the process-wide lane to (re)generate one session's
+// recap now — the manual entry the recap page uses. It reuses the close path's
+// lane on purpose: a second entry would carry its own concurrency, usage source
+// and retry rules. False means no lane is running yet, or the path is already
+// queued (the same "not now" the close path treats as harmless).
+func EnqueueSessionRecap(sessionPath string) bool {
+	sessionPath = strings.TrimSpace(sessionPath)
+	if sessionPath == "" {
+		return false
+	}
+	recapLanes.mu.Lock()
+	runner := recapLanes.byKey[recap.DefaultPath()]
+	recapLanes.mu.Unlock()
+	if runner == nil {
+		return false
+	}
+	return runner.Submit(sessionPath)
+}
+
 // CloseRecapLanes abandons every lane. Work in flight is cancelled rather than
 // waited for; the projection is disposable and the next process rebuilds it.
 func CloseRecapLanes() {

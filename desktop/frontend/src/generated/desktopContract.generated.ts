@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:1d9bce1a1067d5b0104780ef9c09d1b007f967139cf08e888fdee57fe4abd8cc";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:bedd334f65802e69e324c60272249b8f8f5c19a42c3fc7ce01196188a6461187";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -155,6 +155,7 @@ export const DESKTOP_COMMANDS = [
   "ForkForTab",
   "ForkRemoteTab",
   "ForkWorktreeForTab",
+  "GenerateSessionRecap",
   "GetActiveThemePack",
   "GetAuditEffort",
   "GetAuditMaxChars",
@@ -4603,6 +4604,7 @@ export interface GeneratedDesktopCommands {
   ForkForTab(arg0: string, arg1: number): Promise<TabMeta>;
   ForkRemoteTab(arg0: string, arg1: number, arg2: string): Promise<void>;
   ForkWorktreeForTab(arg0: string, arg1: number): Promise<ForkWorktreeResultView>;
+  GenerateSessionRecap(arg0: string): Promise<boolean>;
   GetActiveThemePack(): Promise<ThemeActiveView>;
   GetAuditEffort(): Promise<string>;
   GetAuditMaxChars(): Promise<number>;

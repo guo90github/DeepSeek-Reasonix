@@ -12,6 +12,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
+	"reasonix/internal/recap"
 )
 
 const recapPromptMarker = "distill one finished coding session"
@@ -125,5 +126,85 @@ model = "x"
 	}
 	if len(recaps[0].Tools) != 0 {
 		t.Fatalf("recap lane must run without tools, got %d", len(recaps[0].Tools))
+	}
+}
+
+// A manual generation has to reach the same lane the close path uses — that is
+// the only reason to queue instead of calling the model here. So this pins the
+// manual entry at the provider boundary and in the projection: a session that
+// never closed must still end up with a stored recap.
+func TestEffectManualGenerationUsesTheSameLane(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+	t.Cleanup(CloseRecapLanes)
+
+	if EnqueueSessionRecap("   ") {
+		t.Fatal("an empty path must not be queued")
+	}
+	sessions := filepath.Join(dir, "sessions")
+	if err := os.MkdirAll(sessions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sessionPath := filepath.Join(sessions, "20260101-000000.000000000-test-model.jsonl")
+	session := agent.NewSession("system")
+	session.Add(provider.Message{Role: provider.RoleUser, Content: "please recap the thing"})
+	session.Add(provider.Message{Role: provider.RoleAssistant, Content: "done: the thing is done"})
+	if err := session.Save(sessionPath); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	rec := &recapRecordingProvider{}
+	const kind = "boot-effect-manual"
+	provider.Register(kind, func(provider.Config) (provider.Provider, error) { return rec, nil })
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+session_recap_model = "test-model"
+
+[environment]
+enabled = false
+
+[[providers]]
+name = "test-model"
+kind = "`+kind+`"
+model = "x"
+`)
+
+	if _, err := Build(context.Background(), Options{Sink: event.Discard, SessionDir: sessions}); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !EnqueueSessionRecap(sessionPath) {
+		t.Fatal("the manual entry refused a session while the lane was running")
+	}
+
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(rec.recapRequests()) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(rec.recapRequests()) == 0 {
+		t.Fatal("no recap request reached the provider boundary after a manual generate")
+	}
+
+	store, err := recap.Open(context.Background(), recap.Options{Path: recap.DefaultPath()})
+	if err != nil {
+		t.Fatalf("open projection: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+	stored := false
+	for time.Now().Before(deadline) {
+		if _, ok, err := store.Get(context.Background(), sessionPath); err == nil && ok {
+			stored = true
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if !stored {
+		t.Fatal("a manually generated recap was never stored")
 	}
 }

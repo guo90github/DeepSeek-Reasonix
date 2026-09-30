@@ -405,6 +405,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   CloseRecapHandoff(id: string): Promise<void>;
   ReopenRecapHandoff(id: string): Promise<void>;
   ListRecapOpenItems(): Promise<RecapOpenItem[]>;
+  GenerateSessionRecap(sessionPath: string): Promise<boolean>;
   ResumeSession(path: string): Promise<HistoryMessage[]>;
   ResumeSessionForTab(tabID: string, path: string): Promise<HistoryMessage[]>;
   ResumeSessionPage(path: string, limit: number): Promise<HistoryPage>;
@@ -3329,6 +3330,10 @@ function makeMockApp(): AppBindings {
     },
     async UndoRecapEntry(kind: string) {
       emit({ kind: "notice", level: "info", text: `(mock) undid a ${kind} note` });
+    },
+    async GenerateSessionRecap(sessionPath: string) {
+      emit({ kind: "notice", level: "info", text: `(mock) queued a recap for ${sessionPath.split(/[/\\]/).pop() ?? sessionPath}` });
+      return true;
     },
     async KeepRecapHandoff(_sessionPath: string, body: string) {
       emit({ kind: "notice", level: "info", text: `(mock) kept an unfinished item → ${body.slice(0, 40)}` });

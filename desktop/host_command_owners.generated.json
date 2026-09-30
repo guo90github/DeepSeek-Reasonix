@@ -2168,6 +2168,20 @@
       ]
     }
   },
+  "GenerateSessionRecap": {
+    "domain": "desktop/session_recap.go",
+    "owner": "App.GenerateSessionRecap",
+    "sources": [
+      "desktop/session_recap.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.GenerateSessionRecap",
+      "inputs": [
+        "sessionPath"
+      ]
+    }
+  },
   "GetActiveThemePack": {
     "domain": "desktop/theme_app.go",
     "owner": "App.GetActiveThemePack",

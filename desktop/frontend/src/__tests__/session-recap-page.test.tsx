@@ -91,6 +91,8 @@ const undone: { kind: string; body: string }[] = [];
 const kept: { path: string; body: string; evidence: string }[] = [];
 const closedItems: string[] = [];
 const reopenedItems: string[] = [];
+const generated: string[] = [];
+let acceptGenerate = true;
 let backCount = 0;
 let failNextAccept = false;
 const [{ LocaleProvider }, { SessionRecapPage }] = await Promise.all([
@@ -114,6 +116,9 @@ const reviewProps = {
   },
   close: async (id: string) => { closedItems.push(id); },
   reopen: async (id: string) => { reopenedItems.push(id); },
+  // generate reports whether the lane accepted the work; a refused queue is a
+  // failure the page must show rather than pretend it was queued.
+  generate: async (path: string) => { generated.push(path); return acceptGenerate; },
 };
 
 const rootEl = document.getElementById("root");
@@ -346,7 +351,33 @@ ok(says(failedCards[0], "attempt 2") && says(failedCards[0], "unparseable answer
 ok(says(failedCards[0], "no reusable notes") === false,
   "a failed attempt is not reported as a session with nothing to distil");
 ok(says(failedHost, "have not been generated"), "the page counts what is still waiting");
+// The point of listing a failure is being able to try it again.
+const retry = [...failedHost.querySelectorAll("button")].find((button) => button.textContent?.includes("Retry"));
+ok(retry !== undefined, "a failed attempt offers to try again");
+await clickButton(retry);
+ok(generated.length === 1 && generated[0] === failedPath,
+  `retrying asks the host for that session: ${JSON.stringify(generated)}`);
 await act(async () => { failedRoot.unmount(); });
+
+// A session that produced nothing is in neither list, so a recap that never
+// arrived would be unreachable; the newest few are offered here instead.
+const barePath = "C:\\sessions\\20260906-090000.000000000-deepseek-flash.jsonl";
+const bareHost = document.createElement("div");
+document.body.appendChild(bareHost);
+const bareRoot = createRoot(bareHost);
+await act(async () => {
+  bareRoot.render(<LocaleProvider><SessionRecapPage active onBack={() => {}}
+    list={async () => []} listSessions={async () => [meta(barePath, "Delta 会话", 4)]} {...reviewProps} /></LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+const bareSection = [...bareHost.querySelectorAll(".management-notice")].find((node) => node.querySelector("ul") !== null);
+ok(says(bareSection, "no recap yet"), "a session with no recap is offered a generation");
+ok(says(bareSection?.querySelector("li"), "delta 会话"), "the offered session is named by its title");
+await clickButton([...(bareSection?.querySelectorAll("button") ?? [])][0]);
+ok(generated.length === 2 && generated[1] === barePath,
+  `generating asks the host for that session: ${JSON.stringify(generated)}`);
+ok(says(bareSection, "queued"), "a queued generation says so instead of claiming a result");
+await act(async () => { bareRoot.unmount(); });
 
 await act(async () => { root.unmount(); });
 process.stdout.write(`\n${failed === 0 ? "OK" : "FAILED"}: ${failed} failed\n`);
