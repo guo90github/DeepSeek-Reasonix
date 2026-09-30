@@ -5757,18 +5757,23 @@ button.answer-points__text:focus-visible {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-/* The landed mark says "here": a short accent ring, no movement. */
+/* The landed mark identifies the target and stays put until the reader moves
+   on — a 1.1s fade was gone before it could be read. Drawn with outline, not
+   box-shadow, so the label/claim rails keep their own stroke. */
 .md [data-md-point].md--landed {
-  animation: answerPointLanded 1.1s ease-out 1;
+  border-radius: 0 6px 6px 0;
+  outline: 2px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 2px;
+  background-color: color-mix(in srgb, var(--accent) 6%, transparent);
+  animation: answerPointArrived 0.35s ease-out 1;
 }
-@keyframes answerPointLanded {
-  0% { box-shadow: inset 3px 0 0 var(--accent), 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent); }
-  100% { box-shadow: inset 3px 0 0 transparent, 0 0 0 2px transparent; }
+@keyframes answerPointArrived {
+  from { outline-width: 6px; outline-color: color-mix(in srgb, var(--accent) 28%, transparent); }
+  to { outline-width: 2px; outline-color: color-mix(in srgb, var(--accent) 55%, transparent); }
 }
 @media (prefers-reduced-motion: reduce) {
   .md [data-md-point].md--landed {
     animation: none;
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent);
   }
 }
 

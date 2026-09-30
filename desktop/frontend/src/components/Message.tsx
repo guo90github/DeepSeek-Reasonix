@@ -24,9 +24,9 @@ import { useAnswerJump } from "../lib/answerJump";
 import { CodeViewer } from "./CodeViewer";
 import { formatSelectionLabels, languageFor, parseSelectedTextContext, stripSelectionLabels } from "../lib/selectedTextContext";
 const AuditInlineCard = lazy(() => import("./AuditInlineCard").then((module) => ({ default: module.AuditInlineCard })));
-// The jump says "here": a short accent ring on the landed mark, then it goes.
+// The jump says "here": the landed mark keeps its ring until the reader moves
+// on (a gesture), not for a fixed blink.
 const LANDED_MARK_CLASS = "md--landed";
-const LANDED_MARK_MS = 1200;
 
 const AssistantReasoningPanel = lazy(() => import("./AssistantReasoningPanel").then((module) => ({ default: module.AssistantReasoningPanel })));
 const MemoryCitations = lazy(() => import("./MemoryCitations").then((module) => ({ default: module.MemoryCitations })));
@@ -813,6 +813,7 @@ export const AssistantMessage = memo(function AssistantMessage({
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const [keyPoints, setKeyPoints] = useState<AnswerMarkSummary>(EMPTY_ANSWER_MARKS);
   const answerJump = useAnswerJump();
+  const [landed, setLanded] = useState<HTMLElement | null>(null);
   // A point names the mark by address, so the target is looked up inside this
   // answer's own body — never globally (another answer also has a "0"). No
   // mark means no jump: the strip never guesses a destination.
@@ -820,10 +821,28 @@ export const AssistantMessage = memo(function AssistantMessage({
     if (!answerJump) return;
     const target = bodyRef.current?.querySelector(`[data-md-point="${point.ordinal}"]`) as HTMLElement | null;
     if (!target) return;
-    target.classList.add(LANDED_MARK_CLASS);
-    window.setTimeout(() => target.classList.remove(LANDED_MARK_CLASS), LANDED_MARK_MS);
+    setLanded(target);
     answerJump(target);
   }, [answerJump]);
+  // The ring stays until the reader moves on: a gesture, not a timer, is what
+  // says "I am done looking at this". The jump's own scroll is programmatic and
+  // emits no gesture, so it cannot clear itself. One landed mark at a time.
+  useEffect(() => {
+    if (!landed) return;
+    const doc = landed.ownerDocument;
+    for (const other of doc.querySelectorAll(`.${LANDED_MARK_CLASS}`)) {
+      if (other !== landed) other.classList.remove(LANDED_MARK_CLASS);
+    }
+    landed.classList.add(LANDED_MARK_CLASS);
+    const view = doc.defaultView;
+    const clear = () => setLanded(null);
+    const gestures: (keyof WindowEventMap)[] = ["wheel", "pointerdown", "touchstart", "keydown"];
+    for (const name of gestures) view?.addEventListener(name, clear, { capture: true, passive: true });
+    return () => {
+      landed.classList.remove(LANDED_MARK_CLASS);
+      for (const name of gestures) view?.removeEventListener(name, clear, { capture: true });
+    };
+  }, [landed]);
   useEffect(() => {
     if (item.streaming) {
       setKeyPoints((current) => (current === EMPTY_ANSWER_MARKS ? current : EMPTY_ANSWER_MARKS));

@@ -187,7 +187,7 @@ Documentation-impact: updated - docs/research/desktop-layout-refactor.md 新增
 | `src/lib/answerKeyPoints.ts` | 从渲染后的 DOM 读标记；**采集时**按文档顺序给每个标记写 `data-md-point="k"`，要点带 `ordinal`；去重与上限 6 只影响展示，`total` 报去重后的真实要点数 |
 | `src/components/AnswerKeyPoints.tsx` | 呈现「N 个重点」；拿不到跳转能力时渲染纯文本（不做点了没用的按钮） |
 | `src/components/Message.tsx` | 挂点 = `AssistantMessage`（单列与分栏左栏共用同一处实现）；`MutationObserver` 观察三条 markdown 路径的 DOM 落地；要点条在 `.msg__body` **之外**，复制回答不会重复带出 |
-| `src/lib/answerJump.ts` + `ConversationPane.tsx` | 跳转意图的 context 与其注入点；落点闪 `md--landed` |
+| `src/lib/answerJump.ts` + `ConversationPane.tsx` | 跳转意图的 context 与其注入点；落点保留 `md--landed` 圈（用 outline 画，任何手势才清，同一时刻只一个） |
 | `src/lib/usePaneTailFollow.ts` | 滚动写者提到 `writerRef`，新增 `aimAt(element)`：经 `createTranscriptScrollWriter` 以 `operation:"scrollTo"` + `top` 写入（generation / ownershipEpoch / geometryRevision 三重围栏），被接受才把跟随模式置 `manual` |
 
 两条不可动摇的约束：
