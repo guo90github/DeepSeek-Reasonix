@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:6c943a926d0c2bdf08c7637921518a8b18ff0d70502165084b3bdc9ddaaea86f";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:8f71fddc6a49b0d94953f6b37ecd4ae2559344b175e6c5af2a4cc24b05b4b72c";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -225,6 +225,7 @@ export const DESKTOP_COMMANDS = [
   "ListProjectGroups",
   "ListProjectTopics",
   "ListProjectTree",
+  "ListRecapInsights",
   "ListRecapOpenItems",
   "ListRemoteDir",
   "ListRemoteProjects",
@@ -3470,6 +3471,14 @@ export interface SessionRecapEntry {
   observedIn?: string[];
 }
 
+export interface SessionRecapInsight {
+  kind: string;
+  body: string;
+  evidence?: string;
+  projects: string[];
+  seenAt: string;
+}
+
 export interface SessionRecapPending {
   attempts: number;
   reason: string;
@@ -4690,6 +4699,7 @@ export interface GeneratedDesktopCommands {
   ListProjectGroups(arg0: string, arg1: string): Promise<desktopGroup[]>;
   ListProjectTopics(arg0: ProjectTopicPageRequest): Promise<ProjectTopicPage>;
   ListProjectTree(): Promise<ProjectNode[]>;
+  ListRecapInsights(): Promise<SessionRecapInsight[]>;
   ListRecapOpenItems(): Promise<RecapOpenItemView[]>;
   ListRemoteDir(arg0: string, arg1: string): Promise<RemoteDirEntry[]>;
   ListRemoteProjects(): Promise<RemoteProjectView[]>;

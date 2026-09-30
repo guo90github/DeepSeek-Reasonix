@@ -5834,6 +5834,28 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recap_insights.go",
+      "name": "ListRecapInsights",
+      "owner": "App.ListRecapInsights",
+      "params": [],
+      "result": {
+        "elem": {
+          "kind": "object",
+          "ref": "main.SessionRecapInsight"
+        },
+        "kind": "array"
+      },
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.ListRecapInsights"
+      },
+      "sources": [
+        "desktop/recap_insights.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/recap_open_items.go",
       "name": "ListRecapOpenItems",
       "owner": "App.ListRecapOpenItems",
@@ -31359,6 +31381,44 @@
               "kind": "string"
             },
             "kind": "array"
+          }
+        }
+      ]
+    },
+    "main.SessionRecapInsight": {
+      "fields": [
+        {
+          "name": "kind",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "body",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "evidence",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "projects",
+          "type": {
+            "elem": {
+              "kind": "string"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "seenAt",
+          "type": {
+            "kind": "string"
           }
         }
       ]

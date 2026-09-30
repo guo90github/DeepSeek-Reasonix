@@ -129,6 +129,7 @@ import type {
   SessionRecap,
   RecapOpenItem,
   RecapSkillDraft,
+  SessionRecapInsight,
   SessionRecoveryFailedEvent,
   SessionRecoveryEvent,
   SettingsView,
@@ -408,6 +409,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   ListRecapOpenItems(): Promise<RecapOpenItem[]>;
   GenerateSessionRecap(sessionPath: string): Promise<boolean>;
   DraftRecapSkill(kind: string, body: string): Promise<RecapSkillDraft>;
+  ListRecapInsights(): Promise<SessionRecapInsight[]>;
   ResumeSession(path: string): Promise<HistoryMessage[]>;
   ResumeSessionForTab(tabID: string, path: string): Promise<HistoryMessage[]>;
   ResumeSessionPage(path: string, limit: number): Promise<HistoryPage>;
@@ -3341,6 +3343,9 @@ function makeMockApp(): AppBindings {
       const name = `recap-mock-${body.length}`;
       emit({ kind: "notice", level: "info", text: `(mock) drafted .reasonix/skills/${name}/SKILL.md` });
       return { name, path: `.reasonix/skills/${name}/SKILL.md` };
+    },
+    async ListRecapInsights() {
+      return [{ kind: "refuted", body: "(mock) 只取分支统计未提交数会漏掉 CJK 路径", projects: ["alpha", "beta"], seenAt: new Date().toISOString() }];
     },
     async KeepRecapHandoff(_sessionPath: string, body: string) {
       emit({ kind: "notice", level: "info", text: `(mock) kept an unfinished item → ${body.slice(0, 40)}` });

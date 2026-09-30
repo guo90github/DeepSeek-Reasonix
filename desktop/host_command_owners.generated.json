@@ -3125,6 +3125,18 @@
       "inputs": []
     }
   },
+  "ListRecapInsights": {
+    "domain": "desktop/recap_insights.go",
+    "owner": "App.ListRecapInsights",
+    "sources": [
+      "desktop/recap_insights.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.ListRecapInsights",
+      "inputs": []
+    }
+  },
   "ListRecapOpenItems": {
     "domain": "desktop/recap_open_items.go",
     "owner": "App.ListRecapOpenItems",

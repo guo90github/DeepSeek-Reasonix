@@ -124,6 +124,7 @@ const reviewProps = {
   draftSkill: async (_kind: string, body: string) => ({
     name: `recap-mock-${body.length}`, path: `.reasonix/skills/recap-mock-${body.length}/SKILL.md`,
   }),
+  listInsights: async () => [{ kind: "refuted", body: "只取分支统计未提交数会漏掉 CJK 路径", projects: ["alpha", "beta"], seenAt: new Date().toISOString() }],
 };
 
 const rootEl = document.getElementById("root");
@@ -161,6 +162,9 @@ const notesOf = (card: Element) => [...card.querySelectorAll("p")];
 const rowWith = (card: Element | undefined, text: string) =>
   [...(card?.querySelectorAll("p") ?? [])].find((row) => row.textContent?.includes(text));
 const buttonsOf = (row: Element | undefined) => [...(row?.querySelectorAll("button") ?? [])];
+ok(rootEl.textContent?.includes("Reached independently in 2+ projects") === true
+  && rootEl.textContent?.includes("2 projects: alpha、beta") === true,
+  "the cross-project report is named with the projects that reached it");
 ok(cards().every((card) => notesOf(card).length === 3),
   "each recap renders its two notes plus the pointers line");
 ok(cards().every((card) => card.textContent?.includes("internal/parser.go") === true),

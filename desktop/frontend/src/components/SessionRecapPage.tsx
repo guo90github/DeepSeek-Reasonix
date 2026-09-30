@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, RotateCw, Search } from "lucide-react";
-import type { RecapOpenItem, RecapSkillDraft, SessionMeta, SessionRecap, SessionRecapEntry } from "../lib/types";
+import type { RecapOpenItem, RecapSkillDraft, SessionMeta, SessionRecap, SessionRecapEntry, SessionRecapInsight } from "../lib/types";
 import { useT } from "../lib/i18n";
 import { useManagementT } from "../lib/managementLocale";
 import { ManagementPageShell } from "./ManagementPageShell";
@@ -29,7 +29,7 @@ function kindKey(kind: string): RecapKindKey | null {
 // Only the current project can be settled: an accepted note becomes a fact in the
 // active project's memory, and an unfinished item belongs to the project its
 // session lives in. A session from another project is read-only here.
-export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill }: {
+export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill, listInsights }: {
   active: boolean;
   onBack: () => void;
   list: () => Promise<SessionRecap[]>;
@@ -48,6 +48,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // draftSkill has the host write a playbook draft into this project's skill
   // directory. Only the kinds that are procedures can become one.
   draftSkill: (kind: string, body: string) => Promise<RecapSkillDraft>;
+  // listInsights is the projection read as a report: what more than one project
+  // reached on its own. Read-only, and computed from the same evidence rule.
+  listInsights: () => Promise<SessionRecapInsight[]>;
 }) {
   const t = useT(); const m = useManagementT();
   const [recaps, setRecaps] = useState<SessionRecap[]>([]);
@@ -61,6 +64,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const [failure, setFailure] = useState("");
   const [queued, setQueued] = useState<string[]>([]);
   const [drafted, setDrafted] = useState<Record<string, string>>({});
+  const [insights, setInsights] = useState<SessionRecapInsight[]>([]);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const seq = useRef(0);
   const refresh = useCallback(async () => {
@@ -68,18 +72,20 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     setLoading(true);
     // Session metadata and the unfinished list are niceties, so losing either
     // must not hide the recaps themselves.
-    const [recapValue, sessionValue, itemValue] = await Promise.all([
+    const [recapValue, sessionValue, itemValue, insightValue] = await Promise.all([
       list().catch(() => null),
       listSessions().catch(() => [] as SessionMeta[]),
       listOpenItems().catch(() => [] as RecapOpenItem[]),
+      listInsights().catch(() => [] as SessionRecapInsight[]),
     ]);
     if (generation !== seq.current) return;
     setRecaps(recapValue ?? []);
     setSessions(sessionValue ?? []);
     setOpenItems(itemValue ?? []);
+    setInsights(insightValue ?? []);
     setLoadFailed(recapValue === null);
     setLoading(false);
-  }, [list, listOpenItems, listSessions]);
+  }, [list, listInsights, listOpenItems, listSessions]);
   useEffect(() => { if (active) void refresh(); }, [active, refresh]);
   useEffect(() => () => { seq.current++; }, []);
 
@@ -216,6 +222,21 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     {loading && <div className="management-notice" role="status">{m("loading")}</div>}
     {!loading && !loadFailed && recaps.length === 0 && <div className="management-notice" role="status">{t("history.recapEmpty")}</div>}
     {!loading && failed > 0 && <div className="management-notice" role="status">{m("recapPendingNotice", { n: failed })}</div>}
+    {!loading && insights.length > 0 && (
+      <section style={{ marginBottom: 12 }}>
+        <div style={{ ...labelStyle, fontSize: 12 }}>{m("recapInsightsTitle")}</div>
+        <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
+          {insights.map((insight) => (
+            <div key={`${insight.kind}:${insight.body}`}>
+              <span style={{ ...labelStyle, fontSize: 12 }}>{insight.kind}</span> {insight.body}{" "}
+              <span style={{ ...labelStyle, fontSize: 12 }}>
+                {m("recapInsightsLine", { n: insight.projects.length, list: insight.projects.join("、") })}
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
     {!loading && openItems.length > 0 && (
       <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
         <strong>{m("recapOpenItemsTitle", { n: waiting })}</strong>

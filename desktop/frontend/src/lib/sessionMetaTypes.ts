@@ -70,6 +70,17 @@ export interface SessionRecapPending {
   updatedAt: string; // RFC3339
 }
 
+// SessionRecapInsight is one conclusion more than one project reached on its own:
+// the projection's only cross-project claim, and it names the projects so the
+// claim is checkable.
+export interface SessionRecapInsight {
+  kind: string;
+  body: string;
+  evidence?: string;
+  projects: string[];
+  seenAt: string; // RFC3339
+}
+
 // RecapSkillDraft says where a drafted playbook landed, so the page can point the
 // person at the file instead of claiming the work is done.
 export interface RecapSkillDraft {
