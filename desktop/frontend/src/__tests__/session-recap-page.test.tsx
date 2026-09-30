@@ -323,6 +323,31 @@ ok(quiet.length === 1 && notesOf(quiet[0]).length === 1 && quiet[0].textContent?
   "a recap with no notes says so instead of listing notes");
 await act(async () => { quietRoot.unmount(); });
 
+// A failed attempt leaves no record at all, so the host lists it from its own
+// marker. The page has to say the attempt failed — "nothing reusable" would be
+// the wrong one of the two silences — and count what is still waiting.
+const failedPath = "C:\\sessions\\20260905-090000.000000000-deepseek-flash.jsonl";
+const failedHost = document.createElement("div");
+document.body.appendChild(failedHost);
+const failedRoot = createRoot(failedHost);
+await act(async () => {
+  failedRoot.render(<LocaleProvider><SessionRecapPage active onBack={() => {}}
+    list={async () => [{
+      path: failedPath, state: "pending", model: "", generatedAt: "", entries: [],
+      pending: { attempts: 2, reason: "unparseable answer", updatedAt: "2026-09-05T09:00:00Z" },
+    } as SessionRecap]}
+    listSessions={async () => []} {...reviewProps} /></LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+const failedCards = [...failedHost.querySelectorAll("li")];
+ok(failedCards.length === 1, "a failed attempt is listed even though it has no recap");
+ok(says(failedCards[0], "attempt 2") && says(failedCards[0], "unparseable answer"),
+  "a failed attempt reports the attempt count and the reason");
+ok(says(failedCards[0], "no reusable notes") === false,
+  "a failed attempt is not reported as a session with nothing to distil");
+ok(says(failedHost, "have not been generated"), "the page counts what is still waiting");
+await act(async () => { failedRoot.unmount(); });
+
 await act(async () => { root.unmount(); });
 process.stdout.write(`\n${failed === 0 ? "OK" : "FAILED"}: ${failed} failed\n`);
 if (failed > 0) process.exit(1);

@@ -70,6 +70,13 @@ func TestStorePendingClearedByPut(t *testing.T) {
 	if records != 0 || pending != 1 {
 		t.Fatalf("counts = (%d,%d), want (0,1)", records, pending)
 	}
+	failures, err := store.PendingMap(ctx)
+	if err != nil {
+		t.Fatalf("pending map: %v", err)
+	}
+	if got := failures["/sessions/a.jsonl"]; got.Attempts != 2 || got.Reason != "boom again" {
+		t.Fatalf("pending = %+v, want 2 attempts and the latest reason", got)
+	}
 	if err := store.Put(ctx, Record{Path: "/sessions/a.jsonl", Fingerprint: "f", PromptVersion: PromptVersion}); err != nil {
 		t.Fatalf("put: %v", err)
 	}
@@ -79,5 +86,8 @@ func TestStorePendingClearedByPut(t *testing.T) {
 	}
 	if records != 1 || pending != 0 {
 		t.Fatalf("counts after put = (%d,%d), want (1,0)", records, pending)
+	}
+	if failures, _ = store.PendingMap(ctx); len(failures) != 0 {
+		t.Fatalf("a stored recap must clear the failure: %+v", failures)
 	}
 }

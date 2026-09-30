@@ -45,12 +45,26 @@ export interface SessionRecapEntry {
   decision?: "accept" | "reject" | string;
 }
 
-// SessionRecap is one read-only recap written when a session closes.
+// SessionRecapPending is a failed generation attempt. A failure stores no
+// record, so this is the only thing that can tell a reader the recap they expect
+// was attempted and refused.
+export interface SessionRecapPending {
+  attempts: number;
+  reason: string;
+  updatedAt: string; // RFC3339
+}
+
+// SessionRecap is one read-only recap written when a session closes. State says
+// which of the three things a row is — a stored recap, a failed attempt still
+// being retried, or a session that produced nothing — so the page never has to
+// guess between "no reusable notes" and "the attempt failed".
 export interface SessionRecap {
   path: string;
+  state?: "stored" | "pending" | "empty" | string;
   entries: SessionRecapEntry[];
   model: string;
-  generatedAt: string; // RFC3339
+  generatedAt: string; // RFC3339, empty when the last attempt failed
+  pending?: SessionRecapPending;
 }
 
 // RecapOpenItem is one unfinished item kept from a handoff note. It belongs to a

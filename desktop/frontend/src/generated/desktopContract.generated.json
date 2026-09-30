@@ -31257,10 +31257,38 @@
         }
       ]
     },
+    "main.SessionRecapPending": {
+      "fields": [
+        {
+          "name": "attempts",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "reason",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "updatedAt",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "main.SessionRecapView": {
       "fields": [
         {
           "name": "path",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "state",
           "type": {
             "kind": "string"
           }
@@ -31285,6 +31313,17 @@
           "name": "generatedAt",
           "type": {
             "kind": "string"
+          }
+        },
+        {
+          "name": "pending",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionRecapPending"
+            },
+            "kind": "nullable"
           }
         }
       ]

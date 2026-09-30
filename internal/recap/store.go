@@ -294,6 +294,40 @@ func (s *Store) MarkPending(ctx context.Context, path, reason string, now time.T
 	return err
 }
 
+// Pending is one session's failed attempt. A failure leaves no record at all, so
+// this is the only way a list can show a session whose recap never arrived.
+type Pending struct {
+	Attempts  int
+	Reason    string
+	UpdatedAt time.Time
+}
+
+// PendingMap returns every failed attempt by session path. One query, because a
+// page asks this about every session it lists.
+func (s *Store) PendingMap(ctx context.Context) (map[string]Pending, error) {
+	if s == nil || s.handle == nil {
+		return nil, nil
+	}
+	rows, err := s.handle.DB.QueryContext(ctx,
+		`SELECT path,attempts,last_error,updated_at FROM recap_pending`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]Pending{}
+	for rows.Next() {
+		var path string
+		var pending Pending
+		var updatedAt int64
+		if err := rows.Scan(&path, &pending.Attempts, &pending.Reason, &updatedAt); err != nil {
+			return nil, err
+		}
+		pending.UpdatedAt = time.Unix(0, updatedAt)
+		out[path] = pending
+	}
+	return out, rows.Err()
+}
+
 // ActivityEntry is one recorded lane decision.
 type ActivityEntry struct {
 	At     time.Time

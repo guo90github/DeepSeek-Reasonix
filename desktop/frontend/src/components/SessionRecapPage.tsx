@@ -89,7 +89,10 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     const matched = needle === "" ? recaps.slice() : recaps.filter((recap) => searchable(recap).includes(needle));
     matched.sort((left, right) => {
       if (sort === "session") return titleOf(left).localeCompare(titleOf(right));
-      const order = left.generatedAt < right.generatedAt ? -1 : left.generatedAt > right.generatedAt ? 1 : 0;
+      // A failed attempt has no generatedAt; its own last try is what orders it.
+      const leftStamp = left.generatedAt || left.pending?.updatedAt || "";
+      const rightStamp = right.generatedAt || right.pending?.updatedAt || "";
+      const order = leftStamp < rightStamp ? -1 : leftStamp > rightStamp ? 1 : 0;
       return sort === "oldest" ? order : -order;
     });
     return matched;
@@ -151,6 +154,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const labelStyle = { color: "var(--fg-dim)" } as const;
   const waiting = openItems.filter((item) => !item.closed).length;
   const stale = openItems.filter((item) => !item.closed && item.stale === true).length;
+  const failed = recaps.filter((recap) => recap.state === "pending").length;
   const sorts: { id: RecapSort; label: string }[] = [
     { id: "newest", label: m("recapSortNewest") },
     { id: "oldest", label: m("recapSortOldest") },
@@ -163,6 +167,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     {failure !== "" && <div className="management-notice" role="alert">{failure}</div>}
     {loading && <div className="management-notice" role="status">{m("loading")}</div>}
     {!loading && !loadFailed && recaps.length === 0 && <div className="management-notice" role="status">{t("history.recapEmpty")}</div>}
+    {!loading && failed > 0 && <div className="management-notice" role="status">{m("recapPendingNotice", { n: failed })}</div>}
     {!loading && openItems.length > 0 && (
       <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
         <strong>{m("recapOpenItemsTitle", { n: waiting })}</strong>
@@ -210,12 +215,16 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap", fontSize: 12 }}>
               <strong>{titleOf(recap)}</strong>
               {meta && <span style={labelStyle}>{t(meta.turns === 1 ? "history.turnOne" : "history.turnOther", { n: meta.turns })}</span>}
-              <span style={labelStyle}>{t("history.recapGeneratedAt")}：{formatStamp(recap.generatedAt)}</span>
-              <span style={labelStyle}>{t("history.recapModel")}：{recap.model}</span>
+              {recap.generatedAt !== "" && <span style={labelStyle}>{t("history.recapGeneratedAt")}：{formatStamp(recap.generatedAt)}</span>}
+              {recap.model !== "" && <span style={labelStyle}>{t("history.recapModel")}：{recap.model}</span>}
+              {recap.pending && <span style={labelStyle}>{m("recapPendingSince")}：{formatStamp(recap.pending.updatedAt)}</span>}
               {meta && <button className="btn btn--small" type="button" onClick={() => { void resume(meta); onBack(); }}>
                 <ExternalLink size={13} />{m("recapOpen")}</button>}
             </div>
-            {recap.entries.length === 0 && <p style={{ margin: 0, ...labelStyle }}>{m("recapNoEntries")}</p>}
+            {recap.pending && <p style={{ margin: 0, color: "var(--warn, inherit)" }}>{m("recapPendingLine", { n: recap.pending.attempts, reason: recap.pending.reason })}</p>}
+            {/* A failed attempt has no notes to speak of; "nothing reusable" would
+                be the wrong one of the two silences. */}
+            {recap.entries.length === 0 && recap.state !== "pending" && <p style={{ margin: 0, ...labelStyle }}>{m("recapNoEntries")}</p>}
             {recap.entries.map((entry) => {
               const key = kindKey(entry.kind);
               const reviewable = meta !== undefined && entry.target !== "display";
