@@ -153,6 +153,8 @@ sqlite3 "$DB" "select kind, choice, body, datetime(decided_at/1000000000,'unixep
 rg -o '\{[^{]*"usage_source":"session-recap"[^}]*\}' "C:\Users\guosj\AppData\Roaming\reasonix\stats\<日期>.jsonl"
 ```
 
+**保留策略（宿主每次启动建车道时跑一次，日志里能看到）**：投影是缓存，所以它会自我修剪——`recap_records` 删 180 天前的记录、`recap_resume` 删**会话文件已不存在**的行、`recap_activity` 只留最近 500 行；有删除时打印 `session recap projection pruned records=… resumes=… activity=…`，没删就不打印。**`recap_decisions`（采纳/弃）与 `recap_open_items`（未完成项）永不清理**：那是人产出的，不是派生数据（单测 `TestPruneKeepsWhatThePersonProduced` 钉住这条）。`head_text` 不需要上限——写进去时已被 `headPiece` 截到输入预算的 3/5。
+
 **怎么读决策留痕**（这是三次排查换来的判据）：
 
 | 留痕 | 含义 |

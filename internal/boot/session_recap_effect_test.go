@@ -173,9 +173,34 @@ kind = "`+kind+`"
 model = "x"
 `)
 
+	// Building the lane also runs the projection's maintenance once per process.
+	// Seeding a stale record proves the wiring, not just the SQL: nothing else in
+	// this test would ever remove it.
+	ctx := context.Background()
+	seed, err := recap.Open(ctx, recap.Options{Path: recap.DefaultPath()})
+	if err != nil {
+		t.Fatalf("open projection: %v", err)
+	}
+	stalePath := filepath.Join(sessions, "20240101-000000.000000000-test-model.jsonl")
+	if err := seed.Put(ctx, recap.Record{Path: stalePath, Fingerprint: "f",
+		PromptVersion: recap.PromptVersion, GeneratedAt: time.Now().Add(-365 * 24 * time.Hour)}); err != nil {
+		t.Fatalf("seed stale record: %v", err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatalf("close projection: %v", err)
+	}
+
 	if _, err := Build(context.Background(), Options{Sink: event.Discard, SessionDir: sessions}); err != nil {
 		t.Fatalf("Build: %v", err)
 	}
+	after, err := recap.Open(ctx, recap.Options{Path: recap.DefaultPath()})
+	if err != nil {
+		t.Fatalf("reopen projection: %v", err)
+	}
+	if _, ok, _ := after.Get(ctx, stalePath); ok {
+		t.Fatal("a record past the retention window survived the lane's maintenance")
+	}
+	_ = after.Close()
 	if !EnqueueSessionRecap(sessionPath) {
 		t.Fatal("the manual entry refused a session while the lane was running")
 	}

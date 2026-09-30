@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/config"
@@ -39,10 +40,13 @@ var recapLanes = struct {
 // bindRecapLane attaches the process-wide recap lane to this controller's
 // session-end seam. The lane is optional: a failure only costs recaps.
 func bindRecapLane(ctx context.Context, cfg *config.Config, ctrl *control.Controller, sink event.Sink, resolver provider.Resolver, proxy netclient.ProxySpec) {
-	runner, err := sharedRecapLane(ctx, cfg, sink, recapResolverFor(resolver, cfg, proxy))
+	runner, created, err := sharedRecapLane(ctx, cfg, sink, recapResolverFor(resolver, cfg, proxy))
 	if err != nil {
 		slog.Warn("session recap lane unavailable", "err", err.Error())
 		return
+	}
+	if created {
+		pruneRecapProjection(ctx, recap.DefaultPath())
 	}
 	// /clear and a new chat rotate away content the user dropped, so they owe no
 	// recap; only an ordinary close ends a session worth keeping.
@@ -99,13 +103,14 @@ func CloseRecapLanes() {
 }
 
 // sharedRecapLane builds the lane for the current projection path once, then
-// hands the same one to every later controller.
-func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, resolve resolveRecapModel) (*recap.Runner, error) {
+// hands the same one to every later controller. A created lane is reported so the
+// caller can run the projection's maintenance exactly once per process.
+func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, resolve resolveRecapModel) (*recap.Runner, bool, error) {
 	key := recap.DefaultPath()
 	recapLanes.mu.Lock()
 	defer recapLanes.mu.Unlock()
 	if runner, ok := recapLanes.byKey[key]; ok {
-		return runner, nil
+		return runner, false, nil
 	}
 	models := recapModelsFunc(func(ctx context.Context, sessionPath string) (provider.Provider, string, bool) {
 		if ref, ok := agent.LoadSessionModel(sessionPath); ok {
@@ -131,7 +136,26 @@ func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, r
 	})
 	runner := recap.NewRunner(generator)
 	recapLanes.byKey[key] = runner
-	return runner, nil
+	return runner, true, nil
+}
+
+// pruneRecapProjection trims the projection once per process, on the path that
+// builds the first lane. A failure only costs disk, so it never blocks the lane.
+func pruneRecapProjection(ctx context.Context, path string) {
+	store, err := recap.Open(ctx, recap.Options{Path: path})
+	if err != nil {
+		return
+	}
+	defer func() { _ = store.Close() }()
+	report, err := store.Prune(ctx, time.Now())
+	if err != nil {
+		slog.Warn("session recap prune failed", "err", err.Error())
+		return
+	}
+	if report.Records+report.Resumes+report.Activity > 0 {
+		slog.Info("session recap projection pruned", "records", report.Records,
+			"resumes", report.Resumes, "activity", report.Activity)
+	}
 }
 
 // recapOpenHandoffs reads one project's unfinished items for the controller's

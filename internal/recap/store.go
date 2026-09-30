@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"os"
 	"time"
 
 	"reasonix/internal/projectiondb"
@@ -413,4 +414,80 @@ func (s *Store) Counts(ctx context.Context) (records, pending int, err error) {
 	}
 	err = s.handle.DB.QueryRowContext(ctx, `SELECT COUNT(*) FROM recap_pending`).Scan(&pending)
 	return records, pending, err
+}
+
+const (
+	// recordRetention is how long a stored recap is worth keeping. The projection
+	// is a cache: a session this old is either finished for good or will be
+	// regenerated on demand, while the notes a person kept live in memory.
+	recordRetention = 180 * 24 * time.Hour
+	// maxActivityRows keeps the diagnostic log to the tail a page actually reads.
+	maxActivityRows = 500
+)
+
+// PruneReport counts what one maintenance pass removed.
+type PruneReport struct {
+	Records  int
+	Resumes  int
+	Activity int
+}
+
+// Prune drops what the projection no longer needs, so it cannot grow without end:
+// records past the retention window, resume markers whose session file is gone,
+// and diagnostic rows beyond the tail. What the person produced — decisions and
+// unfinished items — is never touched: those are not derived from anything.
+func (s *Store) Prune(ctx context.Context, now time.Time) (PruneReport, error) {
+	var report PruneReport
+	if s == nil || s.handle == nil {
+		return report, nil
+	}
+	res, err := s.handle.DB.ExecContext(ctx,
+		`DELETE FROM recap_records WHERE generated_at < ?`, now.Add(-recordRetention).UnixNano())
+	if err != nil {
+		return report, err
+	}
+	if removed, err := res.RowsAffected(); err == nil {
+		report.Records = int(removed)
+	}
+	orphans, err := s.orphanResumes(ctx)
+	if err != nil {
+		return report, err
+	}
+	for _, path := range orphans {
+		if _, err := s.handle.DB.ExecContext(ctx, `DELETE FROM recap_resume WHERE path = ?`, path); err != nil {
+			return report, err
+		}
+		report.Resumes++
+	}
+	res, err = s.handle.DB.ExecContext(ctx, `DELETE FROM recap_activity WHERE rowid NOT IN (
+		SELECT rowid FROM recap_activity ORDER BY at DESC, rowid DESC LIMIT ?)`, maxActivityRows)
+	if err != nil {
+		return report, err
+	}
+	if removed, err := res.RowsAffected(); err == nil {
+		report.Activity = int(removed)
+	}
+	return report, nil
+}
+
+// orphanResumes lists resume markers whose session file is no longer there. A
+// marker only says how far a read of that file reached, so with the file gone it
+// is dead weight — and its head text is the largest part of the row.
+func (s *Store) orphanResumes(ctx context.Context) ([]string, error) {
+	rows, err := s.handle.DB.QueryContext(ctx, `SELECT path FROM recap_resume`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		if _, err := os.Stat(path); err != nil {
+			out = append(out, path)
+		}
+	}
+	return out, rows.Err()
 }

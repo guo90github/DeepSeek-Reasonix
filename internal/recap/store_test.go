@@ -2,6 +2,9 @@ package recap
 
 import (
 	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -89,5 +92,74 @@ func TestStorePendingClearedByPut(t *testing.T) {
 	}
 	if failures, _ = store.PendingMap(ctx); len(failures) != 0 {
 		t.Fatalf("a stored recap must clear the failure: %+v", failures)
+	}
+}
+
+// The projection is a cache and must not grow without end — but only what it can
+// rebuild is expendable. Decisions and unfinished items are the person's own
+// output, and dropping either would undo work nobody asked to redo.
+func TestPruneKeepsWhatThePersonProduced(t *testing.T) {
+	ctx := context.Background()
+	store := openTestStore(t)
+	now := time.Unix(1800000000, 0)
+	live := filepath.Join(t.TempDir(), "here.jsonl")
+	missing := filepath.Join(t.TempDir(), "gone.jsonl")
+	if err := os.WriteFile(live, []byte("x"), 0o644); err != nil {
+		t.Fatalf("write session: %v", err)
+	}
+
+	stale := Record{Path: "/sessions/old.jsonl", Fingerprint: "f", PromptVersion: PromptVersion,
+		GeneratedAt: now.Add(-recordRetention - time.Hour)}
+	fresh := Record{Path: "/sessions/new.jsonl", Fingerprint: "f", PromptVersion: PromptVersion,
+		GeneratedAt: now.Add(-time.Hour)}
+	for _, rec := range []Record{stale, fresh} {
+		if err := store.Put(ctx, rec); err != nil {
+			t.Fatalf("put %s: %v", rec.Path, err)
+		}
+	}
+	for _, path := range []string{live, missing} {
+		if err := store.PutResume(ctx, path, Resume{Offset: 1, Head: "head", UserTurns: 1}); err != nil {
+			t.Fatalf("put resume %s: %v", path, err)
+		}
+	}
+	for i := 0; i < maxActivityRows+20; i++ {
+		if err := store.Trace(ctx, "submit", "/sessions/a.jsonl", fmt.Sprintf("row %d", i), now); err != nil {
+			t.Fatalf("trace: %v", err)
+		}
+	}
+	if err := store.KeepOpen(ctx, OpenItem{Project: "/p", Body: "keep me"}, now); err != nil {
+		t.Fatalf("keep open: %v", err)
+	}
+	if err := store.Decide(ctx, KindRefuted, "no, this was ruled out", DecisionReject, now); err != nil {
+		t.Fatalf("decide: %v", err)
+	}
+
+	report, err := store.Prune(ctx, now)
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if report.Records != 1 || report.Resumes != 1 || report.Activity != 20 {
+		t.Fatalf("prune report = %+v, want one record, one resume marker, 20 log rows", report)
+	}
+	if _, ok, _ := store.Get(ctx, fresh.Path); !ok {
+		t.Fatal("a record inside the window must survive")
+	}
+	if _, ok, _ := store.Get(ctx, stale.Path); ok {
+		t.Fatal("a record past the window must go")
+	}
+	if _, ok, _ := store.Resume(ctx, live); !ok {
+		t.Fatal("a resume marker whose session still exists must survive")
+	}
+	if _, ok, _ := store.Resume(ctx, missing); ok {
+		t.Fatal("a resume marker whose session file is gone must go")
+	}
+	if items, _ := store.OpenItemsFor(ctx, "/p"); len(items) != 1 {
+		t.Fatal("unfinished items are not the cache's to drop")
+	}
+	if rejected, _ := store.Rejected(ctx); len(rejected) != 1 {
+		t.Fatal("decisions are not the cache's to drop")
+	}
+	if tail, err := store.Activity(ctx, maxActivityRows+50); err != nil || len(tail) != maxActivityRows {
+		t.Fatalf("activity tail = %d (err=%v), want %d", len(tail), err, maxActivityRows)
 	}
 }
