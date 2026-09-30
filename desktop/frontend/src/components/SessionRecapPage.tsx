@@ -232,6 +232,12 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       setBusy("");
     }
   }, [generate, m, refresh]);
+  // A batch is a loop over the same per-session request: the lane stays
+  // one-session-at-a-time, so nothing here is a new host contract.
+  const askGenerateAll = useCallback(async (paths: string[]) => {
+    for (const path of paths) await askGenerate(path);
+  }, [askGenerate]);
+
   const sorts: { id: RecapSort; label: string }[] = [
     { id: "newest", label: m("recapSortNewest") },
     { id: "oldest", label: m("recapSortOldest") },
@@ -321,12 +327,25 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
         <strong>{m("recapUngeneratedTitle", { n: ungenerated.length })}</strong>
         <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapUngeneratedHint")}</span>
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
-          {ungenerated.map((meta) => (
-            <li key={meta.path} style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-              <span>{titleOf({ path: meta.path } as SessionRecap)}</span>
-              <button className="btn btn--small" type="button" disabled={busy !== ""}
-                onClick={() => void askGenerate(meta.path)}>{m("recapGenerate")}</button>
-              {queued.includes(meta.path) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
+          {groupByTopic(ungenerated.map((meta) => ({
+            id: meta.path, kind: "session", body: titleOf({ path: meta.path } as SessionRecap),
+          }))).map((group) => (
+            <li key={group.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {group.entries.length > 1 && (
+                <span style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapTopicGroupSessions", { n: group.entries.length })}</span>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => void askGenerateAll(group.entries.map((item) => item.id))}>{m("recapGenerate")}</button>
+                </span>
+              )}
+              {group.entries.map((item) => (
+                <span key={item.id} style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span>{item.body}</span>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => void askGenerate(item.id)}>{m("recapGenerate")}</button>
+                  {queued.includes(item.id) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
+                </span>
+              ))}
             </li>
           ))}
         </ul>

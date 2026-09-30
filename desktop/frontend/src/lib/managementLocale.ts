@@ -47,6 +47,7 @@ const messages = {
   recapScopeProposed: ["模型提议落点：{level}（采纳仍写当前项目）", "模型提議落點：{level}（採納仍寫當前專案）", "Tier proposed: {level} (accepting still writes to this project)"],
   recapObservedIn: ["另有 {n} 个项目独立得出同一结论：{list}", "另有 {n} 個專案獨立得出同一結論：{list}", "Reached independently in {n} other project(s): {list}"],
   recapTopicGroup: ["同话题 {n} 条，下面的动作一次处理选中的条目", "同話題 {n} 條，下面的動作一次處理選中的條目", "{n} notes share this topic; the buttons below act on the ones checked"],
+  recapTopicGroupSessions: ["同话题 {n} 个会话，可一次生成", "同話題 {n} 個會話，可一次生成", "{n} sessions share this topic; generate them together"],
   recapGenerate: ["生成回顾", "產生回顧", "Generate recap"],
   recapRetryGenerate: ["重试生成", "重試產生", "Retry generation"],
   recapQueued: ["已排队生成，稍后刷新查看", "已排隊產生，稍後重新整理查看", "Queued — refresh in a moment to see it"],
