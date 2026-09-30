@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:8057ed8ed21e0c59364cb2a2b92d64284a9905fcc068ccca0a3e8d6f9d78acbe";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:f571823d72731268bea337f49c0325abf4638505108119754944101a960d29c6";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -128,6 +128,7 @@ export const DESKTOP_COMMANDS = [
   "DisconnectRemoteHost",
   "DismissTodoBatchForTab",
   "DraftRecapSkill",
+  "DraftRecapTopicSkill",
   "Effort",
   "EffortForTab",
   "EnqueueInboxFollowup",
@@ -3034,6 +3035,11 @@ export interface RecapSkillDraft {
   path: string;
 }
 
+export interface RecapSkillSource {
+  kind: string;
+  body: string;
+}
+
 export interface RecoveryCleanupItem {
   path: string;
   headId?: string;
@@ -4607,6 +4613,7 @@ export interface GeneratedDesktopCommands {
   DisconnectRemoteHost(arg0: string): Promise<void>;
   DismissTodoBatchForTab(arg0: string, arg1: string): Promise<void>;
   DraftRecapSkill(arg0: string, arg1: string): Promise<RecapSkillDraft>;
+  DraftRecapTopicSkill(arg0: RecapSkillSource[]): Promise<RecapSkillDraft>;
   Effort(): Promise<EffortInfo>;
   EffortForTab(arg0: string): Promise<EffortInfo>;
   EnqueueInboxFollowup(arg0: string, arg1: string, arg2: string, arg3: string): Promise<InboxReceiptView>;

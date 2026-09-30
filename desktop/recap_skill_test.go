@@ -58,3 +58,44 @@ func TestQuoteYAMLScalarKeepsOneValue(t *testing.T) {
 		t.Fatalf("a value with a colon and quotes must still parse: %+v", fields)
 	}
 }
+
+// A batch is one skill or several, and what decides it is the topic: the notes of
+// one topic become one file that keeps every note verbatim, so nothing a reader
+// would need is dropped on the way in.
+func TestRecapTopicSkillMarkdownKeepsEveryTopicStep(t *testing.T) {
+	entries := []recap.Entry{
+		{Kind: recap.KindRootCause, Body: "只取分支统计未提交数：漏掉 CJK 路径",
+			Evidence: "desktop/gitstats.go",
+			Refs:     []recap.Ref{{Kind: recap.RefPath, Value: "desktop/gitstats.go", Detail: "L40"}}},
+		{Kind: recap.KindRefuted, Body: "不要再按文件名猜语言：后缀不可靠",
+			Refs: []recap.Ref{{Kind: recap.RefCommand, Value: "git blame -L 12,12", Detail: "已否证"}}},
+	}
+	markdown := recapTopicSkillMarkdown("recap-topic-1a2b3c4d", entries)
+	fields, body := frontmatter.Split(markdown)
+	if fields["invocation"] != "manual" || fields["name"] != "recap-topic-1a2b3c4d" {
+		t.Fatalf("frontmatter = %+v, want a manual draft named after its directory", fields)
+	}
+	for _, want := range []string{
+		"2 session recap notes on one topic",
+		"只取分支统计未提交数：漏掉 CJK 路径",
+		"不要再按文件名猜语言：后缀不可靠",
+		"path desktop/gitstats.go L40",
+		"git blame -L 12,12",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("the composed draft must keep %q:\n%s", want, body)
+		}
+	}
+	if !strings.Contains(body, "`invocation: manual`") {
+		t.Fatalf("the composed draft must still say how to arm it:\n%s", body)
+	}
+}
+
+// A single-note draft must stay byte-identical to the per-note action's output:
+// the batch path is an addition, not a rewrite of what people already have.
+func TestRecapTopicSkillMarkdownMatchesTheSingleNoteDraft(t *testing.T) {
+	entry := recap.Entry{Kind: recap.KindRootCause, Body: "一个诊断", Evidence: "e", Refs: []recap.Ref{{Kind: recap.RefPath, Value: "a.go"}}}
+	if got, want := recapTopicSkillMarkdown("recap-x", []recap.Entry{entry}), recapSkillMarkdown("recap-x", entry); got != want {
+		t.Fatalf("single-note batch draft differs from the per-note draft:\n%s\n%s", got, want)
+	}
+}

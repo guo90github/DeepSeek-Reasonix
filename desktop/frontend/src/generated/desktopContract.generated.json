@@ -3249,6 +3249,36 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recap_skill.go",
+      "name": "DraftRecapTopicSkill",
+      "owner": "App.DraftRecapTopicSkill",
+      "params": [
+        {
+          "elem": {
+            "kind": "object",
+            "ref": "main.RecapSkillSource"
+          },
+          "kind": "array"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.RecapSkillDraft"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "sources"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.DraftRecapTopicSkill"
+      },
+      "sources": [
+        "desktop/recap_skill.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/app.go",
       "name": "Effort",
       "owner": "App.Effort",
@@ -29040,6 +29070,22 @@
         },
         {
           "name": "path",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.RecapSkillSource": {
+      "fields": [
+        {
+          "name": "kind",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "body",
           "type": {
             "kind": "string"
           }

@@ -16,6 +16,53 @@ type RecapSkillDraft struct {
 	Path string `json:"path"`
 }
 
+// RecapSkillSource names one note to draft from: the page sends the notes of one
+// topic, and the host decides which of them the projection still holds.
+type RecapSkillSource struct {
+	Kind string `json:"kind"`
+	Body string `json:"body"`
+}
+
+// DraftRecapTopicSkill writes one playbook for a whole topic. A batch can honestly
+// be one skill or several, and what decides it is the topic, not a count: notes the
+// page grouped as one topic become one file with every note kept verbatim (nothing
+// rewritten, nothing inferred), while notes of other topics are other calls and
+// other files.
+func (a *App) DraftRecapTopicSkill(sources []RecapSkillSource) (RecapSkillDraft, error) {
+	if len(sources) == 0 {
+		return RecapSkillDraft{}, fmt.Errorf("a draft needs at least one note")
+	}
+	entries := make([]recap.Entry, 0, len(sources))
+	for _, source := range sources {
+		kind, body := strings.TrimSpace(source.Kind), strings.TrimSpace(source.Body)
+		if !recapPlaybookKind(kind) {
+			return RecapSkillDraft{}, fmt.Errorf("a %s note is not a playbook", kind)
+		}
+		entry, ok := a.findRecapEntry(kind, body)
+		if !ok {
+			return RecapSkillDraft{}, fmt.Errorf("that note is no longer in the projection")
+		}
+		entries = append(entries, entry)
+	}
+	root := a.projectRootForDrafting()
+	if root == "" {
+		return RecapSkillDraft{}, fmt.Errorf("no project is open to draft into")
+	}
+	name := "recap-" + stableSuggestionName(entries[0].Body, "note")
+	dir := filepath.Join(root, ".reasonix", skill.SkillsDirname, name)
+	target := filepath.Join(dir, skill.SkillFile)
+	if _, err := os.Stat(target); err == nil {
+		return RecapSkillDraft{}, fmt.Errorf("%s already exists; rename or remove it first", target)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return RecapSkillDraft{}, err
+	}
+	if err := os.WriteFile(target, []byte(recapTopicSkillMarkdown(name, entries)), 0o644); err != nil {
+		return RecapSkillDraft{}, err
+	}
+	return RecapSkillDraft{Name: name, Path: target}, nil
+}
+
 // DraftRecapSkill writes a playbook from one reviewed note into this project's
 // skill directory. Three things are deliberate: it is a person-triggered action,
 // it never overwrites a file that is already there, and the draft declares
@@ -69,6 +116,50 @@ func (a *App) projectRootForDrafting() string {
 	}
 	a.reconcileTabWithPinnedSessionMeta(tab)
 	return strings.TrimSpace(tab.WorkspaceRoot)
+}
+
+// recapTopicSkillMarkdown keeps a single-note draft byte-identical to what the
+// per-note action has always written, and lays several notes of one topic out in
+// the order the session produced them. Every step is a note verbatim with its own
+// pointers: composition here is juxtaposition, never rewriting.
+// recapTopicSkillMarkdown keeps a single-note draft byte-identical to what the
+// per-note action has always written, and lays several notes of one topic out in
+// the order the session produced them. Every step is a note verbatim with its own
+// pointers: composition here is juxtaposition, never rewriting.
+func recapTopicSkillMarkdown(name string, entries []recap.Entry) string {
+	if len(entries) == 1 {
+		return recapSkillMarkdown(name, entries[0])
+	}
+	var b strings.Builder
+	b.WriteString("---\n")
+	b.WriteString("name: " + name + "\n")
+	b.WriteString("description: " + quoteYAMLScalar(fmt.Sprintf("%s (and %d more notes on the same topic)",
+		oneLine(entries[0].Body), len(entries)-1)) + "\n")
+	b.WriteString("invocation: manual\n")
+	b.WriteString("---\n\n")
+	b.WriteString(fmt.Sprintf("> Draft distilled from %d session recap notes on one topic. Each step\n", len(entries)))
+	b.WriteString("> below is a note verbatim, with its own pointers — nothing was rewritten or\n")
+	b.WriteString("> inferred. Read it, verify the steps, and change `invocation: manual` to\n")
+	b.WriteString("> `auto` only once you trust it.\n\n")
+	b.WriteString("## When it applies\n\n")
+	for _, entry := range entries {
+		b.WriteString("- " + oneLine(entry.Body) + "\n")
+	}
+	b.WriteString("\n## What to do\n\n")
+	for i, entry := range entries {
+		b.WriteString(fmt.Sprintf("%d. (%s) %s\n", i+1, entry.Kind, oneLine(entry.Body)))
+		if len(entry.Refs) > 0 {
+			lines := make([]string, 0, len(entry.Refs))
+			for _, ref := range entry.Refs {
+				lines = append(lines, refLine(ref))
+			}
+			b.WriteString("   Where to check: " + strings.Join(lines, "; ") + "\n")
+		}
+		if evidence := oneLine(entry.Evidence); evidence != "" {
+			b.WriteString("   Evidence: " + evidence + "\n")
+		}
+	}
+	return b.String()
 }
 
 // recapSkillMarkdown is the draft itself: what it applies to, what to do, and where
