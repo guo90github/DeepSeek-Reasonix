@@ -1,6 +1,12 @@
 package control
 
-import "strings"
+import (
+	"context"
+	"strings"
+
+	"reasonix/internal/extension"
+	"reasonix/internal/extension/dispatch"
+)
 
 // SetSessionEndObserver registers a first-party observer that runs after a
 // session ends (closed or rotated) with the path that ended. A derived
@@ -29,4 +35,15 @@ func (c *Controller) notifySessionEnd(reason, sessionPath string) {
 		return
 	}
 	observer(reason, sessionPath)
+}
+
+// closeSessionEndHooks runs the user-facing end hooks and the end observer for a
+// closed session. Hooks pair with SessionStart and stay gated on `started`; the
+// observer is not, so a session restored from disk is recappable without a turn.
+func (c *Controller) closeSessionEndHooks(started bool) {
+	if started {
+		c.hooks.SessionEnd(context.Background(), "other")
+		c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, c.SessionPath())
+	}
+	c.notifySessionEnd("other", c.SessionPath())
 }

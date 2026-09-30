@@ -5077,10 +5077,8 @@ func (c *Controller) close(fireSessionEnd bool, jobsMode closeJobsMode) {
 		c.inbox.closed = true
 		c.inbox.mu.Unlock()
 		c.inbox.scanMu.Unlock()
-		if fireSessionEnd && started {
-			c.hooks.SessionEnd(context.Background(), "other")
-			c.extensionSessionEvent(extension.PointSessionEnd, dispatch.PhaseEnd, c.SessionPath())
-			c.notifySessionEnd("other", c.SessionPath())
+		if fireSessionEnd {
+			c.closeSessionEndHooks(started)
 		}
 		if c.jobs != nil {
 			switch jobsMode {
