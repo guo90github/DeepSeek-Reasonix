@@ -188,7 +188,7 @@ Documentation-impact: updated - docs/research/desktop-layout-refactor.md 新增
 | `src/components/AnswerKeyPoints.tsx` | 呈现「N 个重点」；拿不到跳转能力时渲染纯文本（不做点了没用的按钮） |
 | `src/components/Message.tsx` | 挂点 = `AssistantMessage`（单列与分栏左栏共用同一处实现）；`MutationObserver` 观察三条 markdown 路径的 DOM 落地；要点条在 `.msg__body` **之外**，复制回答不会重复带出 |
 | `src/lib/answerJump.ts` + `ConversationPane.tsx` | 跳转意图的 context 与其注入点；落点保留 `md--landed` 圈（用 outline 画，任何手势才清，同一时刻只一个） |
-| `src/lib/usePaneTailFollow.ts` | 滚动写者提到 `writerRef`，新增 `aimAt(element)`：经 `createTranscriptScrollWriter` 以 `operation:"scrollTo"` + `top` 写入（generation / ownershipEpoch / geometryRevision 三重围栏），被接受才把跟随模式置 `manual` |
+| `src/lib/usePaneTailFollow.ts` | 滚动写者提到 `writerRef`，新增 `aimAt(element)`：经 `createTranscriptScrollWriter` 以 `operation:"scrollToOffset"` + `top` 写入（**直接写 scroller，不是 Virtuoso 的 `scrollTo`** —— 目标常在尚未测量的行内，那条路会接受命令却不做事），三重围栏通过且被接受才把跟随模式置 `manual`；owner/reason 用诊断词表已有的 `jump` / `scroll-offset`，每次跳转带一个新编号（写者按 owner+epoch+revision+operation 去重） |
 
 两条不可动摇的约束：
 

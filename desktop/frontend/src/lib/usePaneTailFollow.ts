@@ -207,8 +207,12 @@ export function usePaneTailFollow({
   }, [settle]);
 
   // A jump is a reader gesture, not a tail write: it goes through the pane's own
-  // writer, and an accepted jump releases the tail until the reader returns to
-  // the bottom (the scroll listener re-arms it there).
+  // writer, releases the tail until the reader returns to the bottom, and asks
+  // for the offset write rather than Virtuoso's scrollTo — the mark usually sits
+  // inside a row the range has not measured, where that route accepts the
+  // command and then does nothing. Each attempt carries a fresh number because
+  // the writer rejects a repeated owner+epoch+revision+operation as a duplicate.
+  const jumpAttemptRef = useRef(0);
   const aimAt = useCallback((element: HTMLElement | null): boolean => {
     const scroller = scrollerRef.current;
     const writer = writerRef.current;
@@ -218,9 +222,10 @@ export function usePaneTailFollow({
     const leadingGapPx = 12;
     const offset = scroller.scrollTop + element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - leadingGapPx;
     const accepted = writer.write({
-      owner: "answer-point-jump",
-      operation: "scrollTo",
-      reason: "answer-point",
+      owner: "jump",
+      operation: "scrollToOffset",
+      reason: "scroll-offset",
+      settleFrame: (jumpAttemptRef.current += 1),
       top: Math.max(0, offset),
       expectedSurfaceGeneration: generationRef.current,
       expectedOwnershipEpoch: ownershipEpochRef.current,

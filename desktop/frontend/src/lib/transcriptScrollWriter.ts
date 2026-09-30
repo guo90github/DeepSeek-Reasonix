@@ -6,7 +6,7 @@ import { noteTranscriptScrollWrite } from "./transcriptScrollProbe";
 
 export type TranscriptScrollWriterRequest = {
   owner: string;
-  operation: "scrollTo" | "scrollBy" | "scrollToIndex" | "pinTail";
+  operation: "scrollTo" | "scrollBy" | "scrollToIndex" | "pinTail" | "scrollToOffset";
   reason: string;
   top?: number;
   index?: number | "LAST";
@@ -98,12 +98,14 @@ export function createTranscriptScrollWriter({
     previousOwner = request.owner;
 
     const behavior = request.behavior === "smooth" ? "smooth" : "auto";
-    // pinTail targets the scroller's current physical extent. Routing it back
-    // through Virtuoso can defer the write against a stale size tree while the
-    // measured range is collapsing/rebounding, leaving an accepted command as
-    // a no-op. The writer is also the sole gateway for direct Transcript DOM
-    // writes, so this keeps ownership/generation/revision fencing intact.
-    if (request.operation === "pinTail") {
+    // pinTail and scrollToOffset target the scroller's own extent — the tail's
+    // bottom, or an offset inside an item. Routing either back through Virtuoso
+    // can defer the write against a stale size tree while the measured range is
+    // collapsing/rebounding, or has not measured that item yet, leaving an
+    // accepted command as a no-op. The writer is also the sole gateway for
+    // direct Transcript DOM writes, so ownership/generation/revision fencing
+    // stays intact.
+    if (request.operation === "pinTail" || request.operation === "scrollToOffset") {
       if (typeof element.scrollTo === "function") element.scrollTo({ top: request.top!, behavior });
       else element.scrollTop = request.top!;
     } else if (request.operation === "scrollTo") handle.scrollTo({ top: request.top!, behavior });

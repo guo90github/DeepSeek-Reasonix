@@ -16,7 +16,7 @@ export type TranscriptScrollWriteRecord = {
   requestedOffset?: number;
   acceptedOffset?: number;
   outcome?: string;
-  kind: "scrollTo" | "scrollBy" | "scrollToIndex" | "pinTail";
+  kind: "scrollTo" | "scrollBy" | "scrollToIndex" | "pinTail" | "scrollToOffset";
   top?: number;
   index?: number | "LAST";
   source?: string;

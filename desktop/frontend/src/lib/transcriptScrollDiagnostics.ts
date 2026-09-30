@@ -69,7 +69,7 @@ export type TranscriptScrollDiagnosticEvent = {
   mode?: "tail-follow" | "manual" | "native-thumb" | "user-resize" | "selection" | "restoring" | "unknown";
   previousMode?: "tail-follow" | "manual" | "native-thumb" | "user-resize" | "selection" | "restoring" | "unknown";
   owner?: "tail-follow" | "jump" | "rewind" | "jump-bottom" | "custom-scrollbar" | "selection-edge-scroll" | "recovery" | "reader-stability" | "anchor-compensation" | "block-window-prepend" | "other";
-  writeKind?: "scrollTo" | "scrollBy" | "scrollToIndex" | "pinTail";
+  writeKind?: "scrollTo" | "scrollBy" | "scrollToIndex" | "pinTail" | "scrollToOffset";
   source?: "reset" | "user-scroll-intent" | "manual-reading" | "reader-idle-deadline" | "reader-stability" | "reader-tail-handoff" | "reader-transaction-end" | "scroll-delivered"
     | "tail-content-changed" | "content-shrank" | "layout-height-changed" | "viewport-resized"
     | "user-resize-begin" | "user-resize-end" | "selection-begin" | "selection-end"
@@ -160,7 +160,7 @@ const EVENT_TYPES = new Set<TranscriptScrollDiagnosticEventType>([
 ]);
 const MODES = new Set(["tail-follow", "manual", "native-thumb", "user-resize", "selection", "restoring", "unknown"]);
 const OWNERS = new Set(["tail-follow", "jump", "rewind", "jump-bottom", "custom-scrollbar", "selection-edge-scroll", "recovery", "reader-stability", "anchor-compensation", "block-window-prepend", "other"]);
-const WRITE_KINDS = new Set(["scrollTo", "scrollBy", "scrollToIndex", "pinTail"]);
+const WRITE_KINDS = new Set(["scrollTo", "scrollBy", "scrollToIndex", "pinTail", "scrollToOffset"]);
 const SOURCES = new Set([
   "reset", "user-scroll-intent", "manual-reading", "reader-idle-deadline", "reader-stability", "reader-tail-handoff", "reader-transaction-end", "scroll-delivered",
   "tail-content-changed", "content-shrank", "layout-height-changed", "viewport-resized",
