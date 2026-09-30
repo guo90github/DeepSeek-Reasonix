@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"reasonix/internal/agent"
 )
 
 // Calibrating the offer rule needs real text on both sides: the notes a person
@@ -72,6 +74,21 @@ func TestCalibrateOfferRule(t *testing.T) {
 	fired := map[string]int{}
 	rarityOwn := make([]int, len(rarityCuts))
 	rarityOther := make([]int, len(rarityCuts))
+	// Titles are one line per session saying what it was about, and the sidebar
+	// keeps one for every session — so before inventing a corpus, measure whether
+	// the corpus the product already has is enough.
+	titles := map[string]map[string]string{}
+	for _, path := range sessions {
+		bucket := projectOf[path]
+		if bucket == "" {
+			continue
+		}
+		if titles[bucket] == nil {
+			titles[bucket] = loadTitles(filepath.Join(bucket, "sessions"))
+		}
+	}
+	titleOwn := make([]int, len(titleRarityCuts))
+	titleOther := make([]int, len(titleRarityCuts))
 	for _, record := range records {
 		own := realPathFor(sessions, record.Path)
 		if own == "" {
@@ -95,20 +112,19 @@ func TestCalibrateOfferRule(t *testing.T) {
 				Body: entry.Body, Evidence: entry.Evidence, OpenedAt: now}
 			single := []OpenItem{item}
 			tokens := tokensOf(item)
-			// How many of the bucket's other openers name each of this item's
+			// How many of the bucket's other texts name each of this item's
 			// identifiers: a file the whole project talks about cannot say "this is
 			// the work we were discussing". Measuring it here decides whether a
-			// corpus for a document-frequency filter would be worth keeping.
-			df := make(map[string]int, len(tokens.identifiers))
-			for _, identifier := range tokens.identifiers {
-				count := 0
-				for _, turn := range others {
-					if strings.Contains(strings.ToLower(turn), identifier) {
-						count++
-					}
+			// corpus for a document-frequency filter would be worth keeping — and
+			// the titles are the corpus the product already has.
+			df := dfOver(tokens.identifiers, others)
+			ownTitles := make([]string, 0, len(titles[project]))
+			for path, title := range titles[project] {
+				if path != own && strings.TrimSpace(title) != "" {
+					ownTitles = append(ownTitles, title)
 				}
-				df[identifier] = count
 			}
+			titleDF := dfOver(tokens.identifiers, ownTitles)
 			if ownOpener != "" && len(MatchOpenItems(single, ownOpener, now)) == 1 {
 				ownHits++
 			}
@@ -121,6 +137,11 @@ func TestCalibrateOfferRule(t *testing.T) {
 			for i, cut := range rarityCuts {
 				if ownOpener != "" && rarityRule.hit(distinctiveIDs(tokens, ownOpener, df, cut), pairs) {
 					rarityOwn[i]++
+				}
+			}
+			for i, cut := range titleRarityCuts {
+				if ownOpener != "" && rarityRule.hit(distinctiveIDs(tokens, ownOpener, titleDF, cut), pairs) {
+					titleOwn[i]++
 				}
 			}
 			for _, turn := range others {
@@ -139,6 +160,11 @@ func TestCalibrateOfferRule(t *testing.T) {
 				for i, cut := range rarityCuts {
 					if rarityRule.hit(distinctiveIDs(tokens, turn, df, cut), turnPairs) {
 						rarityOther[i]++
+					}
+				}
+				for i, cut := range titleRarityCuts {
+					if rarityRule.hit(distinctiveIDs(tokens, turn, titleDF, cut), turnPairs) {
+						titleOther[i]++
 					}
 				}
 			}
@@ -169,9 +195,14 @@ func TestCalibrateOfferRule(t *testing.T) {
 			100*float64(bucket.n)/float64(max(firedTotal, 1)))
 	}
 	for i, cut := range rarityCuts {
-		t.Logf("rarity: df>=%-3d = ordinary | recall=%d/%d  false-positives=%d/%d (%.1f%%)", cut,
+		t.Logf("rarity: opener df>=%-3d ordinary | recall=%d/%d  false-positives=%d/%d (%.1f%%)", cut,
 			rarityOwn[i], items, rarityOther[i], otherPairs,
 			100*float64(rarityOther[i])/float64(max(otherPairs, 1)))
+	}
+	for i, cut := range titleRarityCuts {
+		t.Logf("rarity: title  df>=%-3d ordinary | recall=%d/%d  false-positives=%d/%d (%.1f%%)", cut,
+			titleOwn[i], items, titleOther[i], otherPairs,
+			100*float64(titleOther[i])/float64(max(otherPairs, 1)))
 	}
 }
 
@@ -196,6 +227,43 @@ var rarityRule = rule{
 // rarityCuts are the document frequencies to read: an identifier named by at
 // least this many of the bucket's other sessions is ordinary inside it.
 var rarityCuts = []int{3, 10, 30, 60}
+
+// titleRarityCuts are the same thresholds over the bucket's session titles, which
+// are one line per session and already exist — a corpus the product has.
+var titleRarityCuts = []int{1, 2, 3}
+
+// loadTitles reads the titles the sidebar shows for one sessions directory.
+func loadTitles(dir string) map[string]string {
+	out := map[string]string{}
+	infos, err := agent.ListSessions(dir)
+	if err != nil {
+		return out
+	}
+	for _, info := range infos {
+		title := strings.TrimSpace(info.CustomTitle)
+		if title == "" {
+			title = strings.TrimSpace(info.TopicTitle)
+		}
+		if title == "" {
+			title = strings.TrimSpace(info.Preview)
+		}
+		out[info.Path] = title
+	}
+	return out
+}
+
+// dfOver counts, for each identifier, how many of the given texts name it.
+func dfOver(identifiers []string, texts []string) map[string]int {
+	out := make(map[string]int, len(identifiers))
+	for _, identifier := range identifiers {
+		for _, text := range texts {
+			if strings.Contains(strings.ToLower(text), identifier) {
+				out[identifier]++
+			}
+		}
+	}
+	return out
+}
 
 // distinctiveIDs counts the matched identifiers that are not ordinary in the
 // bucket — the ones that could still single this item's subject out.
