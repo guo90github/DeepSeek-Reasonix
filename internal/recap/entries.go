@@ -3,7 +3,6 @@ package recap
 import (
 	"encoding/json"
 	"strings"
-	"unicode"
 )
 
 // The four dimensions v1 distills, each a different kind of reuse: a fact
@@ -203,127 +202,7 @@ func normalizeEntries(parsed []entryPayload) []Entry {
 			break
 		}
 	}
-	return mergeSameTopic(out)
-}
-
-// mergeSameTopic keeps one entry per topic: a long session restates the same
-// decision over several turns, and a button group per restatement is a cost the
-// reader pays for nothing. Kinds never merge across each other, and the surviving
-// entry absorbs every pointer and evidence line the restatements carried.
-func mergeSameTopic(entries []Entry) []Entry {
-	out := make([]Entry, 0, len(entries))
-	for _, entry := range entries {
-		index := sameTopicIndex(out, entry)
-		if index < 0 {
-			out = append(out, entry)
-			continue
-		}
-		out[index].Evidence = joinEvidence(out[index].Evidence, entry.Evidence)
-		for _, ref := range entry.Refs {
-			out[index].Refs = appendUniqueRefs(out[index].Refs, ref)
-		}
-	}
 	return out
-}
-
-func appendUniqueRefs(refs []Ref, ref Ref) []Ref {
-	for _, existing := range refs {
-		if existing == ref {
-			return refs
-		}
-	}
-	return append(refs, ref)
-}
-
-func sameTopicIndex(entries []Entry, entry Entry) int {
-	tokens := topicTokens(entry.Body)
-	for i := range entries {
-		if entries[i].Kind != entry.Kind {
-			continue
-		}
-		if sameTopicTokens(tokens, topicTokens(entries[i].Body)) {
-			return i
-		}
-	}
-	return -1
-}
-
-// sameTopicTokens is deliberately narrow — shared identifiers, or heavy overlap —
-// because a wrong merge hides a note the next session never gets to read.
-func sameTopicTokens(a, b map[string]bool) bool {
-	if len(a) == 0 || len(b) == 0 {
-		return false
-	}
-	shared, sharedIdentifiers := 0, 0
-	for token := range a {
-		if !b[token] {
-			continue
-		}
-		shared++
-		if !isCJKToken(token) {
-			sharedIdentifiers++
-		}
-	}
-	return shared >= 2 && (sharedIdentifiers >= 1 || shared >= 4)
-}
-
-// topicTokens keeps what carries a topic: identifiers as whole words, CJK as
-// adjacent pairs (a Chinese sentence reworded shares pairs, not words).
-func topicTokens(s string) map[string]bool {
-	tokens := map[string]bool{}
-	var ascii, cjk []rune
-	flushASCII := func() {
-		if len(ascii) >= 2 {
-			tokens[string(ascii)] = true
-		}
-		ascii = ascii[:0]
-	}
-	flushCJK := func() {
-		for i := 0; i+1 < len(cjk); i++ {
-			tokens[string(cjk[i:i+2])] = true
-		}
-		cjk = cjk[:0]
-	}
-	for _, r := range []rune(strings.ToLower(s)) {
-		switch {
-		case isCJK(r):
-			flushASCII()
-			cjk = append(cjk, r)
-		case unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_':
-			flushCJK()
-			ascii = append(ascii, r)
-		default:
-			flushASCII()
-			flushCJK()
-		}
-	}
-	flushASCII()
-	flushCJK()
-	return tokens
-}
-
-func isCJK(r rune) bool {
-	return unicode.Is(unicode.Han, r) || unicode.Is(unicode.Hiragana, r) || unicode.Is(unicode.Katakana, r)
-}
-
-func isCJKToken(token string) bool {
-	for _, r := range token {
-		return isCJK(r)
-	}
-	return false
-}
-
-func joinEvidence(a, b string) string {
-	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
-	switch {
-	case a == "":
-		return b
-	case b == "" || strings.Contains(a, b):
-		return a
-	case strings.Contains(b, a):
-		return b
-	}
-	return a + " " + b
 }
 
 // normalizeRefs keeps the usable pointers. A missing or unrecognized kind is
