@@ -130,6 +130,7 @@ import type {
   RecapOpenItem,
   RecapSkillDraft,
   RecapSkillSource,
+  RecapPreviewView,
   SessionRecapInsight,
   SessionRecoveryFailedEvent,
   SessionRecoveryEvent,
@@ -411,6 +412,8 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   GenerateSessionRecap(sessionPath: string): Promise<boolean>;
   DraftRecapSkill(kind: string, body: string): Promise<RecapSkillDraft>;
   DraftRecapTopicSkill(sources: RecapSkillSource[]): Promise<RecapSkillDraft>;
+  PreviewRecapMemory(source: RecapSkillSource): Promise<RecapPreviewView>;
+  PreviewRecapSkill(sources: RecapSkillSource[]): Promise<RecapPreviewView>;
   ListRecapInsights(): Promise<SessionRecapInsight[]>;
   ResumeSession(path: string): Promise<HistoryMessage[]>;
   ResumeSessionForTab(tabID: string, path: string): Promise<HistoryMessage[]>;
@@ -3346,6 +3349,13 @@ function makeMockApp(): AppBindings {
       const name = `recap-mock-${body.length}`;
       emit({ kind: "notice", level: "info", text: `(mock) drafted .reasonix/skills/${name}/SKILL.md` });
       return { name, path: `.reasonix/skills/${name}/SKILL.md` };
+    },
+    async PreviewRecapMemory(source: RecapSkillSource): Promise<RecapPreviewView> {
+      return { kind: "memory", text: `(mock) ${source.body}`, fallback: source.body, promptTag: "memory-v1", model: "mock/model" };
+    },
+    async PreviewRecapSkill(sources: RecapSkillSource[]): Promise<RecapPreviewView> {
+      const steps = sources.map((source, index) => `${index + 1}. ${source.body}`).join("\n");
+      return { kind: "skill", text: `# Playbook\n\n## Steps\n${steps}`, fallback: steps, promptTag: "skill-v1", model: "mock/model" };
     },
     async DraftRecapTopicSkill(sources: RecapSkillSource[]) {
       const joined = sources.map((source) => source.body).join(" ");

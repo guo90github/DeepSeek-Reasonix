@@ -64,6 +64,43 @@ func bindRecapLane(ctx context.Context, cfg *config.Config, ctrl *control.Contro
 	})
 }
 
+// recapCompose remembers what a person-triggered preview needs: the same model
+// resolution the lane uses and the same prompt directory, so a preview answers under
+// the rules the lane would apply rather than its own idea of them.
+var recapCompose = struct {
+	mu        sync.RWMutex
+	resolve   recap.ModelResolver
+	promptDir string
+	sink      event.Sink
+}{}
+
+// PreviewRecapMemory rewrites one note into the memory sentence a person is about
+// to store. The caller passes the evidence it wants the rewrite to see.
+func PreviewRecapMemory(ctx context.Context, sessionPath, evidence string) (recap.ComposeResult, error) {
+	return previewRecapCompose(ctx, sessionPath, evidence, recap.ComposeMemory)
+}
+
+// PreviewRecapSkill writes a playbook from the notes of one topic.
+func PreviewRecapSkill(ctx context.Context, sessionPath, evidence string) (recap.ComposeResult, error) {
+	return previewRecapCompose(ctx, sessionPath, evidence, recap.ComposeSkill)
+}
+
+type recapComposeFunc func(context.Context, provider.Provider, string, string, recap.ComposeOptions) (recap.ComposeResult, error)
+
+func previewRecapCompose(ctx context.Context, sessionPath, evidence string, compose recapComposeFunc) (recap.ComposeResult, error) {
+	recapCompose.mu.RLock()
+	resolve, promptDir, sink := recapCompose.resolve, recapCompose.promptDir, recapCompose.sink
+	recapCompose.mu.RUnlock()
+	if resolve == nil {
+		return recap.ComposeResult{}, fmt.Errorf("the session recap lane is not running yet")
+	}
+	prov, ref, ok := resolve.Resolve(ctx, sessionPath)
+	if !ok || prov == nil {
+		return recap.ComposeResult{}, fmt.Errorf("no model is available for this session")
+	}
+	return compose(ctx, prov, ref, evidence, recap.ComposeOptions{PromptDir: promptDir, Sink: sink})
+}
+
 // recapResolverFor builds the lane's independent provider instances, so boot's
 // assembly stays one call instead of an inline closure.
 func recapResolverFor(resolver provider.Resolver, cfg *config.Config, proxy netclient.ProxySpec) resolveRecapModel {
@@ -145,6 +182,9 @@ func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, r
 	})
 	runner := recap.NewRunner(generator)
 	recapLanes.byKey[key] = runner
+	recapCompose.mu.Lock()
+	recapCompose.resolve, recapCompose.promptDir, recapCompose.sink = models, filepath.Dir(key), sink
+	recapCompose.mu.Unlock()
 	return runner, true, nil
 }
 

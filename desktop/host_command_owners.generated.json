@@ -4229,6 +4229,34 @@
       ]
     }
   },
+  "PreviewRecapMemory": {
+    "domain": "desktop/recap_preview.go",
+    "owner": "App.PreviewRecapMemory",
+    "sources": [
+      "desktop/recap_preview.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.PreviewRecapMemory",
+      "inputs": [
+        "source"
+      ]
+    }
+  },
+  "PreviewRecapSkill": {
+    "domain": "desktop/recap_preview.go",
+    "owner": "App.PreviewRecapSkill",
+    "sources": [
+      "desktop/recap_preview.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.PreviewRecapSkill",
+      "inputs": [
+        "sources"
+      ]
+    }
+  },
   "PreviewRewindForTab": {
     "domain": "desktop/app.go",
     "owner": "App.PreviewRewindForTab",

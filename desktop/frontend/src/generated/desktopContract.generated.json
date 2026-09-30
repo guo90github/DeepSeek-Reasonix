@@ -7883,6 +7883,61 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recap_preview.go",
+      "name": "PreviewRecapMemory",
+      "owner": "App.PreviewRecapMemory",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.RecapSkillSource"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.RecapPreviewView"
+      },
+      "scope": {
+        "inputs": [
+          "source"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.PreviewRecapMemory"
+      },
+      "sources": [
+        "desktop/recap_preview.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/recap_preview.go",
+      "name": "PreviewRecapSkill",
+      "owner": "App.PreviewRecapSkill",
+      "params": [
+        {
+          "elem": {
+            "kind": "object",
+            "ref": "main.RecapSkillSource"
+          },
+          "kind": "array"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.RecapPreviewView"
+      },
+      "scope": {
+        "inputs": [
+          "sources"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.PreviewRecapSkill"
+      },
+      "sources": [
+        "desktop/recap_preview.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/app.go",
       "name": "PreviewRewindForTab",
       "owner": "App.PreviewRewindForTab",
@@ -29056,6 +29111,47 @@
           "name": "ageDays",
           "type": {
             "kind": "integer"
+          }
+        }
+      ]
+    },
+    "main.RecapPreviewView": {
+      "fields": [
+        {
+          "name": "kind",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "text",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "fallback",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "promptTag",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "model",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reason",
+          "optional": true,
+          "type": {
+            "kind": "string"
           }
         }
       ]

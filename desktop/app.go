@@ -131,6 +131,9 @@ type App struct {
 	// stampeding the otherwise-unbounded pre-scan goroutines.
 	catalogReconcileMu   sync.Mutex
 	catalogReconcileJobs map[string]*desktopCatalogReconcileJob
+	// recapPreview answers a preview without a provider. It is nil in the app and
+	// set by a test: the real path goes through boot, which owns the model choice.
+	recapPreview recapPreviewCompose
 	// Test-only deterministic boundary, set before concurrent requests.
 	catalogReconcileHook func(sessioncatalog.DirectoryTarget)
 	// catalogRebuildJoinHook is test-only: it proves concurrent Wails callers

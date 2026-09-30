@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:f571823d72731268bea337f49c0325abf4638505108119754944101a960d29c6";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:3a993025aa278205cd16783e67bb1bc803417739e55d5e86f45fb081b5286d14";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -305,6 +305,8 @@ export const DESKTOP_COMMANDS = [
   "Plugins",
   "PollBotConnectionInstall",
   "PrepareWorktreeMerge",
+  "PreviewRecapMemory",
+  "PreviewRecapSkill",
   "PreviewRewindForTab",
   "PreviewSession",
   "PreviewWorkspaceFileRevertForTab",
@@ -3030,6 +3032,15 @@ export interface RecapOpenItemView {
   ageDays: number;
 }
 
+export interface RecapPreviewView {
+  kind: string;
+  text: string;
+  fallback: string;
+  promptTag: string;
+  model: string;
+  reason?: string;
+}
+
 export interface RecapSkillDraft {
   name: string;
   path: string;
@@ -4790,6 +4801,8 @@ export interface GeneratedDesktopCommands {
   Plugins(): Promise<PluginView[]>;
   PollBotConnectionInstall(arg0: string): Promise<BotInstallPollResult>;
   PrepareWorktreeMerge(arg0: string): Promise<MergeInspection>;
+  PreviewRecapMemory(arg0: RecapSkillSource): Promise<RecapPreviewView>;
+  PreviewRecapSkill(arg0: RecapSkillSource[]): Promise<RecapPreviewView>;
   PreviewRewindForTab(arg0: string, arg1: number, arg2: string): Promise<RewindPlanView>;
   PreviewSession(arg0: string): Promise<HistoryMessage[]>;
   PreviewWorkspaceFileRevertForTab(arg0: string, arg1: string): Promise<RewindPlanView>;

@@ -86,6 +86,17 @@ export interface SessionRecapInsight {
 
 // RecapSkillDraft says where a drafted playbook landed, so the page can point the
 // person at the file instead of claiming the work is done.
+// What a preview shows after a person presses "store to memory" or "draft a skill":
+// the model's answer when it came, and always what the button does without a model.
+export type RecapPreviewView = {
+  kind: string;
+  text: string;
+  fallback: string;
+  promptTag: string;
+  model: string;
+  reason?: string;
+};
+
 // One note handed to the host when a whole topic is drafted at once.
 export interface RecapSkillSource { kind: string; body: string }
 

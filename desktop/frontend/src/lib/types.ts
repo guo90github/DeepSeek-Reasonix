@@ -1023,7 +1023,7 @@ export interface RewindResultView {
   coverage?: string;
 }
 
-export type { SessionMeta, SessionRecap, SessionRecapEntry, RecapOpenItem, RecapSkillDraft, RecapSkillSource, SessionRecapInsight } from "./sessionMetaTypes";
+export type { SessionMeta, SessionRecap, SessionRecapEntry, RecapOpenItem, RecapSkillDraft, RecapSkillSource, RecapPreviewView, SessionRecapInsight } from "./sessionMetaTypes";
 
 export type { HistoryIndexStatus, HistorySearchContextLine, HistorySearchContextRequest, HistorySearchHit, HistorySearchPage, HistorySearchRequest, HistorySessionPage, HistorySessionPageRequest } from "./historyCatalogTypes";
 
