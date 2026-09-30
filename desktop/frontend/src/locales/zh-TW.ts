@@ -3379,6 +3379,8 @@ export const zhTW: Record<DictKey, string> = {
   "settings.telemetryHint": "啟動時傳送匿名ID、版本、系統/發行版、會話、Runtime、GPU模式。異常退出後下次啟動傳送階段、堆疊、原因、結束碼、復原結果。不含帳號、對話、金鑰、檔案、完整路徑、顯示卡驅動",
   "settings.metricsLabel": "共享聚合品質指標",
   "settings.metricsHint": "預設開啟。傳送匿名的輪次結束統計、更新器錯誤類別、生命週期/視窗健康分桶與設定偏好快照。包含用於 DAU 去重的隨機安裝 ID。Bucket 可能包含正規化後的自訂 Provider 名和模型名——絕不包含對話、提示詞、金鑰、路徑、base URL、記憶正文、工具輸出或檔案內容。",
+  "settings.recapTierLabel": "讓回顧條目自己決定分檔",
+  "settings.recapTierHint": "預設關閉。開啟後，採納一條被提議為 base/generic 的回顧條目會寫成全域記憶，而不只是本專案可見。分檔是模型的提議，所以除非你已看過該條目的依據（回顧頁會顯示有幾個專案獨立得出同一結論），否則建議保持關閉。",
   "context.windowTitle": "上下文視窗",
   "context.windowStatusHealthy": "上下文充足",
   "context.windowStatusWatch": "即將壓縮",

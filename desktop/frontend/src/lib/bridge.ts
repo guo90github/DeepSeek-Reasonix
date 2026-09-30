@@ -701,6 +701,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   SetDesktopUpdateChannel(channel: string): Promise<void>;
   SetDesktopTelemetry(enabled: boolean): Promise<void>;
   SetDesktopMetrics(enabled: boolean): Promise<void>;
+  SetSessionRecapTier(enabled: boolean): Promise<void>;
   SetExpandThinking(on: boolean): Promise<void>;
   SetDesktopConversationWidth(width: string): Promise<void>;
   MigrateDesktopPreferences(language: string, theme: string, style: string): Promise<void>;

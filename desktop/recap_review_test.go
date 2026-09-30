@@ -11,7 +11,7 @@ import (
 func TestRecapMemoryFactCarriesTheNote(t *testing.T) {
 	fact := recapMemoryFact(
 		recap.Entry{Kind: recap.KindRootCause, Body: "the parser moved", Evidence: "internal/parser.go"},
-		"the parser moved")
+		"the parser moved", memory.FactScopeProject)
 	if fact.Type != memory.TypeProject || fact.Scope != memory.FactScopeProject {
 		t.Fatalf("a diagnosed root cause is a project fact: %+v", fact)
 	}
@@ -35,7 +35,7 @@ func TestRecapMemoryFactKeepsPointersAndReportsTheTier(t *testing.T) {
 			{Kind: recap.RefCommand, Value: "go test ./desktop/"},
 		},
 		Scope: recap.Scope{Level: recap.ScopeGeneric, Reason: "两个项目都踩过"},
-	}, "只取分支统计未提交数会漏掉 CJK 路径")
+	}, "只取分支统计未提交数会漏掉 CJK 路径", memory.FactScopeProject)
 
 	if fact.Scope != memory.FactScopeProject {
 		t.Fatalf("accepting must still land in the project, got %q", fact.Scope)
@@ -45,15 +45,26 @@ func TestRecapMemoryFactKeepsPointersAndReportsTheTier(t *testing.T) {
 		t.Fatalf("the pointers must reach the fact: %q", fact.Body)
 	}
 	if !strings.Contains(fact.Body, "**Scope proposed:** generic") ||
-		!strings.Contains(fact.Body, "still writes to the current project") {
-		t.Fatalf("the proposed tier is reported, and reported as not yet applied: %q", fact.Body)
+		!strings.Contains(fact.Body, "accepted into this project") {
+		t.Fatalf("the proposed tier is reported, and reported as landed in the project: %q", fact.Body)
+	}
+	// The switch is the only thing that moves a note out of the project, and the
+	// body says which of the two happened.
+	applied := recapMemoryFact(recap.Entry{
+		Kind:  recap.KindRefuted,
+		Body:  "同一个结论",
+		Scope: recap.Scope{Level: recap.ScopeGeneric, Reason: "两个项目都踩过"},
+	}, "同一个结论", memory.FactScopeGlobal)
+	if applied.Scope != memory.FactScopeGlobal ||
+		!strings.Contains(applied.Body, "accepted into global memory") {
+		t.Fatalf("with the switch on a generic proposal writes a global fact: %+v", applied)
 	}
 }
 
 func TestRecapMemoryRefutedReadsAsClosedGuidance(t *testing.T) {
 	fact := recapMemoryFact(
 		recap.Entry{Kind: recap.KindRefuted, Body: "polishing the inline decoration again"},
-		"polishing the inline decoration again")
+		"polishing the inline decoration again", memory.FactScopeProject)
 	if fact.Type != memory.TypeFeedback {
 		t.Fatalf("a ruled-out option is guidance about how to work: %+v", fact)
 	}
@@ -63,8 +74,8 @@ func TestRecapMemoryRefutedReadsAsClosedGuidance(t *testing.T) {
 }
 
 func TestRecapMemoryKeepsDistinctNamesPerNote(t *testing.T) {
-	first := recapMemoryFact(recap.Entry{Kind: recap.KindFact, Body: "第一件事"}, "第一件事")
-	second := recapMemoryFact(recap.Entry{Kind: recap.KindFact, Body: "第二件事"}, "第二件事")
+	first := recapMemoryFact(recap.Entry{Kind: recap.KindFact, Body: "第一件事"}, "第一件事", memory.FactScopeProject)
+	second := recapMemoryFact(recap.Entry{Kind: recap.KindFact, Body: "第二件事"}, "第二件事", memory.FactScopeProject)
 	if first.Name == second.Name {
 		t.Fatalf("two notes must not collide on one memory name: %q", first.Name)
 	}

@@ -13326,6 +13326,28 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/settings_preferences.go",
+      "name": "SetSessionRecapTier",
+      "owner": "App.SetSessionRecapTier",
+      "params": [
+        {
+          "kind": "boolean"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "enabled"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SetSessionRecapTier"
+      },
+      "sources": [
+        "desktop/settings_preferences.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/shell_support.go",
       "name": "SetShellPreference",
       "owner": "App.SetShellPreference",
@@ -31975,6 +31997,12 @@
         },
         {
           "name": "metrics",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "sessionRecapTier",
           "type": {
             "kind": "boolean"
           }

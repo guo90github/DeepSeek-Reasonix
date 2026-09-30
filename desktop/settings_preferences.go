@@ -153,6 +153,13 @@ func (a *App) SetDesktopTelemetry(enabled bool) error {
 	return a.applyConfigOnly(func(c *config.Config) error { return c.SetDesktopTelemetry(enabled) })
 }
 
+// SetSessionRecapTier sets whether an accepted recap note may land in the tier the
+// model proposed. Nothing else in the accept path changes: the tier still only
+// reaches memory through a person's explicit accept.
+func (a *App) SetSessionRecapTier(enabled bool) error {
+	return a.applyConfigOnly(func(c *config.Config) error { return c.SetDesktopSessionRecapTier(enabled) })
+}
+
 // SetDesktopMetrics sets whether the desktop sends aggregate desktop metrics,
 // starting or stopping the live aggregator so the toggle takes effect immediately.
 func (a *App) SetDesktopMetrics(enabled bool) error {

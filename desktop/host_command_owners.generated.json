@@ -7303,6 +7303,20 @@
       ]
     }
   },
+  "SetSessionRecapTier": {
+    "domain": "desktop/settings_preferences.go",
+    "owner": "App.SetSessionRecapTier",
+    "sources": [
+      "desktop/settings_preferences.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SetSessionRecapTier",
+      "inputs": [
+        "enabled"
+      ]
+    }
+  },
   "SetShellPreference": {
     "domain": "desktop/shell_support.go",
     "owner": "App.SetShellPreference",

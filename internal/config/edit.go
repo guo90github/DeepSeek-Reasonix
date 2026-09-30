@@ -570,6 +570,13 @@ func (c *Config) SetDesktopMetrics(enabled bool) error {
 	return nil
 }
 
+// SetDesktopSessionRecapTier sets whether an accepted recap note may land in the
+// tier the model proposed rather than in the current project.
+func (c *Config) SetDesktopSessionRecapTier(enabled bool) error {
+	c.Desktop.SessionRecapTier = &enabled
+	return nil
+}
+
 // SetCLITelemetryMode sets the user-global content-free CLI metrics policy.
 func (c *Config) SetCLITelemetryMode(mode string) error {
 	switch strings.ToLower(strings.TrimSpace(mode)) {

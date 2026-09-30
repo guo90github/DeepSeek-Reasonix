@@ -366,6 +366,7 @@ type SettingsView struct {
 	UpdateChannel     string `json:"updateChannel"`
 	Telemetry         bool   `json:"telemetry"`
 	Metrics           bool   `json:"metrics"`
+	SessionRecapTier  bool   `json:"sessionRecapTier"`
 	ExpandThinking    bool   `json:"expandThinking"`
 	ConversationWidth string `json:"conversationWidth,omitempty"`
 	ConfigPath        string `json:"configPath"`
@@ -1147,6 +1148,7 @@ func (a *App) Settings() SettingsView {
 		UpdateChannel:                cfg.DesktopUpdateChannel(),
 		Telemetry:                    cfg.DesktopTelemetry(),
 		Metrics:                      cfg.DesktopMetrics(),
+		SessionRecapTier:             cfg.DesktopSessionRecapTier(),
 		ExpandThinking:               cfg.Desktop.ExpandThinking,
 		ConversationWidth:            cfg.DesktopConversationWidth(),
 		ConfigPath:                   cfgPath,

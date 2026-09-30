@@ -511,6 +511,7 @@ export function SettingsPanel({
                       checkUpdates={s.checkUpdates}
                       telemetry={s.telemetry !== false}
                       metrics={s.metrics !== false}
+                      sessionRecapTier={s.sessionRecapTier === true}
                       settingsBusy={busy}
                       applySettings={apply}
                     />
@@ -7195,6 +7196,7 @@ function UpdatesSection({
   checkUpdates,
   telemetry,
   metrics,
+  sessionRecapTier,
   settingsBusy,
   applySettings,
 }: {
@@ -7203,6 +7205,7 @@ function UpdatesSection({
   checkUpdates: boolean;
   telemetry: boolean;
   metrics: boolean;
+  sessionRecapTier: boolean;
   settingsBusy: boolean;
   applySettings: (fn: () => Promise<void>) => Promise<boolean>;
 }) {
@@ -7457,6 +7460,17 @@ function UpdatesSection({
               value={metrics}
               disabled={settingsBusy}
               onChange={(enabled) => void applySettings(() => app.SetDesktopMetrics(enabled))}
+            />
+          </SettingsField>
+          <SettingsField
+            className="settings-field--wide-copy"
+            label={t("settings.recapTierLabel")}
+            hint={t("settings.recapTierHint")}
+          >
+            <ToggleSegment
+              value={sessionRecapTier}
+              disabled={settingsBusy}
+              onChange={(enabled) => void applySettings(() => app.SetSessionRecapTier(enabled))}
             />
           </SettingsField>
           {configPath && (

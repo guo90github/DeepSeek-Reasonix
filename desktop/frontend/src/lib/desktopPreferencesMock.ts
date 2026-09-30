@@ -34,6 +34,9 @@ export function createDesktopPreferencesMock(settings: SettingsView) {
     async SetDesktopMetrics(enabled: boolean) {
       settings.metrics = enabled;
     },
+    async SetSessionRecapTier(enabled: boolean) {
+      settings.sessionRecapTier = enabled;
+    },
     async SetDesktopConversationWidth(width: string) { settings.conversationWidth = width; },
     async SetReasoningDisplayMode(mode: "hidden" | "summary" | "auto" | "expanded") { applyMockLegacyReasoningMode(settings, mode); },
     async SetSessionExperience(mode: "standard" | "deep") { applyMockSessionExperience(settings, mode); },

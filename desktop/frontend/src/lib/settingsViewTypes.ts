@@ -41,6 +41,7 @@ export interface SettingsView {
   updateChannel: string; // compatibility field; always "stable"
   telemetry: boolean; // anonymous launch ping + scrubbed next-launch native crash diagnostics
   metrics: boolean; // aggregate quality/lifecycle metrics (anonymous signal/bucket counts)
+  sessionRecapTier?: boolean; // let a recap note's proposed tier decide where an accepted note lands
   configPath: string;
   shadowedByPath?: string; // workspace reasonix.toml that outranks configPath, when one exists
   providerKinds: string[]; // provider implementations the kernel registered (for the kind picker)

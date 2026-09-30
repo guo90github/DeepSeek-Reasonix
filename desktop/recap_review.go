@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"reasonix/internal/config"
 	"reasonix/internal/memory"
 	"reasonix/internal/recap"
 )
@@ -35,7 +36,14 @@ func (a *App) AcceptRecapEntry(kind, body, editedBody string) (string, error) {
 	if text == "" {
 		text = entry.Body
 	}
-	name, err := ctrl.SaveMemory(recapMemoryFact(entry, text))
+	// The tier decides where an accepted note lands only when a person has turned
+	// that on: the proposal is the model's, so it stays a display until the switch
+	// says otherwise (Settings > General > 会话回顾分档).
+	scope := memory.FactScope(recap.MemoryScopeFor(""))
+	if cfg, err := config.Load(); err == nil && cfg.DesktopSessionRecapTier() {
+		scope = memory.FactScope(recap.MemoryScopeFor(entry.Scope.Level))
+	}
+	name, err := ctrl.SaveMemory(recapMemoryFact(entry, text, scope))
 	if err != nil {
 		return "", err
 	}
@@ -106,14 +114,14 @@ func (a *App) decideRecapEntry(entry recap.Entry, choice string) error {
 // recapMemoryFact turns a reviewed note into the memory fact it becomes: the
 // note's text is the fact, its kind decides the type, and its provenance is kept
 // as evidence rather than folded into the claim.
-func recapMemoryFact(entry recap.Entry, text string) memory.Memory {
+func recapMemoryFact(entry recap.Entry, text string, scope memory.FactScope) memory.Memory {
 	return memory.Memory{
 		Name:        stableSuggestionName(text, "recap"),
 		Title:       suggestionTitle(text, "Recap note"),
 		Description: oneLine(text),
 		Type:        recapMemoryType(entry.Kind),
-		Scope:       memory.FactScopeProject,
-		Body:        recapMemoryBody(entry, text),
+		Scope:       scope,
+		Body:        recapMemoryBody(entry, text, scope),
 	}
 }
 
@@ -126,7 +134,7 @@ func recapMemoryType(kind string) memory.Type {
 	return memory.TypeProject
 }
 
-func recapMemoryBody(entry recap.Entry, text string) string {
+func recapMemoryBody(entry recap.Entry, text string, scope memory.FactScope) string {
 	var b strings.Builder
 	b.WriteString(text)
 	b.WriteString("\n\n**Why:** ")
@@ -148,15 +156,19 @@ func recapMemoryBody(entry recap.Entry, text string) string {
 			b.WriteString("- " + refLine(ref) + "\n")
 		}
 	}
-	// The tier is reported, never applied: memory is written on an explicit accept
-	// and every accept still lands in the current project, so a tier that says
-	// "in general" cannot quietly move a fact out of it.
+	// The tier is reported, and applied only when a person turned that on: memory is
+	// written on an explicit accept, so by default a tier that says "in general"
+	// cannot quietly move a fact out of the project it came from.
 	if entry.Scope.Level != "" {
 		b.WriteString("\n**Scope proposed:** " + entry.Scope.Level)
 		if reason := oneLine(entry.Scope.Reason); reason != "" {
 			b.WriteString(" — " + reason)
 		}
-		b.WriteString(" (accepting still writes to the current project)\n")
+		if scope == memory.FactScopeGlobal {
+			b.WriteString(" (accepted into global memory)")
+		} else {
+			b.WriteString(" (accepted into this project)")
+		}
 	}
 	return b.String()
 }

@@ -3579,6 +3579,8 @@ export const en = {
   "settings.telemetryHint": "On launch, send a random anonymous install ID, version, OS/build or Linux distribution/session, Web Runtime, and GPU mode to count active installs. After an abnormal exit, the next launch may send scrubbed native diagnostics: lifecycle phase, symbolized stack, runtime reason, exit code, and recovery result. This is not an account ID and never includes conversations, accounts, keys, file contents, full paths, or GPU drivers.",
   "settings.metricsLabel": "Share aggregate quality metrics",
   "settings.metricsHint": "On by default. Sends anonymous turn-end counts, updater error categories, lifecycle/window health buckets, and settings preference snapshots. Includes the random install id used to de-duplicate DAU. Buckets may include normalized custom provider and model names — never conversations, prompts, keys, paths, base URLs, memory text, tool outputs, or file contents.",
+  "settings.recapTierLabel": "Let recap notes choose their tier",
+  "settings.recapTierHint": "Off by default. When on, accepting a recap note proposed as base/generic writes a global memory instead of one only this project sees. The tier is the model's proposal, so leave it off unless you have read the note's evidence (the review page shows how many other projects reached the same conclusion).",
   "updater.currentVersion": "Current version: {v}",
   "updater.checkButton": "Check for updates",
   "updater.checking": "Checking for updates…",

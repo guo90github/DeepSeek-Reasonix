@@ -22,14 +22,27 @@ type DesktopConfig struct {
 	CheckUpdates              *bool    `toml:"check_updates"`                // startup update checks; nil keeps the default enabled
 	// UpdateChannel is a legacy compatibility field. It is accepted on read but
 	// ignored and omitted from future canonical writes.
-	UpdateChannel        string   `toml:"update_channel"`
-	Telemetry            *bool    `toml:"telemetry"`          // anonymous launch ping plus scrubbed next-launch native crash diagnostics; nil keeps the default enabled
-	Metrics              *bool    `toml:"metrics"`            // aggregate desktop metrics (anonymous signal/bucket counts, including lifecycle health; no content); nil keeps the default enabled
+	UpdateChannel string `toml:"update_channel"`
+	Telemetry     *bool  `toml:"telemetry"` // anonymous launch ping plus scrubbed next-launch native crash diagnostics; nil keeps the default enabled
+	Metrics       *bool  `toml:"metrics"`   // aggregate desktop metrics (anonymous signal/bucket counts, including lifecycle health; no content); nil keeps the default enabled
+	// SessionRecapTier lets the tier a recap note proposed decide where an accepted
+	// note lands: base/generic writes a global memory instead of a project one. nil
+	// keeps the default (off) — the tier is a proposal until someone opts in.
+	SessionRecapTier     *bool    `toml:"session_recap_tier"`
 	ProviderAccess       []string `toml:"provider_access"`    // desktop-only list of provider entries shown in Settings > Model > Access
 	SessionExperience    string   `toml:"session_experience"` // standard|deep; canonical desktop transcript experience
 	ExpandThinking       bool     `toml:"expand_thinking"`    // deprecated compatibility alias: true maps to auto
 	ReasoningDisplayMode string   `toml:"reasoning_display_mode"`
 	ConversationWidth    string   `toml:"conversation_width"` // standard|full; max transcript width; empty = standard
+}
+
+// DesktopSessionRecapTier reports whether an accepted recap note may land in the
+// tier the model proposed instead of in the current project. Default off.
+func (c *Config) DesktopSessionRecapTier() bool {
+	if c == nil || c.Desktop.SessionRecapTier == nil {
+		return false
+	}
+	return *c.Desktop.SessionRecapTier
 }
 
 // DesktopExternalOpener returns the selected opener id; unavailable ids fall

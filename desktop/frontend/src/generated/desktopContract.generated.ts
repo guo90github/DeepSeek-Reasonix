@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:8f71fddc6a49b0d94953f6b37ecd4ae2559344b175e6c5af2a4cc24b05b4b72c";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:ada12af0f24b42678b40900203c298acd194461b222cd677f433256b40f0ee21";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -517,6 +517,7 @@ export const DESKTOP_COMMANDS = [
   "SetRemoteTabToolApprovalMode",
   "SetSandbox",
   "SetSessionExperience",
+  "SetSessionRecapTier",
   "SetShellPreference",
   "SetSkillEnabled",
   "SetSkillImplicitInvocation",
@@ -3580,6 +3581,7 @@ export interface SettingsView {
   updateChannel: string;
   telemetry: boolean;
   metrics: boolean;
+  sessionRecapTier: boolean;
   expandThinking: boolean;
   conversationWidth?: string;
   configPath: string;
@@ -4991,6 +4993,7 @@ export interface GeneratedDesktopCommands {
   SetRemoteTabToolApprovalMode(arg0: string, arg1: string): Promise<void>;
   SetSandbox(arg0: string, arg1: boolean, arg2: string, arg3: string[], arg4: string): Promise<void>;
   SetSessionExperience(arg0: string): Promise<void>;
+  SetSessionRecapTier(arg0: boolean): Promise<void>;
   SetShellPreference(arg0: string): Promise<void>;
   SetSkillEnabled(arg0: string, arg1: boolean): Promise<void>;
   SetSkillImplicitInvocation(arg0: boolean): Promise<void>;
