@@ -46,12 +46,14 @@ type Config struct {
 	UsageSource string
 	// Timeout bounds the whole call. Zero uses DefaultTimeout.
 	Timeout time.Duration
-	// MaxTokens caps the completion. Zero uses DefaultMaxTokens.
+	// MaxTokens caps the completion. Zero uses DefaultMaxTokens; a negative value
+	// sends no cap of ours at all, so the model's own budget decides.
 	MaxTokens int
 	// EffortOverride optionally requests a lower or higher reasoning depth for
 	// this independent call. Provider adapters reject unsupported values.
 	EffortOverride string
-	// MaxOutputBytes aborts the stream once exceeded. Zero uses DefaultMaxOutputBytes.
+	// MaxOutputBytes aborts the stream once exceeded. Zero uses DefaultMaxOutputBytes;
+	// a negative value lets the stream run to whatever the provider sends.
 	MaxOutputBytes int
 	// MaxSystemBytes is the hard cap on the fixed system policy. Zero uses DefaultMaxSystemBytes.
 	MaxSystemBytes int
@@ -79,11 +81,16 @@ func Call(ctx context.Context, cfg Config, system, evidence string) (string, err
 	callCtx = provider.WithRequestAttemptCounter(callCtx)
 
 	maxTokens := cfg.MaxTokens
-	if maxTokens <= 0 {
+	switch {
+	case maxTokens < 0:
+		// Negative means "no cap of ours": forwarding zero leaves the ceiling to the
+		// model's own output budget instead of this call inventing a smaller one.
+		maxTokens = 0
+	case maxTokens == 0:
 		maxTokens = DefaultMaxTokens
 	}
 	maxOutputBytes := cfg.MaxOutputBytes
-	if maxOutputBytes <= 0 {
+	if maxOutputBytes == 0 {
 		maxOutputBytes = DefaultMaxOutputBytes
 	}
 	maxSystemBytes := cfg.MaxSystemBytes
@@ -140,7 +147,7 @@ func Call(ctx context.Context, cfg Config, system, evidence string) (string, err
 		switch chunk.Type {
 		case provider.ChunkText:
 			text.WriteString(chunk.Text)
-			if text.Len() > maxOutputBytes {
+			if maxOutputBytes > 0 && text.Len() > maxOutputBytes {
 				cancel()
 				return "", fmt.Errorf("bounded reviewer output exceeded %d bytes", maxOutputBytes)
 			}

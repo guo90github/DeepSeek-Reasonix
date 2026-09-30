@@ -132,8 +132,12 @@ func NewGenerator(opts GeneratorOptions) *Generator {
 	if opts.Timeout <= 0 {
 		opts.Timeout = 90 * time.Second
 	}
-	if opts.MaxTokens <= 0 {
-		opts.MaxTokens = 3000
+	if opts.MaxTokens == 0 {
+		// Long sessions are the normal case, and a reasoning model that runs out of
+		// completion budget answers nothing at all. So the lane asks for no cap of
+		// its own: the model's own output budget is the ceiling, and the lane's
+		// timeout is what keeps a runaway call from running forever.
+		opts.MaxTokens = -1
 	}
 	if opts.MaxInputBytes <= 0 {
 		opts.MaxInputBytes = 96 * 1024
@@ -242,7 +246,7 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 		// A reasoning model can spend the whole completion budget thinking and
 		// return nothing at all; one immediate retry, with room to finish, beats
 		// leaving the session pending for a later sweep.
-		raw, err = g.callWith(ctx, prov, ref, text, 2*g.opts.MaxTokens)
+		raw, err = g.callWith(ctx, prov, ref, text, g.opts.MaxTokens)
 		if err != nil {
 			_ = store.MarkPending(ctx, path, err.Error(), g.opts.Now())
 			return Result{Skipped: true, Reason: "call failed"}, nil
@@ -320,9 +324,10 @@ func (g *Generator) callWith(ctx context.Context, prov provider.Provider, ref, t
 		UsageSource: event.UsageSourceSessionRecap,
 		Timeout:     g.opts.Timeout,
 		MaxTokens:   maxTokens,
-		// Notes carry pointers and a tier now, so the answer is fatter than it was
-		// when 8 KiB was enough; the salvage path only helps up to the first cut.
-		MaxOutputBytes: 16 * 1024,
+		// No byte cap either: notes carry pointers and a tier now, a long session
+		// produces more of them, and a stream cut mid-answer is exactly the failure
+		// this lane kept hitting. The timeout still bounds the call.
+		MaxOutputBytes: -1,
 		MaxSystemBytes: 6 * 1024,
 		MaxTotalBytes:  g.opts.MaxInputBytes + 4*1024,
 		EffortOverride: provider.PreferredReasoning(prov, "low"),
