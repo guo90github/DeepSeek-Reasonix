@@ -246,5 +246,42 @@ console.log("\nmarkdown selection projection");
   ok(result.selectionText.includes("row-51\t51"), "virtual table projection includes rows that never mount in the DOM");
 }
 
+console.log("\nmarkdown emphasis marks");
+
+type MarkNode = { type?: string; tagName?: string; properties?: Record<string, unknown>; children?: MarkNode[] };
+
+function markClasses(node: MarkNode): string[] {
+  const value = node.properties?.className;
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function findElements(node: MarkNode, tagName: string, found: MarkNode[] = []): MarkNode[] {
+  if (node.type === "element" && node.tagName === tagName) found.push(node);
+  for (const child of node.children ?? []) findElements(child, tagName, found);
+  return found;
+}
+
+function emphasisMarks(text: string): { labels: boolean[]; claims: boolean[] } {
+  const tree = parseMarkdownToHast(text) as unknown as MarkNode;
+  return {
+    labels: findElements(tree, "li").map((node) => markClasses(node).includes("md-li--label")),
+    claims: findElements(tree, "p").map((node) => markClasses(node).includes("md-p--claim")),
+  };
+}
+
+function checkMarks(text: string, kind: "labels" | "claims", expected: boolean[], label: string) {
+  const actual = emphasisMarks(text)[kind];
+  ok(JSON.stringify(actual) === JSON.stringify(expected), `${label} (got ${JSON.stringify(actual)})`);
+}
+
+// CSS cannot state either fact: `:only-child`/`:first-child` ignore text nodes,
+// so the ladder used to sell `**要点**：说明` as a fully bold paragraph.
+checkMarks("- **标签**：说明", "labels", [true], "a bullet that opens with the author's bolded label is marked");
+checkMarks("- 说明 **中部加粗**", "labels", [false], "a bullet whose bold sits mid-sentence is left alone");
+checkMarks("- **标签**：说明\n\n  续段", "labels", [true], "a loose list's opening paragraph still counts as the label");
+checkMarks("**整段加粗**", "claims", [true], "a paragraph bolded end to end is a claim");
+checkMarks("**要点**：说明", "claims", [false], "a paragraph that only opens bold is not a claim");
+checkMarks("**整段加粗**\n\n普通段落", "claims", [true, false], "the claim mark does not reach the next paragraph");
+
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
 if (failed > 0) process.exit(1);

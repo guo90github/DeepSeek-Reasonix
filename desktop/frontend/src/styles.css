@@ -5510,14 +5510,20 @@ button.reasoning-summary:focus-visible {
   display: none;
 }
 
-/* ── single-column output emphasis (mirror of conversationPane.css) ─────────
-   Scoped to the answer body: reasoning and tool markdown share this scroller
-   and must stay process-styled. Paint-only, exactly like the split copy. */
+/* ── output emphasis: one ladder for both answer surfaces ──────────────────
+   The split layout's left column and the single column's answer body share
+   these rules; the copy that used to live in components/conversationPane.css
+   is folded in here, the stylesheet every surface loads. Scoped to the answer
+   body: reasoning and tool markdown share this scroller and must stay
+   process-styled. Paint-only — no margin/padding/border-width/font change —
+   so Virtuoso's live row measurements stay valid. */
 
+.conversation-pane .md :where(h1, h2, h3),
 .transcript .msg--assistant .md :where(h1, h2, h3) {
   position: relative;
   color: var(--fg);
 }
+.conversation-pane .md :where(h1, h2, h3)::before,
 .transcript .msg--assistant .md :where(h1, h2, h3)::before {
   content: "";
   position: absolute;
@@ -5526,71 +5532,134 @@ button.reasoning-summary:focus-visible {
   bottom: 0.18em;
   width: 3px;
   border-radius: 3px;
-  background: linear-gradient(180deg, var(--accent), color-mix(in srgb, var(--accent) 22%, transparent));
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 40%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 40%, transparent), color-mix(in srgb, var(--accent) 8%, transparent));
+  box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 14%, transparent);
 }
+/* Three rail tiers, so a long answer's outline is readable without reading:
+   h1 carries the warning hue, h2 the full accent, h3 the quiet base rail. */
+.conversation-pane .md h1::before,
 .transcript .msg--assistant .md h1::before {
-  background: linear-gradient(180deg, var(--accent), var(--warn));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 72%, transparent), color-mix(in srgb, var(--warn) 45%, transparent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 26%, transparent);
 }
+.conversation-pane .md h2::before,
+.transcript .msg--assistant .md h2::before {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 62%, transparent), color-mix(in srgb, var(--accent) 16%, transparent));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+/* A section rule takes the accent instead of the plain border, so the seams of
+   a long answer stay findable while scrolling. Color only: width is untouched. */
+.conversation-pane .md hr,
+.transcript .msg--assistant .md hr {
+  border-top-color: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+/* Marker-pen band under the words: soft edges at both ends so it reads as one
+   stroke of a highlighter, and a gradient so no box metrics move. */
+.conversation-pane .md strong,
 .transcript .msg--assistant .md strong {
   color: var(--fg);
-  background-image: linear-gradient(180deg, transparent 54%, color-mix(in srgb, var(--accent) 38%, transparent) 54%);
+  background-image: linear-gradient(180deg, transparent 50%, color-mix(in srgb, var(--accent) 48%, transparent) 58%, color-mix(in srgb, var(--accent) 42%, transparent) 90%, transparent 100%);
   background-repeat: no-repeat;
   background-size: 100% 100%;
 }
+/* One signal per structure: where the block already marks the text — a heading
+   rail, a labeled-bullet rail, a quote's own tint — a second stroke only blurs
+   which part the author called out. */
+.conversation-pane .md :where(h1, h2, h3) strong,
+.conversation-pane .md li.md-li--label strong,
+.conversation-pane .md blockquote strong,
+.transcript .msg--assistant .md :where(h1, h2, h3) strong,
+.transcript .msg--assistant .md li.md-li--label strong,
+.transcript .msg--assistant .md blockquote strong {
+  background-image: none;
+}
+/* A paragraph the author bolded end to end is a headline claim, not prose, so
+   the block itself takes the accent — still paint-only, no text moves. */
+.conversation-pane .md p.md-p--claim,
+.transcript .msg--assistant .md p.md-p--claim {
+  color: var(--fg);
+  background-color: color-mix(in srgb, var(--accent) 8%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 62%, transparent);
+  border-radius: 0 6px 6px 0;
+}
+/* Evidence, not a decision: the chip loses its box and the accent so a
+   paragraph full of identifiers still reads as prose. The 1px border stays
+   (transparent) because removing it would move text. */
+.conversation-pane .md-code,
 .transcript .msg--assistant .md-code {
   color: var(--fg-dim);
   background: color-mix(in srgb, var(--fg) 7%, transparent);
   border-color: transparent;
 }
+/* Code blocks keep their readability palette (lib/codeReadability.ts); only the
+   competing edge is softened. */
+.conversation-pane .md .code,
 .transcript .msg--assistant .md .code {
   border-color: color-mix(in srgb, var(--code-border, var(--border-soft)) 40%, transparent);
 }
+.conversation-pane .md li::marker,
 .transcript .msg--assistant .md li::marker {
   color: var(--fg-faint);
 }
-.transcript .msg--assistant .md li:has(> strong:first-child),
-.transcript .msg--assistant .md li:has(> p:first-child > strong:first-child) {
+/* A bullet that opens with the author's own bolded label is a decision or a
+   criterion, not an enumeration item. The mark comes from
+   rehypeEmphasisMarks.ts, which sees text nodes and so leaves a bullet whose
+   bold sits mid-sentence alone. */
+.conversation-pane .md li.md-li--label,
+.transcript .msg--assistant .md li.md-li--label {
   color: var(--fg);
-  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--accent) 46%, transparent);
 }
-.transcript .msg--assistant .md li:has(> strong:first-child)::marker,
-.transcript .msg--assistant .md li:has(> p:first-child > strong:first-child)::marker {
+.conversation-pane .md li.md-li--label::marker,
+.transcript .msg--assistant .md li.md-li--label::marker {
   color: var(--accent);
 }
+.conversation-pane .md blockquote,
 .transcript .msg--assistant .md blockquote {
-  border-left-color: var(--accent);
+  border-left-color: color-mix(in srgb, var(--accent) 58%, transparent);
   border-radius: 0 6px 6px 0;
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
   color: var(--fg-dim);
 }
+/* Links stay findable without shouting: a permanent faint rule under the
+   words, accent and a brighter rule on hover/focus. */
+.conversation-pane .md a,
 .transcript .msg--assistant .md a {
   color: var(--fg-dim);
   text-decoration: none;
-  background-image: linear-gradient(90deg, color-mix(in srgb, var(--accent) 75%, transparent), color-mix(in srgb, var(--accent) 75%, transparent));
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--accent) 34%, transparent), color-mix(in srgb, var(--accent) 34%, transparent));
   background-repeat: no-repeat;
   background-position: 0 100%;
-  background-size: 0% 1px;
-  transition: background-size 0.18s ease, color 0.18s ease;
+  background-size: 100% 1px;
+  transition: background-image 0.18s ease, color 0.18s ease;
 }
+.conversation-pane .md a:hover,
+.conversation-pane .md a:focus-visible,
 .transcript .msg--assistant .md a:hover,
 .transcript .msg--assistant .md a:focus-visible {
   color: var(--accent);
   text-decoration: none;
+  background-image: linear-gradient(90deg, var(--accent), var(--accent));
   background-size: 100% 1px;
 }
+.conversation-pane .md .md-rich-link svg,
 .transcript .msg--assistant .md .md-rich-link svg {
   opacity: 0.55;
 }
+.conversation-pane .md .md-rich-link--local .md-rich-link__label,
 .transcript .msg--assistant .md .md-rich-link--local .md-rich-link__label {
   color: color-mix(in srgb, var(--fg-dim) 74%, transparent);
 }
+.conversation-pane .md th,
 .transcript .msg--assistant .md th {
   color: var(--fg-dim);
   background-image: linear-gradient(180deg, color-mix(in srgb, var(--fg) 6%, transparent), transparent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--accent) 38%, transparent);
 }
-/* The sweep keyframe lives here, in the stylesheet every surface loads, so one
-   definition serves the single column and the split pane. */
+/* Background-position keeps the sweep clipped to the tail's own box, so it can
+   never paint into the turn gutter; the keyframe is defined in this sheet, so
+   one definition serves both surfaces. */
+.conversation-pane .md--stream-tail,
 .transcript .msg--assistant .md--stream-tail {
   background-image: linear-gradient(90deg, transparent, var(--accent), transparent);
   background-repeat: no-repeat;
@@ -5601,18 +5670,22 @@ button.reasoning-summary:focus-visible {
 @keyframes paneStreamSweep {
   to { background-position: 100% 100%; }
 }
-/* Notice levels carry their own hue; the single column shows the same cards. */
+/* Notice levels carry their own hue; both surfaces show the same cards. */
+.conversation-pane .notice-line--warn,
 .transcript .notice-line--warn {
   color: var(--warn);
   background: color-mix(in srgb, var(--warn) 9%, transparent);
 }
+.conversation-pane .notice-line--completion,
 .transcript .notice-line--completion {
   box-shadow: inset 3px 0 0 var(--ok);
 }
+.conversation-pane .notice-line--completion .notice-line__icon,
 .transcript .notice-line--completion .notice-line__icon {
   color: var(--ok);
 }
 @media (prefers-reduced-motion: reduce) {
+  .conversation-pane .md--stream-tail,
   .transcript .msg--assistant .md--stream-tail {
     animation: none !important;
   }

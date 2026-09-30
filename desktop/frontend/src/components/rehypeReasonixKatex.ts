@@ -1,4 +1,5 @@
 import rehypeKatex from "rehype-katex";
+import { rehypeEmphasisMarks } from "./rehypeEmphasisMarks";
 
 type HastNode = {
   type: string;
@@ -107,4 +108,4 @@ export function rehypeReasonixKatex() {
   };
 }
 
-export const reasonixRehypePlugins = [rehypeReasonixKatex];
+export const reasonixRehypePlugins = [rehypeReasonixKatex, rehypeEmphasisMarks];
