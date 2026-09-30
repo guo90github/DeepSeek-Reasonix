@@ -12,10 +12,10 @@ import (
 func TestLoadPromptOverrideWithoutAFileKeepsTheBuiltin(t *testing.T) {
 	dir := t.TempDir()
 	got := LoadPromptOverride(dir)
-	if got.Tag != PromptTag || got.Text != recapSystemPrompt || got.Note != "" {
+	if got.Tag != PromptVersion || got.Text != recapSystemPrompt || got.Note != "" {
 		t.Fatalf("no override must mean the built-in rules, silently: %+v", got)
 	}
-	if empty := LoadPromptOverride(""); empty.Tag != PromptTag || empty.Note != "" {
+	if empty := LoadPromptOverride(""); empty.Tag != PromptVersion || empty.Note != "" {
 		t.Fatalf("no directory must mean the built-in rules: %+v", empty)
 	}
 }
@@ -33,8 +33,8 @@ func TestLoadPromptOverrideTagsWhatItSends(t *testing.T) {
 	if got.Text != strings.TrimSpace(text) {
 		t.Fatalf("override text = %q, want the file's contents", got.Text)
 	}
-	if !strings.HasPrefix(got.Tag, PromptTag+"+") || len(got.Tag) != len(PromptTag)+9 {
-		t.Fatalf("override tag = %q, want %s+<8 hex>", got.Tag, PromptTag)
+	if !strings.HasPrefix(got.Tag, PromptVersion+"+") || len(got.Tag) != len(PromptVersion)+9 {
+		t.Fatalf("override tag = %q, want %s+<8 hex>", got.Tag, PromptVersion)
 	}
 	if got.Note != "" {
 		t.Fatalf("a usable override needs no note: %q", got.Note)
@@ -62,7 +62,7 @@ func TestLoadPromptOverrideFallsBackAndSaysWhy(t *testing.T) {
 			t.Fatal(err)
 		}
 		got := LoadPromptOverride(dir)
-		if got.Text != recapSystemPrompt || got.Tag != PromptTag {
+		if got.Text != recapSystemPrompt || got.Tag != PromptVersion {
 			t.Fatalf("%s: must fall back to the built-in rules: %+v", testCase.name, got)
 		}
 		if got.Note == "" {

@@ -14,7 +14,7 @@ import (
 
 // PromptVersion tags the prompt that produced a record so a prompt change can
 // invalidate stored records without touching session content.
-const PromptVersion = "recap-v8"
+const PromptVersion = "recap-v9"
 
 // ErrNoTranscript reports that a session has no authoritative file to read.
 var ErrNoTranscript = fmt.Errorf("recap: session has no transcript")

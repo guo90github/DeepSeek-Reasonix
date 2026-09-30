@@ -23,8 +23,6 @@ type PromptSource struct {
 const (
 	// PromptFileName is the override a person can drop into the state directory.
 	PromptFileName = "recap-prompt.md"
-	// PromptTag names the built-in rules an override starts from.
-	PromptTag = "recap-v8"
 	// promptMaxBytes keeps a mistaken paste from becoming the rules: a prompt the
 	// lane cannot afford to send is worse than the one it ships with.
 	promptMaxBytes = 32 * 1024
@@ -32,7 +30,7 @@ const (
 
 // BuiltinPrompt is the rules compiled into this binary.
 func BuiltinPrompt() PromptSource {
-	return PromptSource{Text: recapSystemPrompt, Tag: PromptTag}
+	return PromptSource{Text: recapSystemPrompt, Tag: PromptVersion}
 }
 
 // LoadPromptOverride reads dir/PromptFileName. Every failure falls back to the
@@ -62,7 +60,7 @@ func LoadPromptOverride(dir string) PromptSource {
 			path, len(raw), promptMaxBytes)
 	default:
 		sum := sha256.Sum256([]byte(text))
-		return PromptSource{Text: text, Tag: PromptTag + "+" + hex.EncodeToString(sum[:4])}
+		return PromptSource{Text: text, Tag: PromptVersion + "+" + hex.EncodeToString(sum[:4])}
 	}
 	return builtin
 }

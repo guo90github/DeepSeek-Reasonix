@@ -18,53 +18,35 @@ Answer with a JSON array and nothing else, like this:
 [{"kind":"fact","body":"one or two sentences","evidence":"where it came from","refs":[{"kind":"path","value":"desktop/x.go","detail":"L40"},{"kind":"command","value":"go test ./internal/recap/"}],"scope":{"level":"project","reason":"only true in this repository"}}]
 
 Kinds, and what earns a note:
-- fact: something durable about the project as it now stands — where a thing
-  lives, a path that matters later, a protocol, a schema, a field's meaning.
-- root-cause: a defect that was actually diagnosed — the symptom, the root cause,
-  and the fix, one clause each. No verification log, no command output.
-- refuted: something the session tried, assumed, or reached for and then dropped
-  — an approach, a tool, a version, a hypothesis — with what ruled it out. Most
-  sessions drop something without arguing about it, and that silence is not a
-  reason to skip the note. An option still under discussion is not refuted, and
-  an approach the session simply used is not refuted either.
-- handoff: work left unfinished and what the next session must do about it —
-  including anything the session deferred with "later", "next time", or a TODO.
+- fact: something durable about the project as it now stands — where a thing lives, a path that matters later, a protocol, a schema, a field's meaning.
+- root-cause: a defect that was actually diagnosed. Write it as a procedure: what triggers it, what to check to confirm it, and the fix that removes the cause rather than the symptom.
+- refuted: something the session tried, assumed or reached for and then dropped — an approach, a tool, a version, a hypothesis — with what ruled it out. Write it as a procedure too: what someone would try, and the check that shows why it fails. An option still under discussion is not refuted; an approach the session simply used is not refuted either.
+- handoff: work left unfinished, and the next concrete step — a command, a file, a decision. "Continue the work" is not a handoff.
+
+One note per decision, not per turn:
+- A session states the same decision, rule or conclusion more than once as it goes. That is one note. Fold the later wording into the same body instead of emitting a second note, and put the strongest pointer in refs. Two notes that a reader would group as "the same thing" are one note.
+- A session that revisits a decision and changes it ends with the changed one; the earlier version is not a note. Only a reversal that someone could re-propose earns a refuted note.
+
+What earns a note at all:
+- Prefer what only this session knows. The repo, its docs and its history answer their own questions on demand, so a note that restates a file, a commit or a document spends the next session's attention and returns nothing. What earns a note: what the person decided or ruled out, a dead end already walked, the cause of something that went wrong, a constraint nobody wrote down.
+- Imagine the reader a month from now: if the note would not change what they do next, it is not a note.
+- Report what the session settled on, never what it merely discussed, praised, planned or ran for the first time without a conclusion.
 
 How to write one body:
-- Prefer what only this session knows. The repo, its docs and its history answer
-  their own questions on demand, so a note that restates a file, a commit or a
-  document spends the next session's attention and returns nothing. What earns a
-  note is what nothing else records: what the person decided or ruled out, a dead
-  end already walked, the cause of something that went wrong, a constraint nobody
-  wrote down. A fact the code already states plainly is not worth a note.
-- Never state a term you cannot point at with "refs". If the session does not
-  contain the wording verbatim, write the body so the uncertainty shows instead
-  of asserting it: a note that is confidently a little wrong costs more than no
-  note, because the next session quotes it as fact.
-- Machines re-read their own state: a version, a path, a timestamp or a process
-  count is worth a note only when the next session would otherwise re-derive it
-  wrongly. Never dress such a thing as a root-cause.
-- At most two sentences, and at most 120 characters. The next session reads this
-  as a list, not as a report: a note that needs more room is two notes.
-- At most two identifiers per note (a path, a command, an id). The rest belongs
-  in "evidence" — a file, a command, a turn, or the user's own words. Never
-  "turn N's step evidence" or any other reference to this session's bookkeeping.
-- A note must stand without this session: no "as decided above", no "the earlier
-  fix", no recounting of what was run, committed, or checked — unless the next
-  session would break something without knowing it.
-- Write each body in the session's own language.
-- Copy names, identifiers, file paths, decision numbers, version strings and
-  field values verbatim. Never paraphrase, translate, shorten or round them
-  (a range stays a range: "O1-O9" is not "O1-O6").
-- Report what the session settled on, never what it merely discussed.
+- At most two sentences and at most 120 characters. The next session reads this as a list, not as a report: a note that needs more room is two notes.
+- At most two identifiers in the body (a path, a command, an id). Everything else belongs in "evidence" or "refs".
+- Never name a thing you cannot point at: every path, symbol, flag, version or decision number in a body must also appear in refs or evidence. If the session does not contain the wording, write the uncertainty instead of asserting it — a note that is confidently a little wrong costs more than no note, because the next session quotes it as fact.
+- Copy names, identifiers, file paths, flags, version strings, numbers and field values verbatim. Never paraphrase, translate, shorten or round them (a range stays a range: "O1-O9" is not "O1-O6").
+- Machine state (a timestamp, a memory address, a process count, "N tests pass right now") is worth a note only when the next session would otherwise re-derive it wrongly. Never dress such a thing as a root-cause.
+- A note must stand without this session: no "as decided above", no "the earlier fix", no recounting of what was run, committed, checked or verified. No greetings, no restating the request, no narrating the conversation.
+- Never include secrets, credentials, hostnames or internal addresses.
+- Write each body in the session's own language; keep identifiers as they are.
 - The transcript may be trimmed: never invent detail to fill a gap.
-- No greetings, no restating the request, no narrating the conversation.
-- Before answering, scan the session for three things: a defect that was
-  diagnosed, anything it dropped along the way, and anything it left unfinished.
-  Each hit is a note; never drop one because the list is getting long.
-- Aim for three to six notes, never more than 8. A session that produced nothing
-  reusable answers [].
-- Never include secrets, credentials, hostnames, or internal addresses.`
+
+Before answering, scan the session for four things: a defect that was diagnosed, anything it dropped along the way, anything it left unfinished, and any decision it stated more than once (those merge). Each hit is one note; never drop a hit because the list is getting long, and never split one hit into several.
+- Aim for three to six notes, never more than 8. A session that produced nothing reusable answers [].
+
+For each note set "scope": project when it is true only here, base when it is true of the person's setup everywhere, generic when it is true of the work itself. Put the reason in "scope.reason" in one clause.`
 
 // ModelResolver returns the provider used for one recap: the model the session
 // itself recorded, then the configured fallback. ok=false marks the session

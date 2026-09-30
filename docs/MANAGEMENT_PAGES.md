@@ -22,6 +22,23 @@ Permanent deletion requires confirmation with initial focus on Cancel. Empty Tra
 
 Session recap keeps its own entry and is deliberately not merged into Trash, which owns a session's restore and purge. The page is read-only: a recap is the four-element document written when a session closes, so it lists closed sessions only, and its subtitle states that session-level deletion and restore live in Trash. Rows come from the host's `ListSessionRecaps` newest first; sessions that left the visible set are dropped host-side, so the page shows exactly what retrieval still sees. Generating a recap never blocks a close: the lane is asynchronous and its own provider call.
 
+
+### How the page renders, and its batch actions
+
+- **Every note is one fixed three-column row**: `checkbox / badge / summary / actions`. Actions **always sit in the same right-hand column**, so a row no longer wraps on one width and not another; evidence, pointers, proposed tier and cross-project counts moved to a muted second line. The summary is clipped **in CSS only** (copying and searching still see the full text), hovering anywhere on the row shows the whole text, and clicking **anywhere on the row** (or Enter/Space) expands it.
+- **Notes of one topic share one action row**: grouping happens only **within a kind** (a fact and a handoff stay apart even on one topic — they land in different places), and the rule is ASCII words plus adjacent CJK pairs, requiring two real identifiers (length >= 4; `t1`, `id`, `sql` do not count) or a shorter note nearly contained in the other. The rule is **presentation only**: every note stays readable and acceptable on its own, and the checkboxes decide which of them "write to memory" covers. A group past six notes shows six with the rest behind "N more".
+- **Session cards expand only the newest one by default** (following sort and search); the title is the fold control, the toolbar has expand-all/collapse-all, and the header shows the note count. A **failed attempt's line never folds away**: it is a state, and it has to stay visible.
+- **Rows are split by rule version**: every record carries the version that produced it, and sessions older than the running rules are listed under "N recaps were produced by an older rule set", regenerable one at a time or in bulk.
+
+### Drafting a skill (playbook)
+
+Both the note row and the **topic group header** offer "draft a skill". One topic composes **one** playbook: every note is kept **verbatim** with its kind, its own pointers (`Where to check`) and its evidence line, and the file opens by saying it came from N notes on one topic with nothing rewritten or inferred — reliability comes from citable ground rather than from guessing a procedure out of several notes. **Different topics are different files**, so a batch is honestly one file or several. Drafts land in this project's `.reasonix/skills/recap-*/SKILL.md`, declare `invocation: manual`, **never overwrite an existing file**, and are only ever person-triggered; the host refuses anything that is not a procedure (facts, unfinished items).
+
+### The model and the prompt behind a recap
+
+- **The model is configured independently**: the model the session itself recorded first, then the `agent.session_recap_model` setting.
+- **The prompt is built-in rules plus an optional override**: the built-in rule set is versioned `recap-v9`; dropping `recap-prompt.md` into the **local state directory** (the one holding the recap projection) replaces it, the file is sent **verbatim**, and records then carry `recap-v9+<8 hex>`. An empty, oversized (past 32 KiB) or unreadable file **falls back to the built-in rules and says why** — half a prompt would silently lower the quality of everything the lane writes. This prompt **never enters the main session's system-prompt prefix**, so changing it leaves that prompt cache untouched.
+
 ## Automation drafts
 
 `useAutomationDraftStore` keeps per-ID baselines, editable values, frequency choice, detail tab, conflicts and operation versions in memory for the application run. Switching tasks, filters, pages, detail visibility and linked conversations preserves drafts. New unsaved tasks remain discoverable; changed existing tasks show an Unsaved badge. Reloading the webview or exiting the process clears drafts; minimize/tray hiding does not.
