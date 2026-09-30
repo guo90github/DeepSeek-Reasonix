@@ -195,6 +195,13 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     }
   }, [draftSkill, m]);
 
+  // One draft per playbook-worthy note in the topic, because a playbook is only as
+  // good as the steps behind it: this reuses each note's own cited ground rather
+  // than inventing a procedure.
+  const draftGroupSkills = useCallback(async (list: SessionRecapEntry[]) => {
+    for (const entry of list) await makeDraft(entry);
+  }, [makeDraft]);
+
   const setItemClosed = useCallback(async (item: RecapOpenItem, closed: boolean, resolution = "") => {
     setBusy(item.id);
     setFailure("");
@@ -432,6 +439,10 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
               const grouped = group.entries.length > 1;
               const open = group.entries.filter((entry) => (entry.decision ?? "") === "" && entry.target !== "display" && meta !== undefined);
               const chosen = open.filter((entry) => selected[entry.id] ?? true);
+              // Same gate the per-note button uses: the host refuses a playbook from
+              // anything but a procedure, and a display-only note is not reviewable.
+              const groupDraftable = group.entries.filter((entry) => meta !== undefined && entry.target !== "display"
+                && (entry.kind === "root-cause" || entry.kind === "refuted"));
               return <div key={group.key} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {grouped && <p style={{ margin: 0, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
                 <span style={{ ...labelStyle, fontSize: 12 }} title={m("recapTopicGroupHint")}>{m("recapTopicGroup", { n: group.entries.length })}</span>
@@ -439,6 +450,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                   onClick={() => void runGroup(group.key, "accept", chosen)}>{m("recapAccept")}</button>}
                 {open.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   onClick={() => void runGroup(group.key, "reject", open)}>{m("recapReject")}</button>}
+                {groupDraftable.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  title={m("recapDraftSkillBatchHint", { n: groupDraftable.length })}
+                  onClick={() => void draftGroupSkills(groupDraftable)}>{m("recapDraftSkill")}</button>}
               </p>}
             {(openGroups[group.key] || group.entries.length <= 6 ? group.entries : group.entries.slice(0, 6)).map((entry) => {
               const key = kindKey(entry.kind);

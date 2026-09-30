@@ -56,6 +56,7 @@ const messages = {
   recapNoteCount: ["{n} 条条目", "{n} 條條目", "{n} notes"],
   recapMoreNotes: ["还有 {n} 条 · 展开", "還有 {n} 條 · 展開", "{n} more · show them"],
   recapUngeneratedBadge: ["未生成", "未生成", "no recap yet"],
+  recapDraftSkillBatchHint: ["为该话题的 {n} 条可成稿条目各起草一份技能（逐条依据其引用的来源，不臆造步骤）", "為該話題的 {n} 條可成稿條目各起草一份技能（逐條依據其引用的來源，不臆造步驟）", "Draft one skill per playbook-worthy note in this topic ({n}), each citing its own source instead of inventing steps"],
   recapStaleBadge: ["旧版规则", "舊版規則", "older rules"],
   recapStaleHint: ["已生成的条目是当时的快照：重新生成才会用当前规则重算，逐条与批量都行。", "已生成的條目是當時的快照：重新生成才會用當前規則重算，逐條與批量都行。", "A stored note is a snapshot: regenerating is what applies the current rules — one at a time or in bulk."],
   recapGenerate: ["生成回顾", "產生回顧", "Generate recap"],

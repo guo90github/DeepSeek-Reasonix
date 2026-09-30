@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type MouseEvent, type ReactNode } from "react";
 
 // One row shape for every list on the recap page: badge, summary, actions, then an
 // optional expanded part. The fixed grid is the point — inline flow is what made the
@@ -20,15 +20,23 @@ const muted = { opacity: 0.72, fontSize: 12 } as const;
 export function RecapRow({ badge, text, leading, actions, detail, editor, tone }: Props) {
   const [open, setOpen] = useState(false);
   const expanded = open || editor !== undefined;
+  // Anywhere on the row opens it, except on the row's own controls: aiming at the
+  // text is a needless precision requirement, and hovering anywhere should say what
+  // the clipped summary holds.
+  const toggleOnHead = (event: MouseEvent<HTMLDivElement>) => {
+    const target = event.target as HTMLElement | null;
+    if (target !== null && target.closest("button, input, a, textarea, select") !== null) return;
+    setOpen((current) => !current);
+  };
   return (
     <div data-recap-row="" style={{ display: "flex", flexDirection: "column", gap: 4, color: tone === "warn" ? "var(--warn, inherit)" : undefined }}>
-      <div style={{ display: "grid", gridTemplateColumns: "auto auto minmax(0, 1fr) auto", gap: 6, alignItems: "baseline" }}>
+      <div onClick={toggleOnHead} title={text}
+        style={{ display: "grid", gridTemplateColumns: "auto auto minmax(0, 1fr) auto", gap: 6, alignItems: "baseline" }}>
         {leading}
         <span style={{ ...muted, whiteSpace: "nowrap" }}>{badge}</span>
         {/* A span, not a button: the summary is not an action, and the row's own
             buttons should stay countable as actions. Keyboard still opens it. */}
-        <span role="button" tabIndex={0} title={text}
-          onClick={() => setOpen((current) => !current)}
+        <span role="button" tabIndex={0}
           onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpen((current) => !current); } }}
           style={{ cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: expanded ? "normal" : "nowrap" }}>
           {text}
