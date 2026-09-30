@@ -508,6 +508,9 @@ func (a *App) startup(ctx context.Context) {
 	a.heartbeat = newHeartbeatEngine(a)
 	a.heartbeat.Start()
 	noteHostLaunch(a.heartbeat.unattendedEnabled())
+	// A switch this host made last run is healthy once this process is the
+	// version it asked for; until then the shell keeps the rollback target.
+	markPortableUpgradeHealthy()
 
 	a.mu.Lock()
 	a.tabsRestored = make(chan struct{})

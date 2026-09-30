@@ -111,6 +111,8 @@ could answer are cleared:
 | `desktop/host_state_marker.go` | Launch marker and crash-streak judgement |
 | `desktop/heartbeat_store.go` | Config read/write (the switch is human-owned; a full-table save must not drop it) |
 | `desktop/electron/src/main/{hostState,restartPolicy,autostart}.ts` | Marker reads, restart backoff, opt-in autostart |
+| `desktop/portable_upgrade.go` | Version switch: ready gate, pointer swap, restart into the new version |
+| `desktop/electron/src/main/upgradeRollback.ts` | Puts a switch that never came up back on the previous version |
 | `desktop/frontend/src/custom/features/heartbeat/UnattendedToggle.tsx` | The tab-strip switch |
 | `docs/UNATTENDED*.md` | This document |
 
@@ -128,7 +130,36 @@ Pre-existing noise, unrelated to this work:
 contents of `scripts/desktop-build.sh`; the electron suite has 5 Windows
 path-separator failures.
 
-## 9. Limits and open items
+## 9. Unattended self-upgrade (keep the long task running on the new build)
+
+The task's artifacts land under `versions/<tag>/` with **increasing version
+numbers**, and a version's **only launch entry is its own inner
+`versions/<tag>/reasonix-desktop.exe`**. The switching rules:
+
+1. **The primary signal is `current.json`, which the packaging SOP maintains**: the
+   build flow is governed by this machine's SOP (`REASONIX.local.md`), and it points
+   the pointer at the new tag; whenever the pointer names another **complete**
+   version, the switch happens at a turn boundary.
+2. **Fallback signal**: when the pointer has not moved, take the **newest ready**
+   version under `versions/` — ready means `versions/<tag>/.reasonix-upgrade-ready.json`
+   with `{"ready":true}`, written by the task after `verify-windows-portable.sh`
+   exits 0. A tree without the marker is never switched to: a half-extracted tree
+   must not become the active version.
+3. **Action**: write `current.json` (`installlayout.WriteCurrent` validates
+   `versions/<version>` and rejects traversal and symlinks) → record the rollback
+   target (`desktop-upgrade.json`, phase `pending`) → ask the shell to restart into
+   the **new version's inner desktop binary**.
+4. **Turn boundaries only**: the switch happens when the driver starts a tick and
+   before it submits, so an in-flight turn is never interrupted; the next process
+   continues the same Goal on its next interval.
+5. **Rollback on failure**: the new version marks the switch `healthy` itself; if
+   the shell cannot reach its service within the grace period (10 minutes), it puts
+   `current.json` back on the previous version and restarts that version's inner
+   binary (3 / 15 minute budget).
+6. **Installed versions are never deleted or overwritten** (matching the SOP's
+   prohibition): only a pointer and a marker are added.
+
+## 10. Limits and open items
 
 - The old session's `scopeID`, DeliveryCheckpoint and todos are **not** migrated:
   the new session re-anchors by the same `goal` text, so the delivery-evidence
@@ -137,5 +168,6 @@ path-separator failures.
   budget is spent, the shell parks on the failure page (deliberate — never loop).
 - The panel does not yet display the switch's current value (the config file is
   authoritative).
-- The full chain — kill the process abnormally → it relaunches → the long task
-  continues — has not been accepted on a real machine yet.
+- Neither full chain has been accepted on a real machine yet: neither kill the
+  process abnormally → relaunch → the long task continues, nor build → switch
+  versions → continue (the switch is unit-verified only).

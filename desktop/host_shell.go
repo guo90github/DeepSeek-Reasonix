@@ -179,6 +179,28 @@ func (b *hostShellBridge) relaunch() error {
 	}{Args: []string{}, ExecPath: execPath}, nil)
 }
 
+// relaunchInto restarts the application into one specific executable: the inner
+// reasonix-desktop.exe of a version the driver just made active, which is that
+// version's only launch entry.
+func (b *hostShellBridge) relaunchInto(execPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), rpcHostWindowTimeout)
+	defer cancel()
+	return b.server.Request(ctx, "host/app.relaunch", struct {
+		Args     []string `json:"args"`
+		ExecPath string   `json:"execPath,omitempty"`
+	}{Args: []string{}, ExecPath: execPath}, nil)
+}
+
+// relaunchIntoVersion restarts into a version's own desktop binary. Under the
+// shell Electron owns the restart; without it the thin launcher resolves the
+// active version itself.
+func (a *App) relaunchIntoVersion(exe string) error {
+	if a.hostMode() {
+		return a.hostShell.relaunchInto(exe)
+	}
+	return relaunchThroughLauncher()
+}
+
 // quit asks the shell to shut the application down without restarting it.
 func (b *hostShellBridge) quit() error {
 	ctx, cancel := context.WithTimeout(context.Background(), rpcHostWindowTimeout)

@@ -458,6 +458,11 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 		e.mu.Unlock()
 		return e.executeTaskOwned(t)
 	}
+	// A finished build waits next to us: switching versions restarts the app, so
+	// it happens here, at a turn boundary, and never mid-turn.
+	if e.maybeRelaunchForUpgrade(&t) {
+		return t
+	}
 	if e.unattendedGoalStep(&t, ctrl) {
 		return t
 	}

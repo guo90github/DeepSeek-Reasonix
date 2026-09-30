@@ -17,6 +17,7 @@ import { renderFailurePage, type ShellAction } from "./failurePage.js";
 import { buildHelloParams, describeHandshakeFailure, validateHelloResult, type HelloResult } from "./handshake.js";
 import { reasonixHome } from "./home.js";
 import { unattendedDesired } from "./hostState.js";
+import { rollbackUpgrade } from "./upgradeRollback.js";
 import { applyAutostart } from "./autostart.js";
 import { RestartBudget } from "./restartBudget.js";
 import { buildHostCallTable, dispatchHostCall, type ScreenInfo } from "./hostCalls.js";
@@ -281,6 +282,15 @@ function bootstrap(dataHome: string): void {
       onFailed: (error) => {
         const failure = describeHandshakeFailure(error);
         log.error(`desktop service failed: ${failure.name}: ${failure.detail}`);
+        // A version switch that never came up is put back before anything else:
+        // the previous version is still on disk and is the one that worked.
+        const previousVersionExe = rollbackUpgrade(dataHome, process.execPath);
+        if (previousVersionExe && relaunchBudget.allow(Date.now())) {
+          log.warn(`unattended: rolling the version switch back, restarting ${previousVersionExe}`);
+          app.relaunch({ execPath: previousVersionExe });
+          app.exit(0);
+          return;
+        }
         if (unattendedDesired(dataHome) && relaunchBudget.allow(Date.now())) {
           // An unattended run owns the machine: bring the shell back instead of
           // parking on a failure page nobody is watching. The budget stops a

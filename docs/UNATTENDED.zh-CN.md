@@ -99,6 +99,8 @@
 | `desktop/heartbeat_store.go` | 配置读写（总开关由人工持有，整表保存不得丢） |
 | `desktop/electron/src/main/{hostState,restartPolicy,autostart}.ts` | 印记读取、重启退避、opt-in 自启 |
 | `desktop/frontend/src/custom/features/heartbeat/UnattendedToggle.tsx` | 标签栏总开关 |
+| `desktop/portable_upgrade.go` | 版本切换：就绪门、指针交换、重启进新版本 |
+| `desktop/electron/src/main/upgradeRollback.ts` | 切了但起不来时把指针写回上一个版本 |
 | `docs/UNATTENDED*.md` | 本文件 |
 
 ## 8. 验证
@@ -113,11 +115,32 @@ go run ./tools/repolint                                              # 注释/�
 已知既有噪声（与本次无关）：`TestDesktopBuildScriptCompilesAndPackagesWindowsUpdateHelper`
 断言 `scripts/desktop-build.sh` 的内容；electron 单测有 5 条 Windows 路径分隔符失败。
 
-## 9. 边界与未做
+## 9. 无人值守下的自我升级切换（把长任务换成新版本继续跑）
+
+任务的产物落在 `versions/<tag>/`，**版本号递增**；一个版本的**唯一启动入口是它自己的内层
+`versions/<tag>/reasonix-desktop.exe`**。切换规则：
+
+1. **首选信号是 SOP 自己维护的 `current.json`**：打包流程由本机 SOP（`REASONIX.local.md`）
+   权威控制，它会把指针指向新 tag；只要指针指向另一个**完整**版本，就在**轮次边界**切换。
+2. **兜底信号**：指针没动时，取 `versions/` 下**最新的、带就绪标记的**版本
+   （`versions/<tag>/.reasonix-upgrade-ready.json`，内容 `{"ready":true}`——由任务在
+   `verify-windows-portable.sh` exit 0 之后写入）。没有标记的目录一律不切：半解压的树绝不能
+   变成活动版本。
+3. **动作**：写 `current.json`（`installlayout.WriteCurrent` 会校验 `versions/<version>`、
+   拒绝穿越与符号链接）→ 记下回滚目标（`desktop-upgrade.json`，phase=`pending`）→
+   请求壳重启到**新版内层 exe**。
+4. **只在回合边界做**：切换发生在驱动本轮开始、还没提交回合之前，不会打断在飞的回合；
+   新进程下个 interval 继续推进同一个 Goal。
+5. **失败回滚**：新版本起来后由它自己把 phase 标成 `healthy`；若壳在宽限期（10 分钟）内
+   连不上服务，就把 `current.json` 写回上一个版本并重启回旧版内层 exe（3 次/15 分钟预算）。
+6. **绝不删改已装版本**（与 SOP 的禁忌一致）：只新增指针与标记，不覆盖、不清理旧目录。
+
+## 10. 边界与未做
 
 - **不迁移**旧会话的 `scopeID` / DeliveryCheckpoint / todos：新会话以同一 `goal` 文本
   重新锚定，交付证据链会断一截。
 - 未做 macOS `LaunchAgent KeepAlive`：Electron main 自身崩溃且 relaunch 预算耗尽时会停在
   失败页（不会无限循环，这是有意的）。
 - 面板尚未显示开关的当前值（配置文件的 `unattended` 是权威位）。
-- 「异常杀进程 → 自主拉起 → 继续长任务」的整条链尚未在真机跑过一次验收。
+- 「异常杀进程 → 自主拉起 → 继续长任务」与「打包后自动切版本 → 继续推进」两条链都还没在
+  真机跑过一次完整验收（切换只做过单元级验证）。
