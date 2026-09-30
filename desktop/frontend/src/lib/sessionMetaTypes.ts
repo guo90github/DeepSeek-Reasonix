@@ -56,6 +56,9 @@ export interface SessionRecapEntry {
   refs?: SessionRecapRef[];
   scope?: "project" | "base" | "generic" | string;
   scopeReason?: string;
+  // observedIn names the other projects that reached a conclusion like this one:
+  // the evidence a proposed tier rests on, filled in only when it exists.
+  observedIn?: string[];
 }
 
 // SessionRecapPending is a failed generation attempt. A failure stores no

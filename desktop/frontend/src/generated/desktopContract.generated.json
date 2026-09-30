@@ -31304,6 +31304,16 @@
           "type": {
             "kind": "string"
           }
+        },
+        {
+          "name": "observedIn",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "string"
+            },
+            "kind": "array"
+          }
         }
       ]
     },

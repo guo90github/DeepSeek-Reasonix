@@ -289,6 +289,11 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                   <span>{entry.body}</span>
                   {entry.evidence && <span style={{ ...labelStyle, fontSize: 12 }}>（{entry.evidence}）</span>}
                   {entry.scope && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapScopeProposed", { level: entry.scope })}</span>}
+                  {entry.observedIn !== undefined && entry.observedIn.length > 0 && (
+                    <span style={{ ...labelStyle, fontSize: 12 }}>
+                      {m("recapObservedIn", { n: entry.observedIn.length, list: entry.observedIn.join("、") })}
+                    </span>
+                  )}
                   {decision === "accept" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapAccepted")}</span>}
                   {decision === "reject" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapRejected")}</span>}
                   {reviewable && <span style={{ display: "flex", gap: 6 }}>

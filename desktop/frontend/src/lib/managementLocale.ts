@@ -45,6 +45,7 @@ const messages = {
   recapPendingNotice: ["其中 {n} 条还没生成成功，正在等重试", "其中 {n} 條還沒產生成功，正在等重試", "{n} of them have not been generated yet and are waiting for a retry"],
   recapPendingSince: ["最近尝试于", "最近嘗試於", "Last attempted"],
   recapScopeProposed: ["模型提议落点：{level}（采纳仍写当前项目）", "模型提議落點：{level}（採納仍寫當前專案）", "Tier proposed: {level} (accepting still writes to this project)"],
+  recapObservedIn: ["另有 {n} 个项目独立得出同一结论：{list}", "另有 {n} 個專案獨立得出同一結論：{list}", "Reached independently in {n} other project(s): {list}"],
   recapGenerate: ["生成回顾", "產生回顧", "Generate recap"],
   recapRetryGenerate: ["重试生成", "重試產生", "Retry generation"],
   recapQueued: ["已排队生成，稍后刷新查看", "已排隊產生，稍後重新整理查看", "Queued — refresh in a moment to see it"],

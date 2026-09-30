@@ -35,6 +35,9 @@ type SessionRecapEntry struct {
 	Refs        []SessionRecapRef `json:"refs,omitempty"`
 	Scope       string            `json:"scope,omitempty"`
 	ScopeReason string            `json:"scopeReason,omitempty"`
+	// ObservedIn names the other projects that reached a conclusion like this one.
+	// Empty means the proposed tier rests on the model's word alone.
+	ObservedIn []string `json:"observedIn,omitempty"`
 }
 
 // SessionRecapPending is a failed attempt, as the page reports it. A failure
@@ -88,6 +91,12 @@ func (a *App) ListSessionRecaps() []SessionRecapView {
 	if err != nil {
 		failures = map[string]recap.Pending{}
 	}
+	// Which other projects reached the same conclusions: computed once for the whole
+	// page, because it is the evidence a proposed tier rests on.
+	recurrences, err := store.Recurrences(ctx)
+	if err != nil {
+		recurrences = map[string][]string{}
+	}
 	out := make([]SessionRecapView, 0, len(records))
 	listed := make(map[string]bool, len(records))
 	for _, rec := range records {
@@ -106,6 +115,7 @@ func (a *App) ListSessionRecaps() []SessionRecapView {
 				Decision:    decisions[id].Choice,
 				Scope:       entry.Scope.Level,
 				ScopeReason: entry.Scope.Reason,
+				ObservedIn:  recap.ObservationOf(recurrences[id], recap.ProjectOf(rec.Path)),
 			}
 			for _, ref := range entry.Refs {
 				view.Refs = append(view.Refs, SessionRecapRef{

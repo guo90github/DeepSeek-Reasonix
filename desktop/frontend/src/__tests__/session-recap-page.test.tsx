@@ -55,7 +55,8 @@ function recap(path: string, goal: string, generatedAt: string): SessionRecap {
     path, model: "deepseek/test", generatedAt,
     entries: [
       { id: `fact-${goal}`, kind: "fact", body: `${goal} 的事实`, evidence: "internal/parser.go", target: "memory",
-        refs: [{ kind: "path", value: "internal/parser.go", detail: "L40" }], scope: "generic", scopeReason: "两个项目都踩过" },
+        refs: [{ kind: "path", value: "internal/parser.go", detail: "L40" }], scope: "generic", scopeReason: "两个项目都踩过",
+        observedIn: ["c--guosj-ai-chatting"] },
       { id: "handoff-mock", kind: "handoff", body: `${goal} 的交接`, target: "display" },
     ],
   } as SessionRecap;
@@ -165,6 +166,8 @@ ok(cards().every((card) => card.textContent?.includes("path internal/parser.go L
   "a note shows the pointers it cites, which is what an accept is judged on");
 ok(cards().every((card) => card.textContent?.includes("Tier proposed: generic") === true),
   "a note shows the tier the model proposed and says it is not applied yet");
+ok(cards().every((card) => card.textContent?.includes("1 other project(s): c--guosj-ai-chatting") === true),
+  "a note another project also reached says so, which is the only checkable ground for a general tier");
 
 const alphaCard = () => cardWith("Alpha 会话");
 const clickButton = async (button: HTMLButtonElement | undefined) => {
