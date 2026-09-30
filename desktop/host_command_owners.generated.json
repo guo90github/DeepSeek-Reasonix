@@ -1171,7 +1171,10 @@
       "kind": "owner-inputs",
       "resolver": "App.CloseRecapHandoff",
       "inputs": [
-        "id"
+        "id",
+        "body",
+        "evidence",
+        "resolution"
       ]
     }
   },

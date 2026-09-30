@@ -4539,7 +4539,7 @@ export function useController() {
   }, [app]);
   const listRecapOpenItems = useCallback(async (): Promise<RecapOpenItem[]> => asArray<RecapOpenItem>(await app.ListRecapOpenItems()), []);
   const keepRecapHandoff = useCallback(async (sessionPath: string, body: string, evidence: string): Promise<string> => app.KeepRecapHandoff(sessionPath, body, evidence), [app]);
-  const closeRecapHandoff = useCallback(async (id: string): Promise<void> => { await app.CloseRecapHandoff(id); }, [app]);
+  const closeRecapHandoff = useCallback(async (id: string, body: string, evidence: string, resolution: string): Promise<void> => { await app.CloseRecapHandoff(id, body, evidence, resolution); }, [app]);
   const reopenRecapHandoff = useCallback(async (id: string): Promise<void> => { await app.ReopenRecapHandoff(id); }, [app]);
   const generateSessionRecap = useCallback(async (sessionPath: string): Promise<boolean> => app.GenerateSessionRecap(sessionPath), [app]);
   const draftRecapSkill = useCallback(async (kind: string, body: string): Promise<RecapSkillDraft> => app.DraftRecapSkill(kind, body), [app]);

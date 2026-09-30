@@ -40,7 +40,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   undo: (kind: string, body: string) => Promise<void>;
   listOpenItems: () => Promise<RecapOpenItem[]>;
   keep: (sessionPath: string, body: string, evidence: string) => Promise<string>;
-  close: (id: string) => Promise<void>;
+  close: (id: string, body: string, evidence: string, resolution: string) => Promise<void>;
   reopen: (id: string) => Promise<void>;
   // generate asks the host to (re)run one session's recap now. It queues into the
   // same lane the close path uses, so it returns as soon as the work is accepted.
@@ -66,6 +66,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const [drafted, setDrafted] = useState<Record<string, string>>({});
   const [insights, setInsights] = useState<SessionRecapInsight[]>([]);
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+  const [closing, setClosing] = useState<{ id: string; text: string } | null>(null);
   const seq = useRef(0);
   const refresh = useCallback(async () => {
     const generation = ++seq.current;
@@ -167,11 +168,11 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     }
   }, [draftSkill, m]);
 
-  const setItemClosed = useCallback(async (item: RecapOpenItem, closed: boolean) => {
+  const setItemClosed = useCallback(async (item: RecapOpenItem, closed: boolean, resolution = "") => {
     setBusy(item.id);
     setFailure("");
     try {
-      await (closed ? close(item.id) : reopen(item.id));
+      await (closed ? close(item.id, item.body, item.evidence ?? "", resolution) : reopen(item.id));
       setOpenItems((current) => current.map((candidate) =>
         candidate.id === item.id ? { ...candidate, closed } : candidate));
     } catch {
@@ -248,9 +249,24 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
               {item.evidence && <span style={{ ...labelStyle, fontSize: 12 }}>（{item.evidence}）</span>}
               {item.closed && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapOpenHandled")}</span>}
               {!item.closed && item.stale === true && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapOpenStale")}</span>}
-              <button className="btn btn--small" type="button" disabled={busy !== ""}
-                onClick={() => void setItemClosed(item, !item.closed)}>
-                {item.closed ? m("recapUndo") : m("recapMarkHandled")}</button>
+              {item.closed ? (
+                <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  onClick={() => void setItemClosed(item, false)}>{m("recapUndo")}</button>
+              ) : closing?.id === item.id ? (
+                <span style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                  <input className="input" style={{ minWidth: 240 }} disabled={busy !== ""}
+                    placeholder={m("recapOutcomePlaceholder")} value={closing.text}
+                    onChange={(event) => setClosing({ id: item.id, text: event.target.value })} />
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => { const text = closing.text; setClosing(null); void setItemClosed(item, true, text); }}>
+                    {m("recapOutcomeSave")}</button>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => setClosing(null)}>{m("recapOutcomeCancel")}</button>
+                </span>
+              ) : (
+                <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  onClick={() => setClosing({ id: item.id, text: "" })}>{m("recapMarkHandled")}</button>
+              )}
             </li>
           ))}
         </ul>

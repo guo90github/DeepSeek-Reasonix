@@ -92,6 +92,7 @@ const rejected: { kind: string; body: string }[] = [];
 const undone: { kind: string; body: string }[] = [];
 const kept: { path: string; body: string; evidence: string }[] = [];
 const closedItems: string[] = [];
+const closedResolutions: string[] = [];
 const reopenedItems: string[] = [];
 const generated: string[] = [];
 let acceptGenerate = true;
@@ -116,7 +117,7 @@ const reviewProps = {
     kept.push({ path, body, evidence });
     return "handoff-mock";
   },
-  close: async (id: string) => { closedItems.push(id); },
+  close: async (id: string, _body: string, _evidence: string, resolution: string) => { closedItems.push(id); closedResolutions.push(resolution); },
   reopen: async (id: string) => { reopenedItems.push(id); },
   // generate reports whether the lane accepted the work; a refused queue is a
   // failure the page must show rather than pretend it was queued.
@@ -284,8 +285,19 @@ ok(buttonsOf(handoffRow()).length === 0, "a kept note stops offering the action"
 ok(openSection() !== undefined, "the project's unfinished items get their own list");
 ok(openSection()?.querySelectorAll("li").length === 1, "the kept item is listed");
 
+// Handling an item is where an outcome can be written down: the first click opens
+// the field, the second records whatever the person typed as sediment.
 await clickButton(openSection()?.querySelector<HTMLButtonElement>("li button"));
-ok(closedItems.length === 1 && closedItems[0] === "handoff-mock", "marking an item handled reports it");
+ok(closedItems.length === 0, "the handled button opens the outcome field before closing anything");
+const outcomeInput = openSection()?.querySelector<HTMLInputElement>("li input");
+ok(outcomeInput?.placeholder === "Outcome (optional): how did this end?",
+  `the handled button opens an outcome field first: ${outcomeInput?.outerHTML}`);
+await clickButton([...openSection()!.querySelectorAll<HTMLButtonElement>("li button")]
+  .find((button) => button.textContent?.includes("Record and mark handled")));
+// The outcome is optional: an item handled without one still closes, and passes an
+// empty resolution rather than inventing text.
+ok(closedItems.length === 1 && closedItems[0] === "handoff-mock" && closedResolutions[0] === "",
+  `marking an item handled reports it with the outcome: ${JSON.stringify(closedResolutions)}`);
 ok(openSection()?.querySelectorAll("li").length === 1, "a handled item stays visible");
 await clickButton(openSection()?.querySelector<HTMLButtonElement>("li button"));
 ok(reopenedItems.length === 1, "a handled item can be put back on the list");

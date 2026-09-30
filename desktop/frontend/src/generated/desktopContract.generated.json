@@ -2173,12 +2173,24 @@
       "params": [
         {
           "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
         }
       ],
       "returnsError": true,
       "scope": {
         "inputs": [
-          "id"
+          "id",
+          "body",
+          "evidence",
+          "resolution"
         ],
         "kind": "owner-inputs",
         "resolver": "App.CloseRecapHandoff"

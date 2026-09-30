@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
+	"reasonix/internal/memory"
 	"reasonix/internal/recap"
 )
 
@@ -52,15 +54,62 @@ func (a *App) KeepRecapHandoff(sessionPath, body, evidence string) (string, erro
 	return recap.HashEntry(recap.KindHandoff, text), nil
 }
 
-// CloseRecapHandoff marks one unfinished item handled.
-func (a *App) CloseRecapHandoff(id string) error {
+// CloseRecapHandoff marks one unfinished item handled. A one-line outcome, when
+// the person writes one, becomes sediment instead of dying with the item: it is
+// their own statement about how the work ended, so it lands in memory — the layer
+// the next session actually reads — and needs no model to get there.
+func (a *App) CloseRecapHandoff(id, body, evidence, resolution string) error {
 	ctx := a.bootContext()
 	store, err := recap.Open(ctx, recap.Options{Path: recap.DefaultPath()})
 	if err != nil {
 		return err
 	}
 	defer func() { _ = store.Close() }()
-	return store.CloseOpen(ctx, id, time.Now())
+	if err := store.CloseOpen(ctx, id, time.Now()); err != nil {
+		return err
+	}
+	if text := strings.TrimSpace(resolution); text != "" {
+		a.recordRecapOutcome(body, evidence, text)
+	}
+	return nil
+}
+
+// recordRecapOutcome writes a resolved item's outcome into the project's memory.
+// Best effort: the item is already closed, and losing the outcome must not undo
+// that. No session open means nowhere to write it, which is not an error.
+func (a *App) recordRecapOutcome(body, evidence, resolution string) {
+	ctrl := a.ctrlByTabID("")
+	if ctrl == nil {
+		return
+	}
+	if _, err := ctrl.SaveMemory(recapOutcomeFact(body, evidence, resolution)); err != nil {
+		slog.Warn("desktop: could not record a resolved item's outcome", "err", err)
+	}
+}
+
+// recapOutcomeFact is the outcome itself plus what it is answering: a resolution
+// without the item reads like a rule with no question behind it.
+func recapOutcomeFact(body, evidence, resolution string) memory.Memory {
+	resolution = strings.TrimSpace(resolution)
+	fact := memory.Memory{
+		Name:        stableSuggestionName(resolution, "recap-outcome"),
+		Title:       suggestionTitle(resolution, "Resolved item"),
+		Description: oneLine(resolution),
+		Type:        memory.TypeProject,
+		Scope:       memory.FactScopeProject,
+		Body: resolution + `
+
+**Why:** An unfinished item from an earlier session ended this way.
+**How to apply:** Check it against the code before relying on it.
+`,
+	}
+	if item := oneLine(body); item != "" {
+		fact.Body += "\n**Item:** " + item + "\n"
+	}
+	if quote := oneLine(evidence); quote != "" {
+		fact.Body += "\nEvidence: " + quote + "\n"
+	}
+	return fact
 }
 
 // ReopenRecapHandoff puts a handled item back on the list, for a mis-click.

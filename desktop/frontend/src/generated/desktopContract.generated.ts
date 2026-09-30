@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:ada12af0f24b42678b40900203c298acd194461b222cd677f433256b40f0ee21";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:46288ccef32aa0f56662116661cc16441f4b8d64a6e66c2304213bd1f7b79ab9";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -4562,7 +4562,7 @@ export interface GeneratedDesktopCommands {
   ClearSessionForTab(arg0: string): Promise<SessionClearResult>;
   CloseMainWindow(): Promise<void>;
   CloseMergedWorktreeTab(arg0: CloseMergedWorktreeTabRequest): Promise<CloseMergedWorktreeTabResult>;
-  CloseRecapHandoff(arg0: string): Promise<void>;
+  CloseRecapHandoff(arg0: string, arg1: string, arg2: string, arg3: string): Promise<void>;
   CloseRemoteTab(arg0: string): Promise<void>;
   CloseTab(arg0: string): Promise<void>;
   CloseTabWithPolicy(arg0: string, arg1: string): Promise<void>;
