@@ -259,8 +259,11 @@ func TestGenerateGivesUpAfterASecondEmptyAnswer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Stored || res.Reason != "unparseable answer" {
-		t.Fatalf("two empty answers must leave the session pending: %+v", res)
+	if res.Stored || res.Reason != "empty answer" {
+		t.Fatalf("two empty answers must leave the session pending and say why: %+v", res)
+	}
+	if pending, err := h.store.PendingMap(ctx); err != nil || pending[path].Reason != "empty answer twice: the model returned nothing" {
+		t.Fatalf("the reason must name an empty answer instead of a parse failure: %+v (%v)", pending, err)
 	}
 	if calls := prov.callsMade(); calls != 2 {
 		t.Fatalf("provider calls = %d, want 2 and no more", calls)

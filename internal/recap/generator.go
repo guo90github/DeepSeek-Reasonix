@@ -240,12 +240,18 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 	}
 	if strings.TrimSpace(raw) == "" {
 		// A reasoning model can spend the whole completion budget thinking and
-		// return nothing at all; one immediate retry beats leaving the session
-		// pending for a later sweep.
-		raw, err = g.call(ctx, prov, ref, text)
+		// return nothing at all; one immediate retry, with room to finish, beats
+		// leaving the session pending for a later sweep.
+		raw, err = g.callWith(ctx, prov, ref, text, 2*g.opts.MaxTokens)
 		if err != nil {
 			_ = store.MarkPending(ctx, path, err.Error(), g.opts.Now())
 			return Result{Skipped: true, Reason: "call failed"}, nil
+		}
+		if strings.TrimSpace(raw) == "" {
+			// Name it for what it is: a model that answered nothing is not a parse
+			// failure, and the two want different things from whoever reads the page.
+			_ = store.MarkPending(ctx, path, "empty answer twice: the model returned nothing", g.opts.Now())
+			return Result{Skipped: true, Reason: "empty answer"}, nil
 		}
 	}
 	entries, ok := parseEntries(raw)
@@ -303,14 +309,20 @@ func answerExcerpt(raw string) string {
 // call runs the lane's one bounded request: no tools, its own usage source, and
 // a completion budget the model's reasoning also has to fit inside.
 func (g *Generator) call(ctx context.Context, prov provider.Provider, ref, text string) (string, error) {
+	return g.callWith(ctx, prov, ref, text, g.opts.MaxTokens)
+}
+
+func (g *Generator) callWith(ctx context.Context, prov provider.Provider, ref, text string, maxTokens int) (string, error) {
 	return boundedllm.Call(ctx, boundedllm.Config{
-		Provider:       prov,
-		ModelRef:       ref,
-		Sink:           g.opts.Sink,
-		UsageSource:    event.UsageSourceSessionRecap,
-		Timeout:        g.opts.Timeout,
-		MaxTokens:      g.opts.MaxTokens,
-		MaxOutputBytes: 8 * 1024,
+		Provider:    prov,
+		ModelRef:    ref,
+		Sink:        g.opts.Sink,
+		UsageSource: event.UsageSourceSessionRecap,
+		Timeout:     g.opts.Timeout,
+		MaxTokens:   maxTokens,
+		// Notes carry pointers and a tier now, so the answer is fatter than it was
+		// when 8 KiB was enough; the salvage path only helps up to the first cut.
+		MaxOutputBytes: 16 * 1024,
 		MaxSystemBytes: 6 * 1024,
 		MaxTotalBytes:  g.opts.MaxInputBytes + 4*1024,
 		EffortOverride: provider.PreferredReasoning(prov, "low"),
