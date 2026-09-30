@@ -205,11 +205,13 @@ const (
 	// file, a command, or an id.
 	minIdentifierLen = 5
 	cjkPairLen       = 2
-	// What a turn must carry to be about one item, calibrated on real sessions:
-	// one shared identifier is ordinary, because a project's sessions name the
-	// same files constantly — measured alone it fired on 40% of unrelated
-	// openers in the same project.
-	sharedIdentifiersNeeded = 2
+	// What a turn must carry to be about one item, calibrated on real sessions
+	// (13 real notes × 598 unrelated openers of the same project): one shared
+	// identifier fired on 39.5% of the unrelated openers, two on 15.7%, three on
+	// 13.2% at the same recall. Loosening the prose floor instead collapses recall
+	// (4 shared pairs: 12.2% false positives but only 4 of 13 notes still match),
+	// so the identifier bar is the knob that pays.
+	sharedIdentifiersNeeded = 3
 	sharedPairsFloor        = 2
 	sharedPairsAlone        = 3
 	pairStride              = 2

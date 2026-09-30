@@ -135,11 +135,17 @@ func TestStrongMatchOpenItemsNeedsANamedThing(t *testing.T) {
 	if got := StrongMatchOpenItems([]OpenItem{item}, corroborated, matchNow); len(got) != 1 {
 		t.Fatalf("a named file with prose agreement must be enough mid-conversation: %+v", got)
 	}
-	// Two named things stand on their own.
+	// Named things stand on their own once there are enough of them to be a
+	// subject rather than the file everyone in the project names anyway.
 	item.Body = "给 desktop/workspace_git_scope.go 的面板补 desktop/panel_state.go 的用例"
 	if got := StrongMatchOpenItems([]OpenItem{item},
-		"desktop/workspace_git_scope.go 和 desktop/panel_state.go 都要改", matchNow); len(got) != 1 {
-		t.Fatalf("two named files must be enough mid-conversation: %+v", got)
+		"desktop/workspace_git_scope.go 和 desktop/panel_state.go 都要改", matchNow); len(got) != 0 {
+		t.Fatalf("two named files alone must not be enough mid-conversation: %+v", got)
+	}
+	item.Body = "给 desktop/workspace_git_scope.go 的面板补 desktop/panel_state.go 与 desktop/panel_view.go 的用例"
+	if got := StrongMatchOpenItems([]OpenItem{item},
+		"desktop/workspace_git_scope.go、desktop/panel_state.go、desktop/panel_view.go 都要改", matchNow); len(got) != 1 {
+		t.Fatalf("three named files must be enough mid-conversation: %+v", got)
 	}
 	if got := StrongMatchOpenItems([]OpenItem{item}, "  ", matchNow); len(got) != 0 {
 		t.Fatalf("an empty turn names nothing: %+v", got)

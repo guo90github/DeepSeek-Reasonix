@@ -2,8 +2,10 @@ package recap
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -60,10 +62,16 @@ func TestCalibrateOfferRule(t *testing.T) {
 	}
 
 	now := time.Now()
-	var items, ownHits, otherPairs, shippedOther int
-	rules := offerRules()
+	var items, ownHits, otherPairs, shippedOther, firedTotal int
+	rules := offerGrid()
 	ownHitsByRule := make([]int, len(rules))
 	otherHitsByRule := make([]int, len(rules))
+	// Which branch fires on unrelated text decides which knob matters: the
+	// identifier branch is the one a whole project shares, so it is the one worth
+	// making stricter. The histogram says where the false positives actually sit.
+	fired := map[string]int{}
+	rarityOwn := make([]int, len(rarityCuts))
+	rarityOther := make([]int, len(rarityCuts))
 	for _, record := range records {
 		own := realPathFor(sessions, record.Path)
 		if own == "" {
@@ -86,24 +94,51 @@ func TestCalibrateOfferRule(t *testing.T) {
 			item := OpenItem{ID: HashEntry(entry.Kind, entry.Body), Project: project,
 				Body: entry.Body, Evidence: entry.Evidence, OpenedAt: now}
 			single := []OpenItem{item}
+			tokens := tokensOf(item)
+			// How many of the bucket's other openers name each of this item's
+			// identifiers: a file the whole project talks about cannot say "this is
+			// the work we were discussing". Measuring it here decides whether a
+			// corpus for a document-frequency filter would be worth keeping.
+			df := make(map[string]int, len(tokens.identifiers))
+			for _, identifier := range tokens.identifiers {
+				count := 0
+				for _, turn := range others {
+					if strings.Contains(strings.ToLower(turn), identifier) {
+						count++
+					}
+				}
+				df[identifier] = count
+			}
 			if ownOpener != "" && len(MatchOpenItems(single, ownOpener, now)) == 1 {
 				ownHits++
 			}
-			ids, pairs := sharedIdentifiers(tokensOf(item), ownOpener), sharedPairs(tokensOf(item), ownOpener)
-			for i, rule := range rules {
-				if ownOpener != "" && rule.hit(ids, pairs) {
+			ids, pairs := sharedIdentifiers(tokens, ownOpener), sharedPairs(tokens, ownOpener)
+			for i, candidate := range rules {
+				if ownOpener != "" && candidate.hit(ids, pairs) {
 					ownHitsByRule[i]++
 				}
 			}
+			for i, cut := range rarityCuts {
+				if ownOpener != "" && rarityRule.hit(distinctiveIDs(tokens, ownOpener, df, cut), pairs) {
+					rarityOwn[i]++
+				}
+			}
 			for _, turn := range others {
+				turnIDs := sharedIdentifiers(tokens, turn)
+				turnPairs := sharedPairs(tokens, turn)
 				if len(MatchOpenItems(single, turn, now)) == 1 {
 					shippedOther++
+					firedTotal++
+					fired[fmt.Sprintf("ids=%d pairs=%d", turnIDs, turnPairs)]++
 				}
-				turnIDs := sharedIdentifiers(tokensOf(item), turn)
-				turnPairs := sharedPairs(tokensOf(item), turn)
-				for i, rule := range rules {
-					if rule.hit(turnIDs, turnPairs) {
+				for i, candidate := range rules {
+					if candidate.hit(turnIDs, turnPairs) {
 						otherHitsByRule[i]++
+					}
+				}
+				for i, cut := range rarityCuts {
+					if rarityRule.hit(distinctiveIDs(tokens, turn, df, cut), turnPairs) {
+						rarityOther[i]++
 					}
 				}
 			}
@@ -116,35 +151,33 @@ func TestCalibrateOfferRule(t *testing.T) {
 	t.Logf("shipped MatchOpenItems: recall=%d/%d  false-positives=%d/%d (%.1f%%)",
 		ownHits, items, shippedOther, otherPairs,
 		100*float64(shippedOther)/float64(max(otherPairs, 1)))
-	for i, rule := range rules {
-		t.Logf("%-22s recall=%d/%d  false-positives=%d/%d (%.1f%%)", rule.name,
+	for i, candidate := range rules {
+		t.Logf("%-26s recall=%d/%d  false-positives=%d/%d (%.1f%%)", candidate.name,
 			ownHitsByRule[i], items, otherHitsByRule[i], otherPairs,
 			100*float64(otherHitsByRule[i])/float64(max(otherPairs, 1)))
 	}
+	top := make([]firedBucket, 0, len(fired))
+	for key, n := range fired {
+		top = append(top, firedBucket{key, n})
+	}
+	sort.Slice(top, func(i, j int) bool { return top[i].n > top[j].n })
+	for i, bucket := range top {
+		if i == 10 {
+			break
+		}
+		t.Logf("  fp at %-16s %4d (%4.1f%% of all fp)", bucket.key, bucket.n,
+			100*float64(bucket.n)/float64(max(firedTotal, 1)))
+	}
+	for i, cut := range rarityCuts {
+		t.Logf("rarity: df>=%-3d = ordinary | recall=%d/%d  false-positives=%d/%d (%.1f%%)", cut,
+			rarityOwn[i], items, rarityOther[i], otherPairs,
+			100*float64(rarityOther[i])/float64(max(otherPairs, 1)))
+	}
 }
 
-// countRuleHits re-runs one rule over the same pairs, for the line above.
-func countRuleHits(records []Record, openers, projectOf map[string]string, sessions []string, rules []rule, index int) int {
-	now := time.Now()
-	hits := 0
-	for _, record := range records {
-		own := realPathFor(sessions, record.Path)
-		if own == "" {
-			continue
-		}
-		for _, entry := range record.Entries {
-			item := OpenItem{Body: entry.Body, Evidence: entry.Evidence, OpenedAt: now}
-			for path, turn := range openers {
-				if path == own || projectOf[path] != projectOf[own] {
-					continue
-				}
-				if rules[index].hit(sharedIdentifiers(tokensOf(item), turn), sharedPairs(tokensOf(item), turn)) {
-					hits++
-				}
-			}
-		}
-	}
-	return hits
+type firedBucket struct {
+	key string
+	n   int
 }
 
 // rule is one candidate offer rule, measured against real text.
@@ -153,15 +186,52 @@ type rule struct {
 	hit  func(identifiers, pairs int) bool
 }
 
-// offerRules are the candidates, loosest first, for the next calibration.
-func offerRules() []rule {
-	return []rule{
-		{"1id|2pair (was shipped)", func(i, p int) bool { return i >= 1 || p >= 2 }},
-		{"2id|1id&2pair|3pair (shipped)", func(i, p int) bool { return i >= 2 || (i >= 1 && p >= 2) || p >= 3 }},
-		{"1id&2pair", func(i, p int) bool { return i >= 1 && p >= 2 }},
-		{"2id|3pair", func(i, p int) bool { return i >= 2 || p >= 3 }},
-		{"2id&2pair", func(i, p int) bool { return i >= 2 && p >= 2 }},
+// rarityRule is the operating point read off the grid, so the rarity rows measure
+// the filter rather than a second threshold change.
+var rarityRule = rule{
+	name: "rarity",
+	hit:  func(i, p int) bool { return i >= 3 || (i >= 1 && p >= 2) || p >= 3 },
+}
+
+// rarityCuts are the document frequencies to read: an identifier named by at
+// least this many of the bucket's other sessions is ordinary inside it.
+var rarityCuts = []int{3, 10, 30, 60}
+
+// distinctiveIDs counts the matched identifiers that are not ordinary in the
+// bucket — the ones that could still single this item's subject out.
+func distinctiveIDs(item tokens, turn string, df map[string]int, cut int) int {
+	lower := strings.ToLower(turn)
+	hits := 0
+	for _, identifier := range item.identifiers {
+		if df[identifier] >= cut {
+			continue
+		}
+		if strings.Contains(lower, identifier) {
+			hits++
+		}
 	}
+	return hits
+}
+
+// offerGrid sweeps the three knobs the rule has: how many named things count on
+// their own, how many character pairs make one named thing enough, and how many
+// pairs stand alone. The operating point is chosen from the measured table, so
+// the sweep exists to be read rather than to pass.
+func offerGrid() []rule {
+	var out []rule
+	for _, minIDs := range []int{2, 3} {
+		for _, idPairs := range []int{2, 3} {
+			for _, pairsAlone := range []int{3, 4, 5} {
+				out = append(out, rule{
+					name: fmt.Sprintf("%did | 1id&%dpair | %dpair", minIDs, idPairs, pairsAlone),
+					hit: func(i, p int) bool {
+						return i >= minIDs || (i >= 1 && p >= idPairs) || p >= pairsAlone
+					},
+				})
+			}
+		}
+	}
+	return out
 }
 
 // sharedIdentifiers counts how many of an item's identifiers the turn names.
