@@ -21,6 +21,12 @@ func (a *App) AcceptRecapEntry(kind, body, editedBody string) (string, error) {
 	if recap.Sink(entry.Kind) != recap.SinkMemory {
 		return "", fmt.Errorf("a %s note is shown only, so it cannot be accepted", entry.Kind)
 	}
+	// Accepting writes what the note actually cited. The page carries only kind and
+	// body, so the note is read back from the projection: the pointers and the tier
+	// it proposed live there, not in the request.
+	if found, ok := a.findRecapEntry(entry.Kind, entry.Body); ok {
+		entry = found
+	}
 	ctrl := a.ctrlByTabID("")
 	if ctrl == nil {
 		return "", fmt.Errorf("no open session to write memory into")
@@ -59,6 +65,30 @@ func (a *App) UndoRecapEntry(kind, body string) error {
 	}
 	defer func() { _ = store.Close() }()
 	return store.ClearDecision(ctx, strings.TrimSpace(kind), strings.TrimSpace(body))
+}
+
+// findRecapEntry reads one note back out of the projection by its identity, which
+// is what a note is keyed by everywhere else. Accepting uses it so the memory fact
+// can carry the pointers the note cited, which the page never sends.
+func (a *App) findRecapEntry(kind, body string) (recap.Entry, bool) {
+	ctx := a.bootContext()
+	store, err := recap.Open(ctx, recap.Options{Path: recap.DefaultPath()})
+	if err != nil {
+		return recap.Entry{}, false
+	}
+	defer func() { _ = store.Close() }()
+	records, err := store.List(ctx)
+	if err != nil {
+		return recap.Entry{}, false
+	}
+	for _, rec := range records {
+		for _, entry := range rec.Entries {
+			if entry.Kind == kind && entry.Body == body {
+				return entry, true
+			}
+		}
+	}
+	return recap.Entry{}, false
 }
 
 // decideRecapEntry opens the projection for one write, the same way every other
@@ -112,5 +142,30 @@ func recapMemoryBody(entry recap.Entry, text string) string {
 	if evidence := oneLine(entry.Evidence); evidence != "" {
 		b.WriteString("\nEvidence: " + evidence + "\n")
 	}
+	if len(entry.Refs) > 0 {
+		b.WriteString("\n**Pointers:**\n")
+		for _, ref := range entry.Refs {
+			b.WriteString("- " + refLine(ref) + "\n")
+		}
+	}
+	// The tier is reported, never applied: memory is written on an explicit accept
+	// and every accept still lands in the current project, so a tier that says
+	// "in general" cannot quietly move a fact out of it.
+	if entry.Scope.Level != "" {
+		b.WriteString("\n**Scope proposed:** " + entry.Scope.Level)
+		if reason := oneLine(entry.Scope.Reason); reason != "" {
+			b.WriteString(" — " + reason)
+		}
+		b.WriteString(" (accepting still writes to the current project)\n")
+	}
 	return b.String()
+}
+
+// refLine renders one pointer as a single line: where, and what part of it.
+func refLine(ref recap.Ref) string {
+	line := strings.TrimSpace(ref.Kind + " " + ref.Value)
+	if detail := oneLine(ref.Detail); detail != "" {
+		line += " " + detail
+	}
+	return line
 }

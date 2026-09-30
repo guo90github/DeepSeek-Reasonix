@@ -12,16 +12,29 @@ import (
 	"reasonix/internal/secrets"
 )
 
+// SessionRecapRef is one place a note says it can be checked at, as the page shows
+// it. The host never invents these: they come from the note.
+type SessionRecapRef struct {
+	Kind   string `json:"kind"`
+	Value  string `json:"value"`
+	Detail string `json:"detail,omitempty"`
+}
+
 // SessionRecapEntry is one distilled note as the recap page consumes it. ID names
 // the note for a review action, Target says where an accepted note lands, and
 // Decision carries the choice already made ("" when the note is untouched).
+// Refs and Scope are what the note cited and the tier it proposed for itself: both
+// are shown so that accepting is an informed act.
 type SessionRecapEntry struct {
-	ID       string `json:"id"`
-	Kind     string `json:"kind"`
-	Body     string `json:"body"`
-	Evidence string `json:"evidence,omitempty"`
-	Target   string `json:"target"`
-	Decision string `json:"decision,omitempty"`
+	ID          string            `json:"id"`
+	Kind        string            `json:"kind"`
+	Body        string            `json:"body"`
+	Evidence    string            `json:"evidence,omitempty"`
+	Target      string            `json:"target"`
+	Decision    string            `json:"decision,omitempty"`
+	Refs        []SessionRecapRef `json:"refs,omitempty"`
+	Scope       string            `json:"scope,omitempty"`
+	ScopeReason string            `json:"scopeReason,omitempty"`
 }
 
 // SessionRecapPending is a failed attempt, as the page reports it. A failure
@@ -84,14 +97,24 @@ func (a *App) ListSessionRecaps() []SessionRecapView {
 		entries := make([]SessionRecapEntry, 0, len(rec.Entries))
 		for _, entry := range rec.Entries {
 			id := recap.HashEntry(entry.Kind, entry.Body)
-			entries = append(entries, SessionRecapEntry{
-				ID:       id,
-				Kind:     entry.Kind,
-				Body:     entry.Body,
-				Evidence: entry.Evidence,
-				Target:   recap.Sink(entry.Kind),
-				Decision: decisions[id].Choice,
-			})
+			view := SessionRecapEntry{
+				ID:          id,
+				Kind:        entry.Kind,
+				Body:        entry.Body,
+				Evidence:    entry.Evidence,
+				Target:      recap.Sink(entry.Kind),
+				Decision:    decisions[id].Choice,
+				Scope:       entry.Scope.Level,
+				ScopeReason: entry.Scope.Reason,
+			}
+			for _, ref := range entry.Refs {
+				view.Refs = append(view.Refs, SessionRecapRef{
+					Kind:   ref.Kind,
+					Value:  secrets.Redact(ref.Value),
+					Detail: secrets.Redact(ref.Detail),
+				})
+			}
+			entries = append(entries, view)
 		}
 		view := SessionRecapView{
 			Path:        rec.Path,

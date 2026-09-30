@@ -54,7 +54,8 @@ function recap(path: string, goal: string, generatedAt: string): SessionRecap {
   return {
     path, model: "deepseek/test", generatedAt,
     entries: [
-      { id: `fact-${goal}`, kind: "fact", body: `${goal} 的事实`, evidence: "internal/parser.go", target: "memory" },
+      { id: `fact-${goal}`, kind: "fact", body: `${goal} 的事实`, evidence: "internal/parser.go", target: "memory",
+        refs: [{ kind: "path", value: "internal/parser.go", detail: "L40" }], scope: "generic", scopeReason: "两个项目都踩过" },
       { id: "handoff-mock", kind: "handoff", body: `${goal} 的交接`, target: "display" },
     ],
   } as SessionRecap;
@@ -156,9 +157,14 @@ const notesOf = (card: Element) => [...card.querySelectorAll("p")];
 const rowWith = (card: Element | undefined, text: string) =>
   [...(card?.querySelectorAll("p") ?? [])].find((row) => row.textContent?.includes(text));
 const buttonsOf = (row: Element | undefined) => [...(row?.querySelectorAll("button") ?? [])];
-ok(cards().every((card) => notesOf(card).length === 2), "each recap renders its two notes as separate lines");
+ok(cards().every((card) => notesOf(card).length === 3),
+  "each recap renders its two notes plus the pointers line");
 ok(cards().every((card) => card.textContent?.includes("internal/parser.go") === true),
   "a note shows the evidence it cites");
+ok(cards().every((card) => card.textContent?.includes("path internal/parser.go L40") === true),
+  "a note shows the pointers it cites, which is what an accept is judged on");
+ok(cards().every((card) => card.textContent?.includes("Tier proposed: generic") === true),
+  "a note shows the tier the model proposed and says it is not applied yet");
 
 const alphaCard = () => cardWith("Alpha 会话");
 const clickButton = async (button: HTMLButtonElement | undefined) => {

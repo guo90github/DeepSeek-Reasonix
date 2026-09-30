@@ -288,6 +288,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                   </span>
                   <span>{entry.body}</span>
                   {entry.evidence && <span style={{ ...labelStyle, fontSize: 12 }}>（{entry.evidence}）</span>}
+                  {entry.scope && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapScopeProposed", { level: entry.scope })}</span>}
                   {decision === "accept" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapAccepted")}</span>}
                   {decision === "reject" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapRejected")}</span>}
                   {reviewable && <span style={{ display: "flex", gap: 6 }}>
@@ -307,6 +308,11 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                       : <span style={{ ...labelStyle, fontSize: 12 }}>{item.closed ? m("recapOpenHandled") : m("recapOpenKept")}</span>}
                   </span>}
                 </p>
+                {entry.refs !== undefined && entry.refs.length > 0 && (
+                  <p style={{ margin: 0, ...labelStyle, fontSize: 12 }}>
+                    {entry.refs.map((ref) => `${ref.kind} ${ref.value}${ref.detail ? ` ${ref.detail}` : ""}`).join(" · ")}
+                  </p>
+                )}
                 {editing?.id === entry.id && <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <textarea value={editing.text} rows={3} style={{ width: "100%" }}
                     onChange={(event) => setEditing({ id: entry.id, text: event.target.value })} />

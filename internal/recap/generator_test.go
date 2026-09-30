@@ -411,13 +411,26 @@ func TestGenerateSkipsInadmissible(t *testing.T) {
 }
 
 func TestParseEntries(t *testing.T) {
-	got, ok := parseEntries("```json\n[{\"kind\":\"fact\",\"body\":\"b1\",\"evidence\":\"e1\"}," +
+	got, ok := parseEntries("```json\n[{\"kind\":\"fact\",\"body\":\"b1\",\"evidence\":\"e1\"," +
+		"\"refs\":[{\"kind\":\"path\",\"value\":\"desktop/x.go\",\"detail\":\"L40\"},{\"value\":\"go test ./internal/recap/\"}]," +
+		"\"scope\":{\"level\":\"base\",\"reason\":\"true on this machine\"}}," +
 		"{\"kind\":\"follow-up\",\"body\":\"b2\"}]\n```")
 	if !ok || len(got) != 2 {
 		t.Fatalf("parse = %+v ok=%v", got, ok)
 	}
 	if got[0].Kind != KindFact || got[0].Evidence != "e1" || got[1].Kind != KindHandoff {
 		t.Fatalf("entries = %+v", got)
+	}
+	if len(got[0].Refs) != 2 || got[0].Refs[0].Kind != RefPath || got[0].Refs[0].Detail != "L40" {
+		t.Fatalf("a pointer must keep its kind and detail: %+v", got[0].Refs)
+	}
+	// A missing kind is inferred from the value: the pointer is the part worth
+	// having, and a command is recognizable without a label.
+	if got[0].Refs[1].Kind != RefCommand {
+		t.Fatalf("a labelled-nowhere command must be read as a command: %+v", got[0].Refs[1])
+	}
+	if got[0].Scope.Level != ScopeBase || got[0].Scope.Reason == "" {
+		t.Fatalf("a proposed tier must survive with its reason: %+v", got[0].Scope)
 	}
 	if empty, ok := parseEntries("[]"); !ok || len(empty) != 0 {
 		t.Fatalf("an empty array is a valid answer: %+v ok=%v", empty, ok)
@@ -427,6 +440,27 @@ func TestParseEntries(t *testing.T) {
 	}
 	if _, ok := parseEntries(`[{"kind":"fact","body"`); ok {
 		t.Fatal("truncated JSON must not parse")
+	}
+}
+
+// A tier or a pointer the rule does not know must not become a claim: the note
+// stays in its project and the unusable pointer is dropped, while the rest of the
+// note survives.
+func TestParseEntriesKeepsOnlyUsablePointersAndTiers(t *testing.T) {
+	got, ok := parseEntries(`[{"kind":"fact","body":"kept",
+		"refs":[{"kind":"vibes","value":"   "},{"kind":"vibes","value":"1-2"}],
+		"scope":{"level":"everything","reason":"why not"}}]`)
+	if !ok || len(got) != 1 {
+		t.Fatalf("parse = %+v ok=%v", got, ok)
+	}
+	if len(got[0].Refs) != 1 || got[0].Refs[0].Kind != RefTurn {
+		t.Fatalf("an unlabelled turn range must survive as a turn, the empty one must not: %+v", got[0].Refs)
+	}
+	if got[0].Scope.Level != "" {
+		t.Fatalf("a tier outside the three must be dropped, got %q", got[0].Scope.Level)
+	}
+	if MemoryScopeFor("everything") != "project" || MemoryScopeFor(ScopeGeneric) != "global" {
+		t.Fatal("an unknown tier lands where unproposed notes land; a generic one would go to the person")
 	}
 }
 

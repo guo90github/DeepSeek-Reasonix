@@ -15,7 +15,7 @@ import (
 
 const recapSystemPrompt = `You distill one finished coding session into reusable notes for the next session.
 Answer with a JSON array and nothing else, like this:
-[{"kind":"fact","body":"one or two sentences","evidence":"where in the session it came from"}]
+[{"kind":"fact","body":"one or two sentences","evidence":"where it came from","refs":[{"kind":"path","value":"desktop/x.go","detail":"L40"},{"kind":"command","value":"go test ./internal/recap/"}],"scope":{"level":"project","reason":"only true in this repository"}}]
 
 Kinds, and what earns a note:
 - fact: something durable about the project as it now stands — where a thing

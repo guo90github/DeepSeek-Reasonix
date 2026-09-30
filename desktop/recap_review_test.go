@@ -23,6 +23,33 @@ func TestRecapMemoryFactCarriesTheNote(t *testing.T) {
 	}
 }
 
+// Pointers and the tier travel into the fact, and the tier is only ever reported:
+// memory is written on an explicit accept and an accept still lands in the current
+// project, so a note cannot talk its way into the person's global memory.
+func TestRecapMemoryFactKeepsPointersAndReportsTheTier(t *testing.T) {
+	fact := recapMemoryFact(recap.Entry{
+		Kind: recap.KindRefuted,
+		Body: "只取分支统计未提交数会漏掉 CJK 路径",
+		Refs: []recap.Ref{
+			{Kind: recap.RefPath, Value: "desktop/gitstats.go", Detail: "L40"},
+			{Kind: recap.RefCommand, Value: "go test ./desktop/"},
+		},
+		Scope: recap.Scope{Level: recap.ScopeGeneric, Reason: "两个项目都踩过"},
+	}, "只取分支统计未提交数会漏掉 CJK 路径")
+
+	if fact.Scope != memory.FactScopeProject {
+		t.Fatalf("accepting must still land in the project, got %q", fact.Scope)
+	}
+	if !strings.Contains(fact.Body, "path desktop/gitstats.go L40") ||
+		!strings.Contains(fact.Body, "command go test ./desktop/") {
+		t.Fatalf("the pointers must reach the fact: %q", fact.Body)
+	}
+	if !strings.Contains(fact.Body, "**Scope proposed:** generic") ||
+		!strings.Contains(fact.Body, "still writes to the current project") {
+		t.Fatalf("the proposed tier is reported, and reported as not yet applied: %q", fact.Body)
+	}
+}
+
 func TestRecapMemoryRefutedReadsAsClosedGuidance(t *testing.T) {
 	fact := recapMemoryFact(
 		recap.Entry{Kind: recap.KindRefuted, Body: "polishing the inline decoration again"},

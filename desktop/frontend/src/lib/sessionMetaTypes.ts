@@ -33,9 +33,19 @@ export interface SessionMeta {
   parentVersionId?: string;
 }
 
+// SessionRecapRef is one place a note says it can be checked at: a path, a
+// command, a test, a turn range, or a config key.
+export interface SessionRecapRef {
+  kind: string;
+  value: string;
+  detail?: string;
+}
+
 // SessionRecapEntry is one distilled note. It stays a candidate until a person
 // accepts it; target is where it goes once accepted, id names it for a review
 // action, and decision is the choice already recorded (absent when untouched).
+// refs are the places it can be checked at, and scope is the deposition tier the
+// model proposed for it — shown, never applied on its own.
 export interface SessionRecapEntry {
   id: string;
   kind: "fact" | "root-cause" | "refuted" | "handoff" | string;
@@ -43,6 +53,9 @@ export interface SessionRecapEntry {
   evidence?: string;
   target: "memory" | "display" | string;
   decision?: "accept" | "reject" | string;
+  refs?: SessionRecapRef[];
+  scope?: "project" | "base" | "generic" | string;
+  scopeReason?: string;
 }
 
 // SessionRecapPending is a failed generation attempt. A failure stores no

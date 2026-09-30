@@ -31279,6 +31279,31 @@
           "type": {
             "kind": "string"
           }
+        },
+        {
+          "name": "refs",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SessionRecapRef"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "scope",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "scopeReason",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
         }
       ]
     },
@@ -31298,6 +31323,29 @@
         },
         {
           "name": "updatedAt",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.SessionRecapRef": {
+      "fields": [
+        {
+          "name": "kind",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "value",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "detail",
+          "optional": true,
           "type": {
             "kind": "string"
           }

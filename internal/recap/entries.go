@@ -26,11 +26,58 @@ const (
 // maxEntries caps one session's output: a close that yields more is padding.
 const maxEntries = 8
 
+// The three deposition tiers a note can be proposed for. The model proposes, the
+// rule decides: a note about this repository belongs to the project, a note about
+// this machine or about work in general belongs to the person, and a note only one
+// project ever saw must not claim otherwise.
+const (
+	ScopeProject = "project"
+	ScopeBase    = "base"
+	ScopeGeneric = "generic"
+)
+
+// Ref kinds: where the conclusion can be checked. A note that says "the count was
+// wrong" is worth less than one that says which line, which command, or which
+// turns to read.
+const (
+	RefPath    = "path"
+	RefCommand = "command"
+	RefTest    = "test"
+	RefTurn    = "turn"
+	RefConfig  = "config"
+)
+
+// maxRefs caps what one note cites: a pointer list longer than a line is not a
+// pointer, it is a second body.
+const maxRefs = 4
+
+// Ref is one place a note can be checked at: a file, a command, a test, a turn
+// range, or a config key.
+type Ref struct {
+	Kind   string `json:"kind"`
+	Value  string `json:"value"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// Scope is the deposition tier a note was proposed for. Reason is kept so a
+// person can see why the model thought a note was universal before accepting it.
+type Scope struct {
+	Level  string `json:"level,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
 // entryPayload is one element of the model's answer before validation.
 type entryPayload struct {
-	Kind     string `json:"kind"`
-	Body     string `json:"body"`
-	Evidence string `json:"evidence"`
+	Kind     string        `json:"kind"`
+	Body     string        `json:"body"`
+	Evidence string        `json:"evidence"`
+	Refs     []Ref         `json:"refs"`
+	Scope    *scopePayload `json:"scope"`
+}
+
+type scopePayload struct {
+	Level  string `json:"level"`
+	Reason string `json:"reason"`
 }
 
 // Entry is one candidate distilled from a session. It stays a candidate: nothing
@@ -39,6 +86,21 @@ type Entry struct {
 	Kind     string `json:"kind"`
 	Body     string `json:"body"`
 	Evidence string `json:"evidence,omitempty"`
+	Refs     []Ref  `json:"refs,omitempty"`
+	Scope    Scope  `json:"scope,omitempty"`
+}
+
+// MemoryScopeFor maps a proposed level onto the memory scope a note would land in
+// once a person lets the tier decide it. Nothing calls it yet on purpose: memory is
+// written only on an explicit accept, and every accept still lands in the project.
+// The rule is here — and tested — so a tier's meaning is pinned before anyone opts
+// into letting it choose.
+func MemoryScopeFor(level string) string {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case ScopeBase, ScopeGeneric:
+		return "global"
+	}
+	return "project"
 }
 
 // Sink is the destination an accepted entry belongs to. The kind decides it, so
@@ -129,12 +191,92 @@ func normalizeEntries(parsed []entryPayload) []Entry {
 			continue
 		}
 		seen[key] = true
-		out = append(out, Entry{Kind: kind, Body: text, Evidence: strings.TrimSpace(item.Evidence)})
+		out = append(out, Entry{
+			Kind:     kind,
+			Body:     text,
+			Evidence: strings.TrimSpace(item.Evidence),
+			Refs:     normalizeRefs(item.Refs),
+			Scope:    normalizeScope(item.Scope),
+		})
 		if len(out) == maxEntries {
 			break
 		}
 	}
 	return out
+}
+
+// normalizeRefs keeps the usable pointers. A missing or unrecognized kind is
+// inferred from the value rather than dropped: the pointer is the part worth
+// having, and a model that only fills values still produced them.
+func normalizeRefs(parsed []Ref) []Ref {
+	out := make([]Ref, 0, len(parsed))
+	for _, ref := range parsed {
+		value := strings.TrimSpace(ref.Value)
+		if value == "" {
+			continue
+		}
+		out = append(out, Ref{
+			Kind:   normalizeRefKind(ref.Kind, value),
+			Value:  value,
+			Detail: strings.TrimSpace(ref.Detail),
+		})
+		if len(out) == maxRefs {
+			break
+		}
+	}
+	return out
+}
+
+// normalizeRefKind maps a label onto one of the five kinds, inferring from the
+// value when the label is missing or unexpected.
+func normalizeRefKind(kind, value string) string {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case RefPath, "file", "files", "source":
+		return RefPath
+	case RefCommand, "cmd", "shell", "bash":
+		return RefCommand
+	case RefTest, "tests", "case":
+		return RefTest
+	case RefTurn, "turns", "turn-range", "range":
+		return RefTurn
+	case RefConfig, "setting", "key", "toml":
+		return RefConfig
+	}
+	switch {
+	case strings.ContainsAny(value, `/\`) && !strings.Contains(value, " "):
+		return RefPath
+	case onlyDigitsAndDashes(value):
+		return RefTurn
+	case strings.Contains(value, " "):
+		return RefCommand
+	}
+	return RefPath
+}
+
+// normalizeScope keeps a proposed tier only when it is one of the three; anything
+// else leaves the note where every unproposed note belongs, in its own project.
+func normalizeScope(parsed *scopePayload) Scope {
+	if parsed == nil {
+		return Scope{}
+	}
+	level := strings.ToLower(strings.TrimSpace(parsed.Level))
+	switch level {
+	case ScopeProject, ScopeBase, ScopeGeneric:
+		return Scope{Level: level, Reason: strings.TrimSpace(parsed.Reason)}
+	}
+	return Scope{}
+}
+
+func onlyDigitsAndDashes(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // extractJSONArray returns the array an answer carries, tolerating a fenced or
