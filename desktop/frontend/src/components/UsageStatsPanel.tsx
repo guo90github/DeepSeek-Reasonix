@@ -7,7 +7,6 @@ import { PurposeTokenUsageSection } from "./PurposeTokenUsageSection";
 // come from a fixed categorical palette (--chart-1..5 plus --chart-other,
 // light/dark variants in styles.css): a model's colour is its rank among the
 // top five by token volume, and the rest collapse into one gray "Other" step.
-// Styles live in UsageStatsPanel.css, loaded with this chunk.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Activity, CalendarDays, ChevronDown, ChevronRight, Coins, Cpu, MessageSquare, MessagesSquare } from "lucide-react";
 import { useI18n } from "../lib/i18n";
