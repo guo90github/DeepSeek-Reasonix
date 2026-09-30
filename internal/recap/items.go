@@ -160,6 +160,19 @@ const (
 // first and never more than a handful: offering work the person did not mean to
 // continue costs more than staying quiet.
 func MatchOpenItems(items []OpenItem, turn string, now time.Time) []OpenItem {
+	return matchOpenItems(items, turn, now, tokens.matches)
+}
+
+// StrongMatchOpenItems returns only the items the turn names outright — the same
+// path, command, or id. It backs the offer on a later turn that does not say it
+// continues anything: shared prose is not enough there, a named thing is.
+func StrongMatchOpenItems(items []OpenItem, turn string, now time.Time) []OpenItem {
+	return matchOpenItems(items, turn, now, tokens.names)
+}
+
+// matchOpenItems weighs the turn against the project's young items, keeping the
+// newest consideredLimit of them and reporting at most maxMatchedItems.
+func matchOpenItems(items []OpenItem, turn string, now time.Time, about func(tokens, string) bool) []OpenItem {
 	text := strings.ToLower(strings.TrimSpace(turn))
 	if text == "" {
 		return nil
@@ -176,7 +189,7 @@ func MatchOpenItems(items []OpenItem, turn string, now time.Time) []OpenItem {
 	}
 	var out []OpenItem
 	for _, item := range young {
-		if !tokensOf(item).matches(text) {
+		if !about(tokensOf(item), text) {
 			continue
 		}
 		out = append(out, item)
@@ -192,12 +205,16 @@ const (
 	// file, a command, or an id.
 	minIdentifierLen = 5
 	cjkPairLen       = 2
-	// cjkPairHits is how many shared character pairs a CJK-only match needs: one
-	// shared pair is ordinary prose, two is a subject.
-	cjkPairHits = 2
-	pairStride  = 2
-	maxPairs    = 120
-	maxIDs      = 40
+	// What a turn must carry to be about one item, calibrated on real sessions:
+	// one shared identifier is ordinary, because a project's sessions name the
+	// same files constantly — measured alone it fired on 40% of unrelated
+	// openers in the same project.
+	sharedIdentifiersNeeded = 2
+	sharedPairsFloor        = 2
+	sharedPairsAlone        = 3
+	pairStride              = 2
+	maxPairs                = 120
+	maxIDs                  = 40
 )
 
 // tokens are the two kinds of evidence one item offers.
@@ -206,25 +223,53 @@ type tokens struct {
 	pairs       []string
 }
 
-// matches reports whether the turn carries this item's subject. One identifier
-// (a path, a command, a field) is decisive; short CJK pieces need corroboration.
+// names is the mid-conversation test: a turn that never says it continues
+// anything must name the item's own things, and corroborate them.
+func (t tokens) names(lowerTurn string) bool {
+	identifiers := t.identifiersIn(lowerTurn)
+	return identifiers >= sharedIdentifiersNeeded ||
+		(identifiers >= 1 && t.pairsIn(lowerTurn) >= sharedPairsFloor)
+}
+
+// matches reports whether the turn carries this item's subject: enough named
+// things, or a named thing with real prose agreement, or prose agreement alone.
 func (t tokens) matches(lowerTurn string) bool {
+	identifiers := t.identifiersIn(lowerTurn)
+	if identifiers >= sharedIdentifiersNeeded {
+		return true
+	}
+	pairs := t.pairsIn(lowerTurn)
+	if identifiers >= 1 && pairs >= sharedPairsFloor {
+		return true
+	}
+	return pairs >= sharedPairsAlone
+}
+
+// identifiersIn counts how many of the item's identifiers the turn names.
+func (t tokens) identifiersIn(lowerTurn string) int {
+	hits := 0
 	for _, identifier := range t.identifiers {
 		if strings.Contains(lowerTurn, identifier) {
-			return true
+			hits++
 		}
 	}
+	return hits
+}
+
+// pairsIn counts the distinct character pairs the turn carries.
+func (t tokens) pairsIn(lowerTurn string) int {
+	seen := make(map[string]struct{}, len(t.pairs))
 	hits := 0
 	for _, pair := range t.pairs {
-		if !strings.Contains(lowerTurn, pair) {
+		if _, ok := seen[pair]; ok {
 			continue
 		}
-		hits++
-		if hits >= cjkPairHits {
-			return true
+		seen[pair] = struct{}{}
+		if strings.Contains(lowerTurn, pair) {
+			hits++
 		}
 	}
-	return false
+	return hits
 }
 
 func tokensOf(item OpenItem) tokens { return tokenize(item.Body + " " + item.Evidence) }

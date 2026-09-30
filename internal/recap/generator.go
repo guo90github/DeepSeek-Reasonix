@@ -22,10 +22,13 @@ Kinds, and what earns a note:
   lives, a path that matters later, a protocol, a schema, a field's meaning.
 - root-cause: a defect that was actually diagnosed — the symptom, the root cause,
   and the fix, one clause each. No verification log, no command output.
-- refuted: an option that was raised and then ruled out — the reason it was
-  ruled out, and whether the user or a measurement ruled it out. An option still
-  under discussion is not refuted.
-- handoff: work left unfinished and what the next session must do about it.
+- refuted: something the session tried, assumed, or reached for and then dropped
+  — an approach, a tool, a version, a hypothesis — with what ruled it out. Most
+  sessions drop something without arguing about it, and that silence is not a
+  reason to skip the note. An option still under discussion is not refuted, and
+  an approach the session simply used is not refuted either.
+- handoff: work left unfinished and what the next session must do about it —
+  including anything the session deferred with "later", "next time", or a TODO.
 
 How to write one body:
 - At most two sentences, and at most 120 characters. The next session reads this
@@ -43,8 +46,9 @@ How to write one body:
 - Report what the session settled on, never what it merely discussed.
 - The transcript may be trimmed: never invent detail to fill a gap.
 - No greetings, no restating the request, no narrating the conversation.
-- Cover every kind that applies: an option the session ruled out is a note, and
-  so is work it left unfinished. Never drop one because the list is getting long.
+- Before answering, scan the session for three things: a defect that was
+  diagnosed, anything it dropped along the way, and anything it left unfinished.
+  Each hit is a note; never drop one because the list is getting long.
 - Aim for three to six notes, never more than 8. A session that produced nothing
   reusable answers [].
 - Never include secrets, credentials, hostnames, or internal addresses.`

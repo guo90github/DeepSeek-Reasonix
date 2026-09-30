@@ -47,9 +47,13 @@ func TestMatchOpenItemsReadsTheSubjectNotTheProse(t *testing.T) {
 	if got := MatchOpenItems(items, "帮我看看主题颜色为什么偏暗", matchNow); len(got) != 0 {
 		t.Fatalf("another subject must not match: %+v", got)
 	}
-	// An identifier in the turn is decisive on its own.
-	if got := MatchOpenItems(items, "看下 desktop/workspace_git_scope_test.go", matchNow); len(got) != 1 {
-		t.Fatalf("an identifier match must be offered: %+v", got)
+	// One named file is ordinary too — every session in a project names the same
+	// paths — so it only counts with real prose agreement behind it.
+	if got := MatchOpenItems(items, "看下 desktop/workspace_git_scope_test.go", matchNow); len(got) != 0 {
+		t.Fatalf("a single named file must not be enough: %+v", got)
+	}
+	if got := MatchOpenItems(items, "看下 desktop/workspace_git_scope_test.go 那个未提交面板的用例", matchNow); len(got) != 1 {
+		t.Fatalf("a named file with prose agreement must be offered: %+v", got)
 	}
 	// A closed item is never offered again.
 	if got := MatchOpenItems(items, "已处理的那条还是有问题，要继续", matchNow); len(got) != 0 {
@@ -79,9 +83,9 @@ func TestMatchOpenItemsRetiresAnOldItemWithoutClosingIt(t *testing.T) {
 func TestMatchOpenItemsIsBounded(t *testing.T) {
 	items := make([]OpenItem, 0, 5)
 	for i, id := range []string{"a", "b", "c", "d", "e"} {
-		items = append(items, openItem(id, "未完成项 "+id, matchNow.Add(-time.Duration(i)*time.Minute)))
+		items = append(items, openItem(id, "未完成项列表 "+id, matchNow.Add(-time.Duration(i)*time.Minute)))
 	}
-	got := MatchOpenItems(items, "未完成项 a b c d e", matchNow)
+	got := MatchOpenItems(items, "未完成项列表 a b c d e", matchNow)
 	if len(got) != maxMatchedItems {
 		t.Fatalf("an offer is capped at %d items, got %d", maxMatchedItems, len(got))
 	}
@@ -107,6 +111,38 @@ func TestMatchOpenItemsOnlyWeighsTheNewestOnes(t *testing.T) {
 	}
 	if got := MatchOpenItems(append(items[:consideredLimit-1:consideredLimit-1], wanted), turn, matchNow); len(got) != 1 || got[0].ID != "wanted" {
 		t.Fatalf("inside the cutoff the item must be offered: %+v", got)
+	}
+}
+
+// Mid-conversation the offer needs the item's own things, corroborated: a
+// session deep in unrelated work will eventually share words with any item, and
+// usually one of the same files too.
+func TestStrongMatchOpenItemsNeedsANamedThing(t *testing.T) {
+	item := openItem("a", "给 Git 未提交面板补一个用例", matchNow.Add(-time.Hour))
+	item.Evidence = "desktop/workspace_git_scope_test.go"
+	prose := "把 Git 未提交面板的用例补上"
+
+	if got := MatchOpenItems([]OpenItem{item}, prose, matchNow); len(got) != 1 {
+		t.Fatalf("a first turn on the subject must be offered the item: %+v", got)
+	}
+	if got := StrongMatchOpenItems([]OpenItem{item}, prose, matchNow); len(got) != 0 {
+		t.Fatalf("shared prose must not be enough mid-conversation: %+v", got)
+	}
+	if got := StrongMatchOpenItems([]OpenItem{item}, "看下 desktop/workspace_git_scope_test.go", matchNow); len(got) != 0 {
+		t.Fatalf("one named file must not be enough mid-conversation: %+v", got)
+	}
+	corroborated := "看下 desktop/workspace_git_scope_test.go 那个未提交面板的用例"
+	if got := StrongMatchOpenItems([]OpenItem{item}, corroborated, matchNow); len(got) != 1 {
+		t.Fatalf("a named file with prose agreement must be enough mid-conversation: %+v", got)
+	}
+	// Two named things stand on their own.
+	item.Body = "给 desktop/workspace_git_scope.go 的面板补 desktop/panel_state.go 的用例"
+	if got := StrongMatchOpenItems([]OpenItem{item},
+		"desktop/workspace_git_scope.go 和 desktop/panel_state.go 都要改", matchNow); len(got) != 1 {
+		t.Fatalf("two named files must be enough mid-conversation: %+v", got)
+	}
+	if got := StrongMatchOpenItems([]OpenItem{item}, "  ", matchNow); len(got) != 0 {
+		t.Fatalf("an empty turn names nothing: %+v", got)
 	}
 }
 

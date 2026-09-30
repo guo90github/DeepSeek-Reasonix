@@ -97,6 +97,32 @@ func TestComposeOffersAnUnfinishedItemOnlyWhenTheTurnIsAboutIt(t *testing.T) {
 	}
 }
 
+// Mid-conversation the offer runs on a named thing instead of the subject, so a
+// session that got there some other way is still picked up — and a session that
+// only shares wording is not.
+func TestComposeOffersAMidConversationTurnThatNamesTheItem(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sessions", "20260101-000000.000000000-m.jsonl")
+	items := []recap.OpenItem{{
+		ID: "a", Project: recap.ProjectOf(path), Body: "给 Git 未提交面板补一个用例",
+		Evidence: "desktop/workspace_git_scope_test.go", OpenedAt: time.Now(),
+	}}
+
+	if prose := handoffController(t, path, items, true, 3).Compose("把 Git 未提交面板的用例补上"); strings.Contains(prose, "<open-items>") {
+		t.Fatalf("mid-conversation, the subject alone must stay quiet: %q", prose)
+	}
+	if bare := handoffController(t, path, items, true, 3).Compose("desktop/workspace_git_scope_test.go 这个还是红的"); strings.Contains(bare, "<open-items>") {
+		t.Fatalf("mid-conversation, one named file alone must stay quiet: %q", bare)
+	}
+	named := handoffController(t, path, items, true, 3).Compose("desktop/workspace_git_scope_test.go 里那个未提交面板的用例还是红的")
+	if !strings.Contains(named, "<open-items>") {
+		t.Fatalf("mid-conversation, naming the item's file with prose agreement must be offered it: %q", named)
+	}
+	if first := handoffController(t, path, items, true, 0).Compose("把 Git 未提交面板的用例补上"); !strings.Contains(first, "<open-items>") {
+		t.Fatalf("a first turn on the subject must still be offered the item: %q", first)
+	}
+}
+
 func TestHasContinuationCueReadsThePhrasing(t *testing.T) {
 	for _, text := range []string{"接着上次那条", "继续把未完成项做完", "上回那个 bug 还在吗"} {
 		if !hasContinuationCue(text) {
