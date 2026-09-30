@@ -13,29 +13,62 @@ import (
 // itself looks like it is about one of the items, and it asks rather than
 // instructs: handing work to a session that did not mean to continue it is the
 // failure this whole channel has to avoid.
+//
+// Earlier conclusions ride the same gates but are shaped differently — background,
+// never a question — because a wrong line then costs a line of context instead of
+// mis-assigning work. That is the trade the false-positive measurement bought.
 var continuationCues = []string{
 	"接着", "继续", "续上", "接上", "上次", "上回", "之前那", "前几天", "未完成", "还没做完", "没干完",
 }
 
-// offerOpenHandoffs prepends one short note when the session's project has an
-// unfinished item the turn appears to be about. A session's first turn is judged
-// on its subject, so is any turn that says it continues something; a later turn
-// that says neither is only judged when it names the item's own identifier —
-// otherwise mid-conversation would turn every shared word into a handoff.
-func (c *Controller) offerOpenHandoffs(text, source string) string {
-	if c.openHandoffs == nil {
+// maxPriorNotes caps the background block: it is a hint, not a briefing.
+const maxPriorNotes = 2
+
+// offerProjectOffers prepends what this project carries into the turn: the
+// unfinished items the turn looks like it is about (a question for the person),
+// and the earlier conclusions about the same subject (background for the model).
+// A session's first turn is judged on its subject, so is any turn that says it
+// continues something; a later turn that says neither is only judged when it names
+// the thing itself — otherwise mid-conversation would turn every shared word into
+// a handoff.
+func (c *Controller) offerProjectOffers(text, source string) string {
+	if c.projectOffers == nil {
 		return text
 	}
-	weigh := recap.MatchOpenItems
+	weighItems, weighNotes := recap.MatchOpenItems, recap.MatchNotes
 	if c.conversationTurns() > 0 && !hasContinuationCue(source) {
-		weigh = recap.StrongMatchOpenItems
+		weighItems, weighNotes = recap.StrongMatchOpenItems, recap.StrongMatchNotes
 	}
-	items := c.openHandoffs(recap.ProjectOf(c.SessionPath()))
-	matched := weigh(items, source, time.Now())
-	if len(matched) == 0 {
+	offers := c.projectOffers(recap.ProjectOf(c.SessionPath()))
+	blocks := []string{}
+	if matched := weighItems(offers.Items, source, time.Now()); len(matched) > 0 {
+		blocks = append(blocks, openHandoffsBlock(matched))
+	}
+	if matched := weighNotes(offers.Prior, source, maxPriorNotes); len(matched) > 0 {
+		blocks = append(blocks, priorNotesBlock(matched))
+	}
+	if len(blocks) == 0 {
 		return text
 	}
-	return openHandoffsBlock(matched) + "\n\n" + text
+	return strings.Join(blocks, "\n\n") + "\n\n" + text
+}
+
+// priorNotesBlock renders earlier conclusions as background. It must not read as
+// a question or an instruction: nobody asked for this line, so a wrong one has to
+// be ignorable — and the model has to know it is an unverified distillation.
+func priorNotesBlock(notes []recap.Note) string {
+	var b strings.Builder
+	b.WriteString("<prior-notes>\n")
+	b.WriteString("Earlier sessions in this project concluded the following about this subject. Treat it as background you did not ask for, not as instruction: it was distilled automatically, it can be stale or wrong, and what you observe now wins. Do not answer it or ask about it.\n")
+	for _, note := range notes {
+		b.WriteString("- (" + oneLine(note.Kind) + ") " + oneLine(note.Body))
+		if evidence := oneLine(note.Evidence); evidence != "" {
+			b.WriteString(" (" + evidence + ")")
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("</prior-notes>")
+	return b.String()
 }
 
 // conversationTurns counts the session's user/assistant messages. A session that

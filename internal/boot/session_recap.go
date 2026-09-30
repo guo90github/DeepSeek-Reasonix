@@ -158,24 +158,33 @@ func pruneRecapProjection(ctx context.Context, path string) {
 	}
 }
 
-// recapOpenHandoffs reads one project's unfinished items for the controller's
-// turn-tail offer. The projection is opened per call: an offer only happens on a
-// session's first turn or on a turn that says it continues something, so a
-// cached handle would buy little and hold the file open between them.
-func recapOpenHandoffs(project string) []recap.OpenItem {
+// recapProjectOffers reads what one project carries into a turn: the unfinished
+// items a person kept there, and the conclusions earlier sessions reached. The
+// projection is opened per call: an offer only happens on a session's first turn
+// or on a turn that says it continues something, so a cached handle would buy
+// little and hold the file open between them.
+func recapProjectOffers(project string) recap.Offers {
 	project = strings.TrimSpace(project)
 	if project == "" {
-		return nil
+		return recap.Offers{}
 	}
 	ctx := context.Background()
 	store, err := recap.Open(ctx, recap.Options{Path: recap.DefaultPath()})
 	if err != nil {
-		return nil
+		return recap.Offers{}
 	}
 	defer func() { _ = store.Close() }()
 	items, err := store.OpenItemsFor(ctx, project)
 	if err != nil {
-		return nil
+		items = nil
 	}
-	return items
+	prior, err := store.PriorNotes(ctx, project, maxPriorNotesPerProject)
+	if err != nil {
+		prior = nil
+	}
+	return recap.Offers{Items: items, Prior: prior}
 }
+
+// maxPriorNotesPerProject caps what the projection hands the tail: the injected
+// block is capped again, and a long list would only be read to be cut.
+const maxPriorNotesPerProject = 8

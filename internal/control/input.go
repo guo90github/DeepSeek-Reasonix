@@ -222,9 +222,10 @@ func (c *Controller) composeWithGoal(
 			})
 		}
 		// Unfinished items a person kept from earlier sessions are offered on a
-		// session's first turn and on turns that say they continue something.
+		// session's first turn and on turns that say they continue something;
+		// earlier conclusions ride the same gates as background.
 		if !c.ablation.Off(ablation.Retrieval) {
-			text = c.offerOpenHandoffs(text, source)
+			text = c.offerProjectOffers(text, source)
 		}
 	}
 	return text

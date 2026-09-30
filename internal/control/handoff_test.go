@@ -26,7 +26,7 @@ func handoffController(t *testing.T, path string, items []recap.OpenItem, withLo
 		Label:       "test",
 	}
 	if withLoader {
-		opts.OpenHandoffs = func(string) []recap.OpenItem { return items }
+		opts.ProjectOffers = func(string) recap.Offers { return recap.Offers{Items: items} }
 	}
 	return New(opts)
 }
