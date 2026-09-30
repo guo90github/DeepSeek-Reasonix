@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
@@ -33,7 +34,7 @@ func handoffController(t *testing.T, path string, items []recap.OpenItem, withLo
 func TestComposeOffersAnUnfinishedItemOnlyWhenTheTurnIsAboutIt(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sessions", "20260101-000000.000000000-m.jsonl")
-	items := []recap.OpenItem{{ID: "a", Project: recap.ProjectOf(path), Body: "给 Git 未提交面板补一个用例"}}
+	items := []recap.OpenItem{{ID: "a", Project: recap.ProjectOf(path), Body: "给 Git 未提交面板补一个用例", OpenedAt: time.Now()}}
 
 	// The session's first turn, about the item: offered as a question.
 	first := handoffController(t, path, items, true, 0).Compose("接着把 Git 未提交面板的用例补上")
@@ -67,6 +68,24 @@ func TestComposeOffersAnUnfinishedItemOnlyWhenTheTurnIsAboutIt(t *testing.T) {
 	continued := handoffController(t, path, items, true, 3).Compose("接着把 Git 未提交面板的用例补上")
 	if !strings.Contains(continued, "<open-items>") {
 		t.Fatalf("a continuation turn must be offered the item: %q", continued)
+	}
+
+	// An item nobody picked up for a month stops being offered on its own: that
+	// is what keeps a growing list from turning into wrong handoffs. It stays on
+	// the project's list, and an explicit rollback puts it back in play.
+	stale := []recap.OpenItem{{
+		ID: "a", Project: recap.ProjectOf(path), Body: "给 Git 未提交面板补一个用例",
+		OpenedAt: time.Now().Add(-40 * 24 * time.Hour),
+	}}
+	if old := handoffController(t, path, stale, true, 0).Compose("接着把 Git 未提交面板的用例补上"); strings.Contains(old, "<open-items>") {
+		t.Fatalf("an item past the window must not be offered: %q", old)
+	}
+	revived := []recap.OpenItem{{
+		ID: "a", Project: recap.ProjectOf(path), Body: "给 Git 未提交面板补一个用例",
+		OpenedAt: time.Now(),
+	}}
+	if again := handoffController(t, path, revived, true, 0).Compose("接着把 Git 未提交面板的用例补上"); !strings.Contains(again, "<open-items>") {
+		t.Fatalf("re-keeping the item must offer it again: %q", again)
 	}
 
 	// With no items kept, or no loader at all, nothing is ever offered.

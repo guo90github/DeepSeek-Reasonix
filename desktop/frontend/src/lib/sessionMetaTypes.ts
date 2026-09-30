@@ -62,4 +62,6 @@ export interface RecapOpenItem {
   from?: string;
   openedAt: string; // RFC3339
   closed: boolean;
+  stale?: boolean;
+  ageDays?: number;
 }

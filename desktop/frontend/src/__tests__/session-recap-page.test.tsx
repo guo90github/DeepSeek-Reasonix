@@ -269,6 +269,33 @@ ok(openSection()?.querySelectorAll("li").length === 1, "a handled item stays vis
 await clickButton(openSection()?.querySelector<HTMLButtonElement>("li button"));
 ok(reopenedItems.length === 1, "a handled item can be put back on the list");
 
+// An item nobody picked up for a month stops being offered, and the list has to
+// say so: otherwise a retired item reads like a live offer. It stays actionable.
+const staleHost = document.createElement("div");
+document.body.appendChild(staleHost);
+const staleRoot = createRoot(staleHost);
+await act(async () => {
+  staleRoot.render(<LocaleProvider><SessionRecapPage active onBack={() => {}}
+    list={async () => recaps} listSessions={async () => sessions} {...reviewProps}
+    listOpenItems={async () => [{
+      id: "handoff-stale", body: "很久以前留下的交接", from: middlePath,
+      openedAt: "2026-08-01T09:00:00Z", closed: false, stale: true, ageDays: 60,
+    }]} /></LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+const staleSection = [...staleHost.querySelectorAll(".management-notice")]
+  .find((node) => node.closest(".history-list") === null && node.querySelector("ul") !== null);
+// This suite renders en (LocaleProvider starts with an empty pref and jsdom
+// reports en-US), so the page's own copy is asserted in that language; the item
+// text itself comes from the fixture.
+const says = (node: Element | null | undefined, text: string) =>
+  node?.textContent?.toLowerCase().includes(text) === true;
+const staleRow = staleSection?.querySelector("li");
+ok(says(staleRow, "too old"), "an item past the window says it is no longer offered on its own");
+ok(says(staleSection, "1 of them are too old"), "the list counts what it retired");
+ok(staleRow?.querySelector("button") !== null, "a retired item is still something the person can handle");
+await act(async () => { staleRoot.unmount(); });
+
 // A failed write must say so instead of pretending the note was settled.
 failNextAccept = true;
 const untouched = () => factOf(cardWith(early));

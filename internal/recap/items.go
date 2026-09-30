@@ -3,6 +3,7 @@ package recap
 import (
 	"context"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 )
@@ -26,6 +27,13 @@ type OpenItem struct {
 
 // Open reports whether the item is still waiting for someone.
 func (i OpenItem) Open() bool { return i.ClosedAt.IsZero() }
+
+// TooOld reports whether the item has aged past automatic offers. It stays on the
+// list: retiring an offer is not the same as calling the work done.
+func (i OpenItem) TooOld(now time.Time) bool { return now.Sub(i.OpenedAt) > offerWindow }
+
+// Offerable reports whether an automatic offer may still include this item.
+func (i OpenItem) Offerable(now time.Time) bool { return i.Open() && !i.TooOld(now) }
 
 // ProjectOf names the project a session belongs to: the sessions directory's
 // parent, which is what both the per-project session roots and the archive use.
@@ -135,21 +143,40 @@ func (s *Store) OpenItemsFor(ctx context.Context, project string) ([]OpenItem, e
 	return out, nil
 }
 
-// maxMatchedItems bounds one offer: a long list is noise, not a handoff.
-const maxMatchedItems = 3
+const (
+	// maxMatchedItems bounds one offer: a long list is noise, not a handoff.
+	maxMatchedItems = 3
+	// offerWindow retires an item from automatic offers. Past it the subject has
+	// usually moved on — and a list that only grows is what makes an unrelated
+	// turn match something.
+	offerWindow = 30 * 24 * time.Hour
+	// consideredLimit caps how many of a project's newest items may match at all,
+	// so a backlog of still-young items cannot flood the offer either.
+	consideredLimit = 20
+)
 
 // MatchOpenItems returns the project's open items that the turn appears to be
-// about. The test is deliberately literal and local: it runs on a session's
-// first turn and on continuation cues, and offering work the person did not mean
-// to continue costs more than staying quiet.
-func MatchOpenItems(items []OpenItem, turn string) []OpenItem {
+// about. Only items young enough to be about current work are considered, newest
+// first and never more than a handful: offering work the person did not mean to
+// continue costs more than staying quiet.
+func MatchOpenItems(items []OpenItem, turn string, now time.Time) []OpenItem {
 	text := strings.ToLower(strings.TrimSpace(turn))
 	if text == "" {
 		return nil
 	}
-	var out []OpenItem
+	young := make([]OpenItem, 0, len(items))
 	for _, item := range items {
-		if !item.Open() || !tokensOf(item).matches(text) {
+		if item.Offerable(now) {
+			young = append(young, item)
+		}
+	}
+	sort.SliceStable(young, func(i, j int) bool { return young[i].OpenedAt.After(young[j].OpenedAt) })
+	if len(young) > consideredLimit {
+		young = young[:consideredLimit]
+	}
+	var out []OpenItem
+	for _, item := range young {
+		if !tokensOf(item).matches(text) {
 			continue
 		}
 		out = append(out, item)

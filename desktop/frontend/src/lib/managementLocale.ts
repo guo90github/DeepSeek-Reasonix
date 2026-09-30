@@ -38,6 +38,8 @@ const messages = {
   recapOpenHandled: ["已处理", "已處理", "Handled"],
   recapMarkHandled: ["标记已处理", "標記已處理", "Mark handled"],
   recapOpenItemsTitle: ["本项目未完成项（{n} 条待处理）", "本專案未完成項（{n} 條待處理）", "Unfinished items in this project ({n} waiting)"],
+  recapOpenStale: ["太久没动 · 不再自动提示", "太久沒動 · 不再自動提示", "Too old to be offered"],
+  recapOpenStaleCount: ["其中 {n} 条太久、已不再自动提示", "其中 {n} 條太久、已不再自動提示", "{n} of them are too old to be offered"],
   recapNoEntries: ["本次会话没有可沉淀的结论", "本次工作階段沒有可沉澱的結論", "No reusable notes from this session"],
   recapCount: ["显示 {shown} / 共 {total} 条", "顯示 {shown} / 共 {total} 條", "{shown} of {total} shown"],
   recapNoMatch: ["没有匹配的回顾", "沒有符合的回顧", "No recaps match"],

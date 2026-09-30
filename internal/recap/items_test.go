@@ -19,45 +19,94 @@ func TestProjectOfGroupsSessionsByProject(t *testing.T) {
 	}
 }
 
+// matchNow fixes the clock so the window and the ordering are asserted exactly.
+var matchNow = time.Unix(1800000000, 0)
+
+func openItem(id, body string, openedAt time.Time) OpenItem {
+	return OpenItem{ID: id, Project: "/p", Body: body, OpenedAt: openedAt}
+}
+
 func TestMatchOpenItemsReadsTheSubjectNotTheProse(t *testing.T) {
 	items := []OpenItem{
-		{ID: "a", Project: "/p", Body: "回归测试仍缺：给 Git 未提交面板补一个用例", Evidence: "desktop/workspace_git_scope_test.go"},
-		{ID: "b", Project: "/p", Body: "文档还没更新"},
-		{ID: "c", Project: "/p", Body: "已处理的那条", ClosedAt: time.Now()},
+		openItem("a", "回归测试仍缺：给 Git 未提交面板补一个用例", matchNow.Add(-time.Hour)),
+		openItem("b", "文档还没更新", matchNow.Add(-time.Hour)),
+		openItem("c", "已处理的那条", matchNow.Add(-time.Hour)),
 	}
+	items[0].Evidence = "desktop/workspace_git_scope_test.go"
+	items[2].ClosedAt = matchNow.Add(-time.Minute)
 	// Same subject, said a little differently: the shared pieces carry it.
-	if got := MatchOpenItems(items, "我们接着把 Git 未提交面板的用例补上吧"); len(got) != 1 || got[0].ID != "a" {
+	if got := MatchOpenItems(items, "我们接着把 Git 未提交面板的用例补上吧", matchNow); len(got) != 1 || got[0].ID != "a" {
 		t.Fatalf("a subject match must be offered: %+v", got)
 	}
 	// One shared pair of characters is ordinary prose, not a subject.
-	if got := MatchOpenItems(items, "测试环境又挂了，帮我看看日志"); len(got) != 0 {
+	if got := MatchOpenItems(items, "测试环境又挂了，帮我看看日志", matchNow); len(got) != 0 {
 		t.Fatalf("a single shared pair must not match: %+v", got)
 	}
 	// A different subject in the same project stays silent: handing this work to
 	// an unrelated session is the failure this rule exists to prevent.
-	if got := MatchOpenItems(items, "帮我看看主题颜色为什么偏暗"); len(got) != 0 {
+	if got := MatchOpenItems(items, "帮我看看主题颜色为什么偏暗", matchNow); len(got) != 0 {
 		t.Fatalf("another subject must not match: %+v", got)
 	}
 	// An identifier in the turn is decisive on its own.
-	if got := MatchOpenItems(items, "看下 desktop/workspace_git_scope_test.go"); len(got) != 1 {
+	if got := MatchOpenItems(items, "看下 desktop/workspace_git_scope_test.go", matchNow); len(got) != 1 {
 		t.Fatalf("an identifier match must be offered: %+v", got)
 	}
 	// A closed item is never offered again.
-	if got := MatchOpenItems(items, "已处理的那条还是有问题，要继续"); len(got) != 0 {
+	if got := MatchOpenItems(items, "已处理的那条还是有问题，要继续", matchNow); len(got) != 0 {
 		t.Fatalf("a closed item must not be offered: %+v", got)
 	}
-	if got := MatchOpenItems(items, "   "); len(got) != 0 {
+	if got := MatchOpenItems(items, "   ", matchNow); len(got) != 0 {
 		t.Fatalf("an empty turn matches nothing: %+v", got)
 	}
 }
 
-func TestMatchOpenItemsIsBounded(t *testing.T) {
-	items := make([]OpenItem, 0, 8)
-	for _, id := range []string{"a", "b", "c", "d", "e"} {
-		items = append(items, OpenItem{ID: id, Body: "未完成项 " + id})
+func TestMatchOpenItemsRetiresAnOldItemWithoutClosingIt(t *testing.T) {
+	turn := "接着把 Git 未提交面板的用例补上"
+	young := openItem("young", "给 Git 未提交面板补一个用例", matchNow.Add(-offerWindow+time.Hour))
+	old := openItem("old", "给 Git 未提交面板补一个用例", matchNow.Add(-offerWindow-time.Hour))
+
+	if got := MatchOpenItems([]OpenItem{young}, turn, matchNow); len(got) != 1 {
+		t.Fatalf("an item inside the window must still be offered: %+v", got)
 	}
-	if got := MatchOpenItems(items, "未完成项 a b c d e"); len(got) != maxMatchedItems {
+	if got := MatchOpenItems([]OpenItem{old}, turn, matchNow); len(got) != 0 {
+		t.Fatalf("an item past the window must not be offered: %+v", got)
+	}
+	if !old.Open() {
+		t.Fatal("retiring an offer must not close the item")
+	}
+}
+
+func TestMatchOpenItemsIsBounded(t *testing.T) {
+	items := make([]OpenItem, 0, 5)
+	for i, id := range []string{"a", "b", "c", "d", "e"} {
+		items = append(items, openItem(id, "未完成项 "+id, matchNow.Add(-time.Duration(i)*time.Minute)))
+	}
+	got := MatchOpenItems(items, "未完成项 a b c d e", matchNow)
+	if len(got) != maxMatchedItems {
 		t.Fatalf("an offer is capped at %d items, got %d", maxMatchedItems, len(got))
+	}
+	if got[0].ID != "a" || got[len(got)-1].ID != "c" {
+		t.Fatalf("the newest items are offered first: %+v", got)
+	}
+}
+
+// A backlog that is still young must not flood the match: only the newest
+// consideredLimit items are weighed at all.
+func TestMatchOpenItemsOnlyWeighsTheNewestOnes(t *testing.T) {
+	turn := "接着把 Git 未提交面板的用例补上"
+	items := make([]OpenItem, 0, consideredLimit+1)
+	for i := 0; i < consideredLimit; i++ {
+		items = append(items, openItem("other-"+string(rune('a'+i)),
+			"别的第 "+string(rune('a'+i))+" 件事", matchNow.Add(-time.Duration(i)*time.Minute)))
+	}
+	wanted := openItem("wanted", "给 Git 未提交面板补一个用例",
+		matchNow.Add(-time.Duration(consideredLimit)*time.Minute))
+
+	if got := MatchOpenItems(append(items, wanted), turn, matchNow); len(got) != 0 {
+		t.Fatalf("items older than the newest %d must not be weighed: %+v", consideredLimit, got)
+	}
+	if got := MatchOpenItems(append(items[:consideredLimit-1:consideredLimit-1], wanted), turn, matchNow); len(got) != 1 || got[0].ID != "wanted" {
+		t.Fatalf("inside the cutoff the item must be offered: %+v", got)
 	}
 }
 

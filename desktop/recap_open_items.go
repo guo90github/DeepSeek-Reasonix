@@ -16,6 +16,10 @@ type RecapOpenItemView struct {
 	From     string `json:"from,omitempty"`
 	OpenedAt string `json:"openedAt"`
 	Closed   bool   `json:"closed"`
+	// Stale says the item has aged past automatic offers while staying on this
+	// list. It is computed here so the page never restates the window.
+	Stale   bool `json:"stale,omitempty"`
+	AgeDays int  `json:"ageDays"`
 }
 
 // KeepRecapHandoff keeps one handoff note as an unfinished item of the session's
@@ -89,6 +93,7 @@ func (a *App) ListRecapOpenItems() []RecapOpenItemView {
 		return []RecapOpenItemView{}
 	}
 	out := make([]RecapOpenItemView, 0, len(items))
+	now := time.Now()
 	for _, item := range items {
 		out = append(out, RecapOpenItemView{
 			ID:       item.ID,
@@ -97,6 +102,8 @@ func (a *App) ListRecapOpenItems() []RecapOpenItemView {
 			From:     item.From,
 			OpenedAt: item.OpenedAt.Format(time.RFC3339),
 			Closed:   !item.Open(),
+			Stale:    item.Open() && item.TooOld(now),
+			AgeDays:  int(now.Sub(item.OpenedAt).Hours() / 24),
 		})
 	}
 	return out

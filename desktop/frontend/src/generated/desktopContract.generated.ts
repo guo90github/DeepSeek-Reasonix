@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:4513dbc11bfd37ddec566f241b15356516a9ac4e65c99cf3266aaaa2c97c7261";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:0124fe84a418dda94a7b9c8d51b7e1fcaeb77f906290c583228eaa599ab28e32";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3021,6 +3021,8 @@ export interface RecapOpenItemView {
   from?: string;
   openedAt: string;
   closed: boolean;
+  stale?: boolean;
+  ageDays: number;
 }
 
 export interface RecoveryCleanupItem {

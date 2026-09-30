@@ -28903,6 +28903,19 @@
           "type": {
             "kind": "boolean"
           }
+        },
+        {
+          "name": "stale",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "ageDays",
+          "type": {
+            "kind": "integer"
+          }
         }
       ]
     },

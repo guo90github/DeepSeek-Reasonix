@@ -150,6 +150,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
 
   const labelStyle = { color: "var(--fg-dim)" } as const;
   const waiting = openItems.filter((item) => !item.closed).length;
+  const stale = openItems.filter((item) => !item.closed && item.stale === true).length;
   const sorts: { id: RecapSort; label: string }[] = [
     { id: "newest", label: m("recapSortNewest") },
     { id: "oldest", label: m("recapSortOldest") },
@@ -165,12 +166,14 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     {!loading && openItems.length > 0 && (
       <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
         <strong>{m("recapOpenItemsTitle", { n: waiting })}</strong>
+        {stale > 0 && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapOpenStaleCount", { n: stale })}</span>}
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
           {openItems.map((item) => (
             <li key={item.id} style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap", opacity: item.closed ? 0.55 : 1 }}>
               <span>{item.body}</span>
               {item.evidence && <span style={{ ...labelStyle, fontSize: 12 }}>（{item.evidence}）</span>}
               {item.closed && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapOpenHandled")}</span>}
+              {!item.closed && item.stale === true && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapOpenStale")}</span>}
               <button className="btn btn--small" type="button" disabled={busy !== ""}
                 onClick={() => void setItemClosed(item, !item.closed)}>
                 {item.closed ? m("recapUndo") : m("recapMarkHandled")}</button>

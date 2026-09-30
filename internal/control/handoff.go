@@ -2,6 +2,7 @@ package control
 
 import (
 	"strings"
+	"time"
 
 	"reasonix/internal/provider"
 	"reasonix/internal/recap"
@@ -28,7 +29,7 @@ func (c *Controller) offerOpenHandoffs(text, source string) string {
 		return text
 	}
 	items := c.openHandoffs(recap.ProjectOf(c.SessionPath()))
-	matched := recap.MatchOpenItems(items, source)
+	matched := recap.MatchOpenItems(items, source, time.Now())
 	if len(matched) == 0 {
 		return text
 	}
