@@ -14,23 +14,15 @@ let passed = 0;
 let failed = 0;
 
 function eq(a: unknown, b: unknown, label: string) {
-  if (a === b) {
-    process.stdout.write(`  PASS  ${label}\n`);
-    passed += 1;
-  } else {
-    process.stdout.write(`  FAIL  ${label}: expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}\n`);
-    failed += 1;
-  }
+  if (a === b) passed += 1; else failed += 1;
+  process.stdout.write(
+    a === b ? `  PASS  ${label}\n` : `  FAIL  ${label}: expected ${JSON.stringify(b)}, got ${JSON.stringify(a)}\n`,
+  );
 }
 
 function ok(value: boolean, label: string) {
-  if (value) {
-    process.stdout.write(`  PASS  ${label}\n`);
-    passed += 1;
-  } else {
-    process.stdout.write(`  FAIL  ${label}\n`);
-    failed += 1;
-  }
+  if (value) passed += 1; else failed += 1;
+  process.stdout.write(value ? `  PASS  ${label}\n` : `  FAIL  ${label}\n`);
 }
 
 function meta(overrides: Partial<Meta> = {}): Meta {

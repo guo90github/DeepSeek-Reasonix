@@ -28,7 +28,6 @@ import { normalizeCompletionSummary } from "../lib/completionSummary";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import {
-  clampWorkspaceSplitTreeWidth,
   initialWorkspaceSplitTreeWidth,
   resolveWorkspaceSplitTreeWidth,
   shouldInitializeWorkspaceSplitOnFileSelect,
@@ -41,12 +40,7 @@ import { closeWorkspacePreviewTab } from "../lib/workspacePreviewTabs";
 import { useWorkspaceRefresh } from "../lib/workspaceRefreshStore";
 import { useWorkspaceRefreshInvalidation, workspaceRefreshFallbackSequence } from "../lib/workspaceRefreshInvalidation";
 import { createWorkspaceRefreshScheduler } from "../lib/workspaceRefreshScheduler";
-import {
-  beginKeyedResourceRequest,
-  emptyKeyedResource,
-  rejectKeyedResourceRequest,
-  resolveKeyedResourceRequest,
-} from "../lib/keyedResource";
+import { beginKeyedResourceRequest, emptyKeyedResource, rejectKeyedResourceRequest, resolveKeyedResourceRequest } from "../lib/keyedResource";
 import { shouldScrollWorkspaceTreeSelection } from "../lib/workspaceTreeReveal";
 import { mergeWorkspaceSearchResults } from "../lib/workspaceTreeSearch";
 import { useWorkspaceTreeScrollPersistence } from "../lib/useWorkspaceTreeScrollPersistence";
@@ -58,11 +52,8 @@ import {
   workspaceTreeVisitId,
 } from "../lib/workspaceViewMemory";
 import { loadLayoutSize, loadOptionalLayoutSize } from "../lib/layoutPreferences";
-import {
-  RIGHT_DOCK_PREVIEW_DEFAULT_WIDTH,
-  defaultCreationRightDockTreeWidth,
-  defaultRightDockTreeWidth,
-} from "../store/layout";
+import { WORKSPACE_CONTEXT_MENU_SELECTION_HEIGHT, WORKSPACE_DUAL_PANEL_TARGET_WIDTH, WORKSPACE_MAX_PREVIEW_TABS, WORKSPACE_PREVIEW_MIN_WIDTH, WORKSPACE_TREE_DEFAULT_WIDTH, WORKSPACE_TREE_MIN_WIDTH, clampWorkspaceTreeWidth, type WorkspaceChangeListEntry, type WorkspaceChangeListRequest, type WorkspaceFileListRequest, type WorkspaceRevealRequest } from "../lib/workspacePanelLayout";
+import { RIGHT_DOCK_PREVIEW_DEFAULT_WIDTH, defaultCreationRightDockTreeWidth, defaultRightDockTreeWidth } from "../store/layout";
 import type {
   DirEntry,
   FilePreview,
@@ -99,29 +90,8 @@ import {
   workspaceTopLevelDirPath as topLevelDirPath,
 } from "../lib/workspacePanelFormat";
 
-const WORKSPACE_TREE_MIN_WIDTH = 140;
-const WORKSPACE_TREE_DEFAULT_WIDTH = 300;
-const WORKSPACE_PREVIEW_MIN_WIDTH = 140;
-const WORKSPACE_PREVIEW_TARGET_WIDTH = 360;
-const WORKSPACE_DUAL_PANEL_TARGET_WIDTH = WORKSPACE_TREE_DEFAULT_WIDTH + WORKSPACE_PREVIEW_TARGET_WIDTH;
-const WORKSPACE_CONTEXT_MENU_SELECTION_HEIGHT = 48;
-const WORKSPACE_MAX_PREVIEW_TABS = 5;
-
-type WorkspaceRevealRequest = { id: number; path: string };
 export { WORKSPACE_TURN_VERIFICATION_ID } from "./WorkspaceTurnVerification";
 export type WorkspaceVerificationRevealRequest = { id: number; summary: WireCompletionSummary; tabId: string; turnStartAt: number; currentSummary?: WireCompletionSummary; sessionPath?: string; view?: "changes" | "checks" };
-type WorkspaceFileListRequest = { id: number; paths: string[] };
-type WorkspaceChangeListEntry = { key: string; path: string; meta: string; time: string; detail: string };
-type WorkspaceChangeListRequest = { id: number; changes: WorkspaceChangeListEntry[] };
-
-function clampWorkspaceTreeWidth(width: number, panelWidth?: number): number {
-  return clampWorkspaceSplitTreeWidth({
-    width,
-    panelWidth,
-    treeMinWidth: WORKSPACE_TREE_MIN_WIDTH,
-    previewMinWidth: WORKSPACE_PREVIEW_MIN_WIDTH,
-  });
-}
 
 export function WorkspacePanel({
   open,

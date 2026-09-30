@@ -1,6 +1,6 @@
 // Run: tsx src/__tests__/message-pasted-blocks.test.ts
 
-import { parsePastedBlocks, parseSelectedTextBlocks } from "../components/Message";
+import { parsePastedBlocks, parseSelectedTextBlocks } from "../lib/messagePasteBlocks";
 import { formatSelectedTextContext, formatSelectionLabel, type SelectedTextReference } from "../lib/selectedTextContext";
 
 let passed = 0;

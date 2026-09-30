@@ -45,6 +45,15 @@ function eq(actual: unknown, expected: unknown, label: string) {
   }
 }
 
+// press folds the click-then-settle idiom the settings suites repeat dozens of times
+// into one line: the button may be absent, and the assertion that says so follows.
+const press = async (button: { click: () => void } | null | undefined) => {
+  await act(async () => {
+    button?.click();
+    await flushPromises();
+  });
+};
+
 console.log("\nsettings refresh snapshot");
 
 const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>", {
@@ -145,10 +154,7 @@ ok(!document.body.textContent?.includes("step limit"), "general settings keep au
 ok(!document.body.textContent?.includes("Automatic plan mode"), "general settings omit the retired automatic Plan Mode control");
 ok(!document.body.textContent?.includes("planning defaults"), "general settings omit retired automatic Plan Mode copy");
 
-await act(async () => {
-  deepButton.click();
-  await flushPromises();
-});
+await press(deepButton);
 
 eq(setSessionExperienceCalls, 1, "session experience mutation is invoked once");
 eq(setDisplayModeCalls, 0, "legacy display mode mutation is not invoked");
@@ -159,10 +165,7 @@ const standardButton = Array.from(document.querySelectorAll("button"))
   .find((button) => button.textContent?.trim() === "Standard") as HTMLButtonElement | undefined;
 if (!standardButton) throw new Error("standard session experience button did not render");
 rejectSessionExperience = true;
-await act(async () => {
-  standardButton.click();
-  await flushPromises();
-});
+await press(standardButton);
 eq(setSessionExperienceCalls, 2, "failed session experience mutation is invoked once");
 eq(settingsCalls, 3, "failed save still reloads the authoritative Settings snapshot");
 ok(onChangedSettings?.sessionExperience === "deep", "failed save publishes the authoritative backend value");
@@ -256,10 +259,7 @@ const setCustomCompactInput = (input: HTMLInputElement, value: string) => {
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 };
-await act(async () => {
-  customCompactInput.focus();
-  await flushPromises();
-});
+await press(customCompactInput.focus());
 ok(recommendedCompactButton.checked, "focusing an empty custom input preserves the saved preset");
 ok(!customCompactButton.checked, "an empty custom draft is not announced as the saved selection");
 await act(async () => {
@@ -292,10 +292,7 @@ eq(compactRatioCalls.length, 1, "Escape cancels a custom compact ratio without s
 eq(customCompactInput.value, "75", "Escape restores the saved inline custom ratio");
 const activeCompactButton = compactRootEl.querySelector('input[type="radio"][aria-label="70% · Active"]') as HTMLInputElement | null;
 if (!activeCompactButton) throw new Error("active compaction preset did not render");
-await act(async () => {
-  activeCompactButton.click();
-  await flushPromises();
-});
+await press(activeCompactButton);
 eq(compactRatioCalls.length, 2, "compact ratio preset adds one mutation");
 eq(compactRatioCalls[1], 0.7, "compact ratio preset sends the expected fraction");
 ok(activeCompactButton.checked, "saved compact ratio is selected after Settings reload");
@@ -417,10 +414,7 @@ ok(document.body.textContent?.includes("Loading…") === false, "failed initial 
 const retryButton = Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Retry") as HTMLButtonElement | undefined;
 if (!retryButton) throw new Error("settings retry button did not render");
 
-await act(async () => {
-  retryButton.click();
-  await flushPromises();
-});
+await press(retryButton);
 await waitFor("settings retry success", () => Boolean(Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Deep")));
 
 eq(failingSettingsCalls, 2, "settings retry calls Settings again");
@@ -514,18 +508,11 @@ await selectSettingsValue(monoFontSelect, "custom");
 const preservedTypography = getTypographyPreferences();
 eq(preservedTypography.code.followGlobal, false, "global monospace changes preserve an explicit code-region override");
 eq(preservedTypography.code.fontFamily, "jetbrains", "global monospace changes preserve the regional code font choice");
-eq(
-  document.documentElement.style.getPropertyValue("--typography-code-font"),
-  regionalCodeFont,
-  "global monospace changes keep the regional code font CSS variable",
-);
+eq(document.documentElement.style.getPropertyValue("--typography-code-font"), regionalCodeFont, "global monospace changes keep the regional code font CSS variable");
 
 const resetZoomButton = document.querySelector("button[aria-label='Reset display zoom to 100%']") as HTMLButtonElement | null;
 if (!resetZoomButton) throw new Error("display zoom reset button did not render");
-await act(async () => {
-  resetZoomButton.click();
-  await flushPromises();
-});
+await press(resetZoomButton);
 await waitFor("display zoom reset", () => document.querySelector(".zoom-slider__value")?.textContent?.trim() === "100%");
 
 eq(savedZoomFactors.at(-1), 1, "display zoom reset writes the default zoom factor");
@@ -598,10 +585,7 @@ ok(document.body.textContent?.includes("Back to entry") === false, "bot manager 
 
 const feishuTab = Array.from(document.querySelectorAll(".bot-channel-tabs [role=\"tab\"]")).find((button) => button.textContent?.includes("Feishu")) as HTMLButtonElement | undefined;
 if (!feishuTab) throw new Error("Feishu channel tab did not render");
-await act(async () => {
-  feishuTab.click();
-  await flushPromises();
-});
+await press(feishuTab);
 await waitFor("selected Feishu detail", () => Boolean(document.querySelector(".bot-channel-manager__detail .bot-detail-card")));
 
 ok(Boolean(document.querySelector(".bot-channel-manager__detail .bot-detail-card")), "configured channel renders selected bot detail on the right");
@@ -613,10 +597,7 @@ const enableBotIndex = selectedBotDetailText.indexOf("Enable bot");
 const toolApprovalIndex = selectedBotDetailText.indexOf("Tool approval");
 const modelIndex = selectedBotDetailText.indexOf("Model");
 const accessControlIndex = selectedBotDetailText.indexOf("Access control");
-ok(
-  connectionSummaryIndex >= 0 && enableBotIndex > connectionSummaryIndex && toolApprovalIndex > enableBotIndex && modelIndex > toolApprovalIndex && accessControlIndex > modelIndex,
-  "selected bot detail places enable, approval, and model controls between summary and access control",
-);
+ok(connectionSummaryIndex >= 0 && enableBotIndex > connectionSummaryIndex && toolApprovalIndex > enableBotIndex && modelIndex > toolApprovalIndex && accessControlIndex > modelIndex, "selected bot detail places enable, approval, and model controls between summary and access control");
 ok(document.body.textContent?.includes("ou_mock_user_001") === true, "selected bot detail shows its trusted user");
 ok(document.body.textContent?.includes("Legacy global allowlist") === true, "advanced area keeps the legacy global allowlist");
 ok(document.querySelector(".bot-simple-advanced")?.textContent?.includes("local control API") === false, "advanced area no longer owns mobile/control API setup");
@@ -655,10 +636,7 @@ desktopStub.replaceCommands(({
 }).main.App);
 const dingtalkTab = Array.from(botsRootEl.querySelectorAll(".bot-channel-tabs [role=\"tab\"]")).find((button) => button.textContent?.includes("DingTalk")) as HTMLButtonElement | undefined;
 if (!dingtalkTab) throw new Error("DingTalk channel tab did not render");
-await act(async () => {
-  dingtalkTab.click();
-  await flushPromises();
-});
+await press(dingtalkTab);
 // Secret is set and the bot is enabled: the configured detail card
 // shows the persisted ClientID (the "input disappeared" regression).
 await waitFor("DingTalk detail card with ClientID", () => {
@@ -672,10 +650,7 @@ eq(dingtalkDetailClientId?.value, "dinghuspf88znepnhwfp", "persisted ClientID is
 // calls TestDingtalkBot and surfaces the result notice.
 const dingtalkTestButtons = Array.from(botsRootEl.querySelectorAll(".bot-channel-manager__detail .bot-detail-card__actions .btn")).filter((button) => /test|测试|測試|傳送/i.test(button.textContent ?? ""));
 eq(dingtalkTestButtons.length, 1, "DingTalk detail card exposes a test-send button");
-await act(async () => {
-  (dingtalkTestButtons[0] as HTMLButtonElement).click();
-  await flushPromises();
-});
+await press((dingtalkTestButtons[0] as HTMLButtonElement));
 eq(dingtalkTestCalls, 1, "test-send button invokes TestDingtalkBot");
 await waitFor("DingTalk test-send result notice", () =>
   botsRootEl.querySelector(".bot-channel-manager__detail .bot-detail-notice")?.textContent?.includes("测试消息已发送") === true);
@@ -708,10 +683,7 @@ await act(async () => {
 });
 const notEnabledTab = Array.from(notEnabledRootEl.querySelectorAll(".bot-channel-tabs [role=\"tab\"]")).find((button) => button.textContent?.includes("DingTalk")) as HTMLButtonElement | undefined;
 if (!notEnabledTab) throw new Error("DingTalk channel tab did not render (not-enabled case)");
-await act(async () => {
-  notEnabledTab.click();
-  await flushPromises();
-});
+await press(notEnabledTab);
 await waitFor("DingTalk setup panel instead of detail card when not enabled", () => {
   const detailCard = notEnabledRootEl.querySelector(".bot-channel-manager__detail .bot-detail-card");
   const setupCard = notEnabledRootEl.querySelector(".bot-channel-manager__detail .bot-channel-setup-card");
@@ -804,10 +776,7 @@ const accessModelsButton = Array.from(providerRaceRootEl.querySelectorAll(".sett
   (button) => button.textContent?.trim() === "Model services",
 ) as HTMLButtonElement | undefined;
 if (!accessModelsButton) throw new Error("provider Access subtab did not render");
-await act(async () => {
-  accessModelsButton.click();
-  await flushPromises();
-});
+await press(accessModelsButton);
 await act(async () => {
   resolveProviderBatch?.({ "race-provider": ["old-model", "stale-fetched-model"].map((model) => ({ model, inputModalities: [], state: "unknown", source: "adapter" })) });
   await flushPromises();
@@ -874,18 +843,12 @@ const providerRefreshCancelAccessButton = Array.from(providerRefreshCancelRootEl
   (button) => button.textContent?.trim() === "Model services",
 ) as HTMLButtonElement | undefined;
 if (!providerRefreshCancelAccessButton) throw new Error("provider refresh cancel Access subtab did not render");
-await act(async () => {
-  providerRefreshCancelAccessButton.click();
-  await flushPromises();
-});
+await press(providerRefreshCancelAccessButton);
 const providerRefreshCancelButton = Array.from(providerRefreshCancelRootEl.querySelectorAll("button")).find(
   (button) => button.getAttribute("aria-label") === "Refresh models",
 ) as HTMLButtonElement | undefined;
 if (!providerRefreshCancelButton) throw new Error("provider refresh action did not render");
-await act(async () => {
-  providerRefreshCancelButton.click();
-  await flushPromises();
-});
+await press(providerRefreshCancelButton);
 await waitFor("provider model discovery", () => providerRefreshCancelRootEl.textContent?.includes("deepseek-v4-pro") === true);
 const providerModelDraftCancelButton = providerRefreshCancelRootEl.querySelector<HTMLButtonElement>('.provider-editor-footer button');
 if (!providerModelDraftCancelButton) throw new Error("provider draft cancel action did not render");
@@ -980,10 +943,7 @@ const upgradeFailureAccessButton = Array.from(upgradeFailureRootEl.querySelector
   (button) => button.textContent?.trim() === "Model services",
 ) as HTMLButtonElement | undefined;
 if (!upgradeFailureAccessButton) throw new Error("upgrade failure Access subtab did not render");
-await act(async () => {
-  upgradeFailureAccessButton.click();
-  await flushPromises();
-});
+await press(upgradeFailureAccessButton);
 await waitFor(
   "legacy DeepSeek protocol upgrade action",
   () => upgradeFailureRootEl.textContent?.includes("Upgrade to recommended protocol") === true,
@@ -992,29 +952,17 @@ let upgradeFailureButton = Array.from(upgradeFailureRootEl.querySelectorAll("but
   (button) => button.textContent?.includes("Upgrade to recommended protocol"),
 ) as HTMLButtonElement | undefined;
 if (!upgradeFailureButton) throw new Error("DeepSeek protocol upgrade button did not render");
-await act(async () => {
-  upgradeFailureButton?.click();
-  await flushPromises();
-});
+await press(upgradeFailureButton);
 upgradeFailureButton = upgradeFailureRootEl.querySelector<HTMLButtonElement>(
   ".provider-protocol-upgrade .inline-confirm > button",
 ) ?? undefined;
 if (upgradeFailureButton?.textContent?.trim() !== "Confirm") throw new Error("DeepSeek protocol upgrade confirmation did not render");
-await act(async () => {
-  upgradeFailureButton?.click();
-  await flushPromises();
-});
+await press(upgradeFailureButton);
 await waitFor("post-error settings reload", () => upgradeFailureSettingsCalls === 2);
 
 eq(upgradeFailureMutationCalls, 1, "DeepSeek protocol upgrade mutation is invoked once");
-ok(
-  upgradeFailureRootEl.textContent?.includes("Upgrade to recommended protocol") === false,
-  "persisted DeepSeek protocol upgrade disappears after a runtime refresh error",
-);
-ok(
-  upgradeFailureRootEl.textContent?.includes("workspace runtime boot failed after protocol upgrade") === true,
-  "post-mutation reload preserves the original runtime error",
-);
+ok(upgradeFailureRootEl.textContent?.includes("Upgrade to recommended protocol") === false, "persisted DeepSeek protocol upgrade disappears after a runtime refresh error");
+ok(upgradeFailureRootEl.textContent?.includes("workspace runtime boot failed after protocol upgrade") === true, "post-mutation reload preserves the original runtime error");
 ok(
   upgradeFailureChanged?.providers[0]?.kind === "anthropic",
   "onChanged receives the authoritative persisted protocol after a runtime error",

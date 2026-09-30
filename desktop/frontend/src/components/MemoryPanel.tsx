@@ -250,11 +250,9 @@ function suggestionStamp(value?: string): string {
 }
 
 // MemoryPanel is the desktop memory manager: a right-side drawer over the loaded
-// REASONIX.md hierarchy and saved auto-memories. Unlike Claude Code's /memory
-// (which shells out to $EDITOR) it edits docs in place, and unlike Codex (no UI
-// at all) it shows the saved facts. Docs are editable; facts are read-only
-// (the model owns them via the `remember` tool). Quick-add mirrors the "#"
-// shortcut with an explicit scope selector.
+// REASONIX.md hierarchy and saved auto-memories. Docs are editable in place;
+// facts are read-only (the model owns them via the `remember` tool). Quick-add
+// mirrors the "#" shortcut with an explicit scope selector.
 export function MemoryPanel({
   view,
   onClose,

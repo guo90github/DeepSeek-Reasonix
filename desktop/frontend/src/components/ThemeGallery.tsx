@@ -6,8 +6,7 @@ import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import { THEME_STYLES, type ThemeStyle, isThemeStyle } from "../lib/theme";
 import {
-  type ThemePackView,
-  type ThemeSaveInput,
+  type ThemePackView, type ThemeSaveInput,
   type ThemePackBackground,
   type ThemePackSceneBackground,
   type ThemePackRecipes,

@@ -15,10 +15,8 @@ import { ResizableDrawer } from "./ResizableDrawer";
 import { Tooltip } from "./Tooltip";
 import { ModalCloseButton } from "./ModalCloseButton";
 
-// CapabilitiesPanel is the desktop MCP & Skills drawer — the GUI counterpart to
-// the CLI's /mcp + /skill, aligning with Claude Code's Customize → Connectors:
-// each server shows a connected/failed dot, transport, and tool/prompt/resource
-// counts, with add / remove / retry; skills list their scope and run mode.
+// CapabilitiesPanel is the desktop MCP & Skills drawer: one row per server (state
+// dot, transport, tool counts, add/remove/retry) and per skill (scope, run mode).
 type CapTab = "servers" | "skills";
 
 type SettingsSnapshot<T> = { key: string; value: T };
