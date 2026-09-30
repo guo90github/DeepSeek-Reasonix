@@ -51,6 +51,8 @@ const messages = {
   recapQueued: ["已排队生成，稍后刷新查看", "已排隊產生，稍後重新整理查看", "Queued — refresh in a moment to see it"],
   recapUngeneratedTitle: ["还没有回顾的会话（最近 {n} 个）", "還沒有回顧的工作階段（最近 {n} 個）", "Sessions with no recap yet (newest {n})"],
   recapUngeneratedHint: ["更早的会话用 `reasonix catalogs reindex session-recap` 批量补。", "更早的工作階段用 `reasonix catalogs reindex session-recap` 批次補。", "For older sessions, backfill in bulk with `reasonix catalogs reindex session-recap`."],
+  recapDraftSkill: ["起草为 skill", "起草為 skill", "Draft a skill"],
+  recapSkillDrafted: ["已起草（手动触发）：{path} —— 审过再去编辑 invocation", "已起草（手動觸發）：{path} —— 審過再去編輯 invocation", "Drafted (manual only): {path} — review it, then edit its invocation"],
   recapCount: ["显示 {shown} / 共 {total} 条", "顯示 {shown} / 共 {total} 條", "{shown} of {total} shown"],
   recapNoMatch: ["没有匹配的回顾", "沒有符合的回顧", "No recaps match"],
   purgeTitle: ["永久删除会话", "永久刪除會話", "Permanently delete conversation"],

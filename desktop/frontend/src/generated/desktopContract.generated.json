@@ -3207,6 +3207,36 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recap_skill.go",
+      "name": "DraftRecapSkill",
+      "owner": "App.DraftRecapSkill",
+      "params": [
+        {
+          "kind": "string"
+        },
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.RecapSkillDraft"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "kind",
+          "body"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.DraftRecapSkill"
+      },
+      "sources": [
+        "desktop/recap_skill.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/app.go",
       "name": "Effort",
       "owner": "App.Effort",
@@ -28940,6 +28970,22 @@
           "name": "ageDays",
           "type": {
             "kind": "integer"
+          }
+        }
+      ]
+    },
+    "main.RecapSkillDraft": {
+      "fields": [
+        {
+          "name": "name",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "path",
+          "type": {
+            "kind": "string"
           }
         }
       ]

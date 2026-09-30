@@ -82,6 +82,7 @@ import type {
   SessionMeta,
   SessionRecap,
   RecapOpenItem,
+  RecapSkillDraft,
   TabMeta,
   ToolApprovalMode,
   TopicActivationEvent,
@@ -4540,6 +4541,7 @@ export function useController() {
   const closeRecapHandoff = useCallback(async (id: string): Promise<void> => { await app.CloseRecapHandoff(id); }, [app]);
   const reopenRecapHandoff = useCallback(async (id: string): Promise<void> => { await app.ReopenRecapHandoff(id); }, [app]);
   const generateSessionRecap = useCallback(async (sessionPath: string): Promise<boolean> => app.GenerateSessionRecap(sessionPath), [app]);
+  const draftRecapSkill = useCallback(async (kind: string, body: string): Promise<RecapSkillDraft> => app.DraftRecapSkill(kind, body), [app]);
   const retrySessionHistory = useCallback(async (tabId?: string) => {
     const id = tabId || activeTabIdRef.current; if (!id) return;
     // A failed hydrate at startup usually means the tab controller build has
@@ -5325,7 +5327,7 @@ export function useController() {
     answerMCPInteraction, answerMCPInteractionForTab, setControllerMode, setControllerModeForTab,
     dismissExtensionForm, drainExtensionNotifications,
     setCollaborationMode, setCollaborationModeForTab, setToolApprovalMode, setToolApprovalModeForTab, setQualityFloor, setComposerProfileForTab, setGoal, setGoalForTab, clearGoal, clearGoalForTab, resumeGoal, resumeGoalForTab, pauseGoal, pauseGoalForTab,
-    newSession, clearSession, listSessions, listTrashedSessions, listSessionRecaps, acceptRecapEntry, rejectRecapEntry, undoRecapEntry, listRecapOpenItems, keepRecapHandoff, closeRecapHandoff, reopenRecapHandoff, generateSessionRecap, retrySessionHistory, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
+    newSession, clearSession, listSessions, listTrashedSessions, listSessionRecaps, acceptRecapEntry, rejectRecapEntry, undoRecapEntry, listRecapOpenItems, keepRecapHandoff, closeRecapHandoff, reopenRecapHandoff, generateSessionRecap, draftRecapSkill, retrySessionHistory, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
     loadOlderHistory,
     requestHistoryFullContent,
     refreshMeta, pickWorkspace, switchWorkspace, compact, rewind, rewindForTab, rewindForTabDetailed, undoRewindForTab, setModel, setModelForTab, setEffort, setEffortForTab, cancelJob,

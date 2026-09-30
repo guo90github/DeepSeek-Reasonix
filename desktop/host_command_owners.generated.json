@@ -1751,6 +1751,21 @@
       ]
     }
   },
+  "DraftRecapSkill": {
+    "domain": "desktop/recap_skill.go",
+    "owner": "App.DraftRecapSkill",
+    "sources": [
+      "desktop/recap_skill.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.DraftRecapSkill",
+      "inputs": [
+        "kind",
+        "body"
+      ]
+    }
+  },
   "Effort": {
     "domain": "desktop/app.go",
     "owner": "App.Effort",

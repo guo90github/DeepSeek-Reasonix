@@ -128,6 +128,7 @@ import type {
   SessionMeta,
   SessionRecap,
   RecapOpenItem,
+  RecapSkillDraft,
   SessionRecoveryFailedEvent,
   SessionRecoveryEvent,
   SettingsView,
@@ -406,6 +407,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   ReopenRecapHandoff(id: string): Promise<void>;
   ListRecapOpenItems(): Promise<RecapOpenItem[]>;
   GenerateSessionRecap(sessionPath: string): Promise<boolean>;
+  DraftRecapSkill(kind: string, body: string): Promise<RecapSkillDraft>;
   ResumeSession(path: string): Promise<HistoryMessage[]>;
   ResumeSessionForTab(tabID: string, path: string): Promise<HistoryMessage[]>;
   ResumeSessionPage(path: string, limit: number): Promise<HistoryPage>;
@@ -3334,6 +3336,11 @@ function makeMockApp(): AppBindings {
     async GenerateSessionRecap(sessionPath: string) {
       emit({ kind: "notice", level: "info", text: `(mock) queued a recap for ${sessionPath.split(/[/\\]/).pop() ?? sessionPath}` });
       return true;
+    },
+    async DraftRecapSkill(_kind: string, body: string) {
+      const name = `recap-mock-${body.length}`;
+      emit({ kind: "notice", level: "info", text: `(mock) drafted .reasonix/skills/${name}/SKILL.md` });
+      return { name, path: `.reasonix/skills/${name}/SKILL.md` };
     },
     async KeepRecapHandoff(_sessionPath: string, body: string) {
       emit({ kind: "notice", level: "info", text: `(mock) kept an unfinished item → ${body.slice(0, 40)}` });

@@ -70,6 +70,13 @@ export interface SessionRecapPending {
   updatedAt: string; // RFC3339
 }
 
+// RecapSkillDraft says where a drafted playbook landed, so the page can point the
+// person at the file instead of claiming the work is done.
+export interface RecapSkillDraft {
+  name: string;
+  path: string;
+}
+
 // SessionRecap is one read-only recap written when a session closes. State says
 // which of the three things a row is — a stored recap, a failed attempt still
 // being retried, or a session that produced nothing — so the page never has to

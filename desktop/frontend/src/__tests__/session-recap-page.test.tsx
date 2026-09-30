@@ -121,6 +121,9 @@ const reviewProps = {
   // generate reports whether the lane accepted the work; a refused queue is a
   // failure the page must show rather than pretend it was queued.
   generate: async (path: string) => { generated.push(path); return acceptGenerate; },
+  draftSkill: async (_kind: string, body: string) => ({
+    name: `recap-mock-${body.length}`, path: `.reasonix/skills/recap-mock-${body.length}/SKILL.md`,
+  }),
 };
 
 const rootEl = document.getElementById("root");

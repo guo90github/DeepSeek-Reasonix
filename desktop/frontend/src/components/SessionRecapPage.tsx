@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, RotateCw, Search } from "lucide-react";
-import type { RecapOpenItem, SessionMeta, SessionRecap, SessionRecapEntry } from "../lib/types";
+import type { RecapOpenItem, RecapSkillDraft, SessionMeta, SessionRecap, SessionRecapEntry } from "../lib/types";
 import { useT } from "../lib/i18n";
 import { useManagementT } from "../lib/managementLocale";
 import { ManagementPageShell } from "./ManagementPageShell";
@@ -29,7 +29,7 @@ function kindKey(kind: string): RecapKindKey | null {
 // Only the current project can be settled: an accepted note becomes a fact in the
 // active project's memory, and an unfinished item belongs to the project its
 // session lives in. A session from another project is read-only here.
-export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate }: {
+export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill }: {
   active: boolean;
   onBack: () => void;
   list: () => Promise<SessionRecap[]>;
@@ -45,6 +45,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // generate asks the host to (re)run one session's recap now. It queues into the
   // same lane the close path uses, so it returns as soon as the work is accepted.
   generate: (sessionPath: string) => Promise<boolean>;
+  // draftSkill has the host write a playbook draft into this project's skill
+  // directory. Only the kinds that are procedures can become one.
+  draftSkill: (kind: string, body: string) => Promise<RecapSkillDraft>;
 }) {
   const t = useT(); const m = useManagementT();
   const [recaps, setRecaps] = useState<SessionRecap[]>([]);
@@ -57,6 +60,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const [busy, setBusy] = useState("");
   const [failure, setFailure] = useState("");
   const [queued, setQueued] = useState<string[]>([]);
+  const [drafted, setDrafted] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const seq = useRef(0);
   const refresh = useCallback(async () => {
@@ -140,6 +144,22 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       setBusy("");
     }
   }, [keep, m]);
+
+  // makeDraft turns one note into a playbook draft inside this project. The host
+  // refuses the kinds that are not procedures, so the button never promises more
+  // than it can do.
+  const makeDraft = useCallback(async (entry: SessionRecapEntry) => {
+    setBusy(entry.id);
+    setFailure("");
+    try {
+      const draft = await draftSkill(entry.kind, entry.body);
+      setDrafted((current) => ({ ...current, [entry.id]: draft.path }));
+    } catch {
+      setFailure(m("operationFailed"));
+    } finally {
+      setBusy("");
+    }
+  }, [draftSkill, m]);
 
   const setItemClosed = useCallback(async (item: RecapOpenItem, closed: boolean) => {
     setBusy(item.id);
@@ -312,6 +332,16 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                           onClick={() => void keepHandoff(recap.path, entry)}>{m("recapKeepOpen")}</button>
                       : <span style={{ ...labelStyle, fontSize: 12 }}>{item.closed ? m("recapOpenHandled") : m("recapOpenKept")}</span>}
                   </span>}
+                  {/* Only procedures become playbooks; the host refuses the rest, so
+                      the button is offered only where it can do something. */}
+                  {reviewable && (entry.kind === "root-cause" || entry.kind === "refuted") && (
+                    <span style={{ display: "flex", gap: 6 }}>
+                      <button className="btn btn--small" type="button" disabled={busy !== ""}
+                        onClick={() => void makeDraft(entry)}>{m("recapDraftSkill")}</button>
+                      {drafted[entry.id] !== undefined && (
+                        <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapSkillDrafted", { path: drafted[entry.id] })}</span>
+                      )}
+                    </span>)}
                 </p>
                 {entry.refs !== undefined && entry.refs.length > 0 && (
                   <p style={{ margin: 0, ...labelStyle, fontSize: 12 }}>
