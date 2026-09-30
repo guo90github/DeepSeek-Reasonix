@@ -13,18 +13,22 @@ import (
 // actually kept, and the openers sessions actually begin with. This test replays
 // one against the other on a live machine and reports how often the rule fires
 // where it should and where it should not; it asserts nothing about the numbers
-// because the numbers are the result. It is skipped without RECAP_CALIB_ROOT.
+// because the numbers are the result. Both env vars are required, and the
+// projection must be a copy the run may migrate.
 //
-//	REASONIX_CACHE_HOME=<dir holding session-recap/v1.sqlite> \
+//	RECAP_CALIB_DB=<copy of session-recap/v1.sqlite> \
 //	  RECAP_CALIB_ROOT=%APPDATA%\reasonix \
 //	  go test ./internal/recap/ -run CalibrateOfferRule -v -count=1
 func TestCalibrateOfferRule(t *testing.T) {
+	// Never DefaultPath() here: a mistyped env var once resolved to the live
+	// cache, and opening it migrated — which drops the rows a person was reading.
+	db := strings.TrimSpace(os.Getenv("RECAP_CALIB_DB"))
 	root := strings.TrimSpace(os.Getenv("RECAP_CALIB_ROOT"))
-	if root == "" {
-		t.Skip("set RECAP_CALIB_ROOT to a reasonix state root to calibrate")
+	if root == "" || db == "" {
+		t.Skip("set RECAP_CALIB_DB (a copy of the projection) and RECAP_CALIB_ROOT (state root)")
 	}
 	ctx := context.Background()
-	store, err := Open(ctx, Options{Path: DefaultPath()})
+	store, err := Open(ctx, Options{Path: db})
 	if err != nil {
 		t.Fatalf("open the projection: %v", err)
 	}

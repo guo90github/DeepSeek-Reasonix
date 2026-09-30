@@ -90,15 +90,17 @@
 
 **怎么复测命中率（校准，不改任何东西）**
 
-判据是本地词面规则，阈值只能靠真实语料校准。这个探针把**已生成的回顾笔记**当候选条目，对**同项目其他会话的真实开场白**回放，打印召回与误放行率；它只读状态根、只写临时投影，未设 `RECAP_CALIB_ROOT` 时自动跳过：
+判据是本地词面规则，阈值只能靠真实语料校准。这个探针把**已生成的回顾笔记**当候选条目，对**同项目其他会话的真实开场白**回放，打印召回与误放行率；它只读状态根，只写你指定的那份投影副本：
 
 ```bash
-REASONIX_CACHE_HOME=<临时目录> \
+cp "%LOCALAPPDATA%\reasonix\session-recap\v1.sqlite" <临时目录>\v1.sqlite
+RECAP_CALIB_DB=<临时目录>\v1.sqlite \
 RECAP_CALIB_ROOT="C:/Users/<你>/AppData/Roaming/reasonix" \
   go test ./internal/recap/ -run CalibrateOfferRule -v -count=1
 ```
 
-- `<临时目录>` 里要有一份回顾投影（`<临时目录>/session-recap/v1.sqlite`，用 §5 的 `catalogs reindex session-recap` 灌入），否则打印「holds no records」后跳过。
+- **必须指向副本**：这份投影会被 `Open`（含 schema 迁移）。**绝不要指向正在用的 `v1.sqlite`**——2026-09-30 就是因为少给一个变量、落回真实缓存路径，一次运行把 v1–v3 时代的回顾行迁没了。两个变量缺一个就直接跳过。
+- 副本里没有回顾行时打印「holds no records」后跳过（要先用 §5 的 `catalogs reindex session-recap` 给副本灌几行）。
 - **2026-09-30 实测**（13 条真笔记 × 598 条同项目无关开场白）：旧判据「1 个标识符即算」误放行 **39.5%**；现判据「两个标识符 / 一个标识符+两处片段 / 三处片段」**15.7%**，召回同为 9/13；更严的 `2id&2pair` 误放行 2.3% 但召回掉到 0/13。
 - 口径：**误放行率可直接决策**；召回的分母是「笔记对自己会话的开场白」，只作下界参考。
 
