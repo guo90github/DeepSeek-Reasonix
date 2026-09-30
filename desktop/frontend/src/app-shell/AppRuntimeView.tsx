@@ -41,6 +41,7 @@ import { buildComposerSurface, buildDecisionFooterSurface, buildFooterTodo, buil
 
 const WindowsWindowControls = lazy(() => import("./WindowsWindowControls").then((module) => ({ default: module.WindowsWindowControls })));
 const DockLauncher = lazy(() => import("../components/DockLauncher").then((module) => ({ default: module.DockLauncher })));
+const UnattendedToggle = lazy(() => import("../custom/features/heartbeat/UnattendedToggle").then((module) => ({ default: module.UnattendedToggle })));
 
 const WORKSPACE_RESIZER_WIDTH = 8;
 const SHOW_CONTEXT_DOCK = true;
@@ -275,6 +276,11 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 onTabsClose={session.sessionTabs.onTabsClose}
                 onTabsReorder={session.sessionTabs.onTabsReorder}
                 onNewTab={() => void navigationCommands.handleNewTab()}
+                unattendedToggle={(
+                  <Suspense fallback={null}>
+                    <UnattendedToggle />
+                  </Suspense>
+                )}
                 sessionAudit={(
                   <SessionAuditLauncher
                     tabId={activeTabId}

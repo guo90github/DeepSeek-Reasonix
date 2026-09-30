@@ -34,9 +34,10 @@ import (
 // HeartbeatTask defines a single scheduled prompt.
 type HeartbeatTask struct {
 	ID                     string         `json:"id"`
-	Title                  string         `json:"title"`    // user-visible label
-	Prompt                 string         `json:"prompt"`   // the prompt to submit
-	Interval               string         `json:"interval"` // e.g. "5m", "1h", "30s"
+	Title                  string         `json:"title"`          // user-visible label
+	Prompt                 string         `json:"prompt"`         // the prompt to submit
+	Goal                   string         `json:"goal,omitempty"` // unattended Goal contract; empty = a plain scheduled prompt
+	Interval               string         `json:"interval"`       // e.g. "5m", "1h", "30s"
 	Enabled                bool           `json:"enabled"`
 	Scope                  string         `json:"scope,omitempty"`                  // "global" or "project"
 	WorkspaceRoot          string         `json:"workspaceRoot,omitempty"`          // project root path when scope="project"
@@ -77,9 +78,12 @@ const heartbeatSchemaVersion = 2
 
 // heartbeatConfig is the on-disk format.
 type heartbeatConfig struct {
-	SchemaVersion int             `json:"schemaVersion,omitempty"`
-	Revision      uint64          `json:"revision,omitempty"`
-	Tasks         []HeartbeatTask `json:"tasks"`
+	SchemaVersion int    `json:"schemaVersion,omitempty"`
+	Revision      uint64 `json:"revision,omitempty"`
+	// Unattended is the master switch for Goal-driven autonomous runs. Off keeps
+	// every task the plain scheduled prompt it is today.
+	Unattended bool            `json:"unattended,omitempty"`
+	Tasks      []HeartbeatTask `json:"tasks"`
 }
 
 // ErrHeartbeatConfigConflict means another writer changed the config after
@@ -95,15 +99,19 @@ type heartbeatConfigSnapshot struct {
 // HeartbeatConfigView is the revisioned Wails contract used by current
 // frontends. ETag detects external editors that do not increment Revision.
 type HeartbeatConfigView struct {
-	Revision uint64          `json:"revision"`
-	ETag     string          `json:"etag"`
-	Tasks    []HeartbeatTask `json:"tasks"`
+	Revision   uint64          `json:"revision"`
+	ETag       string          `json:"etag"`
+	Unattended bool            `json:"unattended"`
+	Tasks      []HeartbeatTask `json:"tasks"`
 }
 
 type HeartbeatConfigUpdate struct {
 	Revision uint64          `json:"revision"`
 	ETag     string          `json:"etag"`
 	Tasks    []HeartbeatTask `json:"tasks"`
+	// Unattended toggles the master switch when set; the running process keeps
+	// its Start-time snapshot and picks the value up on the next launch.
+	Unattended *bool `json:"unattended,omitempty"`
 }
 
 func (s heartbeatConfigSnapshot) view() HeartbeatConfigView {
@@ -115,7 +123,7 @@ func (s heartbeatConfigSnapshot) view() HeartbeatConfigView {
 	if s.exists {
 		etag = hex.EncodeToString(s.digest[:])
 	}
-	return HeartbeatConfigView{Revision: s.cfg.Revision, ETag: etag, Tasks: tasks}
+	return HeartbeatConfigView{Revision: s.cfg.Revision, ETag: etag, Unattended: s.cfg.Unattended, Tasks: tasks}
 }
 
 // ── Engine ──────────────────────────────────────────────────────────────────
@@ -131,6 +139,9 @@ type HeartbeatEngine struct {
 	cfgInitialized bool                             // engine has observed existing or missing config state
 	cfgDeleted     bool                             // an existing config was removed externally
 	pendingTopics  map[string]heartbeatPendingTopic // in-memory retry/in-flight safety for NewConversationEachRun
+	holdLog        map[string]string                // last unattended hold reason per task, so a steady state logs once
+	handoffPreface map[string]string                // one-shot preface for a task just moved to a fresh session
+	unattended     bool                             // master switch, snapshotted at Start so a toggle lands on the next launch
 	runningTasks   map[string]struct{}              // task-level execution reservation shared by tick and TriggerNow
 	done           chan struct{}
 	running        bool
@@ -144,10 +155,12 @@ type heartbeatPendingTopic struct {
 
 func newHeartbeatEngine(app *App) *HeartbeatEngine {
 	return &HeartbeatEngine{
-		app:           app,
-		done:          make(chan struct{}),
-		pendingTopics: make(map[string]heartbeatPendingTopic),
-		runningTasks:  make(map[string]struct{}),
+		app:            app,
+		done:           make(chan struct{}),
+		pendingTopics:  make(map[string]heartbeatPendingTopic),
+		holdLog:        make(map[string]string),
+		handoffPreface: make(map[string]string),
+		runningTasks:   make(map[string]struct{}),
 	}
 }
 
@@ -173,6 +186,10 @@ func (e *HeartbeatEngine) Start() {
 	} else {
 		e.recordConfigSnapshotLocked(snapshot)
 		e.tasks = snapshot.cfg.Tasks
+		e.unattended = snapshot.cfg.Unattended && !hostCrashLoopDegraded()
+		if snapshot.cfg.Unattended && !e.unattended {
+			log.Printf("[heartbeat] unattended driving stays off this launch: the previous launches crashed")
+		}
 	}
 	e.running = true
 	go e.loop()
@@ -441,6 +458,12 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 		e.mu.Unlock()
 		return e.executeTaskOwned(t)
 	}
+	if e.unattendedGoalStep(&t, ctrl) {
+		return t
+	}
+	if e.unattendedEnabled() && strings.TrimSpace(t.Goal) != "" && e.handoffUnattendedTask(&t, ctrl, scope, workspaceRoot, title) {
+		return e.executeTaskOwned(t)
+	}
 
 	// Set the task's approval mode only after confirming the controller is idle.
 	// SetToolApprovalModeForTab may drain pending approvals for auto/yolo modes,
@@ -461,7 +484,7 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 
 	// Submit as a plain user turn so scheduled prompts cannot invoke desktop
 	// shell or slash-command handlers such as "!cmd", "/clear", or "/compact".
-	if !e.app.submitUserTurnToTabWithSink(tabMeta.ID, t.Prompt, botForwarder) {
+	if !e.app.submitUserTurnToTabWithSink(tabMeta.ID, e.takeHandoffPrompt(t), botForwarder) {
 		log.Printf("[heartbeat] submit skipped for %q", t.Title)
 		return t
 	}
@@ -559,7 +582,7 @@ func (e *HeartbeatEngine) ReplaceConfig(update HeartbeatConfigUpdate) (Heartbeat
 		return expected.view(), ErrHeartbeatConfigConflict
 	}
 	tasks := mergeHeartbeatDiskRunHistory(update.Tasks, expected.cfg.Tasks)
-	if err := e.writeTasks(tasks, expected, true); err != nil {
+	if err := e.writeTasksWith(tasks, expected, true, update.Unattended); err != nil {
 		return expected.view(), err
 	}
 	latest, err := e.readConfigSnapshot()

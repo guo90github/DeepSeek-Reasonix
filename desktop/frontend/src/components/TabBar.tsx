@@ -17,6 +17,8 @@ interface TabBarProps {
   onTabsClose: (tabIds: string[], nextActiveTabId?: string) => void;
   onTabsReorder: (tabIds: string[]) => void;
   onNewTab: () => void;
+  /** Rendered immediately before the new-session button (the unattended switch). */
+  unattendedToggle?: ReactNode;
   /** Rendered immediately after the new-session button (the session-audit trigger). */
   sessionAudit?: ReactNode;
   onOpenPalette?: () => void;
@@ -48,7 +50,7 @@ function tabMode(tab: TabMeta): Mode {
   return normalizeMode(tab.mode);
 }
 
-export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose, onTabsReorder, onNewTab, sessionAudit, onOpenPalette, commandCompact = false, revealActiveSignal = 0 }: TabBarProps) {
+export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose, onTabsReorder, onNewTab, unattendedToggle, sessionAudit, onOpenPalette, commandCompact = false, revealActiveSignal = 0 }: TabBarProps) {
   const t = useT();
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; side: DropSide } | null>(null);
@@ -272,6 +274,7 @@ export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose
           );
         })}
       </div>
+      {unattendedToggle}
       <Tooltip label={t("tabBar.newSession")} className="tabbar__icon-trigger">
         <button className="tabbar__new" type="button" aria-label={t("tabBar.newSession")} onClick={onNewTab}>
           <Plus size={13} />

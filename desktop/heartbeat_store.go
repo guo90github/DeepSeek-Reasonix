@@ -95,7 +95,14 @@ func (e *HeartbeatEngine) adoptExternalEditsLocked() {
 	e.prunePendingTopicsLocked(e.tasks)
 }
 
+// writeTasks persists tasks with the unattended switch already on disk.
 func (e *HeartbeatEngine) writeTasks(tasks []HeartbeatTask, expected heartbeatConfigSnapshot, compare bool) error {
+	return e.writeTasksWith(tasks, expected, compare, nil)
+}
+
+// writeTasksWith persists tasks; unattended, when non-nil, replaces the switch
+// on disk — human-owned state the engine never derives by itself.
+func (e *HeartbeatEngine) writeTasksWith(tasks []HeartbeatTask, expected heartbeatConfigSnapshot, compare bool, unattended *bool) error {
 	if tasks == nil {
 		tasks = []HeartbeatTask{}
 	}
@@ -140,7 +147,12 @@ func (e *HeartbeatEngine) writeTasks(tasks []HeartbeatTask, expected heartbeatCo
 			sidecar[t.ID] = t.RunHistory
 		}
 	}
-	cfg := heartbeatConfig{SchemaVersion: heartbeatSchemaVersion, Revision: revision, Tasks: mainTasks}
+	// The unattended master switch is human-owned: a nil override carries the
+	// value already on disk so a full-table save never drops it.
+	cfg := heartbeatConfig{SchemaVersion: heartbeatSchemaVersion, Revision: revision, Unattended: current.cfg.Unattended, Tasks: mainTasks}
+	if unattended != nil {
+		cfg.Unattended = *unattended
+	}
 	b, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err

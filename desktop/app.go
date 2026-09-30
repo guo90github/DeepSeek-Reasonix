@@ -507,6 +507,7 @@ func (a *App) startup(ctx context.Context) {
 
 	a.heartbeat = newHeartbeatEngine(a)
 	a.heartbeat.Start()
+	noteHostLaunch(a.heartbeat.unattendedEnabled())
 
 	a.mu.Lock()
 	a.tabsRestored = make(chan struct{})

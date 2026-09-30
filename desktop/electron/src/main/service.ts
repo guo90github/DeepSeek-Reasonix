@@ -4,6 +4,7 @@ import { eventFrame } from "../shared/eventStream.js";
 import type { HelloResult } from "./handshake.js";
 import { errorText, type Logger } from "./log.js";
 import { RestartBudget } from "./restartBudget.js";
+import { unattendedRestartDelayMs } from "./restartPolicy.js";
 import { RpcClient } from "./rpc.js";
 
 export const LIFECYCLE_TIMEOUT_MS = 10_000;
@@ -28,6 +29,9 @@ export interface ServiceOptions {
   log: Logger;
   spawn?: SpawnFn;
   budget?: RestartBudget;
+  /** True while the last launch asked for unattended driving, which retries
+   *  forever instead of stopping at the attended budget. */
+  unattended?: () => boolean;
   now?: () => number;
   exitGraceMs?: number;
 }
@@ -61,6 +65,7 @@ export class ServiceSupervisor {
   private readonly spawnFn: SpawnFn;
   private readonly now: () => number;
   private readonly exitGraceMs: number;
+  private unattendedRestarts = 0;
 
   constructor(private readonly options: ServiceOptions, private readonly handlers: ServiceHandlers) {
     this.budget = options.budget ?? new RestartBudget();
@@ -245,6 +250,14 @@ export class ServiceSupervisor {
       return;
     }
     this.options.log.error(`desktop service exited unexpectedly (${reason})`);
+    // An unattended run never gives up on a restart; it only paces itself, so a
+    // broken build cannot spin the machine.
+    if (this.options.unattended?.() === true) {
+      const wait = unattendedRestartDelayMs(this.unattendedRestarts++);
+      this.options.log.warn(`unattended: restarting the desktop service in ${wait}ms`);
+      void delay(wait).then(() => this.begin(true)).catch(() => undefined);
+      return;
+    }
     if (this.budget.allow(this.now())) {
       void this.begin(true).catch(() => undefined);
       return;

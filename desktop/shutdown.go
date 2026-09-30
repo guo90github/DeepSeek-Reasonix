@@ -19,6 +19,9 @@ func completeDesktopShutdown(tracker *desktopLifecycleTracker, body func()) {
 	tracker.mark("shutting_down")
 	body()
 	tracker.clean()
+	// A clean exit owns the host-state marker too: leaving it behind would make
+	// the next launch (and the OS watchdog) read an intentional quit as a crash.
+	_ = clearHostState()
 }
 
 func (a *App) shutdownBody() {

@@ -23766,6 +23766,16 @@
             },
             "kind": "array"
           }
+        },
+        {
+          "name": "unattended",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "boolean"
+            },
+            "kind": "nullable"
+          }
         }
       ]
     },
@@ -23781,6 +23791,12 @@
           "name": "etag",
           "type": {
             "kind": "string"
+          }
+        },
+        {
+          "name": "unattended",
+          "type": {
+            "kind": "boolean"
           }
         },
         {
@@ -23827,6 +23843,13 @@
         },
         {
           "name": "prompt",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "goal",
+          "optional": true,
           "type": {
             "kind": "string"
           }

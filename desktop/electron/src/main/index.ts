@@ -16,6 +16,9 @@ import { DialogHost } from "./dialogs.js";
 import { renderFailurePage, type ShellAction } from "./failurePage.js";
 import { buildHelloParams, describeHandshakeFailure, validateHelloResult, type HelloResult } from "./handshake.js";
 import { reasonixHome } from "./home.js";
+import { unattendedDesired } from "./hostState.js";
+import { applyAutostart } from "./autostart.js";
+import { RestartBudget } from "./restartBudget.js";
 import { buildHostCallTable, dispatchHostCall, type ScreenInfo } from "./hostCalls.js";
 import { firstExisting, iconCandidates } from "./icons.js";
 import { registerRendererIpc } from "./ipc.js";
@@ -223,6 +226,10 @@ function bootstrap(dataHome: string): void {
     browser: buildBrowserHostCalls({ surfaces: browser, grants, documents, actions, downloads }),
   });
 
+  // Relaunching the whole shell is the last resort for an unattended run; the
+  // budget keeps a broken build from looping forever on it.
+  const relaunchBudget = new RestartBudget(3, 15 * 60_000);
+
   const service = new ServiceSupervisor(
     {
       binary: serviceBinary,
@@ -232,6 +239,7 @@ function bootstrap(dataHome: string): void {
         serviceLog.write(chunk);
         if (!app.isPackaged) process.stderr.write(chunk);
       },
+      unattended: () => unattendedDesired(dataHome),
       log,
     },
     {
@@ -273,6 +281,15 @@ function bootstrap(dataHome: string): void {
       onFailed: (error) => {
         const failure = describeHandshakeFailure(error);
         log.error(`desktop service failed: ${failure.name}: ${failure.detail}`);
+        if (unattendedDesired(dataHome) && relaunchBudget.allow(Date.now())) {
+          // An unattended run owns the machine: bring the shell back instead of
+          // parking on a failure page nobody is watching. The budget stops a
+          // broken build from relaunching forever.
+          log.warn("unattended: relaunching the desktop shell after an unrecoverable failure");
+          app.relaunch();
+          app.exit(0);
+          return;
+        }
         if (!mainWindow.browserWindow) mainWindow.create(DEFAULT_GEOMETRY);
         void mainWindow.showFailure(renderFailurePage(failure, logsDir));
       },
@@ -298,6 +315,13 @@ function bootstrap(dataHome: string): void {
     if (process.platform === "darwin") {
       const dockIcon = firstExisting(icons.window);
       if (dockIcon && app.dock) app.dock.setIcon(dockIcon);
+    }
+    // Opt-in login item: a policy file decides, so the machine is never
+    // touched unless it was asked for.
+    try {
+      if (applyAutostart(app, dataHome)) log.info("autostart: desktop login item registered");
+    } catch (error) {
+      log.warn(`autostart: ${errorText(error)}`);
     }
     registerAppProtocol({
       protocol,
