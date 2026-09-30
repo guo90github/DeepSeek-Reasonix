@@ -111,6 +111,21 @@ func TestHeartbeatGoalDecideAnchorsReplacesAndHolds(t *testing.T) {
 	}
 }
 
+func TestHeartbeatUnattendedStepClearsGatesEvenWithoutAGoal(t *testing.T) {
+	engine := newHeartbeatEngine(nil)
+	stub := &heartbeatGoalCtrlStub{planMode: true, paused: true}
+	task := HeartbeatTask{ID: "t"}
+	if engine.unattendedGoalStepWith(&task, stub, true) {
+		t.Fatal("a task without a contract still submits its own prompt")
+	}
+	if stub.planMode || !stub.unpaused {
+		t.Fatalf("the switch is the gate, not the Goal: %+v", stub)
+	}
+	if stub.anchored != "" {
+		t.Fatalf("no contract means nothing to anchor, got %q", stub.anchored)
+	}
+}
+
 func TestHeartbeatGoalDecideResumesEveryRecoverableStop(t *testing.T) {
 	task := HeartbeatTask{Goal: "ship the unattended driver"}
 	for _, status := range []string{control.GoalStatusBlocked, control.GoalStatusStopped} {

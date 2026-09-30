@@ -466,7 +466,9 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 	if e.unattendedGoalStep(&t, ctrl) {
 		return t
 	}
-	if e.unattendedEnabled() && strings.TrimSpace(t.Goal) != "" && e.handoffUnattendedTask(&t, ctrl, scope, workspaceRoot, title) {
+	// Spent windows and the switch are independent of a Goal: any task gets a
+	// fresh session while unattended driving is on.
+	if e.unattendedEnabled() && e.handoffUnattendedTask(&t, ctrl, scope, workspaceRoot, title) {
 		return e.executeTaskOwned(t)
 	}
 
@@ -682,7 +684,17 @@ func (a *App) HeartbeatSaveConfig(update HeartbeatConfigUpdate) (HeartbeatConfig
 	if a.heartbeat == nil {
 		return HeartbeatConfigView{Tasks: []HeartbeatTask{}}, nil
 	}
-	return a.heartbeat.ReplaceConfig(update)
+	view, err := a.heartbeat.ReplaceConfig(update)
+	if err != nil {
+		return view, err
+	}
+	if update.Unattended != nil {
+		// The switch owns the OS entry too, so turning unattended on needs no
+		// second command. It takes effect on the next launch, so the entry is
+		// pre-written now; a refusal must never fail the switch itself.
+		_ = syncWatchdogWithUnattended(*update.Unattended)
+	}
+	return view, nil
 }
 
 // HeartbeatTriggerNow immediately executes the task with the given ID.

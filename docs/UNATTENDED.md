@@ -15,8 +15,16 @@ lives in `desktop/` (host, Electron shell, frontend); the kernel
 - **It applies on restart.** A running process snapshots it once in
   `HeartbeatEngine.Start()` (`e.unattended`); reading or writing the file never
   changes what the current process does.
-- Switch off: nothing changes — tasks with a `goal` behave like plain scheduled
-  prompts, and no unattended code runs.
+- Switch off: nothing changes — tasks behave like plain scheduled prompts, and no
+  unattended code runs.
+- With the switch on, unattended care does **not** depend on a `goal`: the contract
+  only says whether there is a Goal to steer. Gate clearing, the spent-window handoff
+  and the version switch apply to **every** task.
+- The switch also owns the **OS watchdog entry** (§10): turning it on registers the
+  watchdog, turning it off unregisters it and removes the desktop file. The entry is
+  written at once but, like the switch, protects the **next** launch — the marker
+  carries the launch-time value, so that is the run a crash would restore. A refused
+  registration is logged, never fails the switch write.
 
 ## 2. Task model: the `goal` contract
 
@@ -171,6 +179,12 @@ reasonix-desktop.exe --watchdog-enable   # write the policy and register at once
 reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desktop file
 ```
 
+- **Driver: the master switch owns this entry.** Turning the switch on registers the
+  watchdog and writes the desktop file; turning it off unregisters the task and removes
+  the file, so nobody has to remember a second command. The four commands above remain
+  for inspection and for a manual override, and every start realigns the entry with the
+  stored switch (a switch written by an older host, or a hand-edited policy, converges).
+  A host that is not a versioned install (a dev run) never touches the OS entry.
 - **One criterion**: a marker exists ∧ `unattended=true` ∧ its process is gone ∧ the
   crash is under 24 hours old → launch the active version's inner desktop binary. A
   clean exit removes the marker, so a deliberate quit is never undone.
@@ -197,8 +211,10 @@ reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desk
 - macOS uses a LaunchAgent **sweep** (RunAtLoad + StartInterval), not `KeepAlive`; an
   Electron main crash that exhausts the relaunch budget parks on the failure page
   (deliberate — never loop) and the next sweep brings it back.
-- The panel does not display the master switch's current value yet, and the watchdog
-  has a CLI plus bindings but no UI toggle.
+- The panel does not display the master switch's current value yet. The watchdog has no
+  toggle of its own: the master switch drives it (§10), and the CLI stays for inspection.
+  Neither the watchdog nor the panel shows why a registration was refused — that lands in
+  `<home>/desktop-watchdog.log` and the host log.
 - Neither full chain has been accepted on a real machine yet: neither kill the
   process abnormally → relaunch → the long task continues, nor build → switch
   versions → continue (both are unit-verified only).

@@ -185,18 +185,18 @@ func TestPortableUpgradeRelaunchPathIsTheInnerDesktop(t *testing.T) {
 	}
 }
 
-func TestMaybeRelaunchForUpgradeIgnoresPlainTasksAndTheSwitchOff(t *testing.T) {
+func TestMaybeRelaunchForUpgradeNeedsOnlyTheSwitch(t *testing.T) {
 	engine := newHeartbeatEngine(nil)
 	if engine.maybeRelaunchForUpgrade(nil) {
-		t.Fatal("no task, no upgrade")
+		t.Fatal("no task, no version switch")
 	}
-	task := HeartbeatTask{ID: "t", Goal: ""}
-	if engine.maybeRelaunchForUpgrade(&task) {
-		t.Fatal("a plain scheduled task must never restart the app")
+	// The switch is the gate, not the Goal: a plain scheduled task may carry it
+	// too — this host simply has no versioned install to switch.
+	if engine.maybeRelaunchForUpgrade(&HeartbeatTask{ID: "t"}) {
+		t.Fatal("there is no versioned install to switch in this test")
 	}
-	unattended := HeartbeatTask{ID: "t", Goal: "ship"}
 	engine.unattended = false
-	if engine.maybeRelaunchForUpgrade(&unattended) {
+	if engine.maybeRelaunchForUpgrade(&HeartbeatTask{ID: "t", Goal: "ship"}) {
 		t.Fatal("the master switch is off: nothing restarts the app")
 	}
 }

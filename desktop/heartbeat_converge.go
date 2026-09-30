@@ -80,23 +80,28 @@ func (e *HeartbeatEngine) unattendedEnabled() bool {
 }
 
 // unattendedGoalStep applies one driver step for this tick and reports whether
-// the caller must stop before submitting; it is a no-op without a Goal, with
-// the switch off, or on a controller that cannot hold a Goal.
+// the caller must stop before submitting; it is a no-op with the switch off or
+// on a controller that cannot hold a Goal.
 func (e *HeartbeatEngine) unattendedGoalStep(t *HeartbeatTask, ctrl heartbeatRuntimeStatus) bool {
 	return e.unattendedGoalStepWith(t, ctrl, e.unattendedEnabled())
 }
 
 // unattendedGoalStepWith is the switch-injected form, so the decision can be
-// tested without a config file on disk.
+// tested without a config file on disk. The switch is the gate, never the Goal: a
+// task without a contract still gets the unattended care — it just has no Goal to
+// steer.
 func (e *HeartbeatEngine) unattendedGoalStepWith(t *HeartbeatTask, ctrl heartbeatRuntimeStatus, on bool) bool {
-	if t == nil || !on || strings.TrimSpace(t.Goal) == "" {
+	if t == nil || !on {
+		return false
+	}
+	e.clearUnattendedGates(t, ctrl)
+	if strings.TrimSpace(t.Goal) == "" {
 		return false
 	}
 	goals, ok := ctrl.(heartbeatGoalRuntime)
 	if !ok {
 		return false
 	}
-	e.clearUnattendedGates(t, ctrl)
 	action, reason := heartbeatGoalDecide(*t, goals.Goal(), goals.GoalStatus())
 	switch action {
 	case heartbeatGoalAnchor:

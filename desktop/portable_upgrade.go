@@ -299,10 +299,10 @@ func markPortableUpgradeHealthy() bool {
 }
 
 // maybeRelaunchForUpgrade switches versions and restarts into the new one. It
-// runs at a turn boundary, so the interrupted work is the one the next process
-// picks up from its Goal.
+// runs at a turn boundary of any task while unattended driving is on, so the
+// interrupted work is the one the next process picks up from its Goal.
 func (e *HeartbeatEngine) maybeRelaunchForUpgrade(t *HeartbeatTask) bool {
-	if t == nil || !e.unattendedEnabled() || strings.TrimSpace(t.Goal) == "" {
+	if t == nil || !e.unattendedEnabled() {
 		return false
 	}
 	root := portableInstallRoot()
