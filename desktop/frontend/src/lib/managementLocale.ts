@@ -49,6 +49,8 @@ const messages = {
   recapTopicGroup: ["同话题 {n} 条", "同話題 {n} 條", "{n} notes share this topic"],
   recapTopicGroupHint: ["这些条目同属一个话题：这行按钮一次作用于勾中的条目，逐条按钮仍在各自条目上。", "這些條目同屬一個話題：這行按鈕一次作用於勾中的條目，逐條按鈕仍在各自條目上。", "These notes share a topic: this row acts on the notes you check below, and each note keeps its own buttons."],
   recapTopicGroupSessions: ["同话题 {n} 个会话", "同話題 {n} 個會話", "{n} sessions share this topic"],
+  recapStaleTitle: ["{n} 个会话的回顾按旧版规则生成", "{n} 個會話的回顧按舊版規則生成", "{n} recaps were produced by an older rule set"],
+  recapStaleHint: ["已生成的条目是当时的快照：重新生成才会用当前规则重算，逐条与批量都行。", "已生成的條目是當時的快照：重新生成才會用當前規則重算，逐條與批量都行。", "A stored note is a snapshot: regenerating is what applies the current rules — one at a time or in bulk."],
   recapGenerate: ["生成回顾", "產生回顧", "Generate recap"],
   recapRetryGenerate: ["重试生成", "重試產生", "Retry generation"],
   recapQueued: ["已排队生成，稍后刷新查看", "已排隊產生，稍後重新整理查看", "Queued — refresh in a moment to see it"],

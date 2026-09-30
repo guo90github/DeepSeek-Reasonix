@@ -212,6 +212,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // the failure list, so the newest few are offered here: yielding nothing must
   // still leave it one click from a retry. Older ones stay a bulk job
   // (`reasonix catalogs reindex session-recap`).
+  // A stored note is a snapshot: these were produced by an older rule set than the
+  // one running now, and only regenerating rewrites them.
+  const staleRecaps = useMemo(() => recaps.filter((recap) => recap.stale === true), [recaps]);
   const known = useMemo(() => new Set(recaps.map((recap) => recap.path)), [recaps]);
   const ungenerated = useMemo(() => sessions
     .filter((meta) => !known.has(meta.path))
@@ -329,6 +332,35 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
           {groupByTopic(ungenerated.map((meta) => ({
             id: meta.path, kind: "session", body: titleOf({ path: meta.path } as SessionRecap),
+          }))).map((group) => (
+            <li key={group.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              {group.entries.length > 1 && (
+                <span style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span style={{ ...labelStyle, fontSize: 12 }} title={m("recapTopicGroupHint")}>{m("recapTopicGroupSessions", { n: group.entries.length })}</span>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => void askGenerateAll(group.entries.map((item) => item.id))}>{m("recapGenerate")}</button>
+                </span>
+              )}
+              {group.entries.map((item) => (
+                <span key={item.id} style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+                  <span>{item.body}</span>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => void askGenerate(item.id)}>{m("recapGenerate")}</button>
+                  {queued.includes(item.id) && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapQueued")}</span>}
+                </span>
+              ))}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
+    {!loading && staleRecaps.length > 0 && (
+      <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
+        <strong>{m("recapStaleTitle", { n: staleRecaps.length })}</strong>
+        <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapStaleHint")}</span>
+        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
+          {groupByTopic(staleRecaps.map((recap) => ({
+            id: recap.path, kind: "session", body: titleOf(recap),
           }))).map((group) => (
             <li key={group.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {group.entries.length > 1 && (

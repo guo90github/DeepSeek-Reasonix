@@ -31545,6 +31545,18 @@
           }
         },
         {
+          "name": "promptVersion",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "stale",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
           "name": "pending",
           "optional": true,
           "type": {

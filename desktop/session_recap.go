@@ -81,12 +81,17 @@ const (
 
 // SessionRecapView is one session's recap as the read-only page consumes it.
 type SessionRecapView struct {
-	Path        string               `json:"path"`
-	State       string               `json:"state"`
-	Entries     []SessionRecapEntry  `json:"entries"`
-	Model       string               `json:"model"`
-	GeneratedAt string               `json:"generatedAt"`
-	Pending     *SessionRecapPending `json:"pending,omitempty"`
+	Path        string              `json:"path"`
+	State       string              `json:"state"`
+	Entries     []SessionRecapEntry `json:"entries"`
+	Model       string              `json:"model"`
+	GeneratedAt string              `json:"generatedAt"`
+	// PromptVersion is the rule set this record was produced by, and Stale says it
+	// is older than the running one: a stored note is a snapshot, so the page has to
+	// be able to say which snapshot the reader is looking at.
+	PromptVersion string               `json:"promptVersion"`
+	Stale         bool                 `json:"stale"`
+	Pending       *SessionRecapPending `json:"pending,omitempty"`
 }
 
 // ListSessionRecaps returns the recaps the 会话回顾 page shows, newest first.
@@ -153,6 +158,9 @@ func (a *App) ListSessionRecaps() []SessionRecapView {
 			Entries:     entries,
 			Model:       rec.Model,
 			GeneratedAt: rec.GeneratedAt.Format(time.RFC3339),
+			// An empty version is a record written before the column existed.
+			PromptVersion: rec.PromptVersion,
+			Stale:         rec.PromptVersion != recap.PromptVersion,
 		}
 		if len(entries) == 0 {
 			view.State = RecapStateEmpty

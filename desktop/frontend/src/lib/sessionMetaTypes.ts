@@ -96,6 +96,9 @@ export interface RecapSkillDraft {
 // being retried, or a session that produced nothing — so the page never has to
 // guess between "no reusable notes" and "the attempt failed".
 export interface SessionRecap {
+  /** Which rule set produced this record; stale means it predates the running one. */
+  promptVersion?: string;
+  stale?: boolean;
   path: string;
   state?: "stored" | "pending" | "empty" | string;
   entries: SessionRecapEntry[];
