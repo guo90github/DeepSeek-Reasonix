@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -11,6 +12,26 @@ import (
 	"reasonix/internal/recap"
 	"reasonix/internal/secrets"
 )
+
+// deleteSessionRecap drops the recap of a session that no longer exists. Purging
+// is permanent, so the row describes nothing anyone can open again — and waiting
+// for the age-based prune would keep it for months. Best effort: a failure only
+// leaves a row the prune still collects.
+func (a *App) deleteSessionRecap(path string) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return
+	}
+	ctx := a.bootContext()
+	store, err := recap.Open(ctx, recap.Options{Path: recap.DefaultPath()})
+	if err != nil {
+		return
+	}
+	defer func() { _ = store.Close() }()
+	if err := store.Delete(ctx, path); err != nil {
+		slog.Warn("desktop: could not drop the recap of a purged session", "session", path, "err", err)
+	}
+}
 
 // SessionRecapRef is one place a note says it can be checked at, as the page shows
 // it. The host never invents these: they come from the note.

@@ -3490,6 +3490,10 @@ func (a *App) purgeTrashedSession(path string, requireRedundantRecovery bool) er
 	if err := purgeTrashedSessionFile(dir, path); err != nil {
 		return err
 	}
+	// The session is gone for good, so its recap has nothing left to describe and
+	// nothing will ever read it again: drop it now instead of waiting for the
+	// age-based prune.
+	a.deleteSessionRecap(path)
 	a.invalidatePromptHistoryCache()
 	return nil
 }
