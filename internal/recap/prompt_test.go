@@ -70,3 +70,32 @@ func TestLoadPromptOverrideFallsBackAndSaysWhy(t *testing.T) {
 		}
 	}
 }
+
+// The two button-driven prompts answer to the same override policy as the notes
+// prompt: their own file, their own tag, the same fallback with a reason.
+func TestButtonPromptsOverrideAndFallBackAlike(t *testing.T) {
+	dir := t.TempDir()
+	if got := LoadMemoryPromptOverride(dir); got.Text != memoryPrompt || got.Tag != MemoryPromptTag || got.Note != "" {
+		t.Fatalf("no memory override must mean the built-in rules: %+v", got)
+	}
+	if got := LoadSkillPromptOverride(dir); got.Text != skillPrompt || got.Tag != SkillPromptTag {
+		t.Fatalf("no skill override must mean the built-in rules: %+v", got)
+	}
+	if err := os.WriteFile(filepath.Join(dir, MemoryPromptFileName), []byte("Rewrite the note as one sentence.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	memory := LoadMemoryPromptOverride(dir)
+	if memory.Text != "Rewrite the note as one sentence." || !strings.HasPrefix(memory.Tag, MemoryPromptTag+"+") {
+		t.Fatalf("memory override = %+v, want the file's text under a fingerprinted tag", memory)
+	}
+	if skill := LoadSkillPromptOverride(dir); skill.Text != skillPrompt {
+		t.Fatal("one override must not leak into the other prompt")
+	}
+	if err := os.WriteFile(filepath.Join(dir, SkillPromptFileName), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	broken := LoadSkillPromptOverride(dir)
+	if broken.Text != skillPrompt || broken.Tag != SkillPromptTag || broken.Note == "" {
+		t.Fatalf("an empty file must fall back with a reason: %+v", broken)
+	}
+}
