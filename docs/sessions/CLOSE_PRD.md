@@ -192,6 +192,11 @@
 - **投影不常驻打开**：用一次开一次（否则缓存目录/临时目录会被锁住）。
 - **关闭必须先让结束事件带上路径（真机首验暴露并已修的缺陷）**：桌面关标签原本"先 `SetSessionPath("")` 再 `Close()`"（目的是让后续快照变 no-op），于是 `close()` 用 `c.SessionPath()` 拿到的**是空串**，而回顾通道丢弃空路径 ⇒ 桌面关标签**从不生成回顾**（投影里 0 记录 0 待补，页面自然空）。修法：`desktop/tabs.go` 两处普通关闭改为"先 `Close()` 再清空路径"（行数中性；返回前路径仍为空，`TestCloseTabNoResurrectionFromAutosave` 的两条断言不变）；丢弃类动作（`/clear`、新建会话轮转）改由 boot 侧按 reason=`clear` 拦下；删除/归档因文件被移走而取不到指纹、天然跳过。回归测试：`desktop/tabs_session_end_test.go` 断言关标签时结束事件带上该会话路径。
 - **剩余待接线**：`Busy` 让路判定（见上第 3 条）、关闭路径"同步 LLM 调用 = 0"的计数式断言（现由耗时上界代理）。
+- **恢复的会话也必须上报（真机第二次失败暴露并已修的缺陷）**：`close()` 的门是 `if fireSessionEnd && started`，而 `started = c.startedOnce` 只在本进程跑过回合（或 NewSession/ClearSession）后置位。于是"启动 App → 恢复会话 → 直接关标签"这条路上整块结束事件被跳过 ⇒ **一次模型调用都不会发生**（用量投影里从未出现 `session-recap`，这正是当时的定位仪表）。修法（`c2f6c67aa`）：把结束序列收进 `session_end_observer.go` 的 `closeSessionEndHooks(started)` —— 面向用户的 hooks 与 extension 事件仍按 `started` 把关（它们与 SessionStart 配对），**结束观察者只按 `fireSessionEnd` 把关**；controller.go 调用点由 5 行变 3 行，未放宽 repolint 棘轮。
+- **决策留痕（`recap_activity`，投影 schema v2）**：车道在每个决策点写一行 —— `submit` 的 `rejected: empty path | discarded | already queued | queue full`，`generate` 的 `stored` / `skip: <原因>` / `error: …`。判据：**没有任何 `generate` 行 = 关闭没上报结束事件**（分离或旧包缺陷）；`submit + rejected: …` = 上报了但被车道丢；`skip: …` = 跑过但跳过。两次真机失败缺的正是这条仪表（当时只能靠推理 + 用量投影反推）。
+- **提示词 `recap-v2`（由真实失真样例驱动）**：首条真机回顾把**被否掉的候选名**（「会话档案」）写成定案、把决策区间写成 `O1–O6`（正文里 `O1–O9` 连写出现 38 次）。v2 明确：名称/编号/路径/版本串**照抄原文**、**只写最终结论**（讨论中被否的候选不算决策）、转录被裁剪时**宁缺勿编**。提示词版本升级会让旧记录在下次关闭时自动刷新（指纹 + 版本双重幂等）。
+- **用量可见性缺口（未修，属面板职责）**：回顾调用的用途标签写在当日 `stats/<日期>.jsonl`（`"usage_source":"session-recap"`），但设置里的用量面板只按**入口点**（desktop/cli/serve/bot/remote）分组、不读用途标签 ⇒ 面板里看不到"回顾"这一项；且该条目报价为 `no_price`（回顾调用目前没有计价，面板即使展示也只会显示"暂无报价"）。
+- **分离运行时不会被自动回收（未修，产品语义待拍板）**：`detachedSessions` 里的运行时只有"关闭项目工作区"或"退出 App"会 `Close()`，没有"作业跑完即关闭"的路径 ⇒ 在活跃时被关掉的标签基本等不到回顾，只能靠存量补录（`catalogs reindex session-recap`）。可选修法：a) 工作跑完即关闭该运行时；b) 启动时对"已结束但无回顾"的会话自动补录。
 
 **验收（P1）**：构造"会话正在跑（有在飞回合）＋ 同时把另一会话移入回收站"的场景，断言会话侧的请求时序、延迟、用量均无变化（用 §8「体验干扰」的口径）；并对回顾通道加一条守卫测试，证明它不持有会话租约、不经过会话准入。
 

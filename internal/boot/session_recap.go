@@ -48,6 +48,7 @@ func bindRecapLane(ctx context.Context, cfg *config.Config, ctrl *control.Contro
 	// recap; only an ordinary close ends a session worth keeping.
 	ctrl.SetSessionEndObserver(func(reason, sessionPath string) {
 		if reason == "clear" {
+			runner.Trace("submit", sessionPath, "rejected: discarded")
 			return
 		}
 		runner.Submit(sessionPath)

@@ -35,7 +35,24 @@ var migrations = []projectiondb.Migration{{
 		_, err := tx.ExecContext(ctx, schemaV1)
 		return err
 	},
+}, {
+	Version: 2,
+	Apply: func(ctx context.Context, tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, schemaV2)
+		return err
+	},
 }}
+
+// schemaV2 adds the lane's decision log: it is what makes a missing recap
+// diagnosable from the projection alone.
+const schemaV2 = `
+CREATE TABLE IF NOT EXISTS recap_activity (
+    at INTEGER NOT NULL,
+    stage TEXT NOT NULL DEFAULT '',
+    path TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT ''
+);
+`
 
 // Options locates one process's recap projection. An empty path or an
 // unavailable cache directory falls back to memory, matching every other
@@ -155,6 +172,54 @@ func (s *Store) MarkPending(ctx context.Context, path, reason string, now time.T
 		ON CONFLICT(path) DO UPDATE SET attempts=attempts+1,last_error=excluded.last_error,updated_at=excluded.updated_at`,
 		path, reason, now.UnixNano())
 	return err
+}
+
+// ActivityEntry is one recorded lane decision.
+type ActivityEntry struct {
+	At     time.Time
+	Stage  string
+	Path   string
+	Detail string
+}
+
+// Trace records one lane decision. The log is what tells "the close never
+// reported" (no row at all) from "the lane refused it" or "it ran and skipped",
+// so a missing recap is diagnosable without a debugger attached.
+func (s *Store) Trace(ctx context.Context, stage, path, detail string, now time.Time) error {
+	if s == nil || s.handle == nil {
+		return nil
+	}
+	_, err := s.handle.DB.ExecContext(ctx,
+		`INSERT INTO recap_activity (at,stage,path,detail) VALUES (?,?,?,?)`,
+		now.UnixNano(), stage, path, detail)
+	return err
+}
+
+// Activity returns the most recent lane decisions, newest first.
+func (s *Store) Activity(ctx context.Context, limit int) ([]ActivityEntry, error) {
+	if s == nil || s.handle == nil {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.handle.DB.QueryContext(ctx,
+		`SELECT at,stage,path,detail FROM recap_activity ORDER BY at DESC, rowid DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := []ActivityEntry{}
+	for rows.Next() {
+		var entry ActivityEntry
+		var at int64
+		if err := rows.Scan(&at, &entry.Stage, &entry.Path, &entry.Detail); err != nil {
+			return nil, err
+		}
+		entry.At = time.Unix(0, at)
+		out = append(out, entry)
+	}
+	return out, rows.Err()
 }
 
 // List returns every stored recap, newest first.

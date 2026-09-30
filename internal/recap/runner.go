@@ -48,7 +48,14 @@ func NewRunner(generator *Generator) *Runner {
 func (r *Runner) Submit(sessionPath string) bool {
 	r.mu.Lock()
 	if r.closed || sessionPath == "" || r.queued[sessionPath] {
+		detail := "rejected: lane closed"
+		if sessionPath == "" {
+			detail = "rejected: empty path"
+		} else if r.queued[sessionPath] {
+			detail = "rejected: already queued"
+		}
 		r.mu.Unlock()
+		r.Trace("submit", sessionPath, detail)
 		return false
 	}
 	r.queued[sessionPath] = true
@@ -62,8 +69,14 @@ func (r *Runner) Submit(sessionPath string) bool {
 		// Closing many tabs at once must not lose a session silently: the pending
 		// marker is what a later sweep or backfill looks for.
 		r.generator.markPending(context.Background(), sessionPath, "queue full")
+		r.Trace("submit", sessionPath, "rejected: queue full")
 		return false
 	}
+}
+
+// Trace records one lane decision made outside the worker.
+func (r *Runner) Trace(stage, path, detail string) {
+	r.generator.trace(context.Background(), nil, stage, path, detail)
 }
 
 // Close stops accepting work and waits for the lane to drain.

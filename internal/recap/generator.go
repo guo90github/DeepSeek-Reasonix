@@ -27,6 +27,15 @@ Goal: what the session set out to do, one sentence
 Actions: the key steps taken, in order, at most two sentences
 Conclusion: what was achieved or learned, and how it was verified
 Follow-ups: what is still unfinished, or "none"
+
+Report the session's final state, not what it merely discussed:
+- Names, identifiers, file paths, decision numbers, version strings and field
+  values are copied verbatim from the transcript. Never paraphrase, translate,
+  shorten or round them (a range stays a range: "O1-O9" is not "O1-O6").
+- An option that was raised and rejected is not a decision. Report what the
+  session settled on; if the transcript does not show a settled answer, leave
+  that detail out instead of guessing.
+- The transcript may be trimmed, so never invent detail to fill a gap.
 Never include secrets, credentials, hostnames, or internal addresses.`
 
 // ModelResolver returns the provider used for one recap: the model the session
@@ -108,6 +117,26 @@ type Result struct {
 // unchanged fingerprint with the current prompt version is left alone.
 func (g *Generator) Generate(ctx context.Context, sessionPath string) (Result, error) {
 	path := strings.TrimSpace(sessionPath)
+	result, err := g.generate(ctx, path)
+	g.trace(ctx, nil, "generate", path, describeResult(result, err))
+	return result, err
+}
+
+// describeResult renders one attempt's outcome for the decision log.
+func describeResult(result Result, err error) string {
+	switch {
+	case err != nil:
+		return "error: " + err.Error()
+	case result.Stored:
+		return "stored"
+	case result.Skipped:
+		return "skip: " + result.Reason
+	default:
+		return "no-op"
+	}
+}
+
+func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 	if !Admissible(path, g.opts.Removing) {
 		return Result{Skipped: true, Reason: "inadmissible"}, nil
 	}
@@ -207,6 +236,20 @@ func (g *Generator) markPending(ctx context.Context, path, reason string) {
 	}
 	defer release()
 	_ = store.MarkPending(ctx, path, reason, g.opts.Now())
+}
+
+// trace records one lane decision, reusing an open store when the caller has one
+// so the common path pays no second open.
+func (g *Generator) trace(ctx context.Context, store *Store, stage, path, detail string) {
+	if store == nil {
+		opened, release, err := g.storeFor(ctx)
+		if err != nil {
+			return
+		}
+		defer release()
+		store = opened
+	}
+	_ = store.Trace(ctx, stage, path, detail, g.opts.Now())
 }
 
 // errLaneBusy reports that a running session held the lane past its budget.
