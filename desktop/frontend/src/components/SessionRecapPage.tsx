@@ -5,6 +5,7 @@ import { useT } from "../lib/i18n";
 import { useManagementT } from "../lib/managementLocale";
 import { ManagementPageShell } from "./ManagementPageShell";
 import { groupByTopic } from "../lib/recapTopics";
+import { RecapRow } from "./RecapRow";
 
 type RecapSort = "newest" | "oldest" | "session";
 
@@ -425,70 +426,66 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
               // choice counts as untouched.
               const decision = entry.decision ?? "";
               const item = openItems.find((candidate) => candidate.id === entry.id);
-              return <div key={entry.id} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <p style={{ margin: 0, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
-                  <span style={{ ...labelStyle, fontSize: 12 }}>
-                    {key ? t(key) : entry.kind} · {entry.target === "display" ? m("recapSinkDisplay") : m("recapSinkMemory")}
-                  </span>
-                  <span>{entry.body}</span>
-                  {entry.evidence && <span style={{ ...labelStyle, fontSize: 12 }}>（{entry.evidence}）</span>}
-                  {entry.scope && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapScopeProposed", { level: entry.scope })}</span>}
-                  {entry.observedIn !== undefined && entry.observedIn.length > 0 && (
-                    <span style={{ ...labelStyle, fontSize: 12 }}>
-                      {m("recapObservedIn", { n: entry.observedIn.length, list: entry.observedIn.join("、") })}
-                    </span>
+              const actions = <>
+                {decision === "accept" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapAccepted")}</span>}
+                {decision === "reject" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapRejected")}</span>}
+                {reviewable && !grouped && decision === "" && <>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => void run(entry.id, "accept", async () => { await accept(entry.kind, entry.body, ""); })}>{m("recapAccept")}</button>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => setEditing({ id: entry.id, text: entry.body })}>{m("recapAcceptEdited")}</button>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => void run(entry.id, "reject", async () => { await reject(entry.kind, entry.body); })}>{m("recapReject")}</button>
+                </>}
+                {reviewable && !grouped && decision !== "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  onClick={() => void run(entry.id, "", async () => { await undo(entry.kind, entry.body); })}>{m("recapUndo")}</button>}
+                {reviewable && grouped && <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  onClick={() => setEditing({ id: entry.id, text: entry.body })}>{m("recapAcceptEdited")}</button>}
+                {meta !== undefined && entry.kind === "handoff" && (item === undefined
+                  ? <button className="btn btn--small" type="button" disabled={busy !== ""}
+                      onClick={() => void keepHandoff(recap.path, entry)}>{m("recapKeepOpen")}</button>
+                  : <span style={{ ...labelStyle, fontSize: 12 }}>{item.closed ? m("recapOpenHandled") : m("recapOpenKept")}</span>)}
+                {/* Only procedures become playbooks; the host refuses the rest, so
+                    the button is offered only where it can do something. */}
+                {reviewable && (entry.kind === "root-cause" || entry.kind === "refuted") && <>
+                  <button className="btn btn--small" type="button" disabled={busy !== ""}
+                    onClick={() => void makeDraft(entry)}>{m("recapDraftSkill")}</button>
+                  {drafted[entry.id] !== undefined && (
+                    <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapSkillDrafted", { path: drafted[entry.id] })}</span>
                   )}
-                  {decision === "accept" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapAccepted")}</span>}
-                  {decision === "reject" && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapRejected")}</span>}
-                  {reviewable && !grouped && <span style={{ display: "flex", gap: 6 }}>
-                    {decision === "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
-                      onClick={() => void run(entry.id, "accept", async () => { await accept(entry.kind, entry.body, ""); })}>{m("recapAccept")}</button>}
-                    {decision === "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
-                      onClick={() => setEditing({ id: entry.id, text: entry.body })}>{m("recapAcceptEdited")}</button>}
-                    {decision === "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
-                      onClick={() => void run(entry.id, "reject", async () => { await reject(entry.kind, entry.body); })}>{m("recapReject")}</button>}
-                    {decision !== "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
-                      onClick={() => void run(entry.id, "", async () => { await undo(entry.kind, entry.body); })}>{m("recapUndo")}</button>}
-                  </span>}
-                  {reviewable && grouped && <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <input type="checkbox" aria-label={m("recapAccept")} checked={selected[entry.id] ?? true}
-                      onChange={(event) => setSelected((current) => ({ ...current, [entry.id]: event.target.checked }))} />
-                    <button className="btn btn--small" type="button" disabled={busy !== ""}
-                      onClick={() => setEditing({ id: entry.id, text: entry.body })}>{m("recapAcceptEdited")}</button>
-                  </span>}
-                  {meta !== undefined && entry.kind === "handoff" && <span style={{ display: "flex", gap: 6 }}>
-                    {item === undefined
-                      ? <button className="btn btn--small" type="button" disabled={busy !== ""}
-                          onClick={() => void keepHandoff(recap.path, entry)}>{m("recapKeepOpen")}</button>
-                      : <span style={{ ...labelStyle, fontSize: 12 }}>{item.closed ? m("recapOpenHandled") : m("recapOpenKept")}</span>}
-                  </span>}
-                  {/* Only procedures become playbooks; the host refuses the rest, so
-                      the button is offered only where it can do something. */}
-                  {reviewable && (entry.kind === "root-cause" || entry.kind === "refuted") && (
-                    <span style={{ display: "flex", gap: 6 }}>
-                      <button className="btn btn--small" type="button" disabled={busy !== ""}
-                        onClick={() => void makeDraft(entry)}>{m("recapDraftSkill")}</button>
-                      {drafted[entry.id] !== undefined && (
-                        <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapSkillDrafted", { path: drafted[entry.id] })}</span>
-                      )}
-                    </span>)}
-                </p>
-                {entry.refs !== undefined && entry.refs.length > 0 && (
-                  <p style={{ margin: 0, ...labelStyle, fontSize: 12 }}>
-                    {entry.refs.map((ref) => `${ref.kind} ${ref.value}${ref.detail ? ` ${ref.detail}` : ""}`).join(" · ")}
-                  </p>
+                </>}
+              </>;
+              const detail = <>
+                {entry.evidence && <span style={{ ...labelStyle, fontSize: 12 }}>（{entry.evidence}）</span>}
+                {entry.scope && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapScopeProposed", { level: entry.scope })}</span>}
+                {entry.observedIn !== undefined && entry.observedIn.length > 0 && (
+                  <span style={{ ...labelStyle, fontSize: 12 }}>
+                    {m("recapObservedIn", { n: entry.observedIn.length, list: entry.observedIn.join("、") })}
+                  </span>
                 )}
-                {editing?.id === entry.id && <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {entry.refs !== undefined && entry.refs.length > 0 && (
+                  <span style={{ ...labelStyle, fontSize: 12 }}>
+                    {entry.refs.map((ref) => `${ref.kind} ${ref.value}${ref.detail ? ` ${ref.detail}` : ""}`).join(" · ")}
+                  </span>
+                )}
+              </>;
+              return <RecapRow key={entry.id}
+                leading={reviewable && grouped ? <input type="checkbox" aria-label={m("recapAccept")} checked={selected[entry.id] ?? true}
+                  onChange={(event) => setSelected((current) => ({ ...current, [entry.id]: event.target.checked }))} /> : undefined}
+                badge={`${key ? t(key) : entry.kind} · ${entry.target === "display" ? m("recapSinkDisplay") : m("recapSinkMemory")}`}
+                text={entry.body}
+                actions={actions}
+                detail={detail}
+                editor={editing?.id === entry.id ? <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                   <textarea value={editing.text} rows={3} style={{ width: "100%" }}
                     onChange={(event) => setEditing({ id: entry.id, text: event.target.value })} />
                   <span style={{ display: "flex", gap: 6 }}>
                     <button className="btn btn--small" type="button" disabled={busy !== "" || editing.text.trim() === ""}
-                      onClick={() => { const text = editing.text; setEditing(null); void run(entry.id, "accept", async () => { await accept(entry.kind, entry.body, text); }); }}>
+                      onClick={() => { const next = editing.text; setEditing(null); void run(entry.id, "accept", async () => { await accept(entry.kind, entry.body, next); }); }}>
                       {m("recapSaveAccept")}</button>
                     <button className="btn btn--small" type="button" onClick={() => setEditing(null)}>{m("cancel")}</button>
                   </span>
-                </div>}
-              </div>;
+                </div> : undefined} />;
             })}
             </div>;
             })}

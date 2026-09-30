@@ -159,15 +159,15 @@ okOrder([newest, middle, unlisted, early], "the newest recap comes first by defa
 
 // The notes are what the page now shows instead of four element paragraphs, and
 // each reviewable note carries its own actions.
-const notesOf = (card: Element) => [...card.querySelectorAll("p")];
+const notesOf = (card: Element) => [...card.querySelectorAll("[data-recap-row]")];
 const rowWith = (card: Element | undefined, text: string) =>
-  [...(card?.querySelectorAll("p") ?? [])].find((row) => row.textContent?.includes(text));
+  [...(card?.querySelectorAll("[data-recap-row]") ?? [])].find((row) => row.textContent?.includes(text));
 const buttonsOf = (row: Element | undefined) => [...(row?.querySelectorAll("button") ?? [])];
 ok(rootEl.textContent?.includes("Reached independently in 2+ projects") === true
   && rootEl.textContent?.includes("2 projects: alpha、beta") === true,
   "the cross-project report is named with the projects that reached it");
-ok(cards().every((card) => notesOf(card).length === 3),
-  "each recap renders its two notes plus the pointers line");
+ok(cards().every((card) => notesOf(card).length === 2),
+  "each recap renders its two notes as rows");
 ok(cards().every((card) => card.textContent?.includes("internal/parser.go") === true),
   "a note shows the evidence it cites");
 ok(cards().every((card) => card.textContent?.includes("path internal/parser.go L40") === true),
@@ -352,7 +352,7 @@ await act(async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 const quiet = [...quietHost.querySelectorAll("li")];
-ok(quiet.length === 1 && notesOf(quiet[0]).length === 1 && quiet[0].textContent?.includes("的事实") !== true,
+ok(quiet.length === 1 && notesOf(quiet[0]).length === 0 && quiet[0].textContent?.includes("的事实") !== true,
   "a recap with no notes says so instead of listing notes");
 await act(async () => { quietRoot.unmount(); });
 
