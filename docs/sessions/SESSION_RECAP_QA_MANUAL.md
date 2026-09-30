@@ -139,6 +139,18 @@ RECAP_CALIB_DB=<临时目录>\v1.sqlite go test ./internal/recap/ -run ReportRec
 - 字段口径：`records/notes`（存了多少条）、`kinds=`（四类分布）、`avg body`（正文均长，**越短越密**）、**density = 带指针的条目占比**（没指针的条目等于让人相信一段话）、`decided`（采纳/弃——人真正动过的比例）、`held beyond their own project`（≥2 个项目独立得出的条目占比，唯一可核对的"通用级"依据）、`oldest`（最老一条多少天，配合 §2 的 180 天清理看）。
 - **2026-09-30 基线（`recap-v6` 时代的 13 条）**：`fact=8 handoff=2 refuted=1 root-cause=2`、均长 **82 字**、**带指针 0%**、采纳/弃 0、跨项目 0。指针 0% 是**预期的**——指针是 `recap-v7` 才要求模型给的，所以这个数字要等新记录生成后再看一次；它也是这条"信息密度"路线唯一的硬指标。
 
+**怎么量端到端效果（题库，**要花模型调用**）**
+
+脚本：`C:/Users/guosj/AppData/Local/Temp/recap-eval/run-eval.sh`（Git Bash 跑；8 组问答，每组 300 秒看门狗）。它的设计与踩过的坑：
+
+- **隔离**：`REASONIX_HOME` 指向被评测笔记所属的**项目桶**（本机为 `Temp/recap-probe`），投递判据因此天然匹配，不用造数据；新会话只落 Temp，不碰 `%APPDATA%\reasonix`。
+- **两组对照**：有沉淀 = `REASONIX_CACHE_HOME=<home>/cache`（投影副本）；无沉淀 = 空 cache home。两者只差投影这一个变量。
+- **反向对照**：同项目一道无关题，看背景块会不会乱冒（端到端误放行）。
+- **凭据（务必先看）**：provider 取 key 走的是 **`<REASONIX_HOME>/.env`**，**不是进程环境变量**——`export DEEPSEEK_API_KEY=…` 完全无效，报错 `missing env DEEPSEEK_API_KEY` 说的是"Reasonix 的 .env 里没有"。假 key 验证：`.env` 就位后错误变成 **HTTP 401**（不产生 token）。脚本会把本机 `.env` 复制进隔离 home；**跑完记得删掉那份副本**（临时目录里的明文 key）。
+- **非交互会话**只能用 `--permission-mode dontAsk`；`plan` 档被 CLI 直接拒（"requires an interactive session"）。
+- **判据**：① 先单独验**投递层**（本地、零模型，`MatchNotes`/`PriorNotes` 一跑就知道），别让"答案不对"掩盖"根本没送到"；② 答案层逐题对着笔记的**关键事实**读，不看"答得像不像"；③ **无沉淀组必须答不出来**，否则说明该事实模型本来就会，这题作废。
+- **2026-09-30 实测**：投递层 3/3 命中、对照 0；答案层 **1/3** 用上（`:only-child` 那题）；无沉淀组 3/3 答"证据不足"；总花费 **$0.052**，单次基础开销 ≈6.9k prompt token。结论与下一个旋钮见 PRD §4.3。
+
 
 **开关语义对照（该生成 / 不该生成）**
 
