@@ -17,6 +17,7 @@ import (
 	"reasonix/internal/planmode"
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
+	"reasonix/internal/skill"
 	"reasonix/internal/tool"
 )
 
@@ -330,10 +331,12 @@ func (a *Agent) applyDeliveryPolicyGates(turn *turnRuntime, plan *toolCallPlan) 
 	// Closed-loopturnskeepthebroaderclassifierbecauseamutationinvalidatestheverificationreceiptevenwhentheexitstatusishonest.
 	// Ordinary turnsblockonly shapes where a
 	if plan.evidenceName == "bash" {
+		command := bashCommandFromArgs(plan.evidenceArgs)
+		split := evidence.ShellContractSplitHint(command)
 		if evidence.BashToolCallMasksVerificationExit(plan.evidenceArgs) {
-			msg := evidence.ShellContractPreflightMessage("mask_exit")
+			msg := evidence.ShellContractPreflightMessage("mask_exit", command)
 			if closedLoop {
-				msg = "blocked: the trailing echo/printf of $? masks the verifier's exit status, so this command would look successful even when the check failed. Run the verifier or read-only extraction pipeline by itself and let its exit status be the tool result; for example: tail ... | head ... | node --check -"
+				msg = "blocked: the trailing echo/printf of $? masks the verifier's exit status, so this command would look successful even when the check failed. Run the verifier or read-only extraction pipeline by itself and let its exit status be the tool result; for example: tail ... | head ... | node --check -" + split
 			}
 			return toolOutcome{
 				output:    msg,
@@ -347,9 +350,9 @@ func (a *Agent) applyDeliveryPolicyGates(turn *turnRuntime, plan *toolCallPlan) 
 			mixed = evidence.BashToolCallMixesMutationAndVerification
 		}
 		if mixed(plan.evidenceArgs) {
-			msg := evidence.ShellContractPreflightMessage("mixed")
+			msg := evidence.ShellContractPreflightMessage("mixed", command)
 			if closedLoop {
-				msg = "blocked: this command mixes a verification check with a segment that may write state. Run the state-changing preparation separately while a todo is in_progress, then run a read-only verification command. For generated input, prefer a host-recognized read-only pipeline into the verifier (for example: tail ... | head ... | node --check -) instead of writing a temporary file."
+				msg = "blocked: this command mixes a verification check with a segment that may write state. Run the state-changing preparation separately while a todo is in_progress, then run a read-only verification command. For generated input, prefer a host-recognized read-only pipeline into the verifier (for example: tail ... | head ... | node --check -) instead of writing a temporary file." + split
 			}
 			return toolOutcome{
 				output:    msg,
@@ -359,7 +362,7 @@ func (a *Agent) applyDeliveryPolicyGates(turn *turnRuntime, plan *toolCallPlan) 
 			}, true
 		}
 		if evidence.BashToolCallUsesNonTerminalInlineInterpreter(plan.evidenceArgs) {
-			msg := evidence.ShellContractPreflightMessage("inline_nonterminal")
+			msg := evidence.ShellContractPreflightMessage("inline_nonterminal", command)
 			return toolOutcome{
 				output:    msg,
 				blocked:   true,
@@ -588,6 +591,7 @@ func (a *Agent) prepareToolExecution(ctx context.Context, plan *toolCallPlan) (t
 	if a.svc.memQueue != nil {
 		cctx = memory.WithQueue(cctx, a.svc.memQueue)
 	}
+	cctx = skill.WithUseRecorder(cctx, a.svc.skillRecorder)
 	callID := plan.call.ID
 	cctx = tool.WithProgress(cctx, func(chunk string) {
 		a.svc.sink.Emit(event.Event{Kind: event.ToolProgress, Tool: event.Tool{ID: callID, Output: chunk}})

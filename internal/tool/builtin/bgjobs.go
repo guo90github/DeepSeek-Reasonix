@@ -42,29 +42,43 @@ func (bashOutput) Schema() json.RawMessage {
 
 func (bashOutput) ReadOnly() bool { return true }
 
+// ExecutionDescriptor reports the shape of a collection before it runs. The
+// real state arrives with ExecuteDetailed; implementing both methods is what
+// makes the tool a DetailedExecutor, so that state reaches the agent at all.
+func (bashOutput) ExecutionDescriptor(json.RawMessage) *tool.ShellExecution {
+	return &tool.ShellExecution{Kind: "shell"}
+}
+
 func (bashOutput) ProviderVisible(ctx context.Context) bool {
 	_, ok := jobs.FromContext(ctx)
 	return ok
 }
 
 func (bashOutput) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	res, err := bashOutput{}.ExecuteDetailed(ctx, args)
+	return res.Output, err
+}
+
+// ExecuteDetailed reports the job's status alongside its output, so a
+// collection can be tied back to the command that was launched.
+func (bashOutput) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.DetailedResult, error) {
 	var p struct {
 		JobID  string `json:"job_id"`
 		Filter string `json:"filter"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
-		return "", fmt.Errorf("invalid args: %w", err)
+		return tool.DetailedResult{}, fmt.Errorf("invalid args: %w", err)
 	}
 	if p.JobID == "" {
-		return "", fmt.Errorf("job_id is required")
+		return tool.DetailedResult{}, fmt.Errorf("job_id is required")
 	}
 	jm, ok := jobs.FromContext(ctx)
 	if !ok {
-		return "", fmt.Errorf("background jobs are not available in this context")
+		return tool.DetailedResult{}, fmt.Errorf("background jobs are not available in this context")
 	}
 	text, status, found := jm.OutputForSession(jobs.SessionFromContext(ctx), p.JobID)
 	if !found {
-		return "", fmt.Errorf("no background job %q", p.JobID)
+		return tool.DetailedResult{}, fmt.Errorf("no background job %q", p.JobID)
 	}
 	if status != jobs.Running {
 		collectBackgroundEvidence(ctx, jm, p.JobID)
@@ -72,15 +86,36 @@ func (bashOutput) Execute(ctx context.Context, args json.RawMessage) (string, er
 	if p.Filter != "" && text != "" {
 		filtered, err := filterLines(text, p.Filter)
 		if err != nil {
-			return "", err
+			return tool.DetailedResult{}, err
 		}
 		text = filtered
 	}
 	header := fmt.Sprintf("[%s] %s", p.JobID, status)
-	if strings.TrimSpace(text) == "" {
-		return header + "\n(no new output)", nil
+	out := header + "\n(no new output)"
+	if strings.TrimSpace(text) != "" {
+		out = header + "\n" + text
 	}
-	return header + "\n" + text, nil
+	return tool.DetailedResult{Output: out, Execution: shellJobExecution(p.JobID, status)}, nil
+}
+
+// shellJobExecution reports what a collection knows about one job.
+func shellJobExecution(jobID string, status jobs.Status) *tool.ShellExecution {
+	return &tool.ShellExecution{Kind: "shell", JobID: jobID, State: shellJobState(status)}
+}
+
+// shellJobState maps a job's status onto the shell execution state the rest of
+// the host already reads.
+func shellJobState(status jobs.Status) string {
+	switch status {
+	case jobs.Running:
+		return tool.ShellStateRunning
+	case jobs.Done:
+		return tool.ShellStateCompleted
+	case jobs.Killed, jobs.Interrupted:
+		return tool.ShellStateCancelled
+	default:
+		return tool.ShellStateFailed
+	}
 }
 
 // filterLines keeps only the lines of s matching the regular expression re.
@@ -155,30 +190,44 @@ func (waitJob) Schema() json.RawMessage {
 
 func (waitJob) ReadOnly() bool { return true }
 
+// ExecutionDescriptor reports the shape of a collection before it runs; see
+// bashOutput.ExecutionDescriptor.
+func (waitJob) ExecutionDescriptor(json.RawMessage) *tool.ShellExecution {
+	return &tool.ShellExecution{Kind: "shell"}
+}
+
 func (waitJob) ProviderVisible(ctx context.Context) bool {
 	_, ok := jobs.FromContext(ctx)
 	return ok
 }
 
 func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error) {
+	res, err := waitJob{}.ExecuteDetailed(ctx, args)
+	return res.Output, err
+}
+
+// ExecuteDetailed names the job a collection belongs to, and its status, so a
+// finished check can be tied back to the command that produced it.
+func (waitJob) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.DetailedResult, error) {
 	var p struct {
 		JobIDs         []string `json:"job_ids"`
 		TimeoutSeconds int      `json:"timeout_seconds"`
 	}
 	if len(args) > 0 {
 		if err := json.Unmarshal(args, &p); err != nil {
-			return "", fmt.Errorf("invalid args: %w", err)
+			return tool.DetailedResult{}, fmt.Errorf("invalid args: %w", err)
 		}
 	}
 	jm, ok := jobs.FromContext(ctx)
 	if !ok {
-		return "", fmt.Errorf("background jobs are not available in this context")
+		return tool.DetailedResult{}, fmt.Errorf("background jobs are not available in this context")
 	}
 	results := jm.WaitForSession(ctx, jobs.SessionFromContext(ctx), p.JobIDs, p.TimeoutSeconds)
 	if len(results) == 0 {
-		return "No background jobs to wait for.", nil
+		return tool.DetailedResult{Output: "No background jobs to wait for."}, nil
 	}
 	var b strings.Builder
+	jobID, state := "", ""
 	for i, r := range results {
 		if r.Status != jobs.Running {
 			collectBackgroundEvidence(ctx, jm, r.ID)
@@ -194,8 +243,18 @@ func (waitJob) Execute(ctx context.Context, args json.RawMessage) (string, error
 		if strings.TrimSpace(r.Output) != "" {
 			b.WriteString("\n" + r.Output)
 		}
+		// One job is the common case; with several the result names none, and
+		// the receipt path falls back to no job rather than guessing.
+		if i == 0 {
+			jobID, state = r.ID, shellJobState(r.Status)
+		} else {
+			jobID, state = "", ""
+		}
 	}
-	return b.String(), nil
+	if jobID == "" {
+		return tool.DetailedResult{Output: b.String()}, nil
+	}
+	return tool.DetailedResult{Output: b.String(), Execution: &tool.ShellExecution{Kind: "shell", JobID: jobID, State: state}}, nil
 }
 
 func collectBackgroundEvidence(ctx context.Context, jm *jobs.Manager, jobID string) {

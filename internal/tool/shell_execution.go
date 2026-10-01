@@ -32,6 +32,9 @@ type ShellExecution struct {
 	MutationRisk string `json:"mutationRisk,omitempty"` // none | not_started | may_have_completed | may_be_partial | unknown
 	Verification string `json:"verification,omitempty"` // not_verification | not_run | passed | failed
 	DurationMs   int64  `json:"durationMs,omitempty"`
+	// JobID names the background job a call started or collected, so a later
+	// collection can be tied back to the command that was launched.
+	JobID string `json:"jobId,omitempty"`
 }
 
 // Shell execution state values.

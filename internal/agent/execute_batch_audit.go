@@ -96,6 +96,7 @@ func (a *Agent) recordToolExecutionAudit(readOnly, parallel bool, startedAt, dur
 func (a *Agent) storeBatchToolResult(ctx context.Context, call provider.ToolCall, o toolOutcome) {
 	if o.executed && o.errMsg == "" && !o.blocked {
 		a.retireWrittenSource(o.evidenceSource)
+		a.rereadAfterWrite(ctx, o.evidenceSource)
 	}
 	state := outcomeRunState(o)
 	msg := provider.Message{Role: provider.RoleTool, Content: o.output, Images: o.images, VisionSummary: o.visionSummary, ToolCallID: call.ID, Name: call.Name, ToolRunState: state, ToolExecution: toProviderToolExecution(o.execution)}

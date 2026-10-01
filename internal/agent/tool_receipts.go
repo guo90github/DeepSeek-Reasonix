@@ -85,6 +85,7 @@ func (a *Agent) recordToolReceipts(plan *toolCallPlan, result string, execution 
 		a.stampReceiptDeliveryScope(&rec)
 		rec.PolicyFloor = floorStamp
 		decorateExecutionReceipt(&rec, result, execution)
+		degradeBackgroundStartReceipt(&rec, execution)
 		rec.OperationID = operationID
 		rec = a.task.ledger.Record(rec)
 		a.commitToolReceipt(rec)

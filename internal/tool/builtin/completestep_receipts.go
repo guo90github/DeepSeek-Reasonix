@@ -203,7 +203,9 @@ func missingVerificationReceipt(ctx context.Context, ledger *evidence.Ledger, in
 		Retryable:         true,
 		RetryBudget:       1,
 	}
-	cause := fmt.Errorf("evidence %d: verification command %q has no matching successful receipt%s%s",
+	cause := fmt.Errorf("evidence %d: verification command %q has no matching successful receipt%s%s "+
+		"(if that check was moved to a background job, collect it with bash_output or wait first: "+
+		"a started job is not a completed check)",
 		index, command, availableReceiptHint(ledger), allCommandHints(ctx, ledger))
 	return &tool.OperationError{Diagnostic: d, Cause: cause}
 }

@@ -314,3 +314,15 @@ func TestVerificationCommandSummaryAcceptedPipeline(t *testing.T) {
 		}
 	}
 }
+
+// TestVerificationCommandSummaryNamesTheBackgroundTrap pins the async rule in
+// the same doctrine text: a job that was started is not a check that ran, and
+// the only way to make it one is to collect its exit status.
+func TestVerificationCommandSummaryNamesTheBackgroundTrap(t *testing.T) {
+	s := VerificationCommandSummary()
+	for _, want := range []string{"background job", "NOT a completed check", "bash_output", "wait"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("summary should name %q, got: %s", want, s)
+		}
+	}
+}

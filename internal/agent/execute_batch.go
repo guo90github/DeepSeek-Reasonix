@@ -155,6 +155,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			return
 		}
 		committed[i] = true
+		a.noteBackgroundShellOutcome(calls[i], &outcomes[i])
 		a.finalizeIncompleteReadOutcome(ctx, outcomes[i].incompleteRead, &outcomes[i])
 		a.finalizeReadDelivery(ctx, calls[i], &outcomes[i])
 		results[i] = outcomes[i].output
@@ -216,6 +217,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 		a.markDependencySkipped(calls, outcomes, results, durations, start, cause)
 		mutationBatchStop = true
 	}
+	asyncDeferred := false // set when a promoted shell call suspends the batch
 
 	for _, batch := range a.toolCallBatches(calls) {
 		if ctx.Err() != nil || batchErr != nil {
@@ -225,6 +227,10 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 		if recoveryBatchStop {
 			markRecoveryStopped(batch.start, recoveryStopReason)
 			break
+		}
+		if asyncDeferred {
+			a.settlePromotedBatch(calls, outcomes, results, durations, batch.start, batch.end, finalize)
+			continue
 		}
 		if batch.parallel && batch.end-batch.start > 1 {
 			// Parallel segments are read-only by construction; no mutation barrier.
@@ -296,8 +302,13 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 				finalize(i)
 				continue
 			}
+			promoted := a.promoteShellCallToBackground(calls, results, i)
 			run(slots, i)
 			finalize(i)
+			asyncDeferred = a.promotedShellDefers(calls, outcomes, results, durations, i, promoted)
+			if asyncDeferred {
+				break
+			}
 			if outcomes[i].recoveryStopTurn {
 				recoveryBatchStop = true
 				recoveryStopReason = outcomes[i].recoveryStopReason

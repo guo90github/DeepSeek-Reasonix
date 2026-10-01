@@ -366,12 +366,12 @@ func TestDeleteRangeShadowDoesNotReuseReadBeforeLatestWrite(t *testing.T) {
 	path := filepath.Join(dir, "sample.txt")
 	sink := &anchorAuditSink{}
 	reg := tool.NewRegistry()
-	for _, tl := range (builtin.Workspace{Dir: dir, WriteRoots: []string{dir}}).Tools("write_file", "read_file", "delete_range") {
+	for _, tl := range (builtin.Workspace{Dir: dir, WriteRoots: []string{dir}}).Tools("read_file", "edit_file", "delete_range") {
 		reg.Add(tl)
 	}
 	prov := &scriptedProvider{name: "p", turns: [][]provider.Chunk{
 		{toolCallChunk("r", "read_file", `{"path":"sample.txt"}`), {Type: provider.ChunkDone}},
-		{toolCallChunk("w", "write_file", `{"path":"sample.txt","content":"start\nchanged\nend\n"}`), {Type: provider.ChunkDone}},
+		{toolCallChunk("w", "edit_file", `{"path":"sample.txt","old_string":"middle","new_string":"changed"}`), {Type: provider.ChunkDone}},
 		{toolCallChunk("d", "delete_range", `{"path":"sample.txt","start_anchor":"start","end_anchor":"end"}`), {Type: provider.ChunkDone}},
 		{{Type: provider.ChunkText, Text: "done"}, {Type: provider.ChunkDone}},
 	}}
@@ -382,8 +382,8 @@ func TestDeleteRangeShadowDoesNotReuseReadBeforeLatestWrite(t *testing.T) {
 	if err := a.Run(withNoClosedLoop(context.Background()), "do not reuse stale read evidence"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if len(sink.audits) != 1 || sink.audits[0].Reason != anchorReasonNoEligibleRead || sink.audits[0].ShadowAllowed {
-		t.Fatalf("pre-write observation audit = %+v, want no eligible read", sink.audits)
+	if len(sink.audits) != 1 || sink.audits[0].Reason != anchorReasonPartialWindow || sink.audits[0].ShadowAllowed {
+		t.Fatalf("pre-write observation audit = %+v, want a partial window", sink.audits)
 	}
 	if got := lastToolResult(a.Session(), "delete_range"); !strings.Contains(got, "[fresh read required]") {
 		t.Fatalf("pre-write observation was reused: %q", got)

@@ -143,15 +143,23 @@ func TestWriteEvidenceRepeatedRepairDoesNotLeaveHistoricalBlocks(t *testing.T) {
 		}
 		edit := map[string]any{"path": path, "old_string": old, "new_string": next}
 		prefix := fmt.Sprintf("round-%d", i)
-		if out := evidenceRound(t, a, prefix+"-blocked", "edit_file", edit); !strings.Contains(out, "evidence required") {
-			t.Fatalf("expected missing current evidence: %s", out)
-		}
-		evidenceRound(t, a, prefix+"-read", "read_file", map[string]any{"path": path, "intent": "full"})
-		if out := evidenceRound(t, a, prefix+"-retry", "edit_file", edit); strings.Contains(out, "blocked:") || strings.Contains(out, "error:") {
-			t.Fatalf("retry failed: %s", out)
+		out := evidenceRound(t, a, prefix+"-edit", "edit_file", edit)
+		if i == 0 {
+			// Nothing has been read yet, so the first edit of the file is refused.
+			if !strings.Contains(out, "evidence required") {
+				t.Fatalf("expected missing current evidence: %s", out)
+			}
+			evidenceRound(t, a, prefix+"-read", "read_file", map[string]any{"path": path, "intent": "full"})
+			if out = evidenceRound(t, a, prefix+"-retry", "edit_file", edit); strings.Contains(out, "blocked:") || strings.Contains(out, "error:") {
+				t.Fatalf("retry failed: %s", out)
+			}
+		} else if strings.Contains(out, "blocked:") || strings.Contains(out, "error:") {
+			// Repairs 2 and 3 rewrite the line this turn's own write produced,
+			// so the host already holds that evidence and owes no re-read.
+			t.Fatalf("rewriting this turn's own line owed a read: %s", out)
 		}
 		if out := evidenceRound(t, a, prefix+"-bash", "bash", map[string]any{"command": "python unrelated.py"}); strings.Contains(out, "evidence required") {
-			t.Fatalf("successful retry left historical block: %s", out)
+			t.Fatalf("a successful repair left a historical block: %s", out)
 		}
 	}
 }

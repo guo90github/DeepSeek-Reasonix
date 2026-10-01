@@ -10,6 +10,30 @@ func sameWindow(a, b TextObservation) bool {
 		a.Token == b.Token && slices.Equal(a.LineHashes, b.LineHashes)
 }
 
+func TestWrittenLinesNamesOnlyTheLinesTheWriteProduced(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		spans []WriteLineSpan
+		want  [][2]int
+	}{
+		{"replacement", []WriteLineSpan{{FirstLine: 2, LastLine: 2, Delta: 0}}, [][2]int{{2, 2}}},
+		{"growth", []WriteLineSpan{{FirstLine: 2, LastLine: 2, Delta: 2}}, [][2]int{{2, 4}}},
+		{"shrink", []WriteLineSpan{{FirstLine: 2, LastLine: 4, Delta: -1}}, [][2]int{{2, 3}}},
+		{"pure deletion", []WriteLineSpan{{FirstLine: 2, LastLine: 2, Delta: -1}}, nil},
+		{"insertion", []WriteLineSpan{{FirstLine: 3, LastLine: 3, Delta: 1}}, [][2]int{{3, 4}}},
+		{"two hunks follow each other", []WriteLineSpan{
+			{FirstLine: 2, LastLine: 2, Delta: 1},
+			{FirstLine: 5, LastLine: 7, Delta: -1},
+		}, [][2]int{{2, 3}, {6, 7}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := WrittenLines(tc.spans); !slices.Equal(got, tc.want) {
+				t.Fatalf("WrittenLines = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func observedWindow(startLine int, hashes ...string) TextObservation {
 	return TextObservation{
 		Path:       "/w/a.go",

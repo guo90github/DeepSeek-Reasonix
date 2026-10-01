@@ -73,6 +73,23 @@ func anyInvalidates(spans []WriteLineSpan, line int) bool {
 	return false
 }
 
+// WrittenLines names the lines a write authored, 1-based and inclusive, in the
+// coordinates of the file it produced. That is exactly the content the model
+// can be said to know afterwards: it composed those lines itself. The rest of
+// the file was not written here, so sight of it is unchanged.
+func WrittenLines(spans []WriteLineSpan) [][2]int {
+	var out [][2]int
+	for _, s := range spans {
+		count := s.LastLine - s.FirstLine + 1 + s.Delta
+		if count <= 0 {
+			continue
+		}
+		start := s.FirstLine + shiftBefore(spans, s.FirstLine)
+		out = append(out, [2]int{start, start + count - 1})
+	}
+	return out
+}
+
 // RebaseObservations re-anchors path's model-visible windows through one
 // applied write. The surviving windows are stamped after it, so the write no
 // longer hides them and a later edit still needs no second read.

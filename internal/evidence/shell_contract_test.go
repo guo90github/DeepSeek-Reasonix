@@ -2,7 +2,10 @@ package evidence
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
+
+	"reasonix/internal/shellparse"
 )
 
 func TestBashToolCallUsesNonTerminalInlineInterpreter(t *testing.T) {
@@ -95,6 +98,53 @@ func TestOrdinaryModeAllowsShortCircuitBuildAndVerify(t *testing.T) {
 		}
 		if !BashToolCallMixesMutationAndVerification(args) {
 			t.Errorf("delivery mode should still classify %q as mixed", command)
+		}
+	}
+}
+
+// TestSplitHintProposalPassesTheSameContract closes the loop the refusal opens:
+// the calls it names are the model's own segments, and each one, on its own,
+// must clear every guard that blocked the compound command — otherwise the
+// "retry" it proposes would be blocked again.
+func TestSplitHintProposalPassesTheSameContract(t *testing.T) {
+	compound := `gofmt -w . ; go test ./internal/agent/`
+	for _, reason := range []string{"mixed", "mask_exit", "inline_nonterminal"} {
+		message := ShellContractPreflightMessage(reason, compound)
+		if !strings.Contains(message, "send each as its own call") {
+			t.Fatalf("%s: refusal does not name the calls: %q", reason, message)
+		}
+	}
+	segments, split, ok := shellparse.SplitTopLevel(compound)
+	if !ok || !split || len(segments) != 2 {
+		t.Fatalf("fixture: split=%v segments=%q", split, segments)
+	}
+	for _, segment := range segments {
+		args, _ := json.Marshal(map[string]string{"command": segment})
+		switch {
+		case BashToolCallMasksVerificationExit(args):
+			t.Errorf("proposed call %q would be refused as masked exit", segment)
+		case BashToolCallMixesMutationAndMaskableVerification(args):
+			t.Errorf("proposed call %q would be refused as mixed", segment)
+		case BashToolCallMixesMutationAndVerification(args):
+			t.Errorf("proposed call %q would be refused as mixed in delivery mode", segment)
+		case BashToolCallUsesNonTerminalInlineInterpreter(args):
+			t.Errorf("proposed call %q would be refused as a non-terminal inline interpreter", segment)
+		}
+	}
+}
+
+// TestSplitHintStaysEmptyWhenThereIsNothingToSplit keeps the refusal from
+// growing a proposal it cannot back: a single command, unparseable input, and a
+// chain too long to render all fall back to the plain recovery text.
+func TestSplitHintStaysEmptyWhenThereIsNothingToSplit(t *testing.T) {
+	for _, command := range []string{
+		`go test ./...`,
+		``,
+		`echo 'unclosed`,
+		`a && b ; c && d ; e`,
+	} {
+		if hint := ShellContractSplitHint(command); hint != "" {
+			t.Errorf("hint(%q) = %q, want none", command, hint)
 		}
 	}
 }

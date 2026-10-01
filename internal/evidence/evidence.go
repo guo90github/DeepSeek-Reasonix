@@ -1674,26 +1674,55 @@ func bashSegmentUsesOpaqueInlineInterpreter(segment string) bool {
 }
 
 // ShellContractPreflightMessage is the model-facing recovery text when a
-// deterministic shell contract blocks a call before launch.
-func ShellContractPreflightMessage(reason string) string {
+// deterministic shell contract blocks a call before launch. A command that
+// would pass as separate calls is named as exactly that: the model's own
+// top-level segments, in order, so the retry is a paste rather than a guess.
+func ShellContractPreflightMessage(reason string, command string) string {
+	var msg string
 	switch reason {
 	case "mixed":
-		return "blocked: this command runs a verification check after a state-changing segment, separated so the " +
+		msg = "blocked: this command runs a verification check after a state-changing segment, separated so the " +
 			"check's exit status would hide a failure in that earlier segment. " +
 			"Chain them with '&&' so a failed step stops the command and stays the result, " +
 			"or run the modification and the verification as separate calls."
 	case "mask_exit":
-		return "blocked: the trailing echo/printf of $? masks the verifier's exit status, so this command would look successful even when the check failed. " +
+		msg = "blocked: the trailing echo/printf of $? masks the verifier's exit status, so this command would look successful even when the check failed. " +
 			"Run the verifier by itself and let its exit status be the tool result."
 	case "inline_nonterminal":
-		return "blocked: an inline interpreter (python -c, node -e, …) is followed by a segment that can hide its failure. " +
+		msg = "blocked: an inline interpreter (python -c, node -e, …) is followed by a segment that can hide its failure. " +
 			"Chain with '&&' so the interpreter's exit status survives, run it as the final command, " +
 			"or use edit_file for file changes and put script source in a file."
 	default:
-		return "blocked: this shell command violates the host execution contract. " +
+		msg = "blocked: this shell command violates the host execution contract. " +
 			"Use edit_file for modifications and a separate shell call for verification."
 	}
+	return msg + ShellContractSplitHint(command)
 }
+
+// ShellContractSplitHint renders the calls that would pass this contract: the
+// command's own top-level segments, in order. It is empty for a single-segment
+// command, when parsing cannot prove a split, or when the rendering would be
+// longer than a tool result should carry.
+func ShellContractSplitHint(command string) string {
+	segments, split, ok := shellparse.SplitTopLevel(command)
+	if !ok || !split || len(segments) < 2 || len(segments) > maxSplitHintSegments {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "\nthis call does %d things; send each as its own call, in this order:", len(segments))
+	for i, segment := range segments {
+		if b.Len()+len(segment) > maxSplitHintBytes {
+			return ""
+		}
+		fmt.Fprintf(&b, "\n%d) %s", i+1, segment)
+	}
+	return b.String()
+}
+
+const (
+	maxSplitHintSegments = 4
+	maxSplitHintBytes    = 1024
+)
 
 func bashContainsVerificationSegment(command string) bool {
 	command = strings.TrimSpace(command)
@@ -1826,7 +1855,9 @@ func VerificationCommandSummary() string {
 		"Read-only inspection commands (grep/find/cat/wc/head/tail) are NOT verification; " +
 		"inline interpreters (node -e, python -c) are blocked in delivery mode. " +
 		"A read-only extraction pipeline ending in a recognized verifier " +
-		"(e.g. tail -n +1 file | node --check -) is accepted."
+		"(e.g. tail -n +1 file | node --check -) is accepted. " +
+		"A check that was moved to a background job is NOT a completed check: collect it with " +
+		"bash_output or wait and let its exit status be the tool result before you count it."
 }
 
 func bashSegmentIsVerification(fields []string) bool {
