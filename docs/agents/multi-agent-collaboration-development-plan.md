@@ -3,6 +3,12 @@
 > 分支：`feat/decentralized-agent-collab`（基于 `dev-2`）
 > 关联设计：`docs/agents/multi-agent-collaboration-design.md`（已审查修订，v1 冻结）
 > 计划性质：全周期开发任务计划书，覆盖从骨架到打包验收的完整生命周期。
+>
+> **状态（2026-10-01）：本计划的对象已变更，编号不复用。** 现行顺序与出口条件见 `docs/agents/AGENT_BUS.md` §11；执行清单见 `docs/agents/TODO.md`；
+> 「设计文档 v1 冻结」的表述作废（见 `docs/agents/multi-agent-collaboration-design.md` 顶部状态块）。
+> 本计划 §3–§6 的阶段/验收/回滚**写法**仍然有效，仍是参照物；但 P1–P4 的 `internal/collab` 落点已被取代：
+> 智能体单位是顶层会话，机读通道是 `internal/agentbus` 复用 `internal/sessioninbox` + `internal/agentd`。
+> 本计划从未执行：本仓没有 `internal/collab`，P0 之后的阶段一行未落地。
 
 ## 1. 目标与范围
 

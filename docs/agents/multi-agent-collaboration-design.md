@@ -2,6 +2,12 @@
 
 > 分支：`feat/decentralized-agent-collab`（基于 `dev-2`）
 > 设计原则：**去中心化、peer-to-peer、交流驱动规划**。本方案刻意不采用 `task`/`parallel_tasks`/`fleet` 的单父节点调度范式，而把它们定位为底层执行原语，在其上构建一层自主协作运行时。
+>
+> **状态（2026-10-01）：本文档部分被 `docs/agents/AGENT_BUS.md` 取代；§1.3 的「v1 单进程」不再成立。** 逐项对照见该稿 §10。
+> 仍然成立：§2.2 Facilitator 性质、§3.3 言语行为集合、§3.5 收敛优先级、§4.1 分层方向、§5.1 内核内实现。
+> 已被推翻：§1.3 / §6 缺陷 3（durable 投递与跨进程寻址已由 `internal/sessioninbox` + `internal/agentd` 落地）、
+> §2.1（peer 不再限定为 collab host session 的子 agent——顶层会话即智能体）。
+> 本稿从未实现：本仓没有 `internal/collab`。
 
 ## 1. System Overview
 
