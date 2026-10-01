@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -401,8 +402,10 @@ func TestNaturalCompletionAutoDispatchesDurableFIFO(t *testing.T) {
 	close(runner.releaseFirst)
 	waitForInboxTurnDone(t, c, done)
 	for _, want := range []string{"queued one", "queued two"} {
-		if got := waitForInboxDispatch(t, c, &inboxDispatchRunner{inputs: runner.inputs}); got != want {
-			t.Fatalf("FIFO input = %q, want %q", got, want)
+		// The model-visible input carries the host's transient head blocks (docs/70
+		// §2.3); the queued instruction is still what the turn ends with.
+		if got := waitForInboxDispatch(t, c, &inboxDispatchRunner{inputs: runner.inputs}); !strings.HasSuffix(got, want) {
+			t.Fatalf("FIFO input = %q, want it to end with %q", got, want)
 		}
 		waitForInboxTurnDone(t, c, done)
 	}

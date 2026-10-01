@@ -364,13 +364,14 @@ model = "x"
 		t.Fatalf("rounds = %d, want two turns", len(reqs))
 	}
 	first, last := reqs[0], reqs[len(reqs)-1]
-	body := ""
+	var lines []string
 	for _, message := range last.Messages {
 		if message.Role == provider.RoleSystem {
 			continue
 		}
-		body += message.Content + "\n"
+		lines = append(lines, message.Content)
 	}
+	body := strings.Join(lines, "\n") + "\n"
 	if !strings.Contains(body, "<turn-progress>") {
 		t.Fatalf("the second turn's body must carry the progress block: %s", body)
 	}

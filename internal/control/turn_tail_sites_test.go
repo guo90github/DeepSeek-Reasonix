@@ -51,7 +51,7 @@ func composeWithGoalBody(t *testing.T) string {
 func TestTurnTailInjectionsDeclareTheirClass(t *testing.T) {
 	body := composeWithGoalBody(t)
 	declared := map[string]int{}
-	for _, raw := range strings.Split(body, "\n") {
+	for raw := range strings.SplitSeq(body, "\n") {
 		line := strings.TrimSpace(raw)
 		if !strings.HasPrefix(line, "text =") {
 			continue

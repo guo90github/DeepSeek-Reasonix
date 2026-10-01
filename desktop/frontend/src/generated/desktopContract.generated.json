@@ -24019,6 +24019,13 @@
           }
         },
         {
+          "name": "lastAttemptAt",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
           "name": "newConversationEachRun",
           "optional": true,
           "type": {

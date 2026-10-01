@@ -677,7 +677,9 @@ func TestRunInboxTurnClaimsAndAcknowledgesFIFOItems(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := runner.inputs; len(got) != 2 || got[0] != "first" || got[1] != "second" {
+	// Each queued item is the tail of the turn's model-visible input; the host's
+	// transient head blocks ride in front of it (docs/70 §2.3).
+	if got := runner.inputs; len(got) != 2 || !strings.HasSuffix(got[0], "first") || !strings.HasSuffix(got[1], "second") {
 		t.Fatalf("durable FIFO inputs = %q", got)
 	}
 	if got := c.InboxSnapshot().Items; len(got) != 0 {
