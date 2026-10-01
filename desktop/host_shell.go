@@ -198,6 +198,7 @@ func (a *App) relaunchIntoVersion(exe string) error {
 	if a.hostMode() {
 		return a.hostShell.relaunchInto(exe)
 	}
+	noteDesktopRunExited(exitKindSelf, "relaunch into version", "relaunching")
 	return relaunchThroughLauncher()
 }
 
@@ -226,6 +227,9 @@ func (a *App) relaunchDesktop(relaunchBinary bool) {
 	}
 	a.shutdown(a.ctx)
 	if relaunchBinary {
+		// A relaunch this process performs itself is a self-exit, not a crash: the
+		// note says so before the new version takes over the role.
+		noteDesktopRunExited(exitKindSelf, "relaunch after update", "relaunching")
 		_ = relaunchThroughLauncher()
 	}
 	os.Exit(0)

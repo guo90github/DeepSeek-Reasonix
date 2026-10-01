@@ -47,6 +47,14 @@ func macSelfUpdateAllowed() bool {
 }
 
 func main() {
+	// The host's own log comes first: the modes below (watchdog, shell bootstrap)
+	// are exactly the ones whose decisions nobody can read afterwards otherwise.
+	installDesktopLogSink()
+	// The watcher runs before any shell too: it must report this process's exit
+	// even when the exit is a kill it never gets to record itself.
+	if handled, exitCode := maybeRunExitObserver(os.Args[1:]); handled {
+		os.Exit(exitCode)
+	}
 	// The detached macOS self-update child must run before any shell starts.
 	if handled, exitCode := maybeRunMacUpdateHandoff(os.Args[1:]); handled {
 		os.Exit(exitCode)

@@ -507,6 +507,14 @@ func (a *App) startup(ctx context.Context) {
 
 	a.heartbeat = newHeartbeatEngine(a)
 	a.heartbeat.Start()
+	// What the run before this one did has to be decided before this run's marker
+	// overwrites the evidence, and stated where the next reader can find it.
+	recordPreviousRunExit()
+	// The exit note is this run's own record of how it ends; the host-state marker
+	// next to it is what the watchdog and the restart policy read.
+	noteDesktopRunStarted()
+	// And the watcher is what can still say how it ended when the process cannot.
+	spawnDesktopExitObserver()
 	noteHostLaunch(a.heartbeat.unattendedEnabled())
 	// A switch this host made last run is healthy once this process is the
 	// version it asked for; until then the shell keeps the rollback target.

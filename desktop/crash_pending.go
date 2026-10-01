@@ -56,6 +56,10 @@ func (a *App) recoverToPending(site string) {
 		return
 	}
 	writePendingCrash(site, r, debug.Stack())
+	// The note is the only record a panic leaves for the next launch's
+	// attribution: crash-fatal output needs the runtime's own fatal exit, and
+	// this path re-panics, which unwinds without a shutdown.
+	noteDesktopRunExited(exitKindPanic, "recovered panic at "+site, "")
 	panic(r)
 }
 

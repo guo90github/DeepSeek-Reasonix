@@ -41,6 +41,10 @@ type hostStateRecord struct {
 	// UncleanStreak counts consecutive launches that found a dead predecessor
 	// inside hostCrashStreakWindow.
 	UncleanStreak int `json:"uncleanStreak,omitempty"`
+	// LastExit says how the run before this one ended, decided by the attribution
+	// and readable without telemetry: it is what a person asking "why did it
+	// vanish again" has to be able to look up.
+	LastExit *desktopExitVerdict `json:"lastExit,omitempty"`
 }
 
 // hostStateProcessAlive is a seam for tests: a marker whose PID is alive belongs
@@ -122,7 +126,7 @@ type hostStateSeen struct {
 }
 
 func newHostStateSeen(runID, appVersion string, unattended bool, streak int) *hostStateSeen {
-	return &hostStateSeen{rec: hostStateRecord{
+	record := hostStateRecord{
 		SchemaVersion: hostStateSchemaVersion,
 		PID:           os.Getpid(),
 		RunID:         runID,
@@ -131,7 +135,13 @@ func newHostStateSeen(runID, appVersion string, unattended bool, streak int) *ho
 		Unattended:    unattended,
 		StartedAt:     time.Now().UTC().Format(time.RFC3339Nano),
 		UncleanStreak: streak,
-	}}
+	}
+	if previousRunExit != nil {
+		verdict := *previousRunExit
+		verdict.UncleanStreak = streak
+		record.LastExit = &verdict
+	}
+	return &hostStateSeen{rec: record}
 }
 
 func (s *hostStateSeen) note(phase string, unattended bool) error {
@@ -200,7 +210,7 @@ func noteHostLaunch(unattended bool) {
 		slog.Warn("desktop: previous host run did not shut down cleanly",
 			"pid", before.PID, "uncleanStreak", before.UncleanStreak)
 	}
-	seen := newHostStateSeen(newDesktopLifecycleRunID(), version, unattended, before.UncleanStreak)
+	seen := newHostStateSeen(desktopRunID, version, unattended, before.UncleanStreak)
 	if err := seen.note("running", unattended); err != nil {
 		slog.Warn("desktop: write host-state marker", "err", err)
 	}
