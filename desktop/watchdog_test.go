@@ -239,6 +239,26 @@ func watchdogTestHarness(t *testing.T) (*watchdogRunnerCalls, string) {
 	return calls, home
 }
 
+// The switch on the UI and the CLI must report the same binary the script runs,
+// or the two silently disagree about what the OS entry starts.
+func TestWatchdogStatusEntryPointIsWhatTheScriptRuns(t *testing.T) {
+	_, _ = watchdogTestHarness(t)
+	if err := writeWatchdogScript(); err != nil {
+		t.Fatalf("write the watchdog script: %v", err)
+	}
+	body, err := os.ReadFile(watchdogScriptPath())
+	if err != nil {
+		t.Fatalf("read the watchdog script: %v", err)
+	}
+	entry := watchdogEntryPoint()
+	if filepath.Base(entry) != installlayout.LauncherBinaryName() {
+		t.Fatalf("the entry point must be the install root launcher, got %q", entry)
+	}
+	if !strings.Contains(string(body), entry) {
+		t.Fatalf("the script does not run the reported entry point:\nscript=%q\nentry=%q", body, entry)
+	}
+}
+
 func TestWatchdogFollowsTheMasterSwitchBothWays(t *testing.T) {
 	if !watchdogSupportedPlatform() {
 		t.Skip("this platform has no OS entry to register")

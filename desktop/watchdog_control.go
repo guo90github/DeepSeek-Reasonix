@@ -80,14 +80,15 @@ func writeWatchdogPolicy(policy watchdogPolicy) error {
 	return fileutil.AtomicWriteFile(path, append(body, '\n'), 0o600)
 }
 
-// watchdogEntryPoint is the binary the scheduler runs: the active version's own
-// desktop executable, which is its only launch entry.
+// watchdogEntryPoint is the binary the scheduler actually runs: the install
+// root's stable launcher, which resolves the active version on every run. The
+// script writes this same path, so what a person reads is what runs.
 func watchdogEntryPoint() string {
 	root := portableInstallRoot()
 	if root == "" {
 		return ""
 	}
-	path, err := installlayout.ActiveDesktopPath(root)
+	path, err := installlayout.StableRelaunchPath(root)
 	if err != nil {
 		return ""
 	}
