@@ -161,10 +161,46 @@ func comparePortableVersions(a, b string) int {
 	if bp == "" {
 		return -1
 	}
-	if ap < bp {
-		return -1
+	return comparePortablePrerelease(ap, bp)
+}
+
+// comparePortablePrerelease orders pre-release tails segment by segment: a
+// numeric segment compares as a number ("dev.9" < "dev.10"), an alphanumeric one
+// lexically, and a numeric segment ranks below an alphanumeric one.
+func comparePortablePrerelease(a, b string) int {
+	as := strings.Split(a, ".")
+	bs := strings.Split(b, ".")
+	for i := 0; i < len(as) || i < len(bs); i++ {
+		if i >= len(as) {
+			return -1
+		}
+		if i >= len(bs) {
+			return 1
+		}
+		av, aerr := strconv.Atoi(as[i])
+		bv, berr := strconv.Atoi(bs[i])
+		switch {
+		case aerr == nil && berr == nil:
+			if av != bv {
+				if av < bv {
+					return -1
+				}
+				return 1
+			}
+		case aerr == nil:
+			return -1
+		case berr == nil:
+			return 1
+		default:
+			if as[i] != bs[i] {
+				if as[i] < bs[i] {
+					return -1
+				}
+				return 1
+			}
+		}
 	}
-	return 1
+	return 0
 }
 
 func splitPortableVersion(version string) ([]int, string) {
