@@ -435,15 +435,15 @@ ok(
   "the bar's rows drag the window while every control inside them stays clickable",
 );
 
-// A maximised frameless window cannot be moved by its caption on Windows, so
-// the layout emits the flag and that window drops the bar's native drag region;
-// useFramelessBarDrag then moves the window through the shell instead.
-const chromeDragBuilderSource = readFileSync(resolve(testDir, "../app-shell/chromeRegionBuilders.ts"), "utf8");
+// Windows does not hit-test the bar's native drag region reliably, so the whole
+// bar drops the region there and useFramelessBarDrag moves the window through
+// the shell instead.
 ok(
-  /input\.mainWindowMaximised \? "app--maximised" : ""/.test(chromeDragBuilderSource) &&
-    finalDeclaration(".app--windows-frameless.app--maximised .topicbar", "--reasonix-draggable") === "no-drag" &&
-    finalDeclaration(':root[data-window-drag="js"] .topicbar', "--reasonix-draggable") === "no-drag",
-  "a maximised frameless window hands the bar's drag to the shell",
+  finalDeclaration(".app--windows-frameless .topicbar", "--reasonix-draggable") === "no-drag" &&
+    finalDeclaration(".app--windows-frameless .topicbar__tabs", "--reasonix-draggable") === "no-drag" &&
+    finalDeclaration(".app--windows-frameless .topicbar__actions", "--reasonix-draggable") === "no-drag" &&
+    finalDeclaration(".topicbar", "--reasonix-draggable") === "drag",
+  "Windows hands the bar's drag to the shell instead of the native region",
 );
 
 // The dock wraps TabContainer in .workbench-dock__panel. It must stretch that

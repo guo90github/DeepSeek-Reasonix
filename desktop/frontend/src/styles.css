@@ -23006,10 +23006,12 @@ body > .mermaid-diagram--fullscreen {
   --reasonix-draggable: no-drag;
 }
 
-/* A maximised frameless window gets no native caption drag on Windows and the
-   press never reaches the page either, so the shell drives the move instead. */
-.app--windows-frameless.app--maximised .topicbar,
-:root[data-window-drag="js"] .topicbar {
+/* Windows moves the bar from the renderer (useFramelessBarDrag), so the bar
+   keeps no native region there: the OS hit test would otherwise decide, by
+   scaled pixel coordinates, whether a press drags the window. */
+.app--windows-frameless .topicbar,
+.app--windows-frameless .topicbar__tabs,
+.app--windows-frameless .topicbar__actions {
   --reasonix-draggable: no-drag;
 }
 

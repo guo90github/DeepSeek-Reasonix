@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { app } from "../lib/bridge";
 import { desktopHost } from "../lib/desktopHost";
-import { setMainWindowMaximised, useWindowChromeStore } from "../store/windowChrome";
+import { setMainWindowMaximised } from "../store/windowChrome";
 
 // Module-owned sync state for the single AppRuntime host: the enabled gate
 // mirrors the active lifecycle, and the generation ticket discards
@@ -54,10 +54,10 @@ const BAR_DRAG_SURFACE = ".topicbar";
 const BAR_DRAG_CONTROL = "button, input, textarea, select, a, [role='button'], [role='tab'], .windows-window-controls";
 
 /**
- * Moves the window from the bar when the OS cannot. A maximised frameless window
- * gets no native caption drag on Windows and the press never reaches the page
- * either, so while maximised the bar carries no drag region (the
- * `.app--maximised` rule) and this hook drives the move through the shell.
+ * Moves the window from the bar itself rather than trusting the OS drag region:
+ * on Windows at a fractional display scale the region stops matching the pixels
+ * that start a move, leaving parts of the bar dead. The shell polls the cursor
+ * from the grab point and restores a maximised window under it first.
  */
 export function useFramelessBarDrag(enabled: boolean): void {
   useEffect(() => {
@@ -67,7 +67,6 @@ export function useFramelessBarDrag(enabled: boolean): void {
     const finish = () => {
       if (!moving) return;
       moving = false;
-      delete document.documentElement.dataset.windowDrag;
       void desktopHost().native.endWindowMove?.()?.catch(() => undefined);
       window.removeEventListener("mouseup", finish, true);
       window.removeEventListener("blur", finish, true);
@@ -75,12 +74,10 @@ export function useFramelessBarDrag(enabled: boolean): void {
 
     const start = (event: MouseEvent) => {
       if (event.button !== 0 || moving) return;
-      if (!useWindowChromeStore.getState().mainWindowMaximised) return;
       const target = event.target as HTMLElement | null;
       if (typeof target?.closest !== "function" || !target.closest(BAR_DRAG_SURFACE)) return;
       if (target.closest(BAR_DRAG_CONTROL)) return;
       moving = true;
-      document.documentElement.dataset.windowDrag = "js";
       void desktopHost().native.beginWindowMove?.(event.clientX, event.clientY)?.catch(() => undefined);
       window.addEventListener("mouseup", finish, true);
       window.addEventListener("blur", finish, true);

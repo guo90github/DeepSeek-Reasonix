@@ -243,10 +243,10 @@ is native-shell behavior, not per-engine rendering quirks:
 - **macOS** — inset/hidden title bar; the CSS marks the top bar as an OS drag
   region (the Electron build rewrites `--reasonix-draggable` to
   `-webkit-app-region`) and leaves room for the traffic lights.
-- **Windows** — frameless, with the bar as the window's drag region and the
-  caption buttons drawn into it. A maximised window takes no native caption
-  drag, so the bar drops its region there and `useFramelessBarDrag` moves the
-  window through the shell instead.
+- **Windows** — frameless, with the caption buttons drawn into the bar. The bar
+  carries no native drag region there: `useFramelessBarDrag` moves the window
+  from the press and the shell restores a maximised window under the cursor
+  first, so no OS hit test decides whether a press drags.
 - **Renderer recovery** — the shell reloads a crashed renderer
   (`render-process-gone`) and reports service state to the UI; a renderer that
   never reports ready is presented anyway with a diagnostics trail instead of

@@ -132,7 +132,6 @@ export function buildSessionStatusBannerProps(input: {
 export function buildAppShellClassNames(input: {
   platform: string;
   windowsFrameless: boolean;
-  mainWindowMaximised: boolean;
   browserPreview: boolean;
   workbench: boolean;
   creation: boolean;
@@ -152,7 +151,6 @@ export function buildAppShellClassNames(input: {
       "app",
       `app--${input.platform}`,
       input.windowsFrameless ? "app--windows-frameless" : "",
-      input.mainWindowMaximised ? "app--maximised" : "",
       input.browserPreview ? "app--browser-preview" : "",
       input.workbench ? "app--workbench" : "",
       input.creation ? "app--creation" : "",
