@@ -113,18 +113,33 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       listInsights().catch(() => [] as SessionRecapInsight[]),
     ]);
     if (generation !== seq.current) return;
-    setRecaps(recapValue ?? []);
+    const records = recapValue ?? [];
+    setRecaps(records);
     setSessions(sessionValue ?? []);
     setOpenItems(itemValue ?? []);
     setInsights(insightValue ?? []);
+    // A session that has since produced a record is no longer waiting in the lane.
+    setQueued((current) => current.filter((path) => !records.some((record) => record.path === path)));
     setLoadFailed(recapValue === null);
     setLoading(false);
   }, [list, listInsights, listOpenItems, listSessions]);
-  useEffect(() => { if (active) void refresh(); }, [active, refresh]);
+  // Read through a ref: a caller passing fresh callbacks every render must not turn
+  // this effect into a refresh loop.
+  const refreshRef = useRef(refresh);
+  useEffect(() => { refreshRef.current = refresh; }, [refresh]);
+  useEffect(() => { if (active) void refreshRef.current(); }, [active]);
   useEffect(() => () => { seq.current++; }, []);
+  // The generation lane is asynchronous, so a queued session is read back once
+  // later; one timer for the whole page, cleared on the way out.
+  const refreshTimer = useRef(0);
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimer.current !== 0) return;
+    refreshTimer.current = window.setTimeout(() => { refreshTimer.current = 0; void refreshRef.current(); }, 3000);
+  }, []);
+  useEffect(() => () => { if (refreshTimer.current !== 0) window.clearTimeout(refreshTimer.current); }, []);
 
   const byPath = useMemo(() => new Map(sessions.map((meta) => [meta.path, meta])), [sessions]);
-  const titleOf = useCallback((recap: SessionRecap) => {
+  const titleOf = useCallback((recap: { path: string }) => {
     const meta = byPath.get(recap.path);
     return (meta?.title ?? "").trim() || (meta?.preview ?? "").trim() || recap.path.split(/[/\\]/).pop() || recap.path;
   }, [byPath]);
@@ -171,12 +186,12 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // The item keeps the note's own id, so the entry and the list entry agree.
   // One button per topic writes every selected note of it, and each note still
   // lands on its own: the group is a render-time row, never a merged note.
-  const runGroup = useCallback(async (groupId: string, choice: string, list: SessionRecapEntry[]) => {
-    if (list.length === 0) return;
+  const runGroup = useCallback(async (groupId: string, choice: string, entries: SessionRecapEntry[]) => {
+    if (entries.length === 0) return;
     setBusy(groupId);
     setFailure("");
     try {
-      for (const entry of list) {
+      for (const entry of entries) {
         if (choice === "accept") await accept(entry.kind, entry.body, "");
         else await reject(entry.kind, entry.body);
         settle(entry.id, choice);
@@ -223,16 +238,16 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // One draft per playbook-worthy note in the topic, because a playbook is only as
   // good as the steps behind it: this reuses each note's own cited ground rather
   // than inventing a procedure.
-  const askMemoryPreview = useCallback(async (list: SessionRecapEntry[]) => {
-    setBusy(list[0]?.id ?? "");
+  const askMemoryPreview = useCallback(async (entries: SessionRecapEntry[]) => {
+    setBusy(entries[0]?.id ?? "");
     setFailure("");
     try {
       const drafts: PreviewDraft[] = [];
-      for (const entry of list) {
+      for (const entry of entries) {
         const view = await previewMemory({ kind: entry.kind, body: entry.body });
         drafts.push({ entry, view, text: view.text !== "" ? view.text : view.fallback });
       }
-      setPreview({ kind: "memory", drafts, markdown: "", group: list.map((entry) => entry.id).join("|") });
+      setPreview({ kind: "memory", drafts, markdown: "", group: entries.map((entry) => entry.id).join("|") });
     } catch {
       setFailure(m("operationFailed"));
     } finally {
@@ -240,17 +255,17 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     }
   }, [m, previewMemory]);
 
-  const askSkillPreview = useCallback(async (list: SessionRecapEntry[]) => {
-    setBusy(list[0]?.id ?? "");
+  const askSkillPreview = useCallback(async (entries: SessionRecapEntry[]) => {
+    setBusy(entries[0]?.id ?? "");
     setFailure("");
     try {
-      const sources = list.map((entry) => ({ kind: entry.kind, body: entry.body }));
+      const sources = entries.map((entry) => ({ kind: entry.kind, body: entry.body }));
       const view = await previewSkill(sources);
       setPreview({
         kind: "skill",
-        drafts: list.map((entry) => ({ entry, view, text: "" })),
+        drafts: entries.map((entry) => ({ entry, view, text: "" })),
         markdown: view.text !== "" ? view.text : view.fallback,
-        group: list.map((entry) => entry.id).join("|"),
+        group: entries.map((entry) => entry.id).join("|"),
       });
     } catch {
       setFailure(m("operationFailed"));
@@ -289,14 +304,14 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     }
   }, [accept, draftTopicSkill, m, preview, settle]);
 
-  const draftGroupSkills = useCallback(async (list: SessionRecapEntry[]) => {
-    setBusy(list[0]?.id ?? "");
+  const draftGroupSkills = useCallback(async (entries: SessionRecapEntry[]) => {
+    setBusy(entries[0]?.id ?? "");
     setFailure("");
     try {
-      const draft = await draftTopicSkill(list.map((entry) => ({ kind: entry.kind, body: entry.body })), "");
+      const draft = await draftTopicSkill(entries.map((entry) => ({ kind: entry.kind, body: entry.body })), "");
       setDrafted((current) => {
         const next = { ...current };
-        for (const entry of list) next[entry.id] = draft.path;
+        for (const entry of entries) next[entry.id] = draft.path;
         return next;
       });
     } catch {
@@ -321,11 +336,22 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   }, [close, m, reopen]);
 
   const labelStyle = { color: "var(--fg-dim)" } as const;
+  // One bounded panel above one scroller. The panel carries what the page already
+  // knows (heatmap, reports, queues) and is capped, so growing note counts can only
+  // scroll inside it — never squeeze the cards themselves out of the window.
+  const pageStyle = { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 } as const;
+  const headStyle = { flex: "0 0 auto", maxHeight: "33vh", overflowY: "auto" } as const;
+  const panelStyle = { flex: "0 1 auto", minHeight: 0, maxHeight: "40vh", overflowY: "auto" } as const;
+  const listStyle = { flex: "1 1 auto", minHeight: 160, maxHeight: "none", borderRightWidth: 0 } as const;
   const waiting = openItems.filter((item) => !item.closed).length;
   const stale = openItems.filter((item) => !item.closed && item.stale === true).length;
   const failed = recaps.filter((recap) => recap.state === "pending").length;
   // The card the page opens by itself: the first row under the default sort.
   const newestPath = rows[0]?.path ?? "";
+  const cardOpen = (path: string) => openCards[path] ?? path === newestPath;
+  const toggleCard = useCallback((path: string) => {
+    setOpenCards((current) => ({ ...current, [path]: !(current[path] ?? path === newestPath) }));
+  }, [newestPath]);
   // A session that never produced a recap appears in neither the record list nor
   // the failure list, so the newest few are offered here: yielding nothing must
   // still leave it one click from a retry. Older ones stay a bulk job
@@ -345,14 +371,14 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       if (!accepted) { setFailure(m("operationFailed")); return; }
       setQueued((current) => [path, ...current.filter((candidate) => candidate !== path)]);
       // The lane is asynchronous, so the page cannot wait for the result: it says
-      // the work is queued and refreshes once, in case it is already done.
-      window.setTimeout(() => { void refresh(); }, 3000);
+      // the work is queued and reads back once, in case it is already done.
+      scheduleRefresh();
     } catch {
       setFailure(m("operationFailed"));
     } finally {
       setBusy("");
     }
-  }, [generate, m, refresh]);
+  }, [generate, m, scheduleRefresh]);
   // A batch is a loop over the same per-session request: the lane stays
   // one-session-at-a-time, so nothing here is a new host contract.
   const askGenerateAll = useCallback(async (paths: string[]) => {
@@ -367,12 +393,52 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   return <ManagementPageShell active={active} onBack={onBack} title={t("history.recapTitle")}
     description={`${m("recapDescription")} ${m("recapAcceptHint")}`}
     actions={<button className="btn btn--small" disabled={loading} onClick={() => void refresh()}><RotateCw size={14} />{m("refresh")}</button>}>
+    <div className="recap-page" style={pageStyle}>
+    <div className="recap-page__head" style={headStyle}>
     {loadFailed && <div className="management-notice" role="alert">{m("loadFailed")}<button className="btn btn--small" onClick={() => void refresh()}>{m("retry")}</button></div>}
     {failure !== "" && <div className="management-notice" role="alert">{failure}</div>}
     {loading && <div className="management-notice" role="status">{m("loading")}</div>}
-    {!loading && !loadFailed && recaps.length === 0 && <div className="management-notice" role="status">{t("history.recapEmpty")}</div>}
+    {/* The empty line is only the fallback: the ungenerated list below already
+        offers those same sessions a generation. */}
+    {!loading && !loadFailed && recaps.length === 0 && ungenerated.length === 0 && <div className="management-notice" role="status">{t("history.recapEmpty")}</div>}
     {!loading && failed > 0 && <div className="management-notice" role="status">{m("recapPendingNotice", { n: failed })}</div>}
-    {!loading && <RecapHeatmap insights={insights} recaps={recaps} selectedDay={heatmapDay} onSelectDay={setHeatmapDay} />}
+    {!loading && recaps.length > 0 && (
+      <div className="history-toolbar">
+        <label className="mem-search history-search">
+          <Search size={13} />
+          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={m("recapSearch")} />
+        </label>
+        <div className="history-filter" role="group" aria-label={m("recapSort")}>
+          {sorts.map((option) => (
+            <button key={option.id} type="button" aria-pressed={sort === option.id}
+              className={`history-filter__pill${sort === option.id ? " history-filter__pill--on" : ""}`}
+              onClick={() => setSort(option.id)}>{option.label}</button>
+          ))}
+        </div>
+        {/* A selected heatmap day filters the list the way the query does, so it
+            stands here as one removable chip, not only as a highlighted cell. */}
+        {heatmapDay !== "" && (
+          <button type="button" className="history-filter__pill history-filter__pill--on"
+            aria-label={`${m("clearFilters")}: ${heatmapDay}`} title={m("clearFilters")}
+            onClick={() => setHeatmapDay("")}>{heatmapDay} ✕</button>
+        )}
+        <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapCount", { shown: rows.length, total: recaps.length })}</span>
+        <span style={{ display: "flex", gap: 6 }}>
+          <button className="btn btn--small recap-expand-all" type="button"
+            onClick={() => setOpenCards(Object.fromEntries(rows.map((recap) => [recap.path, true])))}>{m("recapExpandAll")}</button>
+          <button className="btn btn--small recap-collapse-all" type="button"
+            onClick={() => setOpenCards(Object.fromEntries(rows.map((recap) => [recap.path, false])))}>{m("recapCollapseAll")}</button>
+        </span>
+      </div>
+    )}
+    {!loading && recaps.length > 0 && rows.length === 0 && (
+      <div className="management-notice" role="status">{m("recapNoMatch")}
+        <button className="btn btn--small" onClick={() => { setQuery(""); setHeatmapDay(""); }}>{m("clearFilters")}</button></div>
+    )}
+    </div>
+    {!loading && <div className="recap-page__panel" style={panelStyle}>
+    <RecapHeatmap insights={insights} recaps={recaps} selectedDay={heatmapDay} onSelectDay={setHeatmapDay} />
+
     {!loading && insights.length > 0 && (
       <section style={{ marginBottom: 12 }}>
         <div style={{ ...labelStyle, fontSize: 12 }}>{m("recapInsightsTitle")}</div>
@@ -424,32 +490,6 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
         </ul>
       </div>
     )}
-    {!loading && recaps.length > 0 && (
-      <div className="history-toolbar">
-        <label className="mem-search history-search">
-          <Search size={13} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={m("recapSearch")} />
-        </label>
-        <div className="history-filter" role="group" aria-label={m("recapSort")}>
-          {sorts.map((option) => (
-            <button key={option.id} type="button" aria-pressed={sort === option.id}
-              className={`history-filter__pill${sort === option.id ? " history-filter__pill--on" : ""}`}
-              onClick={() => setSort(option.id)}>{option.label}</button>
-          ))}
-        </div>
-        <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapCount", { shown: rows.length, total: recaps.length })}</span>
-        <span style={{ display: "flex", gap: 6 }}>
-          <button className="btn btn--small recap-expand-all" type="button"
-            onClick={() => setOpenCards(Object.fromEntries(rows.map((recap) => [recap.path, true])))}>{m("recapExpandAll")}</button>
-          <button className="btn btn--small recap-collapse-all" type="button"
-            onClick={() => setOpenCards(Object.fromEntries(rows.map((recap) => [recap.path, false])))}>{m("recapCollapseAll")}</button>
-        </span>
-      </div>
-    )}
-    {!loading && recaps.length > 0 && rows.length === 0 && (
-      <div className="management-notice" role="status">{m("recapNoMatch")}
-        <button className="btn btn--small" onClick={() => setQuery("")}>{m("clearFilters")}</button></div>
-    )}
     {!loading && preview !== null && (
       <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
         <strong>{preview.kind === "memory" ? m("recapPreviewMemoryTitle") : m("recapPreviewSkillTitle")}</strong>
@@ -493,9 +533,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
           {preview.kind === "skill" && (
             <button className="btn btn--small" type="button" disabled={busy !== ""}
               onClick={() => {
-                const list = preview.drafts.map((draft) => draft.entry);
+                const drafts = preview.drafts.map((draft) => draft.entry);
                 setPreview(null);
-                void (list.length === 1 ? makeDraft(list[0]) : draftGroupSkills(list));
+                void (drafts.length === 1 ? makeDraft(drafts[0]) : draftGroupSkills(drafts));
               }}>
               {m("recapPreviewUseVerbatim")}</button>
           )}
@@ -509,7 +549,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
         <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapUngeneratedHint")}</span>
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
           {groupByTopic(ungenerated.map((meta) => ({
-            id: meta.path, kind: "session", body: titleOf({ path: meta.path } as SessionRecap),
+            id: meta.path, kind: "session", body: titleOf({ path: meta.path }),
           }))).map((group) => (
             <li key={group.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               {group.entries.length > 1 && (
@@ -563,15 +603,16 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
         </ul>
       </div>
     )}
-    {!loading && <div className="history-list" style={{ flex: 1, minHeight: 0 }}>
+    </div>}
+    {!loading && <div className="history-list recap-page__list" style={listStyle}>
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
         {rows.map((recap) => {
           const meta = byPath.get(recap.path);
           return <li key={recap.path} className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
             <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap", fontSize: 12 }}>
               <span role="button" tabIndex={0} data-recap-toggle="" title={m("recapFoldHint")}
-                onClick={() => setOpenCards((current) => ({ ...current, [recap.path]: !(current[recap.path] ?? recap.path === newestPath) }))}
-                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setOpenCards((current) => ({ ...current, [recap.path]: !(current[recap.path] ?? recap.path === newestPath) })); } }}
+                onClick={() => toggleCard(recap.path)}
+                onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleCard(recap.path); } }}
                 style={{ cursor: "pointer" }}><strong>{titleOf(recap)}</strong></span>
               {recap.entries.length > 0 && <span style={labelStyle}>{m("recapNoteCount", { n: recap.entries.length })}</span>}
               {meta && <span style={labelStyle}>{t(meta.turns === 1 ? "history.turnOne" : "history.turnOther", { n: meta.turns })}</span>}
@@ -589,7 +630,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             </p>}
             {/* Notes fold away; the pending line above does not, because a failed
                 attempt is a state the reader has to see without expanding. */}
-            {(openCards[recap.path] ?? recap.path === newestPath) && <>
+            {cardOpen(recap.path) && <>
             {/* A failed attempt has no notes to speak of; "nothing reusable" would
                 be the wrong one of the two silences. */}
             {recap.entries.length === 0 && recap.state !== "pending" && <p style={{ margin: 0, ...labelStyle }}>{m("recapNoEntries")}</p>}
@@ -606,8 +647,10 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                 <span style={{ ...labelStyle, fontSize: 12 }} title={m("recapTopicGroupHint")}>{m("recapTopicGroup", { n: group.entries.length })}</span>
                 {chosen.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   onClick={() => void askMemoryPreview(chosen)}>{m("recapAccept")}</button>}
-                {open.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
-                  onClick={() => void runGroup(group.key, "reject", open)}>{m("recapReject")}</button>}
+                {/* Rejecting takes the same selection the accept button does: a note
+                    the reader left unchecked must not be dropped by this row. */}
+                {chosen.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  onClick={() => void runGroup(group.key, "reject", chosen)}>{m("recapReject")}</button>}
                 {groupDraftable.length > 0 && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   title={m("recapDraftSkillBatchHint", { n: groupDraftable.length })}
                   onClick={() => void askSkillPreview(groupDraftable)}>{m("recapDraftSkill")}</button>}
@@ -632,8 +675,10 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                 </>}
                 {reviewable && !grouped && decision !== "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   onClick={() => void run(entry.id, "", async () => { await undo(entry.kind, entry.body); })}>{m("recapUndo")}</button>}
-                {reviewable && grouped && <button className="btn btn--small" type="button" disabled={busy !== ""}
+                {reviewable && grouped && decision === "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
                   onClick={() => setEditing({ id: entry.id, text: entry.body })}>{m("recapAcceptEdited")}</button>}
+                {reviewable && grouped && decision !== "" && <button className="btn btn--small" type="button" disabled={busy !== ""}
+                  onClick={() => void run(entry.id, "", async () => { await undo(entry.kind, entry.body); })}>{m("recapUndo")}</button>}
                 {meta !== undefined && entry.kind === "handoff" && (item === undefined
                   ? <button className="btn btn--small" type="button" disabled={busy !== ""}
                       onClick={() => void keepHandoff(recap.path, entry)}>{m("recapKeepOpen")}</button>
@@ -680,17 +725,22 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
                   </span>
                 </div> : undefined} />;
             })}
-            {group.entries.length > 6 && !openGroups[group.key] && (
+            {group.entries.length > 6 && (
               <button className="btn btn--small" type="button" style={{ alignSelf: "flex-start" }}
-                onClick={() => setOpenGroups((current) => ({ ...current, [group.key]: true }))}>{m("recapMoreNotes", { n: group.entries.length - 6 })}</button>)}
+                onClick={() => setOpenGroups((current) => ({ ...current, [group.key]: !(current[group.key] ?? false) }))}>
+                {openGroups[group.key] ? m("recapHideNotes") : m("recapMoreNotes", { n: group.entries.length - 6 })}</button>)}
             </div>;
             })}
             </>}
-            {recallRecord !== undefined && <RecapRecallStrip sessionPath={recap.path} recallRecord={recallRecord} />}
+            {/* One host read per open card: a folded card shows no strip, so a page of
+                cards no longer fires one read per row. */}
+            {cardOpen(recap.path) && recallRecord !== undefined
+              && <RecapRecallStrip sessionPath={recap.path} recallRecord={recallRecord} />}
           </li>;
         })}
       </ul>
     </div>}
+    </div>
   </ManagementPageShell>;
 }
 

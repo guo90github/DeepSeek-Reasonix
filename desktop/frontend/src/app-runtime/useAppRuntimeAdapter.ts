@@ -67,6 +67,7 @@ export function useAppRuntimeAdapter() {
       previewRecapMemory: controller.previewRecapMemory,
       previewRecapSkill: controller.previewRecapSkill,
       listRecapInsights: controller.listRecapInsights,
+      recallRecordForSession: controller.recallRecordForSession,
       resumeSession: controller.resumeSession,
       openChannelSession: controller.openChannelSession,
       previewSession: controller.previewSession,

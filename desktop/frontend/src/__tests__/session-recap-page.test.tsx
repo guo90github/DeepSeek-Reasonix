@@ -152,6 +152,14 @@ ok(scroller !== null, "the list lives in a scroll container");
 const cards = () => [...(scroller?.querySelectorAll("li") ?? [])];
 ok(cards().length === 4, "every recap is rendered");
 ok(scroller !== null && cards().every((card) => scroller.contains(card)), "the cards are inside the scroll container");
+// One bounded region above one scroller: a growing note count may scroll inside
+// the region, never squeeze the card list itself out of the window.
+const panel = rootEl.querySelector<HTMLElement>(".recap-page__panel");
+ok(panel !== null && panel.style.maxHeight === "40vh" && panel.style.overflowY === "auto",
+  "the region above the list is capped and scrolls on its own");
+ok(panel !== null && !panel.contains(scroller), "the list is outside the capped region, not inside it");
+ok(scroller instanceof HTMLElement && scroller.style.minHeight === "160px" && scroller.style.flexGrow === "1",
+  "the list keeps a height floor and takes the remaining room");
 
 ok(rootEl.textContent?.includes("Gamma 会话") === true, "a recap shows its session title");
 ok(rootEl.textContent?.includes("Alpha 会话") === true, "the other session title is shown too");
@@ -442,11 +450,18 @@ await act(async () => { bareRoot.unmount(); });
 const dayHost = document.createElement("div");
 document.body.appendChild(dayHost);
 const dayRoot = createRoot(dayHost);
+// Day keys are local calendar days — the day the page prints for a recap — so the
+// fixtures step by local days and the cell is found by that same key.
 const today = new Date();
 const dayStamp = (offsetDays: number) => {
   const stamp = new Date(today);
-  stamp.setUTCDate(today.getUTCDate() - offsetDays);
+  stamp.setDate(today.getDate() - offsetDays);
+  stamp.setHours(12, 0, 0, 0);
   return stamp.toISOString();
+};
+const dayStampKey = (stamp: string) => {
+  const at = new Date(stamp);
+  return `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, "0")}-${String(at.getDate()).padStart(2, "0")}`;
 };
 const dayRecaps = [
   recap("C:\sessions\today.jsonl", "Today 会话", dayStamp(0)),
@@ -464,7 +479,7 @@ const dayCards = () => [...dayHost.querySelectorAll(".history-list li")];
 const filledCells = () => [...dayHost.querySelectorAll(".recap-heatmap__cell--filled")];
 ok(filledCells().length === 2, "the heatmap marks the days the page holds data for");
 ok(dayCards().length === 2, "both recaps are listed before any filter");
-const todayCell = filledCells().find((cell) => (cell.getAttribute("aria-label") ?? "").includes(dayStamp(0).slice(0, 10)));
+const todayCell = filledCells().find((cell) => (cell.getAttribute("aria-label") ?? "").includes(dayStampKey(dayStamp(0))));
 await act(async () => {
   (todayCell as HTMLButtonElement | undefined)?.click();
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -472,6 +487,20 @@ await act(async () => {
 ok(dayCards().length === 1, "selecting a day narrows the list to that day");
 ok(dayHost.textContent?.includes("Today 会话") === true && dayHost.textContent?.includes("Earlier 会话") === false,
   "the surviving row is the selected day's session");
+// A day filter has to be visible and removable on its own: otherwise a day with no
+// recaps leaves an empty list with no way back to the full one.
+const dayChip = () => [...dayHost.querySelectorAll<HTMLButtonElement>(".history-filter__pill")]
+  .find((button) => button.textContent?.includes(dayStampKey(dayStamp(0))) === true);
+ok(dayChip() !== undefined, "the filtered day stands in the toolbar as a chip");
+await act(async () => {
+  dayChip()?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+ok(dayCards().length === 2, "the day chip clears the filter on its own");
+await act(async () => {
+  (todayCell as HTMLButtonElement | undefined)?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
 const pressedCell = [...dayHost.querySelectorAll(".recap-heatmap__cell--active")][0];
 await act(async () => {
   (pressedCell as HTMLButtonElement | undefined)?.click();
@@ -508,6 +537,54 @@ await act(async () => {
 });
 ok((stripHost.textContent ?? "").includes("mem-page"), "expanding the page strip lists the recalled id");
 await act(async () => { stripRoot.unmount(); });
+
+// A same-topic group is one row acting on the notes the reader checked, and a note
+// that is already settled keeps its own way back. Both were wrong before: the row's
+// drop button ignored the checkboxes, and a settled note in a group had no undo.
+const groupPath = "C:\\sessions\\20260907-090000.000000000-deepseek-flash.jsonl";
+const groupHost = document.createElement("div");
+document.body.appendChild(groupHost);
+const groupRoot = createRoot(groupHost);
+const groupedRecap = {
+  path: groupPath, model: "deepseek/test", generatedAt: "2026-09-07T09:00:00Z",
+  entries: [
+    { id: "group-a", kind: "fact", body: "session_recap heatmapDay label fix", target: "memory" },
+    { id: "group-b", kind: "fact", body: "session_recap heatmapDay label regression", target: "memory" },
+  ],
+} as SessionRecap;
+await act(async () => {
+  groupRoot.render(<LocaleProvider><SessionRecapPage active onBack={() => {}}
+    list={async () => [groupedRecap]} listSessions={async () => [meta(groupPath, "Group 会话", 3)]} {...reviewProps} /></LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+const groupRows = () => [...groupHost.querySelectorAll("[data-recap-row]")];
+const groupButton = (label: string) => [...groupHost.querySelectorAll<HTMLButtonElement>("button")]
+  .find((button) => button.textContent?.includes(label));
+ok(groupRows().length === 2, "two notes of one topic are listed");
+ok(groupHost.querySelectorAll('input[type="checkbox"]').length === 2, "each grouped note carries a selection box");
+ok(groupButton("Save to memory") !== undefined && groupButton("Don't save") !== undefined,
+  "the topic row offers its own accept and drop");
+const rejectedBefore = rejected.length;
+await act(async () => {
+  groupHost.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[0]?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+await clickButton(groupButton("Don't save"));
+ok(rejected.length === rejectedBefore + 1 && rejected[rejected.length - 1]?.body.includes("regression") === true,
+  `the row drops only the checked notes: ${JSON.stringify(rejected.slice(rejectedBefore))}`);
+// The unchecked note is still there to act on: checking it back puts it into the
+// row's accept, and settling it must leave it its own way back.
+ok(groupButton("Save to memory") === undefined, "an all-unchecked row offers no accept to act on");
+await act(async () => {
+  groupHost.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[0]?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+await clickButton(groupButton("Save to memory"));
+await clickButton(groupHost.querySelector<HTMLButtonElement>(".recap-preview-confirm") ?? undefined);
+const rowHasUndo = (row: Element) => [...row.querySelectorAll("button")].some((button) => button.textContent?.includes("Undo"));
+ok(groupRows().length === 2 && groupRows().every(rowHasUndo),
+  "a settled note inside a group keeps its own undo");
+await act(async () => { groupRoot.unmount(); });
 
 await act(async () => { root.unmount(); });
 process.stdout.write(`\n${failed === 0 ? "OK" : "FAILED"}: ${failed} failed\n`);

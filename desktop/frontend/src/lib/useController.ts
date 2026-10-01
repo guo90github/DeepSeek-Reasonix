@@ -4544,6 +4544,9 @@ export function useController() {
   const generateSessionRecap = useCallback(async (sessionPath: string): Promise<boolean> => app.GenerateSessionRecap(sessionPath), [app]);
   const { draftRecapSkill, draftRecapTopicSkill, previewRecapMemory, previewRecapSkill } = useRecapSkillActions();
   const listRecapInsights = useCallback(async (): Promise<SessionRecapInsight[]> => asArray<SessionRecapInsight>(await app.ListRecapInsights()), []);
+  // The recap page lists closed sessions, so a session's recall fingerprints are
+  // read by transcript path rather than by tab id.
+  const recallRecordForSession = useCallback(async (sessionPath: string) => app.RecallRecordForSession(sessionPath), [app]);
   const retrySessionHistory = useCallback(async (tabId?: string) => {
     const id = tabId || activeTabIdRef.current; if (!id) return;
     // A failed hydrate at startup usually means the tab controller build has
@@ -5329,7 +5332,7 @@ export function useController() {
     answerMCPInteraction, answerMCPInteractionForTab, setControllerMode, setControllerModeForTab,
     dismissExtensionForm, drainExtensionNotifications,
     setCollaborationMode, setCollaborationModeForTab, setToolApprovalMode, setToolApprovalModeForTab, setQualityFloor, setComposerProfileForTab, setGoal, setGoalForTab, clearGoal, clearGoalForTab, resumeGoal, resumeGoalForTab, pauseGoal, pauseGoalForTab,
-    newSession, clearSession, listSessions, listTrashedSessions, listSessionRecaps, acceptRecapEntry, rejectRecapEntry, undoRecapEntry, listRecapOpenItems, keepRecapHandoff, closeRecapHandoff, reopenRecapHandoff, generateSessionRecap, draftRecapSkill, draftRecapTopicSkill, previewRecapMemory, previewRecapSkill, listRecapInsights, retrySessionHistory, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
+    newSession, clearSession, listSessions, listTrashedSessions, listSessionRecaps, acceptRecapEntry, rejectRecapEntry, undoRecapEntry, listRecapOpenItems, keepRecapHandoff, closeRecapHandoff, reopenRecapHandoff, generateSessionRecap, draftRecapSkill, draftRecapTopicSkill, previewRecapMemory, previewRecapSkill, listRecapInsights, recallRecordForSession, retrySessionHistory, resumeSession, openChannelSession, previewSession, deleteSession, restoreSession, purgeTrashedSession, renameSession,
     loadOlderHistory,
     requestHistoryFullContent,
     refreshMeta, pickWorkspace, switchWorkspace, compact, rewind, rewindForTab, rewindForTabDetailed, undoRewindForTab, setModel, setModelForTab, setEffort, setEffortForTab, cancelJob,

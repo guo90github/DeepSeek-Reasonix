@@ -60,6 +60,7 @@ export function buildOverlayHostProps(input: {
     previewRecapMemory: NonNullable<AppOverlayHostProps["recap"]>["commands"]["previewMemory"];
     previewRecapSkill: NonNullable<AppOverlayHostProps["recap"]>["commands"]["previewSkill"];
     listRecapInsights: NonNullable<AppOverlayHostProps["recap"]>["commands"]["listInsights"];
+    recallRecordForSession: NonNullable<AppOverlayHostProps["recap"]>["commands"]["recallRecord"];
     restoreSession: NonNullable<AppOverlayHostProps["trash"]>["commands"]["restore"];
     purgeTrashedSession: NonNullable<AppOverlayHostProps["trash"]>["commands"]["purge"];
   };
@@ -90,7 +91,8 @@ export function buildOverlayHostProps(input: {
         draftTopicSkill: sessionActions.draftRecapTopicSkill,
         previewMemory: sessionActions.previewRecapMemory,
         previewSkill: sessionActions.previewRecapSkill,
-        listInsights: sessionActions.listRecapInsights } } : undefined,
+        listInsights: sessionActions.listRecapInsights,
+        recallRecord: sessionActions.recallRecordForSession } } : undefined,
     automation: shell.visitedAutomation ? { view: { active: input.pageKind === "automation" },
       commands: { onBack: shell.returnToWorkspace, onOpenTopic: input.automationTopic } } : undefined,
     recovery: {

@@ -44,9 +44,13 @@ export function RecapRow({ badge, text, leading, actions, detail, editor, tone }
         <span style={{ display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap", justifyContent: "flex-end" }}>{actions}</span>
       </div>
       {/* The cited ground is never hidden — it just stops competing with the summary
-          for the same line, which is what made rows wrap differently at each width. */}
+          for the same line, which is what made rows wrap differently at each width.
+          Folded it holds one clipped line, so a long note list stays a list; the
+          text is still in the DOM for copying and searching. */}
       {detail !== undefined && (
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", ...muted }}>{detail}</div>
+        <div style={expanded
+          ? { display: "flex", gap: 6, flexWrap: "wrap", ...muted }
+          : { display: "block", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", ...muted }}>{detail}</div>
       )}
       {editor}
     </div>

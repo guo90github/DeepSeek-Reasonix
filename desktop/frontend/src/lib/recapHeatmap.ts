@@ -73,16 +73,18 @@ export function buildRecapHeatmap(input: RecapHeatmapInput): RecapHeatmap {
   return { from: days[0], to, days, rows: built, max };
 }
 
-/** dayKey is the UTC calendar day of a stamp; an empty stamp has no day. */
+/**
+ * dayKey is a stamp's local calendar day — the day the page prints for it.
+ * Bucketing in UTC would file a recap generated before 08:00 in UTC+8 under the
+ * previous cell, right next to a card that states the later date.
+ */
 export function dayKey(stamp: string | Date | null | undefined): string {
-  if (stamp instanceof Date) {
-    return Number.isNaN(stamp.getTime()) ? "" : stamp.toISOString().slice(0, 10);
-  }
-  const text = String(stamp ?? "").trim();
-  if (text === "") return "";
-  const date = new Date(text);
+  if (stamp === null || stamp === undefined) return "";
+  const date = stamp instanceof Date ? stamp : new Date(String(stamp).trim());
   if (Number.isNaN(date.getTime())) return "";
-  return date.toISOString().slice(0, 10);
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
 }
 
 function labels(projects: string[] | null | undefined): string[] {

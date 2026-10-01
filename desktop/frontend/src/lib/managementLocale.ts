@@ -55,6 +55,7 @@ const messages = {
   recapFoldHint: ["点这里展开或折叠这个会话的条目", "點這裡展開或折疊這個會話的條目", "Click to expand or fold this session's notes"],
   recapNoteCount: ["{n} 条条目", "{n} 條條目", "{n} notes"],
   recapMoreNotes: ["还有 {n} 条 · 展开", "還有 {n} 條 · 展開", "{n} more · show them"],
+  recapHideNotes: ["收起这些条目", "收起這些條目", "Hide the rest"],
   recapUngeneratedBadge: ["未生成", "未生成", "no recap yet"],
   recapDraftSkillBatchHint: ["为该话题的 {n} 条可成稿条目各起草一份技能（逐条依据其引用的来源，不臆造步骤）", "為該話題的 {n} 條可成稿條目各起草一份技能（逐條依據其引用的來源，不臆造步驟）", "Draft one skill per playbook-worthy note in this topic ({n}), each citing its own source instead of inventing steps"],
   recapPreviewMemoryTitle: ["预览：这条将写入的记忆", "預覽：這條將寫入的記憶", "Preview: the memory this note becomes"],
