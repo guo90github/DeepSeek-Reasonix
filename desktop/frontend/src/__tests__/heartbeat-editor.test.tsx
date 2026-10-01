@@ -154,6 +154,28 @@ ok(button("Weekly")?.classList.contains("set-seg__btn--on") === true, "failed sa
 ok(document.querySelector('[role="alert"]')?.textContent?.includes("Your draft is still here") === true, "failed save reports an actionable error");
 ok(button("Save") != null, "failed save remains dirty and retryable");
 
+console.log("\nheartbeat editor goal contract");
+
+let contractSaved: HeartbeatTask | null = null;
+await act(async () => {
+  renderEditor({ ...originalTask, id: "contract", goal: "推进到 9/9 已验收" }, async (task) => { contractSaved = task; return true; }, "contract");
+  await flush();
+});
+const contractArea = document.querySelectorAll<HTMLTextAreaElement>("textarea")[1];
+ok(contractArea?.value === "推进到 9/9 已验收", "the editor shows the stored goal contract");
+
+// 受控 textarea 的输入事件在这个 harness 里打不进去（input/change 都试过），
+// 所以这里钉住真正的风险面：保存时不得丢掉契约（onSave 收到的是整对象）。
+await act(async () => {
+  button("Weekly")?.click();
+  await flush();
+});
+await act(async () => {
+  button("Save")?.click();
+  await flush();
+});
+ok(contractSaved?.goal === "推进到 9/9 已验收", "saving a task keeps its goal contract");
+
 console.log("\nheartbeat editor frequency conversion");
 
 await act(async () => {

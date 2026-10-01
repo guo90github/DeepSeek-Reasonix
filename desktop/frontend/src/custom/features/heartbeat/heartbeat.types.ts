@@ -9,6 +9,7 @@ export interface HeartbeatTask {
   id: string;
   title: string;
   prompt: string;
+  goal?: string;      // unattended Goal contract; empty = a plain scheduled prompt
   interval: string;   // e.g. "5m", "1h", "30s"
   enabled: boolean;
   scope?: string;      // "global" or "project"

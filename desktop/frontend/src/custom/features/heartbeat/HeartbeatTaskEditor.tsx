@@ -90,6 +90,7 @@ export function TaskEditor({
   const isNew = managed ? !entry?.baseline : !task.createdAt;
   const isDirty = managed && entry ? automationDraftDirty(entry) : draft.title !== initialTaskRef.current.title
     || draft.prompt !== initialTaskRef.current.prompt
+    || draft.goal !== initialTaskRef.current.goal
     || draft.interval !== initialTaskRef.current.interval
     || draft.enabled !== initialTaskRef.current.enabled
     || draft.approvalMode !== initialTaskRef.current.approvalMode
@@ -351,6 +352,18 @@ export function TaskEditor({
           onChange={(e) => set("prompt", e.target.value)}
           placeholder={t("heartbeat.promptPlaceholder")}
           rows={5}
+        />
+      </div>
+
+      {/* Goal contract：无人值守打开时，这段文字会被锚定成会话的 Goal */}
+      <div className="heartbeat-editor__field">
+        <label>{t("heartbeat.fieldGoal")}</label>
+        <textarea
+          className="heartbeat-editor__textarea"
+          value={draft.goal ?? ""}
+          onChange={(e) => set("goal", e.target.value)}
+          placeholder={t("heartbeat.goalPlaceholder")}
+          rows={3}
         />
       </div>
 

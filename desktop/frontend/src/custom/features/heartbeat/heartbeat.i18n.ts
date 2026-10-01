@@ -70,6 +70,8 @@ export const heartbeatFeatureEn = {
   "heartbeat.unitDay": "d",
   "heartbeat.overdue": "overdue — due {ago}",
   "heartbeat.runHistoryLegacy": "Not in the run history (this run predates it)",
+  "heartbeat.fieldGoal": "Goal contract",
+  "heartbeat.goalPlaceholder": "Optional. With unattended driving on, this text is installed as the session's goal and drives continuation between ticks; a placeholder here is worse than leaving it empty (empty = every tick just runs the prompt).",
   "heartbeat.viewFlat": "Flat list",
   "heartbeat.viewGrouped": "Group by project",
 } as const;
@@ -150,6 +152,8 @@ const heartbeatFeatureZh = {
   "heartbeat.unitDay": "天",
   "heartbeat.overdue": "已到期：{ago}就该运行",
   "heartbeat.runHistoryLegacy": "未入历史（本次运行早于历史功能）",
+  "heartbeat.fieldGoal": "目标契约",
+  "heartbeat.goalPlaceholder": "可选。无人值守打开时，这段文字会被安装成会话的 Goal，并在两次 tick 之间驱动续轮；填占位符比留空更糟（留空＝每个 tick 只跑提示词）。",
   "heartbeat.viewFlat": "纯列表",
   "heartbeat.viewGrouped": "按项目分组",
 } satisfies Record<HeartbeatFeatureKey, string>;
@@ -223,6 +227,8 @@ const heartbeatFeatureZhTW = {
   "heartbeat.unitDay": "天",
   "heartbeat.overdue": "已到期：{ago}就該執行",
   "heartbeat.runHistoryLegacy": "未入歷史（本次執行早於歷史功能）",
+  "heartbeat.fieldGoal": "目標契約",
+  "heartbeat.goalPlaceholder": "可選。無人值守開啟時，這段文字會被安裝成會話的 Goal，並在兩次 tick 之間驅動續輪；填佔位符比留空更糟（留空＝每個 tick 只跑提示詞）。",
   "heartbeat.viewFlat": "純列表",
   "heartbeat.viewGrouped": "按專案分組",
 } satisfies Record<HeartbeatFeatureKey, string>;
