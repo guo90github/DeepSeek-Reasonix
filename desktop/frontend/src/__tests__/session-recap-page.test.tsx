@@ -155,8 +155,12 @@ ok(scroller !== null && cards().every((card) => scroller.contains(card)), "the c
 // One bounded region above one scroller: a growing note count may scroll inside
 // the region, never squeeze the card list itself out of the window.
 const panel = rootEl.querySelector<HTMLElement>(".recap-page__panel");
-ok(panel !== null && panel.style.maxHeight === "40vh" && panel.style.overflowY === "auto",
+ok(panel !== null && panel.style.maxHeight === "min(40vh, 30%)" && panel.style.overflowY === "auto",
   "the region above the list is capped and scrolls on its own");
+ok(panel !== null && panel.style.flexShrink === "0",
+  "the capped region keeps its size; the list is what yields the room");
+ok(rootEl.querySelector<HTMLElement>(".recap-page__head")?.style.maxHeight === "33%",
+  "the fixed head is capped against the page, not the viewport");
 ok(panel !== null && !panel.contains(scroller), "the list is outside the capped region, not inside it");
 ok(scroller instanceof HTMLElement && scroller.style.minHeight === "160px" && scroller.style.flexGrow === "1",
   "the list keeps a height floor and takes the remaining room");

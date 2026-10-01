@@ -336,12 +336,13 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   }, [close, m, reopen]);
 
   const labelStyle = { color: "var(--fg-dim)" } as const;
-  // One bounded panel above one scroller. The panel carries what the page already
-  // knows (heatmap, reports, queues) and is capped, so growing note counts can only
-  // scroll inside it — never squeeze the cards themselves out of the window.
+  // One bounded rail above one scroller. The rail keeps its size (it is the page's
+  // context, not its content) and the LIST yields the room; both caps are relative to
+  // this column, not to the viewport, so 头部 + 概览带 + 列表地板 can never exceed the
+  // page — measured at 720x600 a viewport-relative cap clipped the list's last 67px.
   const pageStyle = { display: "flex", flexDirection: "column", flex: "1 1 auto", minHeight: 0 } as const;
-  const headStyle = { flex: "0 0 auto", maxHeight: "33vh", overflowY: "auto" } as const;
-  const panelStyle = { flex: "0 1 auto", minHeight: 0, maxHeight: "40vh", overflowY: "auto" } as const;
+  const headStyle = { flex: "0 0 auto", maxHeight: "33%", overflowY: "auto" } as const;
+  const panelStyle = { flex: "0 0 auto", minHeight: 0, maxHeight: "min(40vh, 30%)", overflowY: "auto" } as const;
   const listStyle = { flex: "1 1 auto", minHeight: 160, maxHeight: "none", borderRightWidth: 0 } as const;
   const waiting = openItems.filter((item) => !item.closed).length;
   const stale = openItems.filter((item) => !item.closed && item.stale === true).length;
