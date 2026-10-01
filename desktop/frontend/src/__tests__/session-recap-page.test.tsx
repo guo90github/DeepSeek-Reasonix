@@ -394,6 +394,38 @@ ok(quiet.length === 1 && notesOf(quiet[0]).length === 0 && quiet[0].textContent?
   "a recap with no notes says so instead of listing notes");
 await act(async () => { quietRoot.unmount(); });
 
+// The rail states its counts and keeps the bodies one click away; a folded
+// <details> still holds its content in the DOM, which the assertions above rely on.
+const railFolds = [...rootEl.querySelectorAll<HTMLDetailsElement>("details.recap-fold")];
+ok(railFolds.length > 0 && railFolds.every((fold) => fold.open === false),
+  "the rail reports its counts by default");
+ok(railFolds.some((fold) => (fold.textContent ?? "").includes("只取分支统计未提交数会漏掉 CJK 路径")),
+  "a folded report still holds its text in the DOM");
+
+// A failed *refresh* of a session that already has a recap is not a session waiting
+// to be generated: the row states the attempt, and the count above it must not
+// claim a recap is missing.
+const refreshPath = "C:\\sessions\\20260908-090000.000000000-deepseek-flash.jsonl";
+const refreshHost = document.createElement("div");
+document.body.appendChild(refreshHost);
+const refreshRoot = createRoot(refreshHost);
+await act(async () => {
+  refreshRoot.render(<LocaleProvider><SessionRecapPage active onBack={() => {}}
+    list={async () => [{
+      path: refreshPath, state: "pending", model: "deepseek/test", generatedAt: "2026-09-08T09:00:00Z",
+      entries: [{ id: "refresh-a", kind: "fact", body: "刷新失败的记录仍有一条条目", target: "memory" }],
+      pending: { attempts: 1, reason: "bounded reviewer request exceeds 114688 bytes", updatedAt: "2026-09-08T10:00:00Z" },
+    } as SessionRecap]}
+    listSessions={async () => []} {...reviewProps} /></LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+const refreshCards = [...refreshHost.querySelectorAll("li")];
+ok(refreshCards.length === 1 && says(refreshCards[0], "attempt 1") && says(refreshCards[0], "exceeds 114688"),
+  "a failed refresh on an existing recap still reports the attempt");
+ok(says(refreshHost, "have not been generated") === false,
+  "a session that already has a recap is not counted as waiting to be generated");
+await act(async () => { refreshRoot.unmount(); });
+
 // A failed attempt leaves no record at all, so the host lists it from its own
 // marker. The page has to say the attempt failed — "nothing reusable" would be
 // the wrong one of the two silences — and count what is still waiting.

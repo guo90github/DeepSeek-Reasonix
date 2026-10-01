@@ -345,7 +345,9 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   const listStyle = { flex: "1 1 auto", minHeight: 160, maxHeight: "none", borderRightWidth: 0 } as const;
   const waiting = openItems.filter((item) => !item.closed).length;
   const stale = openItems.filter((item) => !item.closed && item.stale === true).length;
-  const failed = recaps.filter((recap) => recap.state === "pending").length;
+  // Only an attempt that left no record is still "waiting to be generated": a
+  // failed refresh of a session that already has a recap is not that.
+  const failed = recaps.filter((recap) => recap.state === "pending" && recap.entries.length === 0).length;
   // The card the page opens by itself: the first row under the default sort.
   const newestPath = rows[0]?.path ?? "";
   const cardOpen = (path: string) => openCards[path] ?? path === newestPath;
@@ -439,9 +441,11 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     {!loading && <div className="recap-page__panel" style={panelStyle}>
     <RecapHeatmap insights={insights} recaps={recaps} selectedDay={heatmapDay} onSelectDay={setHeatmapDay} />
 
+    {/* The rail states its counts and keeps every body one click away: a folded
+        <details> still holds its content in the DOM, so search and copy see it. */}
     {!loading && insights.length > 0 && (
-      <section style={{ marginBottom: 12 }}>
-        <div style={{ ...labelStyle, fontSize: 12 }}>{m("recapInsightsTitle")}</div>
+      <details className="recap-fold" style={{ marginBottom: 12 }}>
+        <summary style={{ ...labelStyle, fontSize: 12, cursor: "pointer" }}>{m("recapInsightsTitle")} · {insights.length}</summary>
         <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
           {insights.map((insight) => (
             <div key={`${insight.kind}:${insight.body}`}>
@@ -454,11 +458,11 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             </div>
           ))}
         </div>
-      </section>
+      </details>
     )}
     {!loading && openItems.length > 0 && (
-      <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-        <strong>{m("recapOpenItemsTitle", { n: waiting })}</strong>
+      <details className="management-notice recap-fold" style={{ display: "block" }}>
+        <summary style={{ cursor: "pointer" }}><strong>{m("recapOpenItemsTitle", { n: waiting })}</strong></summary>
         {stale > 0 && <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapOpenStaleCount", { n: stale })}</span>}
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
           {openItems.map((item) => (
@@ -488,7 +492,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             </li>
           ))}
         </ul>
-      </div>
+      </details>
     )}
     {!loading && preview !== null && (
       <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
@@ -544,8 +548,8 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       </div>
     )}
     {!loading && ungenerated.length > 0 && (
-      <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-        <strong>{m("recapUngeneratedTitle", { n: ungenerated.length })}</strong>
+      <details className="management-notice recap-fold" style={{ display: "block" }}>
+        <summary style={{ cursor: "pointer" }}><strong>{m("recapUngeneratedTitle", { n: ungenerated.length })}</strong></summary>
         <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapUngeneratedHint")}</span>
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
           {groupByTopic(ungenerated.map((meta) => ({
@@ -571,11 +575,11 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             </li>
           ))}
         </ul>
-      </div>
+      </details>
     )}
     {!loading && staleRecaps.length > 0 && (
-      <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-        <strong>{m("recapStaleTitle", { n: staleRecaps.length })}</strong>
+      <details className="management-notice recap-fold" style={{ display: "block" }}>
+        <summary style={{ cursor: "pointer" }}><strong>{m("recapStaleTitle", { n: staleRecaps.length })}</strong></summary>
         <span style={{ ...labelStyle, fontSize: 12 }}>{m("recapStaleHint")}</span>
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 4 }}>
           {groupByTopic(staleRecaps.map((recap) => ({
@@ -601,7 +605,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             </li>
           ))}
         </ul>
-      </div>
+      </details>
     )}
     </div>}
     {!loading && <div className="history-list recap-page__list" style={listStyle}>
