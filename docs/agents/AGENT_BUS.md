@@ -4,6 +4,7 @@
 > 都是落地后必须回填的 `文件:行`，不是现有代码的指针。别把本稿当已实现面读。
 > 并列读：`docs/COLLAB-SURFACE.md`（**已实现**的跨仓封闭面，由 `tools/collabgate` 钉住）、
 > `docs/agents/multi-agent-collaboration-design.md`（本稿部分取代之，见 §10）。
+> 执行清单：`docs/agents/TODO.md`；**S1 的可实现规格见 §11.1**（S1 实现以 §11.1 为准）；评审留痕见 §11.2。
 
 用途：把「给人看的」与「给智能体读的」两类数据钉成两条**不许互相渗透**的通道；并钉住多智能体的**唯一真相**
 ——协调作用域级黑板（共享工件，**可跨工作区、可跨进程**）——以及它的写侧（多写者 op 日志）与读侧（既有任务目录/任务树的投影）。目标形态是**百级 agent 无人值守集群**（§集群规模、§失败模式）。
@@ -36,7 +37,7 @@
 | 全互联通信 / 上下文 | **O(N²)**——每人看所有人的话 | **分解成树** + 视图裁剪 ⇒ 回到 O(N) |
 | 每 agent 每轮的视图读取 | O(视图大小) | 只读「我的子树 + 我认领的节点 + 我订阅的话题摘要」 |
 | op 日志 | O(总步数)，append-only 且每条很小 | 增量读（cursor/seq），**不重放全量** |
-| 并发执行 | 排队延迟随 N 线性 | 全局（账号级）并发槽 + 排队 |
+| 并发执行 | 排队延迟随 N 线性 | 全局（host 级）并发槽 + 排队 |
 
 **真会爆的是"每个人看见多少"与"醒得多勤"**，不是 agent 的数量。100 个 agent 不是 100 倍能力，是 100 倍**上下文成本**的风险。
 
@@ -48,9 +49,11 @@
 4. **独立复现**：`done` 的证据必须由**非产出者**复跑一遍（证据里带 `reproduced_by`）。百级下没人看每一份产出，"谁跑的"就是质量闸。
 5. **观测聚合**：人读默认按子树折叠，只显**异常 / 争议 / 停滞 / 孤儿**，可下钻到节点——不画 100 张卡片。
 
-**四条硬上限（缺一条就上不了百）**：视图（每人不读全板）／并发（全局账号级槽）／预算（board → 子树 → 节点 → 回合，四级封顶）／速率（节点级迁移上限）。任一触顶 = **暂停协作**并保留现场，绝不杀宿主会话。
+**四条硬上限（缺一条就上不了百）**：视图（每人不读全板）／并发（全局 host 级槽）／预算（board → 子树 → 节点 → 回合，四级封顶）／速率（节点级迁移上限）。任一触顶 = **暂停协作**并保留现场，绝不杀宿主会话。
 
-**现实边界（诚实）**：现有并发控制是**会话级**的——`SubagentScheduler` 是 session-scoped（`internal/agent/scheduler.go:36`），`max_subagent_concurrency` 也是每会话一档（`internal/config/config.go:1304-1307`），而且**嵌套子 agent 会 fail-fast**。模型的 rate limit 却是**全账号共享**的 ⇒ 100 个 agent 同时打就是互相 429。所以**全局并发槽是本设计新增的东西**，不是把现有旋钮调大。v1 先做**单机**（一台机器的进程/内存/会话数是硬限），协议保持可跨机（地址 + 令牌已经可以换目标）。
+**现实边界（诚实）**：现有并发控制是**会话级**的——`SubagentScheduler` 是 session-scoped（`internal/agent/scheduler.go:36`），`max_subagent_concurrency` 也是每会话一档（`internal/config/config.go:1304-1307`），而且**嵌套子 agent 会 fail-fast**。模型的 rate limit 却是**全账号共享**的 ⇒ 100 个 agent 同时打就是互相 429。所以**全局并发槽是本设计新增的东西**，不是把现有旋钮调大。
+
+**范围：v1 是单机。** 一台机器的进程/内存/会话数是硬限；**"跨机同算一池"不在 v1**（协议保留可换目标：地址 + 令牌换一个就行，但"多机共享同一个槽池/预算池"是另一件事，需要跨机协调者，明确不做）。评审指出上一版 §11 的 S5 出口条件写成"多机同算一池"，与本节的"v1 单机"冲突——已按本节收敛为"**本机 host 级**"。
 
 ## 失败模式与对应规则（百级特有）
 
@@ -58,7 +61,7 @@
 
 | 风险 | 症状 | 结构应对 |
 |---|---|---|
-| **交互低效** | 靠 `interval` 空转；往返问个不停 | ① **就绪即事件唤醒**（inbox 唤醒），`interval` 只作兜底；② 派活信封**必须带验收条件**，否则 worker 必然回来问；③ 视图**头部稳定、尾部追加**——这一条同时是**前缀缓存命中率**的前提，不做就等于每轮全价重算 |
+| **交互低效** | 靠 `interval` 空转；往返问个不停 | ① **就绪即事件唤醒**（inbox 唤醒），`interval` 只作兜底；② 派活信封**必须带验收条件**，否则 worker 必然回来问；③ 视图**头部稳定、尾部追加**——这一条同时是**前缀缓存命中率**的前提，且只有配合"**增量读、不逐轮全量重发**"（§集群规模 op 日志那行）才成立：全量重发时"头部稳定"没有落点 |
 | **缺能力被"偷懒放弃"** | 节点无声停住，整棵树卡在那一格 | 缺能力是**一等状态**：`capability_gap`（记：要什么 / 试过哪些路径 / 为什么不行）；**放弃只能由 `decide` 批准且须带证据**（`abandon`）；缺能力会生成"获取能力"子节点（装依赖 / 写脚本 / 建 skill / 挂 MCP） |
 | **新造的能力没人知道** | A 写了脚本或工具，B 继续手搓 | 能力**登记到黑板**（能力节点：名称 / 入口 / 证据 / 验证状态 / 谁能用）。**没有登记等于没造**——自建能力的通道本来就有（skill 创建、改代码、挂 MCP），缺的只是"登记 + 可发现" |
 | **错误会（坏结论污染下游）** | 一个 `done` 错了，下游 20 个基于它继续 | `revert`：把 `done` 打回 `open`，并把下游标 `stale`。**已经 `decide` 过的结论必须可撤销** |
@@ -93,17 +96,20 @@ remote/SSH 远端、CLI、手机遥控端。
 | 会话按**工作区**分目录：`<state home>/projects/<WorkspaceSlug(root)>/sessions` | `internal/config/paths.go:462` |
 | 桌面 tab 带 `WorkspaceRoot`（`""` = 全局），并各带自己的 controller | `desktop/tabs.go:72`、`desktop/app.go:759`、`:873`、`:1349` |
 | serve 的会话清单带 `all bool` 开关：`false` = 当前工作区，`true` = 跨工作区 | `internal/serve/session_list.go:21` |
-| 枚举工作区已有出口 | `GET /projects`（`internal/serve/project_list_test.go`） |
-| 每实例一个托管 serve + 注册表 + **每实例令牌**，且注释自述「coordinator posts to」 | `internal/agentd/agentd.go:15`、`:34-58`（`Record.URL()`/`TokenFile`）、`<home>/agents.json` |
+| 枚举工作区已有出口 | `GET /projects`（`internal/serve/serve.go:647`） |
+| 每实例一个托管 serve + 注册表 + **每实例令牌** | `internal/agentd/agentd.go:36-48`（`Record`）、`:41`（`TokenFile`）、`:49-50`（`URL()`，注释自述「the loopback base a coordinator posts to」）、`:15`（`RegistrySchemaVersion`）；注册表 `<home>/agents.json` |
+| **跨进程互斥的真实原语**（Windows `LockFileEx` / unix `flock`，进程死亡由 OS 释放） | `internal/filelock/filelock.go`、`lock_windows.go:30`、`lock_unix.go`；既有使用者 `internal/workspacelease/lease.go`、`internal/agentd/registry.go` |
 
 三条直接后果（本稿据此收紧）：
 
 1. **`board` ≠ workspace。** 黑板是**协调作用域**（一次协作一个），它可以横跨多个工作区；因此它**绝不**落在
    `<state home>/projects/<slug>/` 里——落在那里就等于把编排绑死在一个工作区上。
-2. **机器通道必须进程无关**（不只是"跨工作区"逼出来的）：参与方**可能**同进程（桌面多 tab 的多个 controller），
-   也**可能**跨进程（托管 serve / remote / CLI / 手机）。因此持有权不能是"某个进程持有黑板"，只能是**文件租约**。
-   （上一版把这条写成「跨工作区 = 跨 serve 进程」，把两条轴压成一条——错。）
-3. **常驻性不等于新守护进程。** 真相在文件里（append-only + 租约），通知在各宿主自己的 HTTP 面上，
+2. **机器通道必须进程无关**：参与方**可能**同进程（桌面多 tab 的多个 controller），也**可能**跨进程（托管 serve /
+   remote / CLI / 手机）。因此持有权不能是"某个进程持有黑板"，只能是**文件锁 + 可从日志重算的逻辑租约**
+   （`internal/filelock`；§11.1）。物理互斥用文件锁（跨进程、进程死亡自动释放），逻辑租约（`claim` 的 deadline）
+   让"谁该推进"在进程被杀后仍**可从 op 日志重算**——两者缺一不可。
+   （上一版把这条写成「跨工作区 = 跨 serve 进程」，把两条轴压成一条——错；上一版还只有"租约"没有"文件锁"——也不够。）
+3. **常驻性不等于新守护进程。** 真相在文件里（append-only + 文件锁），通知在各宿主自己的 HTTP 面上，
    所以仍然**不新造守护进程**。
 
 ## 编排落在哪（形态：内核内建；可跨进程，但不出新守护进程）
@@ -111,12 +117,13 @@ remote/SSH 远端、CLI、手机遥控端。
 | 项 | 做法 | 理由 |
 |---|---|---|
 | 真相与协议在内核 | 黑板与消息信封放 `internal/agentbus`（*待建*）；命令面加在 `control.Controller`；传输面加在 `serve` | 按 `REASONIX.md` 约定，CLI / serve / 桌面**自动继承**（`tools/repolint/layers.go:71-74`） |
+| **分层：agentbus 是工具层** | `frontends → control → {agent, agentbus}`；**`agentbus` 只 import 工具包**（`internal/fileutil`、`internal/filelock`），**不得 import `internal/agent` 或 `internal/control`** | 黑板是数据与规则，不懂调度；`SubagentScheduler` / `CapabilityGrant` 的**接线留在 control/host**（评审指出的"链缺环"由此消解） |
 | 编排者是**参与者**，不是一个特殊角色 | 编排的决策跑在某个会话的回合里；它读写黑板的方式与其他参与者完全一样 | §产品判据要求编排者可被杀掉而不影响推进 |
-| 黑板**不属于任何进程** | op 日志 + 逐节点租约落在 state home 的协调作用域目录；任何进程按同一纪律读写 | 同进程多控制器与跨进程两种情形都要能写；只有租约同时覆盖两者 |
-| 编排客户端 = 任何进程 | 桌面 tab、CLI、未来的独立 exe、仓外房间**都只是客户端**。同进程的直接用已有 controller；跨进程的走该宿主 serve 的回环地址**＋该实例的令牌** | 地址与令牌来自 `agentd` 注册表（`Record.URL()` / `Record.TokenFile`） |
+| 黑板**不属于任何进程** | op 日志 + **board 级文件锁**落在 state home 的协调作用域目录；任何进程按同一纪律读写 | 同进程多控制器与跨进程两种情形都要能写；只有"文件锁 + 日志可重算"同时覆盖两者 |
+| 编排客户端 = 任何进程 | 桌面 tab、CLI、未来的独立 exe、仓外房间**都只是客户端**。同进程的直接用已有 controller；跨进程的走该宿主 serve 的回环地址**＋该实例的令牌** | 地址与令牌来自 `agentd` 注册表（`internal/agentd/agentd.go:49-50` + `:41`） |
 | 常驻性复用 `internal/agentd` | 每实例一个托管 `reasonix serve` + 注册表 | 已有；**不新造第二个守护进程** |
 | **时钟与唤醒也复用** | 编排者（一个会话）由两套既有机制被唤醒：① `heartbeat`（间隔，绑 `topicId` + `goal` 契约）；② inbox 唤醒（事件推送） | `docs/UNATTENDED.md` §1–§5、`POST /inbox/items`（`internal/serve/inbox.go:21`） |
-| **规模化的三闸** | 视图裁剪 / 全局并发槽 / 四级预算，见 §集群规模 | 百级下这三样是**成立条件**，不是优化项 |
+| **规模化的三闸** | 视图裁剪 / 全局 host 级并发槽 / 四级预算，见 §集群规模 | 百级下这三样是**成立条件**，不是优化项 |
 
 **"谁来派活"不是缺件，就是编排者本人。** 它是会话 ⇒ 有黑板工具 ⇒ 能 `split` / `claim` / 派发到别的会话；
 它被唤醒 ⇒ 无人时也在跑。无人值守链条因此是：
@@ -135,7 +142,7 @@ remote/SSH 远端、CLI、手机遥控端。
 （`docs/UNATTENDED.md:5-8`：everything lives in `desktop/`，kernel 未参与），所以**纯 CLI/serve 环境目前没有这个时钟**——
 那是能力边界，不是缺件。）
 
-## 0 六句自证
+## 0 七句自证
 
 ```
 ls internal | grep -E '^agentbus$'                    # 本稿落地前：无输出（= 目标稿）
@@ -143,7 +150,8 @@ rg -n 'no reply channel' internal/serve/inbox.go      # 单向投递的现状证
 sed -n '1,12p' internal/taskmonitor/model.go          # 读侧已存在：自述为纯观察层
 rg -n 'WorkspaceSlug' internal/config/paths.go        # 跨工作区：会话按工作区分目录
 rg -n 'TokenFile|func \(r Record\) URL' internal/agentd/agentd.go   # 跨进程：地址 + 每实例令牌
-rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸是会话级，不是账号级
+rg -n 'LOCKFILE_EXCLUSIVE_LOCK|flock' internal/filelock/            # 跨进程互斥的真实原语
+rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸是会话级，不是宿主级
 ```
 
 ## 1 两个维度是两条通道（硬边界）
@@ -177,7 +185,7 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 
 | 字段 | 取值/类型 | 说明 |
 |---|---|---|
-| `id` | string | 幂等 id，语义沿用 `internal/sessioninbox` 的幂等键 |
+| `id` | string | 幂等 id（信封语义沿用 `internal/sessioninbox`；**黑板 op 的幂等键见 §11.1**） |
 | `board` | string | **协调作用域 id**（一次协作一个；可跨工作区）；子树分片另带 `subtree` |
 | `from` / `to` | agent id / `工作区+会话` / `topic:<name>` / 节点 id | 寻址；`to` 缺省 = 广播到订阅者 |
 | `type` | 封闭枚举（§3） | 未知取值**拒收**，不静默降级 |
@@ -209,6 +217,8 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 | `yield` | 撤下自己的断言或认领 |
 
 写侧三条硬线：**`assert` 的证据必须可核对**（不可核对的产出进不了 `done`）；**节点的 `done` 只由 `decide` 给出**（判据见 §什么叫「落地」）；**缺能力不是可以停的理由**（走 `capability_gap` → 获取能力，或 `abandon` 经批准）。另有两条规模硬线：**认领须续租**、**每节点迁移有速率上限**（§集群规模）。
+
+**合法迁移的闭集在 §11.1**——不在那张表里的组合一律**拒收，且必须带原因**（静默忽略是最坏的实现）。
 
 ### 3.2 交流三档（同一管道，三种承诺强度）
 
@@ -265,22 +275,22 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 | 项 | 做法 | 依据 |
 |---|---|---|
 | 黑板是**唯一真相** | 协调作用域级共享工件：节点 + 认领 + 断言/反驳 + 裁决；多写者按 op 追加 | 读侧已存在：`internal/taskcatalog`（SQLite 索引）+ `internal/taskmonitor`（自述纯观察层）+ 桌面任务树 |
-| 逐节点**单写者** | 每个节点的状态迁移由一个租约持有者执行；多写者只体现在**不同节点**与 op 追加 | 免去共享可变结构；复用 `write_claims` / `<id>.jsonl.lease.lock`（`internal/agent/save.go:35`）语义 |
-| 跨进程安全来自**租约** | 持有权是文件租约，不是"谁在内存里持有黑板" | 参与方可能同进程（桌面多 tab）也可能跨进程（托管 serve / remote / CLI / 手机）——只有租约同时覆盖两种 |
+| 逐节点**单写者** | 每个节点的状态迁移由一个租约持有者执行；多写者只体现在**不同节点**与 op 追加。**租约管"谁能推进"，不管"谁能写日志"**（后者由 board 级文件锁串行化，§11.1） | 免去共享可变结构；跨进程互斥用 `internal/filelock`（文件锁，不是内存里的 owner） |
+| 跨进程安全来自**文件锁 + 日志可重算** | 物理互斥 = board 级文件锁；逻辑租约 = `claim` 的 deadline + 心跳，**可从 op 日志重算**（进程被杀不丢） | 参与方可能同进程（桌面多 tab）也可能跨进程（托管 serve / remote / CLI / 手机） |
 | 杀掉编排者仍能推进 | 认领、依赖、裁决规则都在黑板上，任何参与者可继续；编排者只是参与者之一 | **这就是 §产品判据的落点** |
 | 人是参与者 | 人可对争议节点直接 `decide`，也可在话题里 `say`（两个身份都算参与者）；**升级受配额**（§失败模式） | 满足「可观测」不只是看，还能裁、能插话 |
 | 审议的写者 | 审议每轮的 op 仍落**同一节点**；**不写第二条日志** | 一份真相（§1 反例三） |
 | 房间接线 | 仓外房间的每一行按 `room:<seq>` 作为**证据引用**（`docs/COLLAB-SURFACE.md` §2 的 `room.seq`）；内核自由对话按 `<board>/#seq` | 房间负责「说」、黑板负责「算」；房间不在时该项证据缺失，**不阻塞** |
-| 跨工作区寻址 | 目标按 `工作区 + 会话` 寻址；连接取自 `agentd` 注册表（`Record.URL()` + `Record.TokenFile`） | 会话清单的 `all bool`（`internal/serve/session_list.go:21`）已经是"跨工作区"这一维 |
+| 跨工作区寻址 | 目标按 `工作区 + 会话` 寻址；连接取自 `agentd` 注册表（`internal/agentd/agentd.go:49-50` + `:41`） | 会话清单的 `all bool`（`internal/serve/session_list.go:21`）已经是"跨工作区"这一维 |
 | 跨工作区**可见性** | 黑板默认只共享**节点元数据与结果摘要**；证据引用（文件内容、转录片段）**按需授权**，默认不外泄到其他工作区 | 别的仓库可能是私有的；编排不该顺手把它搬到一个共享文件里 |
 | 跨工作区**能力** | worker 的能力天花板由**它自己所在工作区**决定，编排者**不得提升** | `CapabilityGrant` 是能力交集（∩），没有"跨区授权"这回事 |
-| 跨工作区**所有权** | 要搬会话/接管的，复用既有的 `GET /ownership`、`POST /handoff`、`/adopt`、`/reclaim`、`/mirror-end` | 已有；`internal/serve/serve.go:648-652` 就是寄存器 |
+| 跨工作区**所有权** | 要搬会话/接管的，复用既有的 `GET /ownership`、`POST /handoff`、`/adopt`、`/reclaim`、`/mirror-end` | 已有；`internal/serve/serve.go:648-653` 就是寄存器 |
 | 身份是**节点**，不是会话 | 身份 = `(scope, workspaceRoot, topicID)`（仓库既有三元组）+ 会话 +（可选）子 agent id | 只按会话寻址会在**观测**与**成本归属**上都对不上号 |
 | 会话内的再委派 | 一个会话内还能 fan-out：`task` / `parallel_tasks` / `fleet`（后两者上限 64） | `internal/agent/fleet.go:22`、`internal/agent/parallel_tasks.go:84`；**百级靠跨会话展开，不靠单会话扇出**（嵌套会 fail-fast） |
 | 谁在写会话 | 复用既有 ownership / lease 面，**不靠父子链接** | 人类随时可能在同一个 tab 里打字——父子关系不表达「谁持有」 |
 | 成本归属 | 每次参与消耗的 token 记到这次参与（`correlation` + 节点 id + **工作区**）上，而不是只记在目标会话名下 | `UsageSource` 已有 `subagent` 这一档前例；四级预算见 §集群规模 |
 | 跨进程投递 | 落到目标会话 inbox，再由宿主唤醒（跨进程时带该实例令牌） | `POST /inbox/items`（`internal/serve/inbox.go:21`）可按会话寻址；`activateAddressedSession`（`:153`） |
-| 并发与能力天花板 | 会话内仍走 `SubagentScheduler` + `CapabilityGrant`；**会话间另加全局并发槽** | `internal/agent/scheduler.go:36`（session-scoped）、`internal/agent/profile_spec.go` |
+| 并发与能力天花板（**接线在 control / host 层，agentbus 不参与**） | 会话内仍走 `SubagentScheduler` + `CapabilityGrant`；会话间另加全局 host 级并发槽 | `internal/agent/scheduler.go:36`（session-scoped）、`internal/agent/profile_spec.go`；分层见「编排落在哪」 |
 | 能力**登记** | 新造的能力（脚本 / skill / 工具 / MCP）制成**能力节点**上板：名称 / 入口 / 证据 / 验证状态 / 谁能用 | 自建能力的通道已存在（`internal/skill/tools.go:642` 的 `CreateWithContent`、改代码、挂 MCP）；缺的是登记与可发现（§失败模式） |
 
 > 读侧**不新建**：`internal/taskmonitor` 的包注释自述为「纯观察层……不实现第二套状态机」——
@@ -290,10 +300,10 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 
 | 内容 | 位置 | 形态 |
 |---|---|---|
-| 黑板操作日志（真相） | `<state home>/agentbus/<board>/board.jsonl` | append-only op（§3.1 + §3.2 审议），按 `seq`；**确定性 fold 得黑板状态**；损坏行跳过不中断启动 |
+| 黑板操作日志（真相） | `<state home>/agentbus/<board>/board.jsonl` | append-only op（§3.1 + §3.2 审议），按 `seq`；**确定性 fold 得黑板状态**；**结尾半行（无 `\n`）= 未提交的写，不算 op**；中段坏行跳过并**计数可见**（§11.1），两类都不中断启动 |
 | 黑板读投影 | 复用 `internal/taskcatalog`（SQLite）+ `internal/taskmonitor` | **不新开人读面** |
-| 对话与消息流 | `<state home>/agentbus/<board>/messages.jsonl` | append-only，按 `seq`；**`<board>/#seq` 即稳定地址**；损坏行跳过不中断启动 |
-| 邮箱游标 / 视图游标 | `<state home>/agentbus/<board>/cursor.<agent>.json` | 原子替换；**百级下必须增量读，不重放全量** |
+| 对话与消息流 | `<state home>/agentbus/<board>/messages.jsonl` | append-only，按 `seq`；**`<board>/#seq` 即稳定地址**；损坏行处理同上一行 |
+| 邮箱游标 / 视图游标 | `<state home>/agentbus/<board>/cursor.<agent>.json` | 原子替换（`internal/fileutil/atomicwrite.go:49`）；**百级下必须增量读，不重放全量** |
 | 结构化终态 | `<state home>/agentbus/<board>/results/<correlation>.json` | 含 `transcript_ref` 指向已有 JSONL，**不复制正文**；跨区内容按 §4 可见性规则 |
 | 能力登记 | `<state home>/agentbus/<board>/capabilities.json` | 名称 / 入口 / 证据 / 验证状态 / 谁能用（§4 末行） |
 | 地址簿 | `agentd` 的 `<home>/agents.json` | 复用，不新建 |
@@ -371,18 +381,20 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 | 读侧投影层（自述纯观察、不实现第二套状态机） | `internal/taskmonitor/model.go:1-8` |
 | inbox 按会话寻址 | `internal/serve/inbox.go:21`、`:153` |
 
-**9.3 现状事实锚点**（跨工作区 / 跨进程 / 规模 / 无人值守 / 闸门；本稿核实过）
+**9.3 现状事实锚点**（跨工作区 / 跨进程 / 规模 / 无人值守 / 闸门；本稿逐条核实过）
 
 | 面 | 锚点 |
 |---|---|
 | 会话按工作区分目录 | `internal/config/paths.go:462` |
-| 桌面 tab 带 `WorkspaceRoot`（空 = 全局） | `desktop/tabs.go:72`、`desktop/app.go:759`、`:873` |
+| 桌面 tab 带 `WorkspaceRoot`（空 = 全局） | `desktop/tabs.go:72`、`desktop/app.go:759`、`:873`、`:1349` |
 | 会话清单的 `all bool`（跨工作区开关） | `internal/serve/session_list.go:21` |
-| 会话所有权路由（跨进程/跨宿主接管） | `internal/serve/serve.go:648-652` |
-| 托管实例的地址与**每实例令牌** | `internal/agentd/agentd.go:15`、`:34-58` |
-| 会话租约锁侧车名 | `internal/agent/save.go:35` |
+| 会话所有权路由（跨进程/跨宿主接管） | `internal/serve/serve.go:648-653` |
+| 托管实例的 `Record` / 令牌 / 回环地址 | `internal/agentd/agentd.go:36-48`、`:41`（`TokenFile`）、`:49-50`（`URL()`） |
+| **跨进程文件锁（真实原语）** | `internal/filelock/filelock.go`、`lock_windows.go:30`、`lock_unix.go`（使用者 `internal/workspacelease/lease.go`、`internal/agentd/registry.go`） |
+| 原子替换写 | `internal/fileutil/atomicwrite.go:39`（允许 EXDEV 拷贝）、`:49`（仅重命名） |
+| 会话租约锁侧车名（**旧设计引用；不是本稿的锁原语**） | `internal/agent/save.go:35` |
 | 委派上限 64 | `internal/agent/fleet.go:22`、`internal/agent/parallel_tasks.go:84` |
-| **并发闸是会话级**（无账号级全局闸；嵌套 fail-fast） | `internal/agent/scheduler.go:36`、`internal/config/config.go:1304-1307` |
+| **并发闸是会话级**（无 host 级闸；嵌套 fail-fast） | `internal/agent/scheduler.go:36`、`internal/config/config.go:1304-1307` |
 | provider 退避与 `Retry-After` | `internal/provider/retry.go:22` |
 | **自建能力的现有通道**（skill 创建） | `internal/skill/tools.go:642`（`CreateWithContent`） |
 | **现状没有**关键路径 / 优先级调度（本稿核实：`internal/agent/` 无对应符号） | `internal/agent/scheduler.go`（只有会话内并发上限） |
@@ -399,9 +411,11 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 | design §3.3 言语行为集合 | **继承词表，改语义落点**（映射见 §3.4） | 词表已过审；但真相载体从消息换成黑板 |
 | design §3.4「Contract Net + Blackboard」 | **本稿骨架**（不再后置） | 用户 2026-10-02 否决「单向分活」：没有共享工件与裁决就不算多智能体 |
 | design §3.5「有界 propose/reject 表决」 | **继承语义，移到节点上**（§3.2 ③） | 表决从「facilitator 发起的一轮」变成「争议节点的固有状态」——因此不需要 facilitator 存在 |
-| design §3.5 冲突解决与收敛（预算 > 轮次/消息数上限 > quorum > 静默窗口） | **继承**（本稿把 quorum 换成「未决矛盾」，并加节点级速率） | 未受本稿影响 |
+| design §3.5 收敛优先级（预算 > 轮次/消息数上限 > quorum > 静默窗口） | **继承，两处改判** | 优先级次序未变；① quorum 换成「未决矛盾」；② 加节点级速率上限 |
+| design §3.5 平局规则「最小权限默认值 / 保守方案胜出」（design.md:137） | **取代** | 本稿 §3.2 ③ 改为「**等重不掷硬币 → 升级给人**」，受升级配额约束（评审指出此条原先未处置——已补） |
+| design §3.5「写冲突直接复用 `write_claims` 与 `<id>.jsonl.lease.lock`」 | **取代落点** | 那两个是**会话内**的写者锁；跨进程互斥改用 **board 级文件锁 `internal/filelock` + 逻辑租约**（§11.1） |
 | design §2.2「Facilitator 是确定性 Go 引擎、无规划权、无 blackboard 写权限」 | **继承并强化** | 裁决是**规则**不是角色：`decide` 执行前置条件判定，不产生规划 |
-| design §4.1 分层方向（不得让协作层 import control） | **继承**（本稿细化为 `frontends → control → agentbus → sessioninbox/taskmonitor/event`） | `tools/repolint/layers.go:71-74` |
+| design §4.1 分层方向（不得让协作层 import control） | **继承并收紧**：`frontends → control → {agent, agentbus}`；`agentbus` 只 import 工具包 | `tools/repolint/layers.go:71-74`；`agentbus → agent` 这条链被**否**（评审指出原链缺环） |
 | design §5.1 内核内实现、不引入 Python 运行时 | **继承**（独立 exe 只在"该协作涉及的宿主里不跑桌面/CLI"时才可能被需要，见 §编排落在哪） | 打包形态 + 复用既有原语 |
 | design §1.3「v1 限定单进程」 | **取代** | 参与方可能同进程也可能跨进程（§跨工作区两条轴）；`internal/sessioninbox`（durable、按会话围栏、`SchemaVersion=2`）与 `internal/agentd`（每实例托管 serve + 注册表 + 令牌）已把 durable 投递与跨进程寻址落地 |
 | design §6 缺陷 3「进程退出即丢在途队列，durable queue 列入 v2」 | **取代** | 同上：durable **已存在**，缺的是黑板与回执 |
@@ -412,20 +426,79 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 ## 11 落地顺序与出口条件
 
 > **顺序原则：先立骨架，再补手，最后再上量**。骨架是黑板（S1–S2，S2 必须**一开始就跨工作区**验证）；
-> 交流面进 S3；审议进 S4；**规模三闸（全局并发槽 / 四级预算 / 观测聚合）在 S5–S6**——它们只在 N 上去以后才咬，
+> 交流面进 S3；审议进 S4；**规模三闸（host 级并发槽 / 四级预算 / 观测聚合）在 S5–S6**——它们只在 N 上去以后才咬，
 > 但**必须在压测之前就位**（S7 是百级压测，先把闸装好再去撞它）。
 > **无人值守不需要新阶段**：它是「编排会话绑到既有 heartbeat 任务」的接线（§编排落地），验收落在 S7。
 
 | 阶段 | 内容 | 出口条件 |
 |---|---|---|
-| S1 | 黑板内核：op 日志 + 确定性 fold + **节点状态机（含 `capability_gap` / `abandon` / `revert`）** + 逐节点租约 + **心跳/回收**（*待建* `internal/agentbus/board`） | 非法迁移拒收；op 重放幂等；并发 op 折叠结果与串行一致；**杀掉推 op 的进程后，剩余 op 仍能折出完整状态**；**两个不同进程**并发写同一作用域不丢 op；**认领者被杀后节点在 deadline 内被回收并记 `no_progress`**；`revert` 后下游正确标 `stale`；**无证据的 `abandon` 被拒** |
-| S2 | 写侧接线 + 读侧投影（**含跨工作区与子树分片**）：多会话可写；**视图裁剪**（每轮只读我的子树+我的节点+订阅摘要）；读侧复用 `internal/taskcatalog` / `internal/taskmonitor` / 桌面任务树 | **两个不同工作区**的会话对同一黑板 `claim`/`assert`/`refute` 全部可见；**跨子树只经边界节点**；某 agent 的一轮请求里**不含别人的子树**（§8 第三条守卫）；`make frontend-check` 过 |
+| S1 | 黑板内核：op 日志 + 确定性 fold + **节点状态机（含 `capability_gap` / `abandon` / `revert`）** + 逐节点租约 + **心跳/回收**（*待建* `internal/agentbus/board`；规格见 §11.1） | 非法迁移拒收（**带原因**）；op 重放幂等；并发 op 折叠结果与串行一致；**杀掉推 op 的进程后，剩余 op 仍能折出完整状态**；**两个不同进程**并发写同一作用域不丢 op；**认领者被杀后节点在 deadline 内被回收并记 `no_progress`**；`revert` 后下游正确标 `stale`；**无证据的 `abandon`（与无证据的 `decide(done)`）被拒**；`seq` 跨进程单调不重号；**截断尾行不计入 op 且计数可见**；成环的 `split`/`require` 被拒；`agentbus` 不 import `agent`/`control` |
+| S2 | 写侧接线 + 读侧投影（**含跨工作区与子树分片**）：多会话可写；**视图裁剪**（每轮只读我的子树+我的节点+订阅摘要）；读侧复用 `internal/taskcatalog` / `internal/taskmonitor` / 桌面任务树 | **两个不同工作区**的会话对同一黑板 `claim`/`assert`/`refute` 全部可见；**跨子树只经边界节点**；某 agent 的一轮请求里**不含别人的子树**（§8 第三条守卫）；视图**增量读**（cursor/seq）而非每轮全量；`make frontend-check` 过 |
 | S3 | **交流三档**（§3.2）：① 自由对话 `say` + 话题边界；② 有界点对点 `ask`/`answer` + 回执（§7 缺口）；③ `results/<correlation>.json` | 话题轮数/预算/静默窗口任一触顶即收口；**自由对话默认不灌上下文**（只投点名与摘要）；`correlation` 的预算/TTL/hop 生效；跨进程目标带令牌；超速被拒时返回 `rate_limited`；**就绪节点用事件唤醒（`interval` 只兜底）** |
 | S4 | **审议**与裁决：审议状态（参与者/轮次/必答/权重/冷却）+ `decide` 规则 + 人作为参与者 + **升级配额** | ① 一次 `refute` **改变**结论（可回放：同一 op log 折叠出不同结局）；② **等重升级给人**，不被规则拍死；③ 弃答以 `no_answer` 可见；④ 争议节点可由人在桌面下结论；⑤ **无可核对证据时 `done` 被拒**（只允许留 `assert`）；⑥ **连续 `refute` 触发冷却**，速率上限生效；⑦ 超升级配额时**自动降级为 `undecided-by-rule`** 并记账；⑧ **票数不改变权重**（consensus ≠ evidence） |
-| S5 | **集群调度与预算**：全局（账号级）并发槽 + 排队 + 四级预算（board → 子树 → 节点 → 回合）+ 触顶即暂停（不杀会话）+ **调度四则**（关键路径优先 / 批量领取 / 同子树亲和 / 最难优先） | 并发槽满时新回合**排队而非失败**；槽与预算都被 host 级共享（多会话/多进程/多机同算一池）；触顶后**现场保留**、重启可续；`rate_limited` 与 provider 429 不再互相放大；**关键路径上的节点先跑**；**最难节点不被饿死**；**预算只被验收节点消耗**（做工不消耗总预算） |
+| S5 | **集群调度与预算**：**本机 host 级**并发槽 + 排队 + 四级预算（board → 子树 → 节点 → 回合）+ 触顶即暂停（不杀会话）+ **调度四则**（关键路径优先 / 批量领取 / 同子树亲和 / 最难优先） | 并发槽满时新回合**排队而非失败**（依赖 T2-4 定死的持久队列落点）；槽与预算在**本机**被 host 级共享（多会话/多进程同算一池；**跨机不在 v1**）；触顶后**现场保留**、重启可续；`rate_limited` 与 provider 429 不再互相放大；**关键路径上的节点先跑**；**最难节点不被饿死**；**预算只被验收节点消耗**（做工不消耗总预算） |
 | S6 | **观测聚合**（人读）：按子树折叠、只显异常/争议/停滞/孤儿、可下钻到节点 | 100 节点规模下首屏不画 >N 张卡片（阈值可配）；孤儿节点与停滞节点**必现**；下钻到节点能看到参与者、证据与 `no_progress` 记录 |
 | S7 | e2e + **无人值守贯通** + 完成判定 + **N≈100 压测** | ① 杀掉编排者，未完成节点仍被其他参与者认领并推进；② 一次 `refute` 改变结果；③ 运行时依赖：节点/边数在运行后增加，且由参与者而非派发方新增；④ **无人值守贯通**：杀掉桌面进程 → 既有看门狗拉起 → 黑板继续被推进（`docs/UNATTENDED.md` §11 自认这条链还没真机验收，所以第一次必须端到端跑一次）；⑤ **任务级落地**：验收节点全 `done` + 无未决矛盾才宣告完成，否则停在 `blocked` 并保留现场；⑥ **百级压测**：N≈100 并发参与、任意杀掉 20% 后仍收敛；总支出不超预算；无 429 风暴；**存在一次"缺能力→派生获取能力节点→完成"的真实链路** |
 | S8 | PR 元数据门 + 打包 | `verify-windows-portable.sh` exit 0；`Cache-impact`/`Cache-guard`/`System-prompt-review`/`Documentation-impact` 齐全 |
+
+### 11.1 S1 规格（实现前定死；S1 实现以此为准）
+
+**包与分层**：`internal/agentbus`（信封与投影，*待建*）+ `internal/agentbus/board`（S1 本体）。
+`board` **只 import 工具包**（`internal/fileutil`、`internal/filelock`）；**不得** import `internal/agent`、`internal/control`。
+目录由调用方给出（`board.Open(dir)`），**本包不解析 state home**。
+
+**节点状态闭集（8 个）**：`open` / `claimed` / `contested` / `done` / `blocked` / `abandoned` / `stale` / `capability_gap`。
+`ready`（自身 `open` 且所有依赖 `done`）与 `expired`（`claimed` 且 `now > deadline`）是**派生谓词，不落状态**。
+
+**迁移表**（不在表内的组合**一律拒收并带原因**；`-` = 状态不变）：
+
+| 动词 | 允许的前置状态 | 结果 |
+|---|---|---|
+| `claim` | `open`（且无未过期的他人租约） | `claimed` + owner/deadline/定界 |
+| `heartbeat` | `claimed` 且 owner 是本人 | `claimed`（deadline 延长） |
+| `release` / `yield` | `claimed` 且 owner 是本人 | `open` |
+| `assert` | `open` / `claimed` / `contested` | `-`（记录断言与证据；须带证据引用）；若该节点已有 `refute` ⇒ `contested` |
+| `refute` | 除 `abandoned` / `stale` 外任意 | `contested` |
+| `split` | 除 `done` / `abandoned` 外任意 | 子节点 `open`；父节点 `blocked`（建 `parent dependsOn child`） |
+| `require` | 除 `done` / `abandoned` 外任意 | 依赖节点 `open`（按给定 spec 创建，或引用既有）；本节点 `blocked`（建 `node dependsOn dep`） |
+| `capability_gap` | `open` / `claimed` | `capability_gap`（须带「要什么 / 试过什么 / 为何不行」） |
+| `abandon`（请求） | 除 `done` / `abandoned` 外任意 | `-`（请求记入；**须带证据，无证据拒收**） |
+| `decide`(outcome=`done`) | 除 `abandoned` / `stale` 外任意 | `done`（须 ≥1 条带证据 `assert`，**且** `reproduced_by` 不是产出者） |
+| `decide`(outcome=`blocked`) | `open` / `claimed` / `contested` | `blocked` |
+| `decide`(outcome=`abandoned`) | 该节点存在带证据的 `abandon` 请求 | `abandoned` |
+| `revert` | `done` | `open`，且**传递下游**中的 `done` ⇒ `stale` |
+| `no_progress`（系统，非人工） | `claimed` 且租约已过期 | `open`（记 `no_progress`；同 `(node, deadline)` 幂等） |
+
+**边模型**：只有一种边 `node dependsOn dep`。`split` 建 `parent dependsOn child`；`require` 建 `node dependsOn dep`。
+**加边前查环，成环即拒收**。`revert` 的"下游" = 沿 `dependsOn` **反向**可达闭包（谁依赖它）。
+
+**seq、幂等与互斥**：
+- `seq` 在**持有日志锁期间**由"当前末条 `seq` + 1"分配 ⇒ 跨进程单调不重号；`<board>/#seq` 即稳定地址。
+- op 幂等键 = `op.id`（缺省由 `(verb, node, actor, payload 哈希)` 生成）；**同 id 重复提交直接返回首次结果，不追加第二条**。
+- 写事务 = `读状态 → 校验 → 追加` **全程持 board 级文件锁**（`internal/filelock`）⇒「两个不同进程并发写不丢 op」成立。
+- **租约只表达"谁能推进"，不表达"谁能写日志"**（后者由文件锁管）——所以「逐节点单写者」与「多写者按 op 追加」不冲突（评审第 3 条缺口就此消解）。
+
+**时钟**：deadline / 心跳 / TTL 全用**墙钟 UTC**（跨进程唯一可比），判定只用 `now > deadline`，不依赖瞬时精度；
+**`now` 由调用方注入**（`Fold(ops, now)` 是纯函数），测试用注入时钟。
+
+**日志与损坏行**：每行一条 JSON + `\n`，**只追加、从不改写**。
+**结尾半行（无 `\n`）= 未提交的写，不算 op**；文件中段解析失败的行跳过并**计数**（`Truncated` / `Skipped` 可见）。
+**不静默、不中断启动**——静默跳过会毁掉"重放幂等"的可信度，所以计数必须能被读到。
+
+**过期扫描者**：**任何**参与者在自己的写事务开头顺手 `Sweep(now)`（**无新守护进程**）；`no_progress` 幂等。
+
+### 11.2 对抗评审留痕（2026-10-02，独立子智能体，只读）
+
+结论：**不能直接开工**——须先补 S1 规格（已补为 §11.1）并消解范围冲突。已并入本稿的：
+
+1. **锚点错误（3 处，逐条实测核对后修）**：`internal/agentd/agentd.go:15` 是 `RegistrySchemaVersion`，地址与令牌在 `:41`/`:49-50`；`/mirror-end` 在 `internal/serve/serve.go:653`（原写 `:648-652`，漏一格）；租约原语应锚 `internal/filelock`，不是 `internal/agent/save.go:35`（那只是侧车后缀常量，且是会话内的锁）。
+2. **自相矛盾（3 处）**：design §3.5 的**平局规则**原先未处置 ⇒ 补「取代」行；「收敛优先级」一格的"未受本稿影响"与同格自述冲突 ⇒ 改为"两处改判"；S5 的"多机同算一池"与 §现实边界"v1 单机"冲突 ⇒ 收敛为"**本机 host 级**；跨机不在 v1"，并把持久队列列为 TODO T2-4。
+3. **分层链缺环**：`agentbus → agent` 被否 ⇒ `agentbus` 只 import 工具包，Scheduler/Grant 接线留在 control/host（§编排落在哪、§10）。
+4. **S1 规格缺口（8 条）**：状态闭集与迁移表、`seq` 分配、op 幂等键、租约 vs append 的互斥粒度、时钟来源、损坏行边界、过期扫描者、`revert` 下游闭包——**全部落为 §11.1**。
+
+**未消解、留给 T2 的五条**（落地到对应阶段时**不得默认**）：视图/摘要的**廉价物化**（S2 成本模型）、
+**就绪事件由谁发**（S3/S5 接缝）、**四级预算与既有旋钮**谁统谁（超限后 Goal 变 `blocked` 还是 `complete`）、
+**并发槽的持久队列落点**（inbox 是会话级且嵌套 fail-fast）、**能力的授权链**（缺能力要装依赖/改仓库时谁批）。
 
 每阶段末：`gofmt -w .` → `go vet ./...` → `make lint`（含 `repolint`，会查**注释长度**与
 **变异体标量字段 ≤12**，`tools/repolint/structstate.go:13`；**不许放宽 baseline**）→
@@ -437,9 +510,9 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 - **把「指数复杂度」当成"不可设计"**：真实增长是**超线性**，只有全互联通信是 O(N²)；控制点在**视图**与**并发**，不在 agent 数（§集群规模）。
 - **把 100 个 agent 当 100 倍能力**：它是 100 倍**上下文成本**的风险；能力来自分解成树 + 视图裁剪 + 可核对证据（§集群规模）。
 - **让每个 agent 读全板**：视图必须是「我的子树 + 我的节点 + 订阅摘要」；读全板 = 每轮 O(N²)（§集群规模、§8 守卫三）。
-- **没有全局并发槽就拉百个**：现有旋钮是**每会话**一档、嵌套还 fail-fast，而模型 rate limit 是全账号共享 ⇒ 互相 429（§集群规模）。
-- **把「没能力」当「做不了」而静默停手**：缺能力是一等状态 `capability_gap`；`abandon` **要 `decide` 批准 + 带证据**，否则不许停（§失败模式）。
-- **以为「已 `done` 就不能改」**：`revert` 是必备——错误会放大，下游要标 `stale`（§失败模式）。
+- **没有 host 级并发槽就拉百个**：现有旋钮是**每会话**一档、嵌套还 fail-fast，而模型 rate limit 是全账号共享 ⇒ 互相 429（§集群规模）。
+- **把「没能力」当「做不了」而静默停手**：缺能力是一等状态 `capability_gap`；`abandon` **要 `decide` 批准 + 带证据**，否则不许停（§失败模式、§11.1）。
+- **以为「已 `done` 就不能改」**：`revert` 是必备——错误会放大，下游要标 `stale`（§失败模式、§11.1）。
 - **把「大家都同意」当证据**：consensus ≠ evidence；**票数不改变权重**（§失败模式）。
 - **让 `interval` 当唯一触发**：**就绪即事件唤醒**，`interval` 只兜底；否则百级下大半时间在空转（§失败模式）。
 - **把预算绑在做工而不是验收上**：做工多 ≠ 落地；**预算只被验收节点消耗**（§失败模式）。
@@ -454,6 +527,9 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 - **把「跨工作区」当成「必然跨进程」**：桌面多 tab 是**同进程、多 controller**（各带自己的 `WorkspaceRoot`）；托管 serve / remote / CLI 才是跨进程。两条轴都要覆盖（§跨工作区）。
 - **把 `board` 写成 `scope`**：仓库里 `Scope` 已另有所指（`desktop/app.go:759`）；撞名会让后来的人把一个当另一个读（§2）。
 - **把编排当成第四个前端或新守护进程**：编排是作用域里的参与者，唤醒复用既有 `heartbeat` / inbox 唤醒（§编排落在哪）。
+- **把「v1 单机」读成「永远单机」或反过来**：协议（地址 + 令牌 + 文件锁语义）保持可换目标，但**跨机同算一池不在 v1**（§集群规模、§11 S5）。
+- **拿会话内的写者锁当跨进程锁**：`internal/agent/save.go:35` 与 `write_claims` 都是会话内的；跨进程互斥是 `internal/filelock`（§10、§11.1）。
+- **把"跳过坏行"当无代价**：截断尾行不算 op，中段坏行跳过**必须计数可见**——静默跳过会毁掉重放的可信度（§11.1）。
 - 把本稿当已实现面读：§2–§5 的「定义处」在落地前是**目标**，不是指针。
 - 拿 §2 的信封去解析人读正文：正文是投影，字段是契约，两者永不互换（§1 反例一）。
 - 把 `GET /inbox/room-line` 当 reply：它答「这一行现在怎么了」，不答「谁回了你什么」（§7）。
