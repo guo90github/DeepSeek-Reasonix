@@ -63,6 +63,7 @@ type MemoryRecall struct {
 	Hits       []MemoryRecallHit `json:"hits,omitempty"`
 	UsedChars  int               `json:"used_chars,omitempty"`
 	Omitted    int               `json:"omitted,omitempty"`
+	TurnSeq    int               `json:"turn_seq,omitempty"`
 	Suppressed string            `json:"suppressed,omitempty"`
 	ShadowHits []MemoryRecallHit `json:"shadow_hits,omitempty"`
 }
@@ -82,6 +83,7 @@ type AnchorSafetyAudit struct {
 type MemoryRecallHit struct {
 	ID        string  `json:"id"`
 	Revision  int     `json:"revision,omitempty"`
+	Injected  *bool   `json:"injected,omitempty"`
 	Scope     string  `json:"scope,omitempty"`
 	Type      string  `json:"type,omitempty"`
 	Freshness string  `json:"freshness,omitempty"`
@@ -321,10 +323,11 @@ func (r *Recorder) RecordOutcomeProgress(sample evidence.OutcomeSample) {
 }
 
 func (r *Recorder) RecordMemoryRecall(a event.MemoryRecallAudit) {
-	rec := &MemoryRecall{UsedChars: a.UsedChars, Omitted: a.Omitted, Suppressed: a.Suppressed}
+	rec := &MemoryRecall{UsedChars: a.UsedChars, Omitted: a.Omitted, TurnSeq: a.TurnSeq, Suppressed: a.Suppressed}
 	for _, hit := range a.Hits {
+		injected := hit.Injected
 		rec.Hits = append(rec.Hits, MemoryRecallHit{
-			ID: hit.ID, Revision: hit.Revision, Scope: hit.Scope,
+			ID: hit.ID, Revision: hit.Revision, Injected: &injected, Scope: hit.Scope,
 			Type: hit.Type, Freshness: hit.Freshness, Score: hit.Score,
 		})
 	}

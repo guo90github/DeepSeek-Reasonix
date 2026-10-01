@@ -44,15 +44,27 @@ func TestRememberToolSaves(t *testing.T) {
 	}
 }
 
-func TestRememberToolDefaultsToProjectScope(t *testing.T) {
+// A fact the tool saves without a scope takes the default its type implies:
+// feedback about how to work is global (and pinned), project knowledge is local.
+func TestRememberToolDefaultsScopeByType(t *testing.T) {
 	root := t.TempDir()
 	store := Store{Dir: root + "/project", GlobalDir: root + "/global"}
-	if _, err := NewRememberTool(store).Execute(context.Background(), []byte(`{"name":"project-feedback","description":"current project only","type":"feedback","body":"body"}`)); err != nil {
+	tool := NewRememberTool(store)
+	if _, err := tool.Execute(context.Background(), []byte(`{"name":"work-style","description":"how to work","type":"feedback","body":"body"}`)); err != nil {
 		t.Fatal(err)
 	}
-	list := store.List()
-	if len(list) != 1 || list[0].Scope != FactScopeProject {
-		t.Fatalf("memory = %+v, want project scope", list)
+	if _, err := tool.Execute(context.Background(), []byte(`{"name":"project-only","description":"current project only","type":"project","body":"body"}`)); err != nil {
+		t.Fatal(err)
+	}
+	byName := map[string]FactScope{}
+	for _, m := range store.ListAll() {
+		byName[m.Name] = NormalizeFactScope(string(m.Scope))
+	}
+	if byName["work-style"] != FactScopeGlobal {
+		t.Fatalf("feedback scope = %q, want global", byName["work-style"])
+	}
+	if byName["project-only"] != FactScopeProject {
+		t.Fatalf("project scope = %q, want project", byName["project-only"])
 	}
 }
 
@@ -160,5 +172,41 @@ func TestRememberToolQueuesResolvedNameWhenUpdatingByID(t *testing.T) {
 	}
 	if len(q.notes) != 1 || !strings.Contains(q.notes[0], "stable-name") {
 		t.Fatalf("queued note did not use the resolved memory name: %v", q.notes)
+	}
+}
+
+// B1b (docs/50 §六): a create that would shadow an existing fact is refused with
+// the update instruction, so the model can act on it instead of piling up
+// near-identical memories. An explicit update still goes through.
+func TestRememberToolRefusesAShadowingCreateAndPointsAtTheUpdate(t *testing.T) {
+	root := t.TempDir()
+	store := Store{Dir: root + "/project", GlobalDir: root + "/global"}
+	tool := NewRememberTool(store)
+	if _, err := tool.Execute(context.Background(), []byte(`{"name":"release-target","title":"Release target","description":"Current release branch","type":"project","body":"Use main-v2."}`)); err != nil {
+		t.Fatal(err)
+	}
+	existing, ok := store.Read("release-target")
+	if !ok {
+		t.Fatal("seed fact missing")
+	}
+
+	_, err := tool.Execute(context.Background(), []byte(`{"name":"release-branch","title":"Release target","description":"Where releases come from","type":"project","body":"Use release-v2."}`))
+	if err == nil {
+		t.Fatal("a shadowing create must be refused")
+	}
+	if !strings.Contains(err.Error(), existing.ID) || !strings.Contains(err.Error(), "expected_revision") {
+		t.Fatalf("refusal = %q, want the existing id and the update instruction", err)
+	}
+	if list := store.List(); len(list) != 1 {
+		t.Fatalf("memories = %+v, want the duplicate refused", list)
+	}
+
+	updated := []byte(`{"id":"` + existing.ID + `","expected_revision":1,"title":"Release target","description":"Current release branch","type":"project","body":"Use release-v2."}`)
+	if _, err := tool.Execute(context.Background(), updated); err != nil {
+		t.Fatalf("an explicit update must still work: %v", err)
+	}
+	after, ok := store.Read("release-target")
+	if !ok || after.Revision != 2 || !strings.Contains(after.Body, "release-v2") {
+		t.Fatalf("update did not land: %+v ok=%v", after, ok)
 	}
 }

@@ -222,7 +222,7 @@ func (s Store) SaveWithOptions(m Memory, opts SaveOptions) (SaveResult, error) {
 		if inputRef.qualified {
 			m.Scope = inputRef.scope
 		} else {
-			m.Scope = FactScopeProject
+			m.Scope = DefaultScopeForType(m.Type)
 		}
 	} else {
 		m.Scope = NormalizeFactScope(string(m.Scope))

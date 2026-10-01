@@ -156,6 +156,9 @@ func (t *runSkillTool) Execute(ctx context.Context, args json.RawMessage) (strin
 		return "", fmt.Errorf("run_skill: %w", err)
 	}
 	sk = t.store.Prepare(sk)
+	if recorder, ok := UseRecorderFromContext(ctx); ok {
+		recorder.RecordSkillUse(sk.Name, SkillContentHash(sk))
+	}
 	rawArgs := strings.TrimSpace(p.Arguments)
 	opts := SubagentRunOptions{ContinueFrom: strings.TrimSpace(p.Continue), ForkFrom: strings.TrimSpace(p.Fork)}
 	if opts.ContinueFrom != "" && opts.ForkFrom != "" {

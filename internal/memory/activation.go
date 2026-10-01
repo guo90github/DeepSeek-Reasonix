@@ -4,6 +4,19 @@ package memory
 
 import "strings"
 
+// DefaultScopeForType is where a fact lands when its writer names no scope.
+// user/feedback describe the person and how they want to work, so they are
+// global on purpose — which is also what makes them pinned guidance; everything
+// else is a project fact, retrieved on demand (docs/50 A-32).
+func DefaultScopeForType(t Type) FactScope {
+	switch NormalizeType(string(t)) {
+	case TypeUser, TypeFeedback:
+		return FactScopeGlobal
+	default:
+		return FactScopeProject
+	}
+}
+
 // Activation controls how a fact reaches the model, orthogonal to Scope:
 // scope says where a fact may be used, activation says whether its body rides
 // the current session-context snapshot (pinned) or is retrieval-only (relevant).

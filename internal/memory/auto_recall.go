@@ -54,6 +54,12 @@ type RecallResult struct {
 	CharBudget int
 	UsedChars  int
 	Suppressed string
+	// TurnSeq is the session turn this decision belongs to (0 when unknown).
+	TurnSeq int
+	// Dropped are the hits that matched but did not reach the block: trimmed by
+	// the relative-score cut, by the hit limit, or by the character budget. They
+	// are recorded, never served (docs/50 §2.2).
+	Dropped []RecallHit
 	// ShadowHits is the Retrieval V2 ranking over the same pool, telemetry
 	// only: it never reaches the model and never affects Hits.
 	ShadowHits []ShadowHit
@@ -220,10 +226,13 @@ func autoRecallIndexed(index *RecallIndex, result RecallResult, opts RecallOptio
 	limit := recallLimit(opts.Limit)
 	if len(hits) > limit {
 		result.Omitted += len(hits) - limit
+		result.Dropped = append(result.Dropped, hits[limit:]...)
 		hits = hits[:limit]
 	}
 
-	result.Hits, result.block, result.Omitted = buildRecallBlock(hits, result.CharBudget, result.Omitted)
+	var overBudget []RecallHit
+	result.Hits, result.block, result.Omitted, overBudget = buildRecallBlock(hits, result.CharBudget, result.Omitted)
+	result.Dropped = append(result.Dropped, overBudget...)
 	result.UsedChars = utf8.RuneCountInString(result.block)
 	if len(result.Hits) == 0 {
 		result.Suppressed = "matched facts exceeded recall budget"
@@ -402,11 +411,12 @@ func recallReason(matched []string, scope FactScope) string {
 	return "matched " + strings.Join(matched, ", ") + "; " + string(NormalizeFactScope(string(scope))) + " scope"
 }
 
-func buildRecallBlock(hits []RecallHit, budget, omitted int) ([]RecallHit, string, int) {
+func buildRecallBlock(hits []RecallHit, budget, omitted int) ([]RecallHit, string, int, []RecallHit) {
 	const open = "<memory-recall>\n"
 	const close = "</memory-recall>"
 	prefix := open + autoRecallPreamble + "\n"
 	selected := make([]RecallHit, 0, len(hits))
+	dropped := make([]RecallHit, 0)
 	entries := make([]string, 0, len(hits))
 	used := utf8.RuneCountInString(prefix + close)
 	for _, hit := range hits {
@@ -417,6 +427,7 @@ func buildRecallBlock(hits []RecallHit, budget, omitted int) ([]RecallHit, strin
 		}
 		if entry == "" {
 			omitted++
+			dropped = append(dropped, hit)
 			continue
 		}
 		selected = append(selected, hit)
@@ -424,7 +435,7 @@ func buildRecallBlock(hits []RecallHit, budget, omitted int) ([]RecallHit, strin
 		used += utf8.RuneCountInString(entry)
 	}
 	if len(selected) == 0 {
-		return nil, "", omitted
+		return nil, "", omitted, dropped
 	}
 	block := prefix + strings.Join(entries, "")
 	if omitted > 0 {
@@ -434,7 +445,7 @@ func buildRecallBlock(hits []RecallHit, budget, omitted int) ([]RecallHit, strin
 		}
 	}
 	block += close
-	return selected, block, omitted
+	return selected, block, omitted, dropped
 }
 
 func recallEntry(hit RecallHit, snippet string) string {

@@ -414,3 +414,75 @@ func TestStoreV2RestoreArchivedRejectsSymlinkDirectory(t *testing.T) {
 		t.Fatalf("outside target changed: %v", err)
 	}
 }
+
+// B1 (docs/50 A-32): the create path takes the type's own default scope, so an
+// unscoped user fact is written as global memory — which is what makes it pinned
+// guidance — while an unscoped project fact stays project-local.
+func TestSaveDefaultsScopeByType(t *testing.T) {
+	caseDir, globalDir := t.TempDir(), t.TempDir()
+	store := Store{Dir: caseDir, GlobalDir: globalDir}
+
+	user, err := store.SaveWithOptions(Memory{Name: "prefers-go", Description: "Preferred language", Type: TypeUser, Body: "Prefer Go."}, SaveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if user.Memory.Scope != FactScopeGlobal {
+		t.Fatalf("unscoped user fact scope = %q, want global", user.Memory.Scope)
+	}
+	if !strings.HasPrefix(user.Path, globalDir) {
+		t.Fatalf("unscoped user fact wrote to %s, want the global dir %s", user.Path, globalDir)
+	}
+	if got := ResolveActivation(user.Memory); got != ActivationPinned {
+		t.Fatalf("global user fact activation = %q, want pinned", got)
+	}
+
+	project, err := store.SaveWithOptions(Memory{Name: "release-target", Description: "Release target", Type: TypeProject, Body: "Use main-v2."}, SaveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if project.Memory.Scope != FactScopeProject || !strings.HasPrefix(project.Path, caseDir) {
+		t.Fatalf("unscoped project fact = scope %q path %s, want project in %s", project.Memory.Scope, project.Path, caseDir)
+	}
+	if got := ResolveActivation(project.Memory); got != ActivationRelevant {
+		t.Fatalf("project fact activation = %q, want relevant", got)
+	}
+
+	// An explicit scope still wins over the type default.
+	pinnedByHand, err := store.SaveWithOptions(Memory{Name: "prefers-go-here", Description: "Repo-specific preference", Type: TypeUser, Scope: FactScopeProject, Body: "Prefer Go in this repo."}, SaveOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pinnedByHand.Memory.Scope != FactScopeProject {
+		t.Fatalf("explicit project scope = %q, want project", pinnedByHand.Memory.Scope)
+	}
+}
+
+func TestStoreDefaultsNewMemoriesByType(t *testing.T) {
+	dir := t.TempDir()
+	s := Store{Dir: filepath.Join(dir, "project"), GlobalDir: filepath.Join(dir, "global")}
+
+	projectPath, err := s.Save(Memory{Name: "project-constraint", Description: "project-only fact", Type: TypeProject, Body: "keep this local"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(projectPath, s.Dir) {
+		t.Fatalf("project fact path = %q, want project dir %q", projectPath, s.Dir)
+	}
+
+	globalPath, err := s.Save(Memory{Name: "work-style", Description: "how to work", Type: TypeFeedback, Body: "keep answers short"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(globalPath, s.GlobalDir) {
+		t.Fatalf("feedback fact path = %q, want global dir %q", globalPath, s.GlobalDir)
+	}
+	for _, m := range s.ListAll() {
+		want := FactScopeProject
+		if m.Name == "work-style" {
+			want = FactScopeGlobal
+		}
+		if got := NormalizeFactScope(string(m.Scope)); got != want {
+			t.Fatalf("%s scope = %q, want %q", m.Name, got, want)
+		}
+	}
+}

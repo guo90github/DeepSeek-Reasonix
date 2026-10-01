@@ -235,7 +235,7 @@ func TestStoreSaveTitleInIndexAndFrontmatter(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if idx := s.Index(); !strings.Contains(idx, "[Prefers tabs](project/tabs-rule.md)") {
+	if idx := s.Index(); !strings.Contains(idx, "[Prefers tabs](global/tabs-rule.md)") {
 		t.Fatalf("index link should use the title label:\n%s", idx)
 	}
 	if got := s.List()[0].Title; got != "Prefers tabs" {
@@ -250,7 +250,7 @@ func TestStoreIndexLabelFallsBackToDeKebabbedName(t *testing.T) {
 	if _, err := s.Save(Memory{Name: "likes-go", Description: "d", Type: TypeUser, Body: "b"}); err != nil {
 		t.Fatal(err)
 	}
-	if idx := s.Index(); !strings.Contains(idx, "[likes go](project/likes-go.md)") {
+	if idx := s.Index(); !strings.Contains(idx, "[likes go](global/likes-go.md)") {
 		t.Fatalf("missing-title label should de-kebab the name:\n%s", idx)
 	}
 }
@@ -662,22 +662,6 @@ func TestDirForFallsBackWhenNoGlobalDir(t *testing.T) {
 	s := Store{Dir: filepath.Join(dir, "memory")}
 	if got := s.DirFor(FactScopeGlobal); got != s.Dir {
 		t.Errorf("global scope without GlobalDir should fall back to Dir, got %q", got)
-	}
-}
-
-func TestStoreDefaultsNewMemoriesToProjectScope(t *testing.T) {
-	dir := t.TempDir()
-	s := Store{Dir: filepath.Join(dir, "project"), GlobalDir: filepath.Join(dir, "global")}
-	path, err := s.Save(Memory{Name: "project-feedback", Description: "project-only feedback", Type: TypeFeedback, Body: "keep this local"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.HasPrefix(path, s.Dir) {
-		t.Fatalf("default save path = %q, want project dir %q", path, s.Dir)
-	}
-	list := s.List()
-	if len(list) != 1 || list[0].Scope != FactScopeProject {
-		t.Fatalf("default memory = %+v, want project scope", list)
 	}
 }
 

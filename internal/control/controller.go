@@ -347,6 +347,7 @@ type Controller struct {
 	// turn counts model turns this session, passed to hooks in their payload.
 	turn       int
 	turnEvents turnEventState
+	readiness  readinessState
 	liveness   turnLiveness
 
 	displayRecorder func(content, display string)
@@ -836,6 +837,7 @@ func New(opts Options) *Controller {
 	if c.executor != nil {
 		c.wireMutationObserver()
 		c.executor.SetMemoryQueue(c)
+		c.executor.SetSkillUseRecorder(c)
 	}
 	// Auto Guard is built into Auto. Ask and YOLO bypass it through the mode
 	// provider, so no separate enablement state is needed.
@@ -2160,11 +2162,8 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	if c.guardianSess != nil {
 		c.guardianSess.ResetTurn()
 	}
+	turn := c.nextTurn()
 	if c.hooks.Enabled() {
-		c.mu.Lock()
-		c.turn++
-		turn := c.turn
-		c.mu.Unlock()
 		if block, _ := c.hooks.PromptSubmit(ctx, input, turn); block {
 			return nil
 		}
@@ -5403,7 +5402,7 @@ func (g gateApprover) approveWithPolicyReason(ctx context.Context, tool, subject
 	if tool == memoryRememberTool && g.c.allowLowRiskRemember(args) {
 		return true, false, "", nil
 	}
-	subject = approvalDisplaySubject(tool, subject, args)
+	subject, policyReason = approvalDisplaySubject(tool, subject, args), g.c.rememberWriteNote(tool, args, policyReason)
 	requireHuman := strings.EqualFold(tool, "bash") && permission.BashSubjectRequiresExplicitApproval(subject)
 	// Check pre-approval first, before any prompt or Guardian review. Dynamic
 	// Bash accepts only YOLO or an exact session grant here; ordinary calls also

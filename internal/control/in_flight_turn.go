@@ -51,6 +51,7 @@ func (c *Controller) clearInFlightTurn(marker agent.InFlightTurnMeta) {
 // crash marker. A crash can therefore leave either a recoverable marker or a
 // durable completed transcript, never an unmarked in-memory-only suffix.
 func (c *Controller) finishInFlightTurn(startMessages int, marker agent.InFlightTurnMeta) {
+	defer c.recordTurnOutcome()
 	if marker.HeadID != "" {
 		c.finishLoggedTurn(startMessages, marker)
 		return

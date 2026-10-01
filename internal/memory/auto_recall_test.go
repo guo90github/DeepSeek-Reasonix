@@ -201,3 +201,29 @@ func recallTestWrite(t *testing.T, dir string, memory Memory) {
 		t.Fatal(err)
 	}
 }
+
+// B2 (docs/50 §2.2): a hit that matched but lost the cut, the limit, or the
+// character budget is recorded as dropped — the record must be able to explain a
+// fact the user expected to see.
+func TestAutoRecallRecordsDroppedHits(t *testing.T) {
+	store := recallTestStore(t)
+	for _, id := range []string{"mem-drop-a", "mem-drop-b", "mem-drop-c"} {
+		recallTestWrite(t, store.Dir, Memory{
+			ID: id, Name: "authhandler-" + id, Title: "AuthHandler issue 6928",
+			Description: "AuthHandler panic tracked by issue 6928", Type: TypeProject,
+			Scope: FactScopeProject, Body: "AuthHandler panics without session metadata.",
+		})
+	}
+	result := AutoRecall(store, "AuthHandler issue 6928 panic", RecallOptions{Limit: 1})
+	if len(result.Hits) != 1 {
+		t.Fatalf("hits = %+v, want the limit to leave one", result.Hits)
+	}
+	if len(result.Dropped) == 0 || result.Omitted == 0 {
+		t.Fatalf("dropped = %+v omitted = %d, want the trimmed hits recorded", result.Dropped, result.Omitted)
+	}
+	for _, hit := range result.Dropped {
+		if hit.Memory.ID == "" {
+			t.Fatalf("dropped hit lacks an identity: %+v", hit)
+		}
+	}
+}

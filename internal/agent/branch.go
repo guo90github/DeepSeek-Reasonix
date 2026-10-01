@@ -54,6 +54,9 @@ type BranchMeta struct {
 	VersionKind          SessionVersionKind  `json:"version_kind,omitempty"`
 	VersionState         SessionVersionState `json:"version_state,omitempty"`
 	ParentConversationID string              `json:"parent_conversation_id,omitempty"`
+	MemoryRecall         []MemoryRecallTurn  `json:"memory_recall,omitempty"`
+	SkillUse             []SkillUseRecord    `json:"skill_use,omitempty"`
+	TurnOutcome          []TurnOutcome       `json:"turn_outcome,omitempty"`
 	ParentVersionID      string              `json:"parent_version_id,omitempty"`
 	BaseRevision         int64               `json:"base_revision,omitempty"`
 	DiskRevision         int64               `json:"disk_revision,omitempty"`
@@ -90,6 +93,9 @@ type BranchMeta struct {
 	LogGeneration int64  `json:"log_generation,omitempty"`
 	// Closed completed todo shelves; desktop remounts hide the same fingerprint.
 	DismissedTodoBatches []string `json:"dismissed_todo_batches,omitempty"`
+	// TodoBatch is the host-issued identity of the task list this sidecar last
+	// carried; see todo_batch_identity.go.
+	TodoBatch *TodoBatchIdentity `json:"todo_batch,omitempty"`
 }
 
 // SessionVersionKind is the durable identity class of a physical transcript.

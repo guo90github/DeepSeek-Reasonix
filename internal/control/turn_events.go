@@ -36,6 +36,14 @@ type turnEventState struct {
 	err    error
 }
 
+// RecordReadinessAudit keeps the turn's readiness verdict for the turn-outcome
+// record and forwards it, so every other sink still sees it. Memory only: the
+// sink runs on the agent's goroutine.
+func (s *turnEventSink) RecordReadinessAudit(a evidence.ReadinessAudit) {
+	s.c.readiness.record(a)
+	s.AuditForwarder.RecordReadinessAudit(a)
+}
+
 func newTurnEventSink(inner event.Sink, c *Controller) *turnEventSink {
 	s := &turnEventSink{inner: inner, c: c}
 	s.stream = event.Coalesce(&turnEventDurableSink{owner: s}, event.DefaultStreamDeltaWindow)

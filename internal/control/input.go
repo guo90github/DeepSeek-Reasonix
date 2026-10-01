@@ -203,6 +203,11 @@ func (c *Controller) composeWithGoal(
 		}
 	}
 	if includeHookContext {
+		// The session's own progress: recent verdicts and open obligations. Like
+		// the blocks below it rides the turn body, never the stable prefix.
+		if progress := c.turnProgressBlock(); progress != "" {
+			text = progress + "\n\n" + text
+		}
 		if block := c.drainHookContextBlock(); block != "" {
 			text = block + "\n\n" + text
 		}
@@ -211,13 +216,16 @@ func (c *Controller) composeWithGoal(
 		// accidental recall. A just-written fact already arrives in memory-update.
 		if len(notes) == 0 && !c.ablation.Off(ablation.Retrieval) {
 			result := c.memory.recall(source)
+			result.TurnSeq = c.Turn()
 			event.RecordMemoryRecall(c.sink, memoryRecallAudit(result))
+			c.recordMemoryRecallTurn(result)
 			if block := result.Block(); block != "" {
 				text = strings.TrimRight(text, "\n") + "\n\n" + block
 			}
 		} else if len(notes) > 0 {
 			c.memory.recordRecall(memory.RecallResult{
 				Query:      strings.TrimSpace(source),
+				TurnSeq:    c.Turn(),
 				Suppressed: "memory update already supplies the new fact",
 			})
 		}

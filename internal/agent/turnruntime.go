@@ -56,6 +56,9 @@ type turnRuntime struct {
 	// (or a pending recovery of) a prior readiness failure, so the final
 	// allowed audit can report Recovered=true.
 	readinessRecovered bool
+	// missingObligations is the last readiness verdict's unclosed obligations,
+	// kept for the turn-outcome record (docs/70 §2.1). Ids only, never text.
+	missingObligations []string
 
 	// recoveryTaskSummary is the bounded task text for this Agent.Run. It lets
 	// a shared recovery gate review sub-agent mutations against the child

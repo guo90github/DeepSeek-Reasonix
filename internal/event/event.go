@@ -779,15 +779,18 @@ type MemoryRecallAudit struct {
 	Hits       []MemoryRecallHit
 	UsedChars  int
 	Omitted    int
+	TurnSeq    int    // session turn this decision belongs to; 0 when unknown
 	Suppressed string // reason recall stayed silent; "" when hits were injected
 	// Shadow is the Retrieval V2 ranking (telemetry only, never served).
 	Shadow []MemoryRecallHit
 }
 
-// MemoryRecallHit is one recalled fact's content-free fingerprint.
+// MemoryRecallHit is one recalled fact's content-free fingerprint. Injected
+// separates what reached the model from what matched and was dropped (docs/50 §2.2).
 type MemoryRecallHit struct {
 	ID        string
 	Revision  int
+	Injected  bool
 	Scope     string
 	Type      string
 	Freshness string

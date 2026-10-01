@@ -2,11 +2,13 @@ package control
 
 import (
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/memory"
 )
@@ -110,14 +112,15 @@ func newMemoryManager(set *memory.Set) memoryManager {
 func memoryRecallAudit(result memory.RecallResult) event.MemoryRecallAudit {
 	audit := event.MemoryRecallAudit{
 		UsedChars: result.UsedChars, Omitted: result.Omitted, Suppressed: result.Suppressed,
+		TurnSeq: result.TurnSeq,
 	}
 	for _, hit := range result.Hits {
-		audit.Hits = append(audit.Hits, event.MemoryRecallHit{
-			ID: hit.Memory.ID, Revision: hit.Memory.Revision,
-			Scope:     string(memory.NormalizeFactScope(string(hit.Memory.Scope))),
-			Type:      string(memory.NormalizeType(string(hit.Memory.Type))),
-			Freshness: hit.Freshness, Score: hit.Score,
-		})
+		audit.Hits = append(audit.Hits, memoryRecallHit(hit, true))
+	}
+	// Dropped hits are recorded as fingerprints only: they never reached the
+	// model, and the record must show why a fact a user expected was absent.
+	for _, hit := range result.Dropped {
+		audit.Hits = append(audit.Hits, memoryRecallHit(hit, false))
 	}
 	for _, hit := range result.ShadowHits {
 		audit.Shadow = append(audit.Shadow, event.MemoryRecallHit{ID: hit.ID, Score: hit.Score})
@@ -127,6 +130,15 @@ func memoryRecallAudit(result memory.RecallResult) event.MemoryRecallAudit {
 
 // current returns the loaded snapshot (nil when memory is disabled). The returned
 // *Set is immutable — mutations go through quickAdd / saveDoc / saveMemory.
+func memoryRecallHit(hit memory.RecallHit, injected bool) event.MemoryRecallHit {
+	return event.MemoryRecallHit{
+		ID: hit.Memory.ID, Revision: hit.Memory.Revision, Injected: injected,
+		Scope:     string(memory.NormalizeFactScope(string(hit.Memory.Scope))),
+		Type:      string(memory.NormalizeType(string(hit.Memory.Type))),
+		Freshness: hit.Freshness, Score: hit.Score,
+	}
+}
+
 func (m *memoryManager) current() *memory.Set {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -289,4 +301,65 @@ func (m *memoryManager) queue(_ string) {
 	if mem := m.current(); mem != nil {
 		m.applyBackgroundWrite(mem)
 	}
+}
+
+// rememberWriteNote appends the write assessment's explanation to an approval
+// reason. A remember call that cannot be auto-written usually hit a duplicate or
+// a global-scope default, and the reason names the existing fact to update — the
+// human sees it in the prompt and the model sees it if the call is denied.
+func (c *Controller) rememberWriteNote(tool string, args json.RawMessage, reason string) string {
+	if tool != memoryRememberTool {
+		return reason
+	}
+	mem := c.Memory()
+	if mem == nil {
+		return reason
+	}
+	assessment := memory.AssessRememberWrite(mem.Store, args)
+	if assessment.AutoAllow || strings.TrimSpace(assessment.Reason) == "" {
+		return reason
+	}
+	return combineApprovalReasons(reason, assessment.Reason)
+}
+
+// recordMemoryRecallTurn persists one turn's decision on the session sidecar, so
+// the review page can answer "which facts did turn N use" without re-parsing the
+// trajectory. Best-effort: a missing path or an unwritable sidecar never fails
+// the turn.
+func (c *Controller) recordMemoryRecallTurn(result memory.RecallResult) {
+	path := strings.TrimSpace(c.SessionPath())
+	if path == "" {
+		return
+	}
+	turn := agent.MemoryRecallTurn{
+		TurnSeq: result.TurnSeq, QueryHash: recallQueryHash(result.Query),
+		UsedChars: result.UsedChars, Omitted: result.Omitted, Suppressed: result.Suppressed,
+	}
+	for _, hit := range result.Hits {
+		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
+			ID: hit.Memory.ID, Revision: hit.Memory.Revision, Score: hit.Score, Injected: true,
+		})
+	}
+	for _, hit := range result.Dropped {
+		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
+			ID: hit.Memory.ID, Revision: hit.Memory.Revision, Score: hit.Score,
+		})
+	}
+	if len(turn.Hits) == 0 && turn.Suppressed == "" {
+		return
+	}
+	_ = agent.UpdateBranchMeta(path, false, func(meta *agent.BranchMeta) error {
+		agent.AppendMemoryRecallTurn(meta, turn)
+		return nil
+	})
+}
+
+// recallQueryHash keeps the record content-free: the query's text stays out.
+func recallQueryHash(query string) string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(query))
+	return hex.EncodeToString(sum[:8])
 }

@@ -7,7 +7,9 @@ package boot
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -15,6 +17,7 @@ import (
 	"reasonix/internal/ablation"
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
+	"reasonix/internal/memory"
 	"reasonix/internal/provider"
 )
 
@@ -231,5 +234,264 @@ model = "x"
 	}
 	if rec.roundCount() == 0 {
 		t.Fatal("no round reached the provider; the run never started")
+	}
+}
+
+// docs/50 A-32, at the provider boundary: the type's default scope decides
+// whether a fact's body actually reaches the model. An unscoped user/feedback
+// fact is global, so it is pinned guidance and rides the session-context
+// envelope; an unscoped project fact is retrieval-only, so its body stays out
+// (only its index description is sent).
+func TestEffectDefaultScopeDecidesWhetherAFactBodyReachesTheProvider(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	rec := &effectRecordingProvider{}
+	provider.Register("boot-scope-effect-test", func(provider.Config) (provider.Provider, error) { return rec, nil })
+	writeFile(t, dir, "reasonix.toml", scopedFactConfig)
+
+	seed, err := Build(context.Background(), Options{Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("seed Build: %v", err)
+	}
+	mem := seed.Memory()
+	if _, err := mem.Store.Save(memory.Memory{
+		Name: "work-style", Description: "how to work", Type: memory.TypeFeedback, Body: "PINNED-STYLE-BODY-9f",
+	}); err != nil {
+		seed.Close()
+		t.Fatalf("save feedback fact: %v", err)
+	}
+	if _, err := mem.Store.Save(memory.Memory{
+		Name: "project-note", Description: "project note description", Type: memory.TypeProject, Body: "PROJECT-ONLY-BODY-9f",
+	}); err != nil {
+		seed.Close()
+		t.Fatalf("save project fact: %v", err)
+	}
+	seed.Close()
+
+	ctrl, err := Build(context.Background(), Options{Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+	if err := ctrl.Run(context.Background(), "reply ok"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	reqs := rec.requests()
+	if len(reqs) == 0 {
+		t.Fatal("no request reached the provider boundary")
+	}
+	containsSent := func(needle string) bool {
+		for _, message := range reqs[0].Messages {
+			if strings.Contains(message.Content, needle) {
+				return true
+			}
+		}
+		return false
+	}
+	containsSystem := func(needle string) bool { return strings.Contains(systemMessage(reqs[0].Messages), needle) }
+	if !containsSent("PINNED-STYLE-BODY-9f") {
+		t.Fatal("global feedback fact body did not reach the provider request")
+	}
+	if containsSent("PROJECT-ONLY-BODY-9f") {
+		t.Fatal("retrieval-only project fact body leaked into the provider request")
+	}
+	if !containsSent("project note description") {
+		t.Fatal("retrieval-only fact should still be indexed by description")
+	}
+	if containsSystem("PINNED-STYLE-BODY-9f") {
+		t.Fatal("pinned guidance must ride the session-context envelope, not the system prompt")
+	}
+}
+
+const scopedFactConfig = `
+default_model = "test-model"
+
+[agent]
+system_prompt = "STABLE BASE"
+
+[environment]
+enabled = false
+
+[[providers]]
+name = "test-model"
+kind = "boot-scope-effect-test"
+model = "x"
+`
+
+// docs/70 §2.3, at the real boundary: the pre-turn progress block rides the turn
+// BODY (so a later turn starts knowing where it stands) and never the cache-stable
+// prefix, which must stay byte-identical across turns.
+func TestEffectTurnProgressRidesTheBodyNotThePrefix(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	rec := &effectRecordingProvider{}
+	provider.Register("boot-turn-progress-effect-test", func(provider.Config) (provider.Provider, error) { return rec, nil })
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "STABLE BASE"
+
+[environment]
+enabled = false
+
+[[providers]]
+name = "test-model"
+kind = "boot-turn-progress-effect-test"
+model = "x"
+`)
+
+	ctrl, err := Build(context.Background(), Options{Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+	ctrl.SetFreshSessionPath(filepath.Join(dir, "turn-progress.jsonl"))
+
+	if err := ctrl.Run(context.Background(), "first turn"); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	if err := ctrl.Run(context.Background(), "second turn"); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+
+	reqs := rec.requests()
+	if len(reqs) < 2 {
+		t.Fatalf("rounds = %d, want two turns", len(reqs))
+	}
+	first, last := reqs[0], reqs[len(reqs)-1]
+	body := ""
+	for _, message := range last.Messages {
+		if message.Role == provider.RoleSystem {
+			continue
+		}
+		body += message.Content + "\n"
+	}
+	if !strings.Contains(body, "<turn-progress>") {
+		t.Fatalf("the second turn's body must carry the progress block: %s", body)
+	}
+	if strings.Contains(systemMessage(first.Messages), "<turn-progress>") ||
+		strings.Contains(systemMessage(last.Messages), "<turn-progress>") {
+		t.Fatal("the progress block must never enter the system prompt")
+	}
+	if a, b := systemMessage(first.Messages), systemMessage(last.Messages); a != b {
+		t.Fatal("the progress block moved the system prompt")
+	}
+	if !reflect.DeepEqual(toolNames(first), toolNames(last)) {
+		t.Fatal("the tool surface drifted between turns")
+	}
+}
+
+// skillUseProvider asks for one skill, then finishes.
+type skillUseProvider struct {
+	mu     sync.Mutex
+	reqs   []provider.Request
+	rounds int
+}
+
+func (p *skillUseProvider) Name() string { return "boot-skill-use" }
+
+func (p *skillUseProvider) Stream(_ context.Context, req provider.Request) (<-chan provider.Chunk, error) {
+	p.mu.Lock()
+	p.reqs = append(p.reqs, req)
+	p.rounds++
+	round := p.rounds
+	p.mu.Unlock()
+	ch := make(chan provider.Chunk, 4)
+	if round == 1 {
+		ch <- provider.Chunk{Type: provider.ChunkToolCall, ToolCall: &provider.ToolCall{
+			ID: "skill-1", Name: "run_skill", Arguments: `{"name":"hot"}`,
+		}}
+	} else {
+		ch <- provider.Chunk{Type: provider.ChunkText, Text: "ok"}
+	}
+	ch <- provider.Chunk{Type: provider.ChunkDone}
+	close(ch)
+	return ch, nil
+}
+
+func (p *skillUseProvider) requests() []provider.Request {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]provider.Request(nil), p.reqs...)
+}
+
+// docs/50 §2.2, at the real boundary: a skill a turn actually ran is recorded on
+// the session sidecar as a fingerprint, and recording it leaves the provider
+// prefix (system prompt plus tool surface) byte-identical.
+func TestEffectSkillUseIsRecordedWithoutMovingThePromptPrefix(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+
+	rec := &skillUseProvider{}
+	provider.Register("boot-skill-use-effect-test", func(provider.Config) (provider.Provider, error) { return rec, nil })
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "STABLE BASE"
+
+[environment]
+enabled = false
+
+[[providers]]
+name = "test-model"
+kind = "boot-skill-use-effect-test"
+model = "x"
+`)
+	writeFile(t, dir, ".reasonix/skills/hot/SKILL.md", `---
+name: hot
+description: hot skill
+---
+HOT-SKILL-BODY-B3`)
+
+	ctrl, err := Build(context.Background(), Options{Sink: event.Discard})
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	defer ctrl.Close()
+
+	// The host binds the transcript path; boot's Options has no such field, so a
+	// test binds the sidecar target the way the desktop host does.
+	ctrl.SetFreshSessionPath(filepath.Join(dir, "skill-use.jsonl"))
+	if err := ctrl.Run(context.Background(), "run the hot skill"); err != nil {
+		t.Fatalf("first Run: %v", err)
+	}
+	if err := ctrl.Run(context.Background(), "say ok"); err != nil {
+		t.Fatalf("second Run: %v", err)
+	}
+
+	path := ctrl.SessionPath()
+	if strings.TrimSpace(path) == "" {
+		t.Fatal("the session has no path, so nothing could be recorded")
+	}
+	meta, ok, err := agent.LoadBranchMeta(path)
+	if err != nil || !ok {
+		t.Fatalf("LoadBranchMeta(%s): ok=%v err=%v", path, ok, err)
+	}
+	use, ok := agent.LatestSkillUse(meta)
+	if !ok || use.Name != "hot" || use.ContentHash == "" || use.CatalogDigest == "" {
+		t.Fatalf("skill use record = %+v ok=%v, want a fingerprint of the run skill", use, ok)
+	}
+	if strings.Contains(use.ContentHash+use.CatalogDigest, "HOT") || strings.Contains(use.ContentHash, "hot") {
+		t.Fatalf("the record must stay content-free: %+v", use)
+	}
+
+	reqs := rec.requests()
+	if len(reqs) < 2 {
+		t.Fatalf("rounds = %d, want the skill round and a later one", len(reqs))
+	}
+	if first, last := systemMessage(reqs[0].Messages), systemMessage(reqs[len(reqs)-1].Messages); first != last {
+		t.Fatalf("recording a skill use moved the system prompt")
+	}
+	for i, req := range reqs {
+		if !reflect.DeepEqual(toolNames(reqs[0]), toolNames(req)) {
+			t.Fatalf("round %d tool surface drifted", i)
+		}
 	}
 }

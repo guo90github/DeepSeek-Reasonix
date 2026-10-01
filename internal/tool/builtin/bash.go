@@ -275,9 +275,9 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 		msg := fmt.Sprintf("Started background job %q. It keeps running across turns; read new output with bash_output(job_id=%q), wait for it with wait, or stop it with kill_shell(job_id=%q).", job.ID, job.ID, job.ID)
 		// Background start is not a completed execution: completion is reported
 		// later by bash_output/wait. Do not masquerade as success with exit 0.
-		ex.State = tool.ShellStateBackgroundStarted
 		ex.MutationRisk = tool.ShellMutationUnknown
 		ex.DurationMs = time.Since(start).Milliseconds()
+		ex.State, ex.JobID = tool.ShellStateBackgroundStarted, job.ID
 		return tool.DetailedResult{
 			Output:    appendSessionDataHint(msg, b.guard.CommandHint(b.workDir, p.Command)),
 			Execution: ex,

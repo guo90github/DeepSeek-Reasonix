@@ -93,3 +93,74 @@ func (q *fakeAutoWriteQueue) ClaimAutoMemoryWrite(json.RawMessage) bool {
 	q.claim = false
 	return claimed
 }
+
+// B1 (docs/50 A-32): where a fact lands when the caller names no scope.
+//
+// Guards first: the three thresholds below already hold, so they are pinned here
+// rather than presented as new behavior.
+func TestAssessRememberWriteRejectsNonProjectTypesRegardlessOfScope(t *testing.T) {
+	store := Store{Dir: t.TempDir(), GlobalDir: t.TempDir()}
+	for _, args := range []json.RawMessage{
+		json.RawMessage(`{"name":"prefers-go","description":"Preferred language","type":"user","scope":"project","body":"Prefer Go."}`),
+		json.RawMessage(`{"name":"concise","description":"Response style","type":"feedback","scope":"project","body":"Keep answers concise."}`),
+	} {
+		got := AssessRememberWrite(store, args)
+		if got.AutoAllow || !strings.Contains(got.Reason, "project/reference") {
+			t.Fatalf("non-project type assessment = %+v", got)
+		}
+	}
+}
+
+// The flip: a user/feedback fact without an explicit scope is not a project fact
+// silently downgraded to retrieval; it is global by default, so an automatic
+// write must be refused *because the effective scope is global*.
+func TestAssessRememberWriteTreatsUnscopedUserFactAsGlobal(t *testing.T) {
+	store := Store{Dir: t.TempDir(), GlobalDir: t.TempDir()}
+	for _, args := range []json.RawMessage{
+		json.RawMessage(`{"name":"prefers-go","description":"Preferred language","type":"user","body":"Prefer Go."}`),
+		json.RawMessage(`{"name":"concise","description":"Response style","type":"feedback","body":"Keep answers concise."}`),
+	} {
+		got := AssessRememberWrite(store, args)
+		if got.AutoAllow {
+			t.Fatalf("unscoped global-by-default fact was auto-allowed: %+v", got)
+		}
+		if got.Scope != FactScopeGlobal {
+			t.Fatalf("effective scope = %q, want global", got.Scope)
+		}
+		if !strings.Contains(got.Reason, "global") {
+			t.Fatalf("reason must name the effective scope: %+v", got)
+		}
+	}
+	// An explicit project scope keeps the same fact project-local (still not an
+	// automatic write: the type is what the low-risk path refuses).
+	if got := AssessRememberWrite(store, json.RawMessage(`{"name":"prefers-go","description":"Preferred language","type":"user","scope":"project","body":"Prefer Go."}`)); got.Scope != FactScopeProject {
+		t.Fatalf("explicit project scope = %q, want project", got.Scope)
+	}
+}
+
+// The flip: a semantic duplicate is not a dead end — the assessment names the
+// fact that already covers it, so the caller can steer to an update.
+func TestAssessRememberWriteNamesTheExistingFactToUpdate(t *testing.T) {
+	store := Store{Dir: t.TempDir(), GlobalDir: t.TempDir()}
+	if _, err := store.Save(Memory{
+		Name: "release-target", Title: "Release target", Description: "Current release branch",
+		Type: TypeProject, Scope: FactScopeProject, Body: "Use main-v2.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	saved, ok := store.Read("release-target")
+	if !ok {
+		t.Fatal("seed fact missing")
+	}
+	got := AssessRememberWrite(store, json.RawMessage(`{"name":"release-target","description":"Changed release branch","type":"project","body":"Use release-v2."}`))
+	if got.AutoAllow || !strings.Contains(got.Reason, "existing") {
+		t.Fatalf("duplicate assessment = %+v", got)
+	}
+	if got.OverlapID != saved.ID || got.OverlapRevision != saved.Revision || got.OverlapName != saved.Name {
+		t.Fatalf("assessment must name the existing fact: got %+v, want id=%s revision=%d name=%s",
+			got, saved.ID, saved.Revision, saved.Name)
+	}
+	if !strings.Contains(got.Reason, saved.ID) || !strings.Contains(got.Reason, "update") {
+		t.Fatalf("reason must point at the update path: %+v", got)
+	}
+}

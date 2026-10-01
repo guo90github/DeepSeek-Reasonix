@@ -92,6 +92,15 @@ func (t rememberTool) Execute(ctx context.Context, args json.RawMessage) (string
 	}
 	factScope := FactScope(scope)
 	name := rememberRequestName(in)
+	// A create that would shadow an existing fact is a duplicate: hand the model
+	// the update instruction instead of writing a second near-identical file.
+	if strings.TrimSpace(in.ID) == "" && in.ExpectedRevision == 0 && t.store.Dir != "" {
+		// Writing to a name that already exists is an update-by-name, which the
+		// store performs; only a *different* name shadows a fact as a duplicate.
+		if existing, ok := rememberRequestOverlap(t.store, in, slug(name)); ok && slug(existing.Name) != slug(name) {
+			return "", fmt.Errorf("%s", overlapUpdateGuidance(existing))
+		}
+	}
 	autoCreate := ClaimAutoMemoryWriteFromContext(ctx, args)
 	activation := NormalizeActivation(in.Activation)
 	if strings.TrimSpace(in.Activation) != "" && activation == "" {

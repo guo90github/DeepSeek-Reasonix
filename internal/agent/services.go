@@ -14,6 +14,7 @@ import (
 	"reasonix/internal/provider"
 	"reasonix/internal/sandbox"
 	"reasonix/internal/sessiontemp"
+	"reasonix/internal/skill"
 	"reasonix/internal/tool"
 	"reasonix/internal/workspacelease"
 )
@@ -95,6 +96,9 @@ type agentServices struct {
 	// session, acquired lazily on the first mutation and held through the final
 	// participating run so verification stays isolated.
 	workspaceLease *workspacelease.Owner
+	// skillRecorder fingerprints skill invocations for the session record; it
+	// never sees skill bodies (see skill.UseRecorder).
+	skillRecorder skill.UseRecorder
 	// memQueue lets the remember/forget tools fold a turn-tail note about a
 	// just-made memory change into the next turn, so it applies this session
 	// without touching the cache-stable prefix.

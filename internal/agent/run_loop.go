@@ -412,6 +412,7 @@ func (a *Agent) handleFinalResponse(ctx context.Context, state *turnRuntime, tex
 		a.contextManager().ObserveUsage(usage)
 		return false, a.gracePause(state)
 	}
+	a.turn.missingObligations = readiness.missingIDs()
 	if readiness.reason != "" {
 		// Standard ends with its answer/quality summary. Delivery and Goal hand
 		// the structured gap to the controller, which exposes an explicit recovery
