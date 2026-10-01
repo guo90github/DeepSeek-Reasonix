@@ -82,8 +82,11 @@ type heartbeatConfig struct {
 	Revision      uint64 `json:"revision,omitempty"`
 	// Unattended is the master switch for Goal-driven autonomous runs. Off keeps
 	// every task the plain scheduled prompt it is today.
-	Unattended bool            `json:"unattended,omitempty"`
-	Tasks      []HeartbeatTask `json:"tasks"`
+	Unattended bool `json:"unattended,omitempty"`
+	// HandoffPercent is the context usage (percent of the window) at which an
+	// unattended task continues in a fresh session. Absent uses the default.
+	HandoffPercent int             `json:"handoffPercent,omitempty"`
+	Tasks          []HeartbeatTask `json:"tasks"`
 }
 
 // ErrHeartbeatConfigConflict means another writer changed the config after
@@ -142,6 +145,7 @@ type HeartbeatEngine struct {
 	holdLog        map[string]string                // last unattended hold reason per task, so a steady state logs once
 	handoffPreface map[string]string                // one-shot preface for a task just moved to a fresh session
 	unattended     bool                             // master switch, snapshotted at Start so a toggle lands on the next launch
+	handoffPercent int                              // context threshold, snapshotted at Start from handoffPercent
 	runningTasks   map[string]struct{}              // task-level execution reservation shared by tick and TriggerNow
 	done           chan struct{}
 	running        bool
@@ -187,6 +191,7 @@ func (e *HeartbeatEngine) Start() {
 		e.recordConfigSnapshotLocked(snapshot)
 		e.tasks = snapshot.cfg.Tasks
 		e.unattended = snapshot.cfg.Unattended && !hostCrashLoopDegraded()
+		e.handoffPercent = normalizeUnattendedHandoffPercent(snapshot.cfg.HandoffPercent)
 		if snapshot.cfg.Unattended && !e.unattended {
 			log.Printf("[heartbeat] unattended driving stays off this launch: the previous launches crashed")
 		}
@@ -463,13 +468,14 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 	if e.maybeRelaunchForUpgrade(&t) {
 		return t
 	}
+	// Spent windows and the switch are independent of a Goal, and they outrank
+	// the Goal hold below: a running Goal drives its own turns, so a window check
+	// placed behind that hold never fires for the long run it exists for.
+	if heartbeatSpentWindow(ctrl, e.unattendedEnabled(), e.handoffPercentValue()) && e.handoffUnattendedTask(&t, ctrl, scope, workspaceRoot, title) {
+		return e.executeTaskOwned(t)
+	}
 	if e.unattendedGoalStep(&t, ctrl) {
 		return t
-	}
-	// Spent windows and the switch are independent of a Goal: any task gets a
-	// fresh session while unattended driving is on.
-	if e.unattendedEnabled() && e.handoffUnattendedTask(&t, ctrl, scope, workspaceRoot, title) {
-		return e.executeTaskOwned(t)
 	}
 
 	// Set the task's approval mode only after confirming the controller is idle.

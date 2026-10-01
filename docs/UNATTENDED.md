@@ -102,7 +102,11 @@ could answer are cleared:
 
 ## 6. Spent window → handoff session
 
-- Criterion: `ContextSnapshot()` usage ≥ **96%** (`heartbeatWindowSpent`).
+- Criterion: `ContextSnapshot()` usage ≥ **90%** of the window (`heartbeatWindowSpent`),
+  configurable as `handoffPercent` in `heartbeat-tasks.json` (clamped to 50–99, absent
+  means the 90 default).
+- The criterion outranks the Goal hold: a running Goal drives its own turns, so a check
+  placed after that hold would never fire for the long unattended run it exists for.
 - Action: open a **fresh session**, switch `topicId` to it, and give it a one-shot
   preface carrying the goal contract and **the old transcript's path**, so the
   model reads what it needs instead of the driver inventing a summary.

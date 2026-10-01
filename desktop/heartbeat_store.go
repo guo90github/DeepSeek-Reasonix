@@ -149,7 +149,13 @@ func (e *HeartbeatEngine) writeTasksWith(tasks []HeartbeatTask, expected heartbe
 	}
 	// The unattended master switch is human-owned: a nil override carries the
 	// value already on disk so a full-table save never drops it.
-	cfg := heartbeatConfig{SchemaVersion: heartbeatSchemaVersion, Revision: revision, Unattended: current.cfg.Unattended, Tasks: mainTasks}
+	cfg := heartbeatConfig{
+		SchemaVersion:  heartbeatSchemaVersion,
+		Revision:       revision,
+		Unattended:     current.cfg.Unattended,
+		HandoffPercent: current.cfg.HandoffPercent,
+		Tasks:          mainTasks,
+	}
 	if unattended != nil {
 		cfg.Unattended = *unattended
 	}

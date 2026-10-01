@@ -210,6 +210,33 @@ func TestHeartbeatReplaceTasksPreservesRunHistory(t *testing.T) {
 	}
 }
 
+// 接续阈值也是人工拥有的配置：前端整表保存不得把它冲回默认值。
+func TestHeartbeatReplaceTasksKeepsTheHandoffThreshold(t *testing.T) {
+	isolateDesktopUserDirs(t)
+	engine := &HeartbeatEngine{}
+	path := engine.configPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create state dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(`{"schemaVersion":2,"handoffPercent":75,"tasks":[]}`), 0o600); err != nil {
+		t.Fatalf("seed config: %v", err)
+	}
+	if err := engine.ReplaceTasks([]HeartbeatTask{{ID: "t1", Title: "task", Enabled: true}}); err != nil {
+		t.Fatalf("ReplaceTasks: %v", err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read config: %v", err)
+	}
+	var cfg heartbeatConfig
+	if err := json.Unmarshal(body, &cfg); err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+	if cfg.HandoffPercent != 75 {
+		t.Fatalf("handoffPercent = %d, want 75 (a full-table save must not drop it)", cfg.HandoffPercent)
+	}
+}
+
 // TestHeartbeatReplaceConfigPreservesRunHistory: ReplaceConfig（revision/ETag 校验的
 // 前端保存）同样不得用旧快照清掉引擎已写入的 runHistory。
 func TestHeartbeatReplaceConfigPreservesRunHistory(t *testing.T) {

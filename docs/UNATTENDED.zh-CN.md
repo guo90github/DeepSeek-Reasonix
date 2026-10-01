@@ -88,7 +88,10 @@
 
 ## 6. 窗口耗尽 → 接续会话
 
-- 判定：`ContextSnapshot()` 用量 ≥ **96%**（`heartbeatWindowSpent`）。
+- 判定：`ContextSnapshot()` 用量 ≥ 窗口的 **90%**（`heartbeatWindowSpent`），可用
+  `heartbeat-tasks.json` 的 `handoffPercent` 改（自动夹在 50–99；缺省即 90）。
+- 该判据**优先于 Goal hold**：Goal 运行中会自己驱动续轮，判据放在 hold 之后则永远轮不到——
+  而它正是为这种长无人值守任务准备的。
 - 动作：开一条**新会话**、把 `topicId` 切过去、并给它一条一次性前言：
   目标契约 + **旧会话的完整记录路径**（让模型自己去读，而不是让驱动编一份摘要）。
 - 新会话按同一份 `goal` 契约重新锚定并继续推进；旧会话原样留在盘上可查。

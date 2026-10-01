@@ -9,21 +9,61 @@ import (
 	"strings"
 )
 
-// unattendedHandoffPercent is the context usage at which the driver prefers a
-// fresh session over one more turn against a full window.
-const unattendedHandoffPercent = 96
+// unattendedHandoffPercent is the default context usage at which the driver
+// prefers a fresh session over one more turn against a full window.
+const unattendedHandoffPercent = 90
+
+// Handoff bounds: a hand-edited config must not be able to disable the handoff
+// or fire it against a session that still has room.
+const (
+	minUnattendedHandoffPercent = 50
+	maxUnattendedHandoffPercent = 99
+)
+
+// normalizeUnattendedHandoffPercent maps an unset value onto the default and
+// clamps the rest into range.
+func normalizeUnattendedHandoffPercent(percent int) int {
+	if percent <= 0 {
+		return unattendedHandoffPercent
+	}
+	return min(max(percent, minUnattendedHandoffPercent), maxUnattendedHandoffPercent)
+}
 
 // heartbeatContextUsage is the read-only usage half of the status port.
 type heartbeatContextUsage interface {
 	ContextSnapshot() (int, int)
 }
 
-// heartbeatWindowSpent decides the handoff from the context snapshot alone.
-func heartbeatWindowSpent(used, window int) bool {
+// handoffPercentValue is the snapshotted threshold, normalized on read so a
+// hand-edited config cannot disable or over-eager the handoff.
+func (e *HeartbeatEngine) handoffPercentValue() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return normalizeUnattendedHandoffPercent(e.handoffPercent)
+}
+
+// heartbeatWindowSpent decides the handoff from the context snapshot and the
+// configured threshold alone.
+func heartbeatWindowSpent(used, window, percent int) bool {
 	if window <= 0 || used <= 0 {
 		return false
 	}
-	return used*100 >= window*unattendedHandoffPercent
+	return used*100 >= window*normalizeUnattendedHandoffPercent(percent)
+}
+
+// heartbeatSpentWindow is the switch-gated read of the same decision. It is
+// consulted before the Goal hold: a running Goal drives its own turns, so a
+// check placed behind that hold never fires for the long run it exists for.
+func heartbeatSpentWindow(ctrl heartbeatRuntimeStatus, unattended bool, percent int) bool {
+	if !unattended || ctrl == nil {
+		return false
+	}
+	usage, ok := ctrl.(heartbeatContextUsage)
+	if !ok {
+		return false
+	}
+	used, window := usage.ContextSnapshot()
+	return heartbeatWindowSpent(used, window, percent)
 }
 
 // heartbeatHandoffPreface tells the new session what it continues. The previous
@@ -50,7 +90,7 @@ func (e *HeartbeatEngine) handoffUnattendedTask(t *HeartbeatTask, ctrl heartbeat
 		return false
 	}
 	used, window := usage.ContextSnapshot()
-	if !heartbeatWindowSpent(used, window) {
+	if !heartbeatWindowSpent(used, window, e.handoffPercentValue()) {
 		return false
 	}
 	oldPath := ""
