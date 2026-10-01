@@ -74,7 +74,7 @@
 |---|---|---|
 | 服务子进程 | Electron `ServiceSupervisor` | 人活：3 次 / 5 分钟预算；**无人值守：不限次数 + 指数退避**（1s→2s→…→60s 封顶） |
 | 整个壳 | `app.relaunch()` | 无人值守下重试耗尽时自拉起并退出当前进程；另加 3 次 / 15 分钟预算，防止坏构建无限重启 |
-| 开机 | login item（**opt-in**） | 只有存在 `<home>/desktop-autostart.json` 且 `enabled: true` 才注册；关掉即注销，默认绝不碰你的机器 |
+| 开机 | login item（**opt-in**） | 只有存在 `<home>/desktop-autostart.json` 且 `enabled: true` 才注册；关掉即注销，默认绝不碰你的机器。有版本目录的安装启动的是 `versions/<当前版本>/reasonix-desktop.exe`，由它再拉起壳；**绝不指向 `app\Reasonix.exe`**（壳自己找不到服务）。版本目录是动态递增的，所以每次启动都按 `current.json` 重写这条登录项，换版本自动跟过去 |
 | 会话状态 | 印记 + goal sidecar | 重启后会话与 Goal 自动恢复，驱动下个 interval 继续推进 |
 
 「人主动退出绝不拉起」由印记裁决：干净退出会删掉印记，看门狗/重启策略因此看不到期望态。

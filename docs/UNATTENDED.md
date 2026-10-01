@@ -85,7 +85,7 @@ Ownership comes from the binding: the driver only ever acts on the session its
 |---|---|---|
 | Service child | Electron `ServiceSupervisor` | Attended: 3 restarts / 5 min; **unattended: unlimited, exponential backoff** (1s→…→60s cap) |
 | Whole shell | `app.relaunch()` | When retries are exhausted and unattended, relaunch and exit; a 3 / 15 min budget keeps a broken build from looping |
-| Boot | login item (**opt-in**) | Registered only when `<home>/desktop-autostart.json` says `enabled: true`; disabling unregisters it, and nothing ever touches a machine that did not ask |
+| Boot | login item (**opt-in**) | Registered only when `<home>/desktop-autostart.json` says `enabled: true`; disabling unregisters it, and nothing ever touches a machine that did not ask. A versioned install starts `versions/<active>/reasonix-desktop.exe`, which bootstraps the shell — never the Electron app in `app/`, which cannot find its service alone. The entry is rewritten from `current.json` on every launch, so a new version moves it |
 | Session state | marker + goal sidecar | Sessions and Goals recover on restart; the driver continues next interval |
 
 A deliberate quit never relaunches anything: a clean exit removes the marker, so
