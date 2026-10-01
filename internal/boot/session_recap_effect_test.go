@@ -2,6 +2,7 @@ package boot
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -231,5 +232,75 @@ model = "x"
 	}
 	if !stored {
 		t.Fatal("a manually generated recap was never stored")
+	}
+}
+
+// The window a person configures has to reach the provider request, not stop at
+// the config file: how much of a long session a recap reads is exactly this.
+func TestEffectRecapSendsWhatTheConfiguredWindowAllows(t *testing.T) {
+	isolateConfigHome(t)
+	dir := robustTempDir(t)
+	t.Chdir(dir)
+	t.Cleanup(CloseRecapLanes)
+
+	sessions := filepath.Join(dir, "sessions")
+	if err := os.MkdirAll(sessions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sessionPath := filepath.Join(sessions, "20260101-000000.000000000-test-model.jsonl")
+	session := agent.NewSession("system")
+	line := "这一轮我在查打包脚本里的路径处理，顺便核对了 NSIS 与 portable 目录的约定。"
+	for i := 0; i < 400; i++ {
+		session.Add(provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("%d %s", i, strings.Repeat(line, 6))})
+		session.Add(provider.Message{Role: provider.RoleAssistant, Content: "记下了：" + strings.Repeat(line, 3)})
+	}
+	if err := session.Save(sessionPath); err != nil {
+		t.Fatalf("save session: %v", err)
+	}
+
+	rec := &recapRecordingProvider{}
+	const kind = "boot-effect-recap-window"
+	provider.Register(kind, func(provider.Config) (provider.Provider, error) { return rec, nil })
+	writeFile(t, dir, "reasonix.toml", `
+default_model = "test-model"
+
+[agent]
+system_prompt = "BASE"
+session_recap_model = "test-model"
+
+[environment]
+enabled = false
+
+[[providers]]
+name = "test-model"
+kind = "`+kind+`"
+model = "x"
+context_window = 1000000
+`)
+
+	if _, err := Build(context.Background(), Options{Sink: event.Discard, SessionDir: sessions}); err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if !EnqueueSessionRecap(sessionPath) {
+		t.Fatal("the manual entry refused a session while the lane was running")
+	}
+
+	deadline := time.Now().Add(20 * time.Second)
+	var recaps []provider.Request
+	for time.Now().Before(deadline) {
+		if recaps = rec.recapRequests(); len(recaps) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if len(recaps) == 0 {
+		t.Fatal("no recap request reached the provider boundary")
+	}
+	evidence := recaps[0].Messages[len(recaps[0].Messages)-1].Content
+	// The lane's own constant was 96 KiB; this session is several times that, so
+	// reading it whole is only possible if the configured window arrived.
+	const oldConstant = 96 * 1024
+	if len(evidence) <= oldConstant*3 {
+		t.Fatalf("evidence = %d bytes, want the whole session the configured window allows", len(evidence))
 	}
 }

@@ -25,6 +25,25 @@ func (f recapModelsFunc) Resolve(ctx context.Context, sessionPath string) (provi
 	return f(ctx, sessionPath)
 }
 
+// recapModelsWithWindow pairs that resolver with the model's configured context
+// window: the lane needs one to reach a model and the other to know how much
+// transcript it may send.
+type recapModelsWithWindow struct {
+	resolve recapModelsFunc
+	window  func(ref string) int
+}
+
+func (m recapModelsWithWindow) Resolve(ctx context.Context, sessionPath string) (provider.Provider, string, bool) {
+	return m.resolve.Resolve(ctx, sessionPath)
+}
+
+func (m recapModelsWithWindow) WindowTokens(ref string) int {
+	if m.window == nil {
+		return 0
+	}
+	return m.window(ref)
+}
+
 // resolveRecapModel builds an independent provider instance for one model ref.
 type resolveRecapModel func(ref string) (provider.Provider, error)
 
@@ -154,20 +173,31 @@ func sharedRecapLane(ctx context.Context, cfg *config.Config, sink event.Sink, r
 	if runner, ok := recapLanes.byKey[key]; ok {
 		return runner, false, nil
 	}
-	models := recapModelsFunc(func(ctx context.Context, sessionPath string) (provider.Provider, string, bool) {
-		if ref, ok := agent.LoadSessionModel(sessionPath); ok {
-			if prov, err := resolve(ref); err == nil && prov != nil {
-				return prov, ref, true
+	models := recapModelsWithWindow{
+		resolve: recapModelsFunc(func(ctx context.Context, sessionPath string) (provider.Provider, string, bool) {
+			if ref, ok := agent.LoadSessionModel(sessionPath); ok {
+				if prov, err := resolve(ref); err == nil && prov != nil {
+					return prov, ref, true
+				}
 			}
-		}
-		if entry, ok := cfg.ResolveSessionRecapModel(); ok && entry != nil {
-			ref := entry.Name + "/" + entry.Model
-			if prov, err := resolve(ref); err == nil && prov != nil {
-				return prov, ref, true
+			if entry, ok := cfg.ResolveSessionRecapModel(); ok && entry != nil {
+				ref := entry.Name + "/" + entry.Model
+				if prov, err := resolve(ref); err == nil && prov != nil {
+					return prov, ref, true
+				}
 			}
-		}
-		return nil, "", false
-	})
+			return nil, "", false
+		}),
+		// The lane sends what the model can read, so it has to know the window the
+		// configuration declares for that model — not a constant compiled into it.
+		window: func(ref string) int {
+			entry, ok := cfg.ResolveModel(ref)
+			if !ok || entry == nil {
+				return 0
+			}
+			return entry.ContextWindow
+		},
+	}
 	generator := recap.NewGenerator(recap.GeneratorOptions{
 		// The override lives beside the projection, which is the one directory this
 		// lane already knows: a prompt nobody can find is a prompt nobody edits.

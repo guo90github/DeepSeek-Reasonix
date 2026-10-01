@@ -44,6 +44,9 @@ type fakeProvider struct {
 	maxSeen int
 	calls   int
 	last    string
+	// failures makes the next N calls fail the way a provider refuses an
+	// oversized request, which is what the lane's smaller-retry answers.
+	failures int
 }
 
 // lastEvidence is what the lane actually asked with: the budget failure this
@@ -102,6 +105,12 @@ func (p *fakeProvider) Name() string { return p.name }
 
 func (p *fakeProvider) Stream(ctx context.Context, req provider.Request) (<-chan provider.Chunk, error) {
 	p.mu.Lock()
+	if p.failures > 0 {
+		p.failures--
+		p.calls++
+		p.mu.Unlock()
+		return nil, fmt.Errorf("prompt is too long: %d bytes", len(lastMessageText(req)))
+	}
 	p.active++
 	p.calls++
 	p.last = lastMessageText(req)
@@ -565,8 +574,8 @@ func TestClipForRecapKeepsHeadAndTail(t *testing.T) {
 	tail := strings.Repeat("tail line\n", 40)
 	text := head + strings.Repeat("middle line\n", 200) + tail
 	got := clipForRecap(text, 400)
-	if len(got) > 400+64 {
-		t.Fatalf("clip kept %d bytes, want near 400", len(got))
+	if len(got) > 400 {
+		t.Fatalf("clip kept %d bytes, want the budget or less", len(got))
 	}
 	if !strings.HasPrefix(got, "head line") || !strings.HasSuffix(got, "tail line\n") {
 		t.Fatalf("clip dropped an end of the transcript: %q", got)
@@ -605,7 +614,7 @@ func TestClipForRecapDigestsTheOmittedTurns(t *testing.T) {
 	if strings.Contains(got, strings.Repeat("body\n", 3)) {
 		t.Fatalf("the digest copied a turn's body instead of one line: %q", got)
 	}
-	if len(got) > 3000+700 {
+	if len(got) > 3000 {
 		t.Fatalf("the digest blew the input budget: %d bytes", len(got))
 	}
 	// Tight: the map stays short and says how many turns it left out.
@@ -613,7 +622,7 @@ func TestClipForRecapDigestsTheOmittedTurns(t *testing.T) {
 	if !strings.Contains(tight, "more turns)") {
 		t.Fatalf("a short digest must count the turns it left out: %q", tight)
 	}
-	if len(tight) > 1000+1000 {
+	if len(tight) > 1000 {
 		t.Fatalf("a tight clip blew the input budget: %d bytes", len(tight))
 	}
 }
@@ -658,17 +667,25 @@ func TestTheLaneYieldsToARunningSessionAndGivesUpAtItsBudget(t *testing.T) {
 
 // A long session fills the transcript budget right up to its cap, so whatever the
 // request spends on its own policy has to be budgeted for. The failure this guards
-// was "bounded reviewer request exceeds 102400 bytes" on the longest sessions.
+// was "bounded reviewer request exceeds 114688 bytes" on the longest sessions.
 func TestGenerateHandlesASessionThatFillsTheTranscriptBudget(t *testing.T) {
 	ctx := context.Background()
-	h := newHarness(t)
 	// CJK, because that is what this user's sessions look like and a rune is three
 	// bytes: a budget counted in either one must still fit.
 	line := "这一轮我在查打包脚本里的路径处理，顺便核对了 NSIS 与 portable 目录的约定。\n"
 	// 96 KiB is the lane's default transcript budget; the session below is far past
 	// it, so the clip fills the budget and the request's own policy has to fit too.
 	const transcriptBudget = 96 * 1024
-	body := strings.Repeat(line, (transcriptBudget/len(line))+500)
+	// The markers are what the middle digest is built from, and the digest is what the
+	// clip used to spend on top of its budget: a fixture without them never reached the
+	// overflow this test exists for.
+	turn := "## User (turn %d)\n" + line + "\n## Assistant (turn %d)\n我先读了 scripts/desktop-build.sh。\n\n"
+	var b strings.Builder
+	for turnNumber := 1; b.Len() <= transcriptBudget*2; turnNumber++ {
+		fmt.Fprintf(&b, turn, turnNumber, turnNumber)
+	}
+	body := b.String()
+	h := newHarness(t, func(o *GeneratorOptions) { o.Transcript = fakeTranscript{text: body} })
 	path := h.session(t, "20260101-000000.000000000-fake.jsonl", body)
 
 	res, err := h.generator.Generate(ctx, path)

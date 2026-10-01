@@ -124,7 +124,7 @@ func NewGenerator(opts GeneratorOptions) *Generator {
 		opts.MaxTokens = -1
 	}
 	if opts.MaxInputBytes <= 0 {
-		opts.MaxInputBytes = 96 * 1024
+		opts.MaxInputBytes = recapDefaultMaxInputBytes
 	}
 	if opts.YieldInterval <= 0 {
 		opts.YieldInterval = 250 * time.Millisecond
@@ -212,16 +212,26 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 		return Result{Skipped: true, Reason: err.Error()}, nil
 	}
 	text = verifyFastPath(ctx, g, store, path, text)
-	text = clipForRecap(text, g.opts.MaxInputBytes)
 	if strings.TrimSpace(text) == "" {
 		return Result{Skipped: true, Reason: "empty transcript"}, nil
 	}
+	// The model decides how much transcript fits, so it is resolved before the clip
+	// rather than after it: the clip's budget is the window this model offers.
 	prov, ref, ok := g.opts.Models.Resolve(ctx, path)
 	if !ok {
 		_ = store.MarkPending(ctx, path, "no usable model", g.opts.Now())
 		return Result{Skipped: true, Reason: "no usable model"}, nil
 	}
-	raw, err := g.call(ctx, prov, ref, text)
+	budget := g.evidenceBudget(ref)
+	raw, err := g.call(ctx, prov, ref, clipForRecap(text, budget), budget)
+	for step := 0; err != nil && step < recapSizeFallbackSteps && budget > recapDefaultMaxInputBytes; step++ {
+		// A request the provider refused is retried smaller, because how much
+		// transcript it carries is the one thing this lane can change about it.
+		budget /= 2
+		g.trace(ctx, store, "generate", path,
+			fmt.Sprintf("retrying with %d bytes of transcript after: %v", budget, err))
+		raw, err = g.call(ctx, prov, ref, clipForRecap(text, budget), budget)
+	}
 	if err != nil {
 		_ = store.MarkPending(ctx, path, err.Error(), g.opts.Now())
 		return Result{Skipped: true, Reason: "call failed"}, nil
@@ -230,7 +240,7 @@ func (g *Generator) generate(ctx context.Context, path string) (Result, error) {
 		// A reasoning model can spend the whole completion budget thinking and
 		// return nothing at all; one immediate retry, with room to finish, beats
 		// leaving the session pending for a later sweep.
-		raw, err = g.callWith(ctx, prov, ref, text, g.opts.MaxTokens)
+		raw, err = g.callWith(ctx, prov, ref, clipForRecap(text, budget), g.opts.MaxTokens, budget)
 		if err != nil {
 			_ = store.MarkPending(ctx, path, err.Error(), g.opts.Now())
 			return Result{Skipped: true, Reason: "call failed"}, nil
@@ -302,29 +312,108 @@ func (g *Generator) promptSource() PromptSource {
 
 // call runs the lane's one bounded request: no tools, its own usage source, and
 // a completion budget the model's reasoning also has to fit inside.
-func (g *Generator) call(ctx context.Context, prov provider.Provider, ref, text string) (string, error) {
-	return g.callWith(ctx, prov, ref, text, g.opts.MaxTokens)
+func (g *Generator) call(ctx context.Context, prov provider.Provider, ref, text string, budget int) (string, error) {
+	return g.callWith(ctx, prov, ref, text, g.opts.MaxTokens, budget)
 }
 
-func (g *Generator) callWith(ctx context.Context, prov provider.Provider, ref, text string, maxTokens int) (string, error) {
+// recapGuardSlack is the room both request guard numbers leave above what the lane
+// measures, so they trip on a regression rather than on the byte they count.
+const recapGuardSlack = 1024
+
+// The transcript budget is derived from the window the model actually offers,
+// never from a constant: long sessions are the norm here, and a flat 96 KiB made
+// every one of them a fixed fraction of what the model could have read.
+const (
+	// recapDefaultMaxInputBytes is the floor the lane always spends, and the budget
+	// for a model whose window is unknown. A window narrows the lane only when it
+	// is smaller than this; it never narrows it below what the lane always sent.
+	recapDefaultMaxInputBytes = 96 * 1024
+	// recapWindowShare is the part of the context window the transcript may take.
+	// The rest carries the policy, the answer and the model's own reasoning.
+	recapWindowShare = 2 // half, as a divisor, so the arithmetic stays integral
+	// recapBytesPerToken understates how much text a token covers in the
+	// CJK-heavy transcripts this lane reads (a CJK character is three bytes and is
+	// roughly a token), so the derived budget errs on the safe side.
+	recapBytesPerToken = 3
+	// recapCompletionReserveTokens is what the model's own answer needs, so a full
+	// window never leaves the answer nowhere to go.
+	recapCompletionReserveTokens = 8 * 1024
+	// recapHardMaxInputBytes bounds the lane's appetite whatever the model claims:
+	// a recap is a background call with a timeout, so an unbounded window is not a
+	// size the lane could honour even if the provider accepts it.
+	recapHardMaxInputBytes = 2 * 1024 * 1024
+	// recapPrefillBytesPerSecond is a deliberately low read rate for deriving the
+	// timeout: the call must be allowed to finish reading what it was sent.
+	recapPrefillBytesPerSecond = 32 * 1024
+	// recapSizeFallbackSteps is how many times a failed call is retried smaller.
+	// The one thing this lane can change about a request the provider refused is
+	// how much transcript it carries.
+	recapSizeFallbackSteps = 2
+)
+
+// WindowResolver is optionally implemented by a ModelResolver that knows the
+// model's context window. Without it the lane spends only its floor.
+type WindowResolver interface {
+	WindowTokens(ref string) int
+}
+
+// evidenceBudget is how many bytes of transcript this call may send: the lane's
+// floor, raised by the window the model offers and bounded by the hard ceiling.
+func (g *Generator) evidenceBudget(ref string) int {
+	budget := g.opts.MaxInputBytes
+	if budget <= 0 {
+		budget = recapDefaultMaxInputBytes
+	}
+	resolver, ok := g.opts.Models.(WindowResolver)
+	if !ok {
+		return budget
+	}
+	window := resolver.WindowTokens(ref)
+	if window <= 0 {
+		return budget
+	}
+	room := window/recapWindowShare*recapBytesPerToken -
+		recapCompletionReserveTokens*recapBytesPerToken -
+		len(g.promptSource().Text)
+	if room > budget {
+		budget = room
+	}
+	if budget > recapHardMaxInputBytes {
+		budget = recapHardMaxInputBytes
+	}
+	return budget
+}
+
+// requestTimeout is the lane's own timeout raised to fit the evidence sent: a
+// call that carries a megabyte has to be allowed to read it.
+func (g *Generator) requestTimeout(budget int) time.Duration {
+	timeout := g.opts.Timeout
+	if derived := time.Duration(budget/recapPrefillBytesPerSecond) * time.Second; derived > timeout {
+		return derived
+	}
+	return timeout
+}
+
+func (g *Generator) callWith(ctx context.Context, prov provider.Provider, ref, text string, maxTokens, budget int) (string, error) {
+	source := g.promptSource()
 	return boundedllm.Call(ctx, boundedllm.Config{
 		Provider:    prov,
 		ModelRef:    ref,
 		Sink:        g.opts.Sink,
 		UsageSource: event.UsageSourceSessionRecap,
-		Timeout:     g.opts.Timeout,
+		Timeout:     g.requestTimeout(budget),
 		MaxTokens:   maxTokens,
 		// No byte cap either: notes carry pointers and a tier now, a long session
 		// produces more of them, and a stream cut mid-answer is exactly the failure
 		// this lane kept hitting. The timeout still bounds the call.
 		MaxOutputBytes: -1,
-		MaxSystemBytes: 6 * 1024,
-		// The transcript budget is spent on the evidence, and the system policy sits on
-		// top of it: four kilobytes stopped fitting once the prompt asked for pointers
-		// and a tier, and the longest sessions failed the total cap instead.
-		MaxTotalBytes:  g.opts.MaxInputBytes + 16*1024,
+		// Both numbers are measured from what is actually sent — the transcript budget
+		// the clip spends plus the policy it carries — so the guard trips on a regression
+		// rather than on a flat margin that a long session's digest overflowed.
+		MaxSystemBytes: len(source.Text) + recapGuardSlack,
+		MaxTotalBytes:  budget + len(source.Text) + recapGuardSlack,
 		EffortOverride: provider.PreferredReasoning(prov, "low"),
-	}, g.promptSource().Text, text)
+	}, source.Text, text)
 }
 
 // redactEntries scrubs a whole note: the body, the provenance it quotes, and the
@@ -431,6 +520,10 @@ func (g *Generator) acquire(ctx context.Context) error {
 	}
 }
 
+// clipNoteOverhead is the room the omission note needs for its own wording and for
+// the count of turns the digest left out. The clip keeps it inside the budget.
+const clipNoteOverhead = 128
+
 // clipForRecap keeps the head and the tail of an over-long transcript — the head
 // states what the session set out to do, the tail holds the conclusion — and
 // turns the dropped middle into one line per turn. Losing the middle outright
@@ -440,12 +533,21 @@ func clipForRecap(text string, max int) string {
 	if max <= 0 || len(text) <= max {
 		return text
 	}
-	head, tail := headPiece(text, max), tailPiece(text, max)
+	// The digest and its note come out of the same budget as the head and the tail:
+	// head + tail + note is what the request guard measures, so a clip that overshoots
+	// by its own digest is one the request it is sent in cannot carry.
+	inner, digestBudget := max-clipNoteOverhead-omittedBudget(max), omittedBudget(max)
+	if inner <= 0 {
+		inner, digestBudget = max, 0
+	}
+	head, tail := headPiece(text, inner), tailPiece(text, inner)
 	middle := text[len(head) : len(text)-len(tail)]
 	note := fmt.Sprintf("…[%d bytes omitted]…", len(middle))
-	if digest := digestTurns(middle, omittedBudget(max)); digest != "" {
-		note = fmt.Sprintf("…[%d bytes omitted; those turns came down to:]\n%s\n…[end of omitted middle]…",
-			len(middle), digest)
+	if digestBudget > 0 {
+		if digest := digestTurns(middle, digestBudget); digest != "" {
+			note = fmt.Sprintf("…[%d bytes omitted; those turns came down to:]\n%s\n…[end of omitted middle]…",
+				len(middle), digest)
+		}
 	}
 	return head + "\n" + note + "\n" + tail
 }
