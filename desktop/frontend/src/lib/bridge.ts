@@ -1,7 +1,7 @@
 import { makeMockModelSettingsBindings, type ModelSettingsBindings } from "./modelSettingsBridge";
 import { mockProviderTemplate, mockPreset, mockBundlePreset, mockKimiAPIModels, mockLongCatModels, mockTokenRhythmModels, mockTokenRhythmModelOverrides, mockMiMoV25Models, mockMiniMaxModels, mockGLMAPIModels, mockGLMCodingModels, mockGLMAnthropicModels, mockQwenAPIModels, mockQwenPlanModels, mockQwenPlanVisionModels, mockStepFunModels, mockOpenCodeGoModels, mockNovitaModels, mockGMIModels, mockVercelModels, mockOllamaCloudModels } from "./mockProviderTemplates";
 // The Electron host and the browser mock share this React-to-Go contract.
-import type { DesktopCommandName } from "../generated/desktopContract.generated";
+import type { DesktopCommandName, RecallRecordView } from "../generated/desktopContract.generated";
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
@@ -580,6 +580,8 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   // session. Busy tabs queue one reload for when they go idle.
   ReloadRuntime(tabID: string): Promise<void>;
   Memory(): Promise<MemoryView>;
+  RecallRecordForTab(tabID: string): Promise<RecallRecordView>;
+  RecallRecordForSession(sessionPath: string): Promise<RecallRecordView>;
   MemorySuggestions(): Promise<MemorySuggestionsView>;
   AcceptMemorySuggestion(suggestion: MemorySuggestion): Promise<string>;
   AcceptSkillSuggestion(suggestion: SkillSuggestion): Promise<string>;
@@ -714,6 +716,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   MigrateDesktopPreferences(language: string, theme: string, style: string): Promise<void>;
   SetAgentParams(temperature: number, maxSteps: number, plannerMaxSteps: number, systemPrompt: string): Promise<void>;
   SetCompactRatio(ratio: number): Promise<void>;
+  SetShellAsyncSpeedTier(tier: string): Promise<void>;
   SetReasoningLanguage(lang: string): Promise<void>;
   SetTrayLocale(locale: "en" | "zh" | "zh-TW"): Promise<void>;
   // SetBypass is the legacy desktop name for YOLO/full-access tool auto-approval
@@ -1053,7 +1056,7 @@ function bridgeBreadcrumb(method: string): string {
     return `turn ${method}`;
   if (/^(SetModel|SetEffort|SetDefaultModel|SetPlannerModel|SetVisionModel|SetWebSearchModel|SetSubagentModel|SetSubagentEffort|SetMaxSubagentDepth|SetMaxSubagentConcurrency|SetMaxParallelWriters)/.test(method))
     return `model ${method}`;
-  if (/^(SetDesktop|SetCloseBehavior|SetDisplayMode|SetStatusBar|SetReasoningDisplayMode|SetExpandThinking|SetAutoPlan|SetDefaultToolApprovalMode|SetCompactRatio|SetReasoningLanguage)/.test(method))
+  if (/^(SetDesktop|SetCloseBehavior|SetDisplayMode|SetStatusBar|SetReasoningDisplayMode|SetExpandThinking|SetAutoPlan|SetDefaultToolApprovalMode|SetCompactRatio|SetShellAsyncSpeedTier|SetReasoningLanguage)/.test(method))
     return `settings ${method}`;
   if (/^(SetConnectionKey|AddProviderConnection|RenameProviderConnections|SaveProvider|SetProviderWebSearch|SaveProviderModelCatalogs|AddOfficialProviderAccess|UpgradeDeepSeekProviderAccess|AddProviderPresetAccess|ResetProviderPresetAccess|RemoveProviderAccess|RemoveProviderAccesses|DeleteProvider|SaveProviderKey|SetProviderKey|ClearProviderKey|TestProviderModel|FetchProviderModelCatalog|FetchAllProviderModelCatalogs|FetchProviderModels|FetchAllProviderModels|ConnectKey)/.test(method))
     return `provider ${method}`;
@@ -1666,7 +1669,7 @@ function makeMockApp(): AppBindings {
       noProxy: "",
       proxy: { type: "socks5", server: "127.0.0.1", port: 7890, username: "", password: "" },
     },
-    agent: { temperature: 0.2, maxSteps: 0, plannerMaxSteps: 0, maxSubagentDepth: 2, maxSubagentConcurrency: 6, maxParallelWriters: 3, systemPrompt: "You are Reasonix, a coding agent.", reasoningLanguage: "auto", compactRatio: 0.8 },
+    agent: { temperature: 0.2, maxSteps: 0, plannerMaxSteps: 0, maxSubagentDepth: 2, maxSubagentConcurrency: 6, maxParallelWriters: 3, systemPrompt: "You are Reasonix, a coding agent.", reasoningLanguage: "auto", compactRatio: 0.8, shellAsync: "off" },
     bot: {
       enabled: !freshMock,
       model: "",
@@ -3525,7 +3528,7 @@ function makeMockApp(): AppBindings {
             used: 42124,
             window: 128000,
             sessionTokens: 34479,
-            compactRatio: 0.8,
+            compactRatio: 0.8, shellAsync: "off",
             sessionCost: 0.1287,
             sessionCurrency: "CNY",
             sessionCostQuote: {
@@ -4451,6 +4454,12 @@ function makeMockApp(): AppBindings {
     async MemoryForTab(_tabID: string) {
       return this.Memory();
     },
+    async RecallRecordForTab(_tabID: string) {
+      return { available: false };
+    },
+    async RecallRecordForSession(_sessionPath: string) {
+      return { available: false };
+    },
     async MemoryRevisions(_ref: string) {
       return [];
     },
@@ -5110,6 +5119,10 @@ function makeMockApp(): AppBindings {
         throw new Error(`compact ratio must be between ${COMPACT_RATIO_MIN_PERCENT / 100} and ${COMPACT_RATIO_MAX_PERCENT / 100}`);
       }
       settings.agent = { ...settings.agent, compactRatio: ratio };
+    },
+    async SetShellAsyncSpeedTier(tier: string) {
+      const normalized = tier === "balanced" || tier === "fast" ? tier : "off";
+      settings.agent = { ...settings.agent, shellAsync: normalized };
     },
     async SetReasoningLanguage(lang: string) {
       const normalized = lang === "zh" || lang === "en" ? lang : "auto";

@@ -4455,6 +4455,34 @@
       "inputs": []
     }
   },
+  "RecallRecordForSession": {
+    "domain": "desktop/recall_record_view.go",
+    "owner": "App.RecallRecordForSession",
+    "sources": [
+      "desktop/recall_record_view.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RecallRecordForSession",
+      "inputs": [
+        "sessionPath"
+      ]
+    }
+  },
+  "RecallRecordForTab": {
+    "domain": "desktop/recall_record_view.go",
+    "owner": "App.RecallRecordForTab",
+    "sources": [
+      "desktop/recall_record_view.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RecallRecordForTab",
+      "inputs": [
+        "tabID"
+      ]
+    }
+  },
   "ReclaimRemoteTabSession": {
     "domain": "desktop/remote_tab.go",
     "owner": "App.ReclaimRemoteTabSession",
@@ -7360,6 +7388,20 @@
       "resolver": "App.SetSessionRecapTier",
       "inputs": [
         "enabled"
+      ]
+    }
+  },
+  "SetShellAsyncSpeedTier": {
+    "domain": "desktop/settings_app.go",
+    "owner": "App.SetShellAsyncSpeedTier",
+    "sources": [
+      "desktop/settings_app.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SetShellAsyncSpeedTier",
+      "inputs": [
+        "tier"
       ]
     }
   },

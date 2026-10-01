@@ -2,6 +2,7 @@ import { saveModelSettings, isModelSettingsResult } from "../lib/modelSettings";
 import { ModelSettingHelp } from "./ModelSettingHelp";
 import { desktopHost } from "../lib/desktopHost";
 import { SettingsOptions } from "./SettingsOptions";
+import { ShellAsyncTierField } from "./ShellAsyncTierField";
 import { SettingsSelect } from "./SettingsSelect";
 import { providerProtocolLabel, providerProtocolChoices } from "../lib/providerProtocol";
 import { providerSupportsServerWebSearch } from "../lib/providerSearch";
@@ -1798,6 +1799,7 @@ function GeneralSection({ s, busy, apply, agentRunning }: SectionProps & { agent
           ))}
         </SettingsOptions>
       </SettingsField>
+      <ShellAsyncTierField value={s.agent.shellAsync} busy={busy} onSelect={(tier) => void apply(() => app.SetShellAsyncSpeedTier(tier))} />
       <DevWorkflowExtras />
       <SettingsField label={t("settings.language")} hint={t("settings.languageHint")} icon={<Languages size={18} />}>
         <SettingsOptions layout="field" className="set-seg">

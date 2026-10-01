@@ -6555,6 +6555,13 @@ type Meta struct {
 	GoalRuntime *GoalRuntimeView `json:"goalRuntime,omitempty"`
 	// Nil means no authoritative snapshot; non-nil empty means clear the panel.
 	CanonicalTodos *[]evidence.TodoItem `json:"canonicalTodos,omitempty"`
+	// TodoBatchID is the host-issued identity of that list; see
+	// todo_batch_identity.go.
+	TodoBatchID string `json:"todoBatchId,omitempty"`
+	// TodoQueue and TodoArchive are the board: unfinished work across every
+	// list this session carried, and what finished.
+	TodoQueue   []evidence.TodoItem `json:"todoQueue,omitempty"`
+	TodoArchive []evidence.TodoItem `json:"todoArchive,omitempty"`
 	// TodosSupervised rides with CanonicalTodos: absent means the list is the
 	// model's own note, so a frontend may label and dismiss it as such.
 	TodosSupervised bool `json:"todosSupervised,omitempty"`
@@ -6665,6 +6672,16 @@ func (a *App) MetaForTab(tabID string) Meta {
 		sessionRevision = branchMeta.Revision
 		sessionDigest = branchMeta.ContentDigest
 	}
+	canonicalTodos := ctrlTodos(snap.ctrl)
+	board := ctrlTodoBoard(snap.ctrl)
+	if canonicalTodos == nil {
+		// No bound controller: the transcript is the only truth, replayed
+		// read-only so a restored tab still shows what it owes (docs/40 S2).
+		if replayed, replayedBoard, ok := replayedTodosForSession(sessionPath, sessionDigest, sessionRevision); ok {
+			canonicalTodos = &replayed
+			board = replayedBoard
+		}
+	}
 	return Meta{
 		Label:                 snap.label,
 		Ready:                 runtimeView.Phase == sessionRuntimeReady && snap.ctrl != nil,
@@ -6690,11 +6707,23 @@ func (a *App) MetaForTab(tabID string) Meta {
 		Goal:                  goal,
 		GoalStatus:            goalStatus,
 		GoalRuntime:           goalRuntimeViewFromController(snap.ctrl),
-		CanonicalTodos:        ctrlTodos(snap.ctrl),
+		CanonicalTodos:        canonicalTodos,
+		TodoBatchID:           a.todoBatchIDForSessionPath(sessionPath, todoItemsOf(canonicalTodos)),
+		TodoQueue:             board.Queue,
+		TodoArchive:           board.Archive,
 		TodosSupervised:       snap.ctrl != nil && snap.ctrl.TodosSupervised(),
 		DismissedTodoBatches:  a.dismissedTodoBatchesForSession(sessionPath),
 		PinnedFiles:           buildPinnedContext(snap.workspaceRoot, tab.GetPinnedFiles()).Infos,
 	}
+}
+
+// ctrlTodoBoard returns the shelf's queue and archive, or the zero board when
+// the controller is not bound.
+func ctrlTodoBoard(ctrl control.SessionAPI) agent.TodoBoard {
+	if ctrl == nil {
+		return agent.TodoBoard{}
+	}
+	return ctrl.TodoBoard()
 }
 
 // ctrlTodos returns the canonical task list from a session controller, or nil

@@ -8298,6 +8298,56 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recall_record_view.go",
+      "name": "RecallRecordForSession",
+      "owner": "App.RecallRecordForSession",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.RecallRecordView"
+      },
+      "scope": {
+        "inputs": [
+          "sessionPath"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RecallRecordForSession"
+      },
+      "sources": [
+        "desktop/recall_record_view.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/recall_record_view.go",
+      "name": "RecallRecordForTab",
+      "owner": "App.RecallRecordForTab",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.RecallRecordView"
+      },
+      "scope": {
+        "inputs": [
+          "tabID"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RecallRecordForTab"
+      },
+      "sources": [
+        "desktop/recall_record_view.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/remote_tab.go",
       "name": "ReclaimRemoteTabSession",
       "owner": "App.ReclaimRemoteTabSession",
@@ -13445,6 +13495,28 @@
       },
       "sources": [
         "desktop/settings_preferences.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/settings_app.go",
+      "name": "SetShellAsyncSpeedTier",
+      "owner": "App.SetShellAsyncSpeedTier",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "tier"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SetShellAsyncSpeedTier"
+      },
+      "sources": [
+        "desktop/settings_app.go"
       ]
     },
     {
@@ -21025,6 +21097,13 @@
           "type": {
             "kind": "boolean"
           }
+        },
+        {
+          "name": "shellAsync",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
         }
       ]
     },
@@ -26857,6 +26936,35 @@
           }
         },
         {
+          "name": "todoBatchId",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "todoQueue",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "evidence.TodoItem"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "todoArchive",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "evidence.TodoItem"
+            },
+            "kind": "array"
+          }
+        },
+        {
           "name": "todosSupervised",
           "optional": true,
           "type": {
@@ -29126,6 +29234,125 @@
           "type": {
             "elem": {
               "kind": "string"
+            },
+            "kind": "array"
+          }
+        }
+      ]
+    },
+    "main.RecallHitView": {
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "revision",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "score",
+          "optional": true,
+          "type": {
+            "kind": "number"
+          }
+        },
+        {
+          "name": "injected",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ]
+    },
+    "main.RecallRecordView": {
+      "fields": [
+        {
+          "name": "available",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "sessionPath",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "turns",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.RecallTurnView"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "skills",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.SkillUseView"
+            },
+            "kind": "array"
+          }
+        }
+      ]
+    },
+    "main.RecallTurnView": {
+      "fields": [
+        {
+          "name": "turnSeq",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "queryHash",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "usedChars",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "omitted",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "suppressed",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "hits",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.RecallHitView"
             },
             "kind": "array"
           }
@@ -32592,6 +32819,36 @@
               "kind": "string"
             },
             "kind": "array"
+          }
+        }
+      ]
+    },
+    "main.SkillUseView": {
+      "fields": [
+        {
+          "name": "turnSeq",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "name",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "contentHash",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "catalogDigest",
+          "optional": true,
+          "type": {
+            "kind": "string"
           }
         }
       ]

@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:a0fc4f14edb0b17a4529359ba59ddb345a25ca0c7a0afac4b206787dd578a081";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:51e19bb40c321ab0b1aedaba94f7a68727f05f6ac0cf93ef65dcea83e5260b35";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -321,6 +321,8 @@ export const DESKTOP_COMMANDS = [
   "RebuildHistoryIndex",
   "RebuildSessionCatalog",
   "RebuildTaskCatalog",
+  "RecallRecordForSession",
+  "RecallRecordForTab",
   "ReclaimRemoteTabSession",
   "ReconcileRecoveryVersions",
   "ReconnectMCPServer",
@@ -521,6 +523,7 @@ export const DESKTOP_COMMANDS = [
   "SetSandbox",
   "SetSessionExperience",
   "SetSessionRecapTier",
+  "SetShellAsyncSpeedTier",
   "SetShellPreference",
   "SetSkillEnabled",
   "SetSkillImplicitInvocation",
@@ -1531,6 +1534,7 @@ export interface AgentView {
   compactRatio?: number;
   effectiveCompactRatio?: number;
   compactRatioOverridden?: boolean;
+  shellAsync?: string;
 }
 
 export interface BackgroundRuntimeView {
@@ -2614,6 +2618,9 @@ export interface Meta {
   goalStatus?: string;
   goalRuntime?: GoalRuntimeView | null;
   canonicalTodos?: TodoItem[] | null;
+  todoBatchId?: string;
+  todoQueue?: TodoItem[];
+  todoArchive?: TodoItem[];
   todosSupervised?: boolean;
   dismissedTodoBatches?: string[];
   pinnedFiles?: PinnedFileInfo[];
@@ -3024,6 +3031,29 @@ export interface QQBotView {
 export interface QuestionAnswer {
   questionId: string;
   selected: string[];
+}
+
+export interface RecallHitView {
+  id: string;
+  revision?: number;
+  score?: number;
+  injected?: boolean;
+}
+
+export interface RecallRecordView {
+  available: boolean;
+  sessionPath?: string;
+  turns?: RecallTurnView[];
+  skills?: SkillUseView[];
+}
+
+export interface RecallTurnView {
+  turnSeq: number;
+  queryHash?: string;
+  usedChars?: number;
+  omitted?: number;
+  suppressed?: string;
+  hits?: RecallHitView[];
 }
 
 export interface RecapOpenItemView {
@@ -3673,6 +3703,13 @@ export interface SkillSuggestion {
   body: string;
   reason: string;
   evidence: string[];
+}
+
+export interface SkillUseView {
+  turnSeq: number;
+  name: string;
+  contentHash?: string;
+  catalogDigest?: string;
 }
 
 export interface SkillView {
@@ -4832,6 +4869,8 @@ export interface GeneratedDesktopCommands {
   RebuildHistoryIndex(): Promise<void>;
   RebuildSessionCatalog(): Promise<void>;
   RebuildTaskCatalog(): Promise<void>;
+  RecallRecordForSession(arg0: string): Promise<RecallRecordView>;
+  RecallRecordForTab(arg0: string): Promise<RecallRecordView>;
   ReclaimRemoteTabSession(arg0: string): Promise<void>;
   ReconcileRecoveryVersions(arg0: ProjectTopicKey): Promise<void>;
   ReconnectMCPServer(arg0: string): Promise<void>;
@@ -5032,6 +5071,7 @@ export interface GeneratedDesktopCommands {
   SetSandbox(arg0: string, arg1: boolean, arg2: string, arg3: string[], arg4: string): Promise<void>;
   SetSessionExperience(arg0: string): Promise<void>;
   SetSessionRecapTier(arg0: boolean): Promise<void>;
+  SetShellAsyncSpeedTier(arg0: string): Promise<void>;
   SetShellPreference(arg0: string): Promise<void>;
   SetSkillEnabled(arg0: string, arg1: boolean): Promise<void>;
   SetSkillImplicitInvocation(arg0: boolean): Promise<void>;

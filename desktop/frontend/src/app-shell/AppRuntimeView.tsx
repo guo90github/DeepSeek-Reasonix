@@ -28,6 +28,8 @@ import { TabBar } from "../components/TabBar";
 import { SessionAuditLauncher } from "../components/SessionAuditLauncher";
 import { SessionStatusBanners } from "./SessionStatusBanners";
 import { ChatPaneRegion } from "./ChatPaneRegion";
+import { FloatingViewLayer } from "../components/FloatingViewLayer";
+import { dockViewToMain, flushViewPlacements, tearOffView, useViewPlacementStore } from "../store/viewPlacements";
 import { noticePreviewMockEnabled } from "./NoticePreviewPanel";
 import { DecisionFooterRegion } from "./DecisionFooterRegion";
 import { FOOTER_PANEL_MODULES } from "../components/footerPanelModules";
@@ -161,6 +163,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
     show: session.todoPanel.showTodos,
     identity: session.todoPanel.scopedTodoBatch,
     todos: session.todoPanel.todos,
+    archive: session.todoPanel.todoArchive,
     running: visibleRuntimeState.running,
     pendingPrompt: visibleRuntimeState.pendingPrompt,
     continueReady: Boolean(activeTabId && !activeTab?.readOnly && (core.remoteSurfaceActive ? core.remoteComposerReady : controllerReady)),
@@ -193,6 +196,78 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
     onRevisionActiveChange: session.insertCommands.handleRevisionActiveChange,
     t,
   });
+
+  // A torn-off tab is carried by its floating panel and nothing else, so the
+  // main view yields to it (docs/30 §4: one surface per view).
+  const activeTabFloated = useViewPlacementStore((placements) => Boolean(activeTabId && placements.placements[activeTabId]?.surface === "float"));
+  const tearOffTab = (tabId: string) => {
+    if (tabId !== activeTabId) session.sessionTabs.onTabChange(tabId);
+    tearOffView(tabId, { width: window.innerWidth, height: window.innerHeight });
+    flushViewPlacements();
+  };
+  const floatingTitleOf = (viewId: string) => session.sessionTabs.tabs.find((tab) => tab.id === viewId)?.topicTitle?.trim() || viewId;
+  const renderChatPane = () => (
+          <ChatPaneRegion
+            splitMode={splitSurface}
+            transitioning={runtimeTransitioning}
+            t={t}
+            imDetail={sidebarImDetailConnection ? {
+              connection: sidebarImDetailConnection,
+              onClose: () => local.setSidebarImDetailConnectionId(""),
+              onOpenSettings: chromeCommands.openBotSettings,
+              onManageAllowlist: chromeCommands.openBotAllowlistSettings,
+              onOpenSession: (connection) => void navigationCommands.openSidebarImConnectionSession(connection),
+            } : null}
+            remote={activeTab?.remote ? { tab: activeTab, session: core.remoteSession } : undefined}
+            launcher={session.workspacePanelCommands.launcherCardMounted && !core.remoteSurfaceActive ? (
+              <Suspense fallback={null}>
+                <DockLauncher
+                  tabId={activeTabId ?? ""}
+                  scopeKey={session.workspaceScopeKey}
+                  workspaceRoot={activeTab?.workspaceRoot ?? state.meta?.cwd ?? ""}
+                  visible={!shell.managementActive && !sidebarImDetailConnection}
+                  onSelect={session.workspacePanelCommands.openDockEntry}
+                  gitBranch={state.meta?.gitBranch}
+                  onSpaceModeChange={session.workspacePanelCommands.setLauncherSpaceMode}
+                  overlay={session.workspacePanelCommands.launcherCardOverlay}
+                />
+              </Suspense>
+            ) : null}
+            transcript={{
+              state,
+              items: session.transcript.visibleTranscriptItems,
+              tabId: session.transcript.visibleTranscriptTabId,
+              geometrySessionKey: session.transcript.visibleTranscriptGeometryKey,
+              footerHeight,
+              revealSignal: local.transcriptRevealSignal,
+              invocationMetadata: session.transcript.visibleTranscriptTabId ? session.invocation.invocationMetadataByTab[session.transcript.visibleTranscriptTabId] : undefined,
+              surfaceCommitToken: core.surface.surfaceCommitToken,
+              liveStore: core.liveStore,
+              transcriptHydrating: session.transcript.transcriptHydrating,
+              navigationDataReady: core.surface.dataReady,
+              readOnly: Boolean(activeTab?.readOnly),
+              controllerReady,
+              hydratePlaceholderActive: session.hydratePlaceholderActive,
+              clearContextPending: session.clearCommands.clearContextPending,
+              creation: sidebarCreation,
+              emptyHero: session.transcript.emptyHero,
+              availability: session.transcript.availability,
+              rewind: { stateActive: session.sessionUndo.rewindState != null, committing: session.sessionUndo.rewindCommitting, signal: session.sessionUndo.rewindSignal },
+            }}
+            onRetryHistory={() => runtime.sessionActions.retrySessionHistory(activeTabId)}
+            commands={{
+              onPrompt: session.transcript.handleTranscriptPrompt,
+              onDeliveryContinue: () => void session.delivery.handleDeliveryContinue(),
+              onAcceptDelivery: session.controlCommands.handleAcceptDelivery,
+              onOpenChanges: session.turnVerificationCommands.openTurnChanges,
+              onOpenVerification: session.turnVerificationCommands.openTurnVerification,
+              onEditPrompt: session.sessionUndo.handleEditPrompt,
+              onRewind: session.sessionUndo.handleMessageAction,
+              onLoadOlderHistory: session.transcript.handleLoadOlderHistory,
+              onSurfacePaintReady: session.transcript.handleSurfacePaintReady,
+            }}
+          />
+  );
 
   return (
     <ShellExpandProvider>
@@ -276,6 +351,8 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 onTabsClose={session.sessionTabs.onTabsClose}
                 onTabsReorder={session.sessionTabs.onTabsReorder}
                 onNewTab={() => void navigationCommands.handleNewTab()}
+                onTearOffTab={tearOffTab}
+                isFloatingTab={(tabId) => useViewPlacementStore.getState().placements[tabId]?.surface === "float"}
                 unattendedToggle={(
                   <Suspense fallback={null}>
                     <UnattendedToggle />
@@ -329,65 +406,27 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
             onboarding: navigation.onboardingCommands,
           })} />
 
-          <ChatPaneRegion
-            splitMode={splitSurface}
-            transitioning={runtimeTransitioning}
-            t={t}
-            imDetail={sidebarImDetailConnection ? {
-              connection: sidebarImDetailConnection,
-              onClose: () => local.setSidebarImDetailConnectionId(""),
-              onOpenSettings: chromeCommands.openBotSettings,
-              onManageAllowlist: chromeCommands.openBotAllowlistSettings,
-              onOpenSession: (connection) => void navigationCommands.openSidebarImConnectionSession(connection),
-            } : null}
-            remote={activeTab?.remote ? { tab: activeTab, session: core.remoteSession } : undefined}
-            launcher={session.workspacePanelCommands.launcherCardMounted && !core.remoteSurfaceActive ? (
-              <Suspense fallback={null}>
-                <DockLauncher
-                  tabId={activeTabId ?? ""}
-                  scopeKey={session.workspaceScopeKey}
-                  workspaceRoot={activeTab?.workspaceRoot ?? state.meta?.cwd ?? ""}
-                  visible={!shell.managementActive && !sidebarImDetailConnection}
-                  onSelect={session.workspacePanelCommands.openDockEntry}
-                  gitBranch={state.meta?.gitBranch}
-                  onSpaceModeChange={session.workspacePanelCommands.setLauncherSpaceMode}
-                  overlay={session.workspacePanelCommands.launcherCardOverlay}
-                />
-              </Suspense>
-            ) : null}
-            transcript={{
-              state,
-              items: session.transcript.visibleTranscriptItems,
-              tabId: session.transcript.visibleTranscriptTabId,
-              geometrySessionKey: session.transcript.visibleTranscriptGeometryKey,
-              footerHeight,
-              revealSignal: local.transcriptRevealSignal,
-              invocationMetadata: session.transcript.visibleTranscriptTabId ? session.invocation.invocationMetadataByTab[session.transcript.visibleTranscriptTabId] : undefined,
-              surfaceCommitToken: core.surface.surfaceCommitToken,
-              liveStore: core.liveStore,
-              transcriptHydrating: session.transcript.transcriptHydrating,
-              navigationDataReady: core.surface.dataReady,
-              readOnly: Boolean(activeTab?.readOnly),
-              controllerReady,
-              hydratePlaceholderActive: session.hydratePlaceholderActive,
-              clearContextPending: session.clearCommands.clearContextPending,
-              creation: sidebarCreation,
-              emptyHero: session.transcript.emptyHero,
-              availability: session.transcript.availability,
-              rewind: { stateActive: session.sessionUndo.rewindState != null, committing: session.sessionUndo.rewindCommitting, signal: session.sessionUndo.rewindSignal },
-            }}
-            onRetryHistory={() => runtime.sessionActions.retrySessionHistory(activeTabId)}
-            commands={{
-              onPrompt: session.transcript.handleTranscriptPrompt,
-              onDeliveryContinue: () => void session.delivery.handleDeliveryContinue(),
-              onAcceptDelivery: session.controlCommands.handleAcceptDelivery,
-              onOpenChanges: session.turnVerificationCommands.openTurnChanges,
-              onOpenVerification: session.turnVerificationCommands.openTurnVerification,
-              onEditPrompt: session.sessionUndo.handleEditPrompt,
-              onRewind: session.sessionUndo.handleMessageAction,
-              onLoadOlderHistory: session.transcript.handleLoadOlderHistory,
-              onSurfacePaintReady: session.transcript.handleSurfacePaintReady,
-            }}
+          {activeTabFloated ? (
+            <section className="chat-pane__floating-placeholder">
+              <p>{t("floatingView.floatingHere")}</p>
+              <button type="button" onClick={() => { dockViewToMain(activeTabId ?? ""); flushViewPlacements(); }}>
+                {t("floatingView.dockBack")}
+              </button>
+            </section>
+          ) : (
+            renderChatPane()
+          )}
+
+          <FloatingViewLayer
+            titleOf={floatingTitleOf}
+            renderView={(viewId) => (viewId === activeTabId ? renderChatPane() : (
+              <section className="chat-pane__floating-placeholder">
+                <p>{t("floatingView.inactiveTab")}</p>
+                <button type="button" onClick={() => session.sessionTabs.onTabChange(viewId)}>
+                  {t("floatingView.activateTab")}
+                </button>
+              </section>
+            ))}
           />
 
           <DecisionFooterRegion

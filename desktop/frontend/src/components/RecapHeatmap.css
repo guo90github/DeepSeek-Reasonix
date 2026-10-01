@@ -1,0 +1,98 @@
+/* 第十四: the recap page's calendar heatmap. Intensity is the only variable, so
+   colour comes from the existing accent token mixed with transparency; the
+   retired tokens (--fg-muted, --bg-elev-1, --hover, --border-strong, --shadow)
+   are deliberately not used. */
+
+.recap-heatmap {
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--bg-soft);
+}
+
+.recap-heatmap__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.recap-heatmap__title {
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+
+.recap-heatmap__window {
+  font-size: 11px;
+  color: var(--fg-dim);
+  opacity: 0.85;
+}
+
+.recap-heatmap__rows {
+  display: grid;
+  gap: 4px;
+}
+
+.recap-heatmap__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.recap-heatmap__project {
+  flex: 0 0 auto;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.recap-heatmap__cells {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
+.recap-heatmap__cell {
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-dim);
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.recap-heatmap__cell:hover {
+  border-color: var(--accent);
+}
+
+.recap-heatmap__cell:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 52%, transparent);
+  outline-offset: 1px;
+}
+
+.recap-heatmap__cell--filled {
+  background: color-mix(in srgb, var(--accent) calc(18% + 62% * var(--recap-heatmap-weight, 1)), transparent);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.recap-heatmap__cell--active {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.recap-heatmap__total {
+  flex: 0 0 auto;
+  min-width: 20px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--fg-dim);
+}

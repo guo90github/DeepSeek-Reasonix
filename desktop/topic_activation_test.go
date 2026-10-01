@@ -344,6 +344,7 @@ func (c *activationStubController) GoalRuntime() control.GoalRuntimeView {
 }
 func (c *activationStubController) Todos() []evidence.TodoItem { return nil }
 func (c *activationStubController) TodosSupervised() bool      { return false }
+func (c *activationStubController) TodoBoard() agent.TodoBoard { return agent.TodoBoard{} }
 func (c *activationStubController) SnapshotForShutdown() error { return nil }
 
 func TestStartTopicActivationFailureDetachesPreviousAndReattaches(t *testing.T) {

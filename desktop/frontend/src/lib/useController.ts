@@ -54,7 +54,7 @@ import { HISTORY_OLDER_STALL_MS, historyPageRequestBudget, shouldReleaseStalledO
 import { createUniqueItemIDAllocator } from "./historyItemIds";
 import { withRemoteProviderUnreachable, withRemoteTurnInterrupted } from "./remoteTurnState";
 import type { NavigationResult, SurfaceDataCommit, SurfaceDataOutcome } from "./navigationSurfaceTransition";
-import { sameStringList, sameTodoList } from "./todoVisibility";
+import { sameStringList, sameTodoBoard, sameTodoList } from "./todoVisibility";
 import { resolveSnapshotTurnStartedAt, resolveTurnStartedAt, snapshotPredatesTurnLifecycle } from "./turnTiming";
 import { TurnEventProjector } from "./turnEventProjection";
 import { useStaleTurnWatchdog } from "./useStaleTurnWatchdog";
@@ -697,7 +697,7 @@ export function sameMeta(a?: Meta, b?: Meta): boolean {
     a.floorInferred === b.floorInferred &&
     a.goal === b.goal &&
     a.goalStatus === b.goalStatus &&
-    sameTodoList(a.canonicalTodos, b.canonicalTodos) && sameStringList(a.dismissedTodoBatches, b.dismissedTodoBatches)
+    sameTodoList(a.canonicalTodos, b.canonicalTodos) && sameStringList(a.dismissedTodoBatches, b.dismissedTodoBatches) && sameTodoBoard(a, b)
   );
 }
 

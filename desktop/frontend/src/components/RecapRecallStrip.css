@@ -1,0 +1,81 @@
+/* 第十六: the recap page's recall/skill fingerprint strip. Read-only history, so
+   it borrows the row vocabulary already in use and adds no colour of its own;
+   retired tokens (--fg-muted, --bg-elev-1, --hover, --border-strong, --shadow)
+   are deliberately not used. */
+
+.recap-recall {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.recap-recall__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 0;
+  border: none;
+  background: none;
+  color: var(--fg-dim);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recap-recall__head:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 52%, transparent);
+  outline-offset: 2px;
+}
+
+.recap-recall__chevron {
+  display: inline-block;
+  transition: transform 120ms ease;
+}
+
+.recap-recall__chevron--closed {
+  transform: rotate(-90deg);
+}
+
+.recap-recall__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recap-recall__body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.recap-recall__turn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.recap-recall__turn-head {
+  font-size: 11px;
+  color: var(--fg-dim);
+}
+
+.recap-recall__hit {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding-left: 8px;
+  font-size: 11px;
+}
+
+.recap-recall__fingerprint {
+  flex: 0 0 auto;
+  font-family: var(--font-mono, monospace);
+  color: var(--fg-dim);
+}
+
+.recap-recall__meta {
+  color: var(--fg-dim);
+  opacity: 0.9;
+}

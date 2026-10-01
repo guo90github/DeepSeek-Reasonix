@@ -190,6 +190,8 @@ type AgentView struct {
 	CompactRatio           float64 `json:"compactRatio,omitempty"`
 	EffectiveCompactRatio  float64 `json:"effectiveCompactRatio,omitempty"`
 	CompactRatioOverridden bool    `json:"compactRatioOverridden,omitempty"`
+	// ShellAsync is the speed tier for long shell calls (off|balanced|fast).
+	ShellAsync string `json:"shellAsync,omitempty"`
 }
 
 type BotAllowlistView struct {
@@ -1128,6 +1130,7 @@ func (a *App) Settings() SettingsView {
 			ReasoningLanguage:      cfg.ReasoningLanguage(),
 			CompactRatio:           cfg.Agent.CompactRatio,
 			EffectiveCompactRatio:  cfg.Agent.CompactRatio,
+			ShellAsync:             cfg.Agent.ShellAsync,
 		},
 		Bot:                          botSettingsView(cfg.Bot),
 		DesktopLanguage:              cfg.DesktopLanguage(),
@@ -3257,6 +3260,17 @@ func (a *App) SetAgentParams(temperature float64, maxSteps int, plannerMaxSteps 
 func (a *App) SetCompactRatio(ratio float64) error {
 	_, err := a.applyConfigChangeWithWarning("context compaction threshold", func(c *config.Config) error {
 		return c.SetCompactRatio(ratio)
+	})
+	return err
+}
+
+// SetShellAsyncSpeedTier stores the speed tier for long shell calls. It takes
+// effect the next time a session builds its executor: the tier decides at
+// launch whether a shell call runs in the background, so it cannot change under
+// a call already in flight.
+func (a *App) SetShellAsyncSpeedTier(tier string) error {
+	_, err := a.applyConfigChangeWithWarning("shell speed tier", func(c *config.Config) error {
+		return c.SetAgentShellAsync(tier)
 	})
 	return err
 }

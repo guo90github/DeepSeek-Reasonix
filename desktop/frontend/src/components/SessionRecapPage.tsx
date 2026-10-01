@@ -6,7 +6,11 @@ import { useManagementT } from "../lib/managementLocale";
 import { ManagementPageShell } from "./ManagementPageShell";
 import { groupByTopic } from "../lib/recapTopics";
 import { RecapRow } from "./RecapRow";
+import { RecapHeatmap } from "./RecapHeatmap";
+import { RecapRecallStrip } from "./RecapRecallStrip";
+import { matchesHeatmapDay } from "../lib/recapHeatmap";
 import type { RecapPreviewView } from "../lib/types";
+import type { RecallRecordView } from "../generated/desktopContract.generated";
 
 type RecapSort = "newest" | "oldest" | "session";
 
@@ -37,7 +41,7 @@ function kindKey(kind: string): RecapKindKey | null {
 type PreviewDraft = { entry: SessionRecapEntry; view: RecapPreviewView; text: string };
 type PreviewState = { kind: "memory" | "skill"; drafts: PreviewDraft[]; markdown: string; group: string };
 
-export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill, draftTopicSkill, previewMemory, previewSkill, listInsights }: {
+export function SessionRecapPage({ active, onBack, list, listSessions, resume, accept, reject, undo, listOpenItems, keep, close, reopen, generate, draftSkill, draftTopicSkill, previewMemory, previewSkill, listInsights, recallRecord }: {
   active: boolean;
   onBack: () => void;
   list: () => Promise<SessionRecap[]>;
@@ -64,6 +68,10 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // listInsights is the projection read as a report: what more than one project
   // reached on its own. Read-only, and computed from the same evidence rule.
   listInsights: () => Promise<SessionRecapInsight[]>;
+  // recallRecord reads one session's recall/skill fingerprints by transcript path
+  // (the page lists sessions that are not open tabs). Optional: a host without it
+  // simply shows no strip.
+  recallRecord?: (sessionPath: string) => Promise<RecallRecordView>;
 }) {
   const t = useT(); const m = useManagementT();
   const [recaps, setRecaps] = useState<SessionRecap[]>([]);
@@ -88,6 +96,8 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   // no-model behaviour is always offered as the way out of a failed generation.
   const [preview, setPreview] = useState<PreviewState | null>(null);
   const [insights, setInsights] = useState<SessionRecapInsight[]>([]);
+  // A heatmap cell filters the list below; "" means no filter.
+  const [heatmapDay, setHeatmapDay] = useState("");
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [closing, setClosing] = useState<{ id: string; text: string } | null>(null);
   const seq = useRef(0);
@@ -124,7 +134,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       titleOf(recap), recap.model,
       ...recap.entries.map((entry) => `${entry.body}\n${entry.evidence ?? ""}`),
     ].join("\n").toLowerCase();
-    const matched = needle === "" ? recaps.slice() : recaps.filter((recap) => searchable(recap).includes(needle));
+    const matched = recaps.filter((recap) => (needle === "" || searchable(recap).includes(needle)) && matchesHeatmapDay(recap, heatmapDay));
     matched.sort((left, right) => {
       if (sort === "session") return titleOf(left).localeCompare(titleOf(right));
       // A failed attempt has no generatedAt; its own last try is what orders it.
@@ -134,7 +144,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       return sort === "oldest" ? order : -order;
     });
     return matched;
-  }, [recaps, query, sort, titleOf]);
+  }, [heatmapDay, recaps, query, sort, titleOf]);
 
   // settle marks one note with the choice the backend just recorded, so the page
   // reflects it without a second round trip.
@@ -362,6 +372,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
     {loading && <div className="management-notice" role="status">{m("loading")}</div>}
     {!loading && !loadFailed && recaps.length === 0 && <div className="management-notice" role="status">{t("history.recapEmpty")}</div>}
     {!loading && failed > 0 && <div className="management-notice" role="status">{m("recapPendingNotice", { n: failed })}</div>}
+    {!loading && <RecapHeatmap insights={insights} recaps={recaps} selectedDay={heatmapDay} onSelectDay={setHeatmapDay} />}
     {!loading && insights.length > 0 && (
       <section style={{ marginBottom: 12 }}>
         <div style={{ ...labelStyle, fontSize: 12 }}>{m("recapInsightsTitle")}</div>
@@ -675,6 +686,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             </div>;
             })}
             </>}
+            {recallRecord !== undefined && <RecapRecallStrip sessionPath={recap.path} recallRecord={recallRecord} />}
           </li>;
         })}
       </ul>

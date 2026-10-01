@@ -17,6 +17,10 @@ interface TabBarProps {
   onTabsClose: (tabIds: string[], nextActiveTabId?: string) => void;
   onTabsReorder: (tabIds: string[]) => void;
   onNewTab: () => void;
+  /** Tears one tab's view off the main view into a floating panel. */
+  onTearOffTab?: (tabId: string) => void;
+  /** True when this tab's view already floats, so the item can say so. */
+  isFloatingTab?: (tabId: string) => boolean;
   /** Rendered immediately before the new-session button (the unattended switch). */
   unattendedToggle?: ReactNode;
   /** Rendered immediately after the new-session button (the session-audit trigger). */
@@ -50,7 +54,7 @@ function tabMode(tab: TabMeta): Mode {
   return normalizeMode(tab.mode);
 }
 
-export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose, onTabsReorder, onNewTab, unattendedToggle, sessionAudit, onOpenPalette, commandCompact = false, revealActiveSignal = 0 }: TabBarProps) {
+export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose, onTabsReorder, onNewTab, onTearOffTab, isFloatingTab, unattendedToggle, sessionAudit, onOpenPalette, commandCompact = false, revealActiveSignal = 0 }: TabBarProps) {
   const t = useT();
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{ id: string; side: DropSide } | null>(null);
@@ -163,6 +167,18 @@ export function TabBar({ tabs, activeTabId, onTabChange, onTabClose, onTabsClose
   const menuTabIndex = menuTabId ? tabs.findIndex((tab) => tab.id === menuTabId) : -1;
   const tabMenuItems: ContextMenuItem[] = menuTabId && menuTabIndex >= 0
     ? [
+        ...(onTearOffTab
+          ? [
+              {
+                key: "float-view",
+                label: isFloatingTab?.(menuTabId) ? t("tabBar.floatViewActive") : t("tabBar.floatView"),
+                onSelect: () => {
+                  onTearOffTab(menuTabId);
+                  closeTabMenu();
+                },
+              },
+            ]
+          : []),
         {
           key: "close-current",
           label: t("tabBar.closeTab"),

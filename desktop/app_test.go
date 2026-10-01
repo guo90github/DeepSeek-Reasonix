@@ -57,6 +57,9 @@ func (c *todoMetaController) Todos() []evidence.TodoItem {
 }
 
 func (c *todoMetaController) TodosSupervised() bool { return c.supervised }
+func (c *todoMetaController) TodoBoard() agent.TodoBoard {
+	return agent.TodoBoard{}
+}
 
 func TestCanonicalTodosMetaWireContract(t *testing.T) {
 	if got := ctrlTodos(nil); got != nil {
@@ -870,7 +873,9 @@ func TestMemoryViewIncludesActiveAndArchivedFacts(t *testing.T) {
 	if view.Facts[0].ID == "" || view.Facts[0].Revision != 1 || view.Facts[0].CreatedAt == "" || view.Facts[0].UpdatedAt == "" {
 		t.Fatalf("Memory() active fact metadata = %+v", view.Facts[0])
 	}
-	if len(view.Archives) != 1 || view.Archives[0].Name != "archived-fact" || view.Archives[0].Type != "feedback" || view.Archives[0].Scope != "project" ||
+	// docs/50 A-32: an unscoped feedback fact is global, so the archived copy
+	// reports the global scope even though this store has no separate global dir.
+	if len(view.Archives) != 1 || view.Archives[0].Name != "archived-fact" || view.Archives[0].Type != "feedback" || view.Archives[0].Scope != "global" ||
 		view.Archives[0].Path == "" || view.Archives[0].ArchivedAt == "" {
 		t.Fatalf("Memory() archived facts = %+v", view.Archives)
 	}

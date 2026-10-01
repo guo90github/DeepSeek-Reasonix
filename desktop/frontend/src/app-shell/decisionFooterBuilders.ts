@@ -40,6 +40,7 @@ export function buildFooterTodo(input: {
   show: boolean;
   identity: string;
   todos: Todo[];
+  archive: Todo[];
   running: boolean;
   pendingPrompt: boolean;
   continueReady: boolean;
@@ -53,6 +54,7 @@ export function buildFooterTodo(input: {
     props: {
       stateKey: input.identity,
       todos: input.todos,
+      archive: input.archive,
       running: input.running,
       pendingPrompt: input.pendingPrompt,
       todosSupervised: input.todosSupervised,

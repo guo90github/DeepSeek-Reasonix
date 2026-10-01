@@ -513,7 +513,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
       dismissTodoBatch: (tabId, batchKey) => desktopBridge.dismissTodoBatchForTab(tabId, batchKey),
     },
   });
-  const { showTodos, scopedTodoBatch, todos, dismissTodos, handleTodoContinue } = todoPanelCommands;
+  const { showTodos, scopedTodoBatch, todos, todoArchive, dismissTodos, handleTodoContinue } = todoPanelCommands;
 
   const sessionTitle = topicTitle(activeTab);
   const exportItems = remoteSurfaceActive ? remoteSession.transcript.items : state.items;
@@ -713,7 +713,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     sessionUndo: {
       rewindState, rewindCommitting, rewindSignal, handleSessionRevertCommitted, handleMessageAction, handleUndoRewind, handleEditPrompt,
     },
-    todoPanel: { showTodos, scopedTodoBatch, todos, todosSupervised: todoPanelCommands.todosSupervised, dismissTodos, handleTodoContinue },
+    todoPanel: { showTodos, scopedTodoBatch, todos, todoArchive, todosSupervised: todoPanelCommands.todosSupervised, dismissTodos, handleTodoContinue },
     delivery: { handleDeliveryContinue },
     transcript: {
       transcriptHydrating, emptyHero, availability,

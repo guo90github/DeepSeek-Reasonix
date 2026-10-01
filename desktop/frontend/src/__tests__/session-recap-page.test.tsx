@@ -437,6 +437,78 @@ ok(generated.length === 2 && generated[1] === barePath,
 ok(says(bareSection, "queued"), "a queued generation says so instead of claiming a result");
 await act(async () => { bareRoot.unmount(); });
 
+// 第十四 (docs/60 §2.1): a heatmap cell filters the list it sits above. The
+// fixtures are dated relative to now so the window holds them whenever this runs.
+const dayHost = document.createElement("div");
+document.body.appendChild(dayHost);
+const dayRoot = createRoot(dayHost);
+const today = new Date();
+const dayStamp = (offsetDays: number) => {
+  const stamp = new Date(today);
+  stamp.setUTCDate(today.getUTCDate() - offsetDays);
+  return stamp.toISOString();
+};
+const dayRecaps = [
+  recap("C:\sessions\today.jsonl", "Today 会话", dayStamp(0)),
+  recap("C:\sessions\earlier.jsonl", "Earlier 会话", dayStamp(9)),
+];
+await act(async () => {
+  // No insights here: the shared stub carries one dated now, which would add a
+  // filled cell per project and make the count depend on the clock.
+  dayRoot.render(<LocaleProvider><SessionRecapPage active onBack={() => {}}
+    list={async () => dayRecaps} listSessions={async () => []} {...reviewProps}
+    listInsights={async () => []} /></LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+const dayCards = () => [...dayHost.querySelectorAll(".history-list li")];
+const filledCells = () => [...dayHost.querySelectorAll(".recap-heatmap__cell--filled")];
+ok(filledCells().length === 2, "the heatmap marks the days the page holds data for");
+ok(dayCards().length === 2, "both recaps are listed before any filter");
+const todayCell = filledCells().find((cell) => (cell.getAttribute("aria-label") ?? "").includes(dayStamp(0).slice(0, 10)));
+await act(async () => {
+  (todayCell as HTMLButtonElement | undefined)?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+ok(dayCards().length === 1, "selecting a day narrows the list to that day");
+ok(dayHost.textContent?.includes("Today 会话") === true && dayHost.textContent?.includes("Earlier 会话") === false,
+  "the surviving row is the selected day's session");
+const pressedCell = [...dayHost.querySelectorAll(".recap-heatmap__cell--active")][0];
+await act(async () => {
+  (pressedCell as HTMLButtonElement | undefined)?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+ok(dayCards().length === 2, "clearing the selection restores the list");
+await act(async () => { dayRoot.unmount(); });
+
+// 第十六 (docs/60 §2.2): the session detail carries its recall/skill fingerprints,
+// read by transcript path (R-45: this is the page-level interaction assertion).
+const stripHost = document.createElement("div");
+document.body.appendChild(stripHost);
+const stripRoot = createRoot(stripHost);
+const stripRecaps = [recap("C:\sessions\strip.jsonl", "Strip 会话", new Date().toISOString())];
+await act(async () => {
+  stripRoot.render(<LocaleProvider><SessionRecapPage active onBack={() => {}}
+    list={async () => stripRecaps} listSessions={async () => []} {...reviewProps}
+    listInsights={async () => []}
+    recallRecord={async (sessionPath: string) => ({
+      available: true,
+      sessionPath,
+      turns: [{ turnSeq: 2, hits: [{ id: "mem-page", revision: 1, score: 0.8, injected: true }] }],
+      skills: [],
+    })} /></LocaleProvider>);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+const pageStrip = stripHost.querySelector(".recap-recall");
+ok(pageStrip !== null, "the session detail offers its recall record");
+ok((pageStrip?.textContent ?? "").includes("mem-page") === false, "the folded strip lists no fingerprint yet");
+const pageStripHead = pageStrip?.querySelector<HTMLButtonElement>(".recap-recall__head");
+await act(async () => {
+  pageStripHead?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+ok((stripHost.textContent ?? "").includes("mem-page"), "expanding the page strip lists the recalled id");
+await act(async () => { stripRoot.unmount(); });
+
 await act(async () => { root.unmount(); });
 process.stdout.write(`\n${failed === 0 ? "OK" : "FAILED"}: ${failed} failed\n`);
 if (failed > 0) process.exit(1);

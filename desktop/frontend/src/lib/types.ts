@@ -1078,7 +1078,7 @@ export interface Meta extends RemoteSessionMetaFields {
   goal?: string;
   goalStatus?: GoalStatus;
   goalRuntime?: GoalRuntime;
-  canonicalTodos?: Todo[]; dismissedTodoBatches?: string[]; pinnedFiles?: PinnedFileInfo[]; todosSupervised?: boolean;
+  canonicalTodos?: Todo[]; dismissedTodoBatches?: string[]; pinnedFiles?: PinnedFileInfo[]; todosSupervised?: boolean; todoBatchId?: string; todoQueue?: Todo[]; todoArchive?: Todo[];
 }
 export type CollaborationMode = "normal" | "plan" | "goal";
 export type ToolApprovalMode = "ask" | "auto" | "yolo";
@@ -2041,7 +2041,7 @@ export interface NetworkView {
 }
 
 export interface AgentView {
-  temperature: number;
+  temperature: number; shellAsync?: string; // off | balanced | fast
   maxSteps: number;
   plannerMaxSteps: number;
   maxSubagentDepth: number;
