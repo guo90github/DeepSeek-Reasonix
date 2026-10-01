@@ -1,6 +1,7 @@
 // Run: tsx src/__tests__/heartbeat-next-run.test.ts
 
 import { changeHeartbeatFrequency, cronToInterval, heartbeatBuildCycleInterval, heartbeatNextRunAt, intervalToCron, mergeEngineRunState, nextCycleRunAt, prepareTasksByNextRun } from "../custom/features/heartbeat/HeartbeatPanel";
+import { formatTaskNextRun } from "../custom/features/heartbeat/heartbeat.presentation";
 
 let passed = 0;
 let failed = 0;
@@ -422,6 +423,48 @@ eq(
 );
 if (originalTZ === undefined) delete process.env.TZ;
 else process.env.TZ = originalTZ;
+
+console.log("scheduler-spent attempts and overdue wording");
+
+// 后端把「消耗掉的 tick」（Goal hold 等）记进 lastAttemptAt，调度基准取两者较晚者：
+// 面板必须同口径，否则显示的「下次运行」会和引擎错开。
+const attemptNow = localMs(2026, 8, 10, 12, 0);
+const [attemptEntry] = prepareTasksByNextRun(
+  [{ id: "a", title: "a", prompt: "", interval: "10m", enabled: true, lastRunAt: attemptNow - 60 * 60000, lastAttemptAt: attemptNow - 60000 }],
+  attemptNow,
+);
+eq(attemptEntry.nextRunAt, attemptNow - 60000 + 10 * 60000, "a spent attempt moves the next run out by a whole interval");
+
+const zhUi: Record<string, string> = {
+  "heartbeat.justNow": "刚刚",
+  "heartbeat.minutesAgo": "{n} 分钟前",
+  "heartbeat.hoursAgo": "{n} 小时前",
+  "heartbeat.daysAgo": "{n} 天前",
+  "heartbeat.dueSoon": "即将触发",
+  "heartbeat.overdue": "已到期：{ago}就该运行",
+  "heartbeat.nextRun": "下次运行",
+  "heartbeat.later": "后",
+  "heartbeat.unitMin": "分钟",
+  "heartbeat.unitHour": "小时",
+  "heartbeat.unitDay": "天",
+};
+const uiT = ((key: string, params?: Record<string, unknown>) => {
+  let text = zhUi[key] ?? key;
+  for (const name of Object.keys(params ?? {})) text = text.split(`{${name}}`).join(String((params ?? {})[name]));
+  return text;
+}) as unknown as Parameters<typeof formatTaskNextRun>[2];
+
+// 到期却没跑（被占用/被跳过）必须说清晚了多久；「即将触发」只留给刚到期的那一分钟。
+eq(
+  formatTaskNextRun(attemptNow - 5 * 3600000, attemptNow, uiT),
+  "已到期：5 小时前就该运行",
+  "an overdue task names how late it is instead of saying due soon",
+);
+eq(
+  formatTaskNextRun(attemptNow - 30000, attemptNow, uiT),
+  "即将触发",
+  "a task that only just came due still reads as due soon",
+);
 
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
 if (failed > 0) process.exit(1);

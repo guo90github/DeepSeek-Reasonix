@@ -564,10 +564,13 @@ export function TaskEditor({
           <span>{t("heartbeat.runHistory")}</span>
         </div>
         {(() => {
-          const history = (task.runHistory || []).length > 0
+          // 历史为空但有会话（topicId）：只可能是 runHistory 字段引入前跑过。用 lastRunAt
+          // 标一条「旧记录」；绝不拿 createdAt 造一条看起来跑过的假运行。
+          type HistoryEntry = { at: number; topicId: string; legacy?: boolean };
+          const history: HistoryEntry[] = (task.runHistory || []).length > 0
             ? [...task.runHistory!].reverse()
-            : task.topicId
-              ? [{ at: task.lastRunAt || task.createdAt || Date.now(), topicId: task.topicId }]
+            : task.topicId && task.lastRunAt
+              ? [{ at: task.lastRunAt, topicId: task.topicId, legacy: true }]
               : [];
           if (history.length === 0) {
             return <div className="heartbeat-run-history__empty">{t("heartbeat.runHistoryEmpty")}</div>;
@@ -591,10 +594,13 @@ export function TaskEditor({
                   <span className="heartbeat-run-history__scope">
                     {task.scope === "project" && task.workspaceRoot
                       ? (workspaces.find((w) => w.path === task.workspaceRoot)?.name
-                        || task.workspaceRoot.split("/").pop() || task.workspaceRoot)
+                        || task.workspaceRoot.split(/[\\/]/).filter(Boolean).pop() || task.workspaceRoot)
                       : t("heartbeat.scopeGlobal")}
                   </span>
                   <span className="heartbeat-run-history__rel">{formatRelativeTime(run.at, Date.now(), t)}</span>
+                  {run.legacy && (
+                    <span className="heartbeat-run-history__notopic">{t("heartbeat.runHistoryLegacy")}</span>
+                  )}
                   {!run.topicId && (
                     <span className="heartbeat-run-history__notopic">{t("heartbeat.runHistoryNoTopic")}</span>
                   )}

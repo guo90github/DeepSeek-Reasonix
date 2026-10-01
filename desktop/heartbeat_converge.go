@@ -119,7 +119,8 @@ func (e *HeartbeatEngine) unattendedGoalStepWith(t *HeartbeatTask, ctrl heartbea
 // holdTick consumes this tick so a steady state is re-checked on the next
 // interval instead of on every 30s scheduler tick.
 func (e *HeartbeatEngine) holdTick(t *HeartbeatTask, reason string) bool {
-	t.LastRunAt = time.Now().UnixMilli()
+	// A hold is not a run: the schedule counts from it, LastRunAt does not.
+	t.LastAttemptAt = time.Now().UnixMilli()
 	if e.noteGoalHold(t.ID, reason) {
 		log.Printf("[heartbeat] unattended %q holds: %s", t.Title, reason)
 	}

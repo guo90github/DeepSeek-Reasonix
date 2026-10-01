@@ -38,7 +38,7 @@ import { useHeartbeatT, type HeartbeatTranslator } from "./heartbeat.i18n";
 // 静态导入：Vite 保证 CSS 在模块 evaluate 前注入 DOM，避免首次访问自动化页
 // 无样式闪烁（FOUC）。node 单测通过 css-stub-register.mjs 的 loader hook 解析。
 import "./heartbeat.css";
-import { formatInterval, formatTaskNextRun, prepareTasksByNextRun } from "./heartbeat.presentation";
+import { formatInterval, formatTaskNextRun, prepareTasksByNextRun, splitWorkspaceTail } from "./heartbeat.presentation";
 import { TaskEditor } from "./HeartbeatTaskEditor";
 import { CirclePlaySolid } from "./HeartbeatShared";
 export { changeHeartbeatFrequency, cronToInterval, heartbeatNextRunAt, intervalToCron, nextCycleRunAt, prepareTasksByNextRun } from "./heartbeat.presentation";
@@ -435,7 +435,7 @@ export function HeartbeatView({ onOpenTopic, active = true, onBack = () => {} }:
   const scopeFilterLabel = (filter: string, map: Record<string, string>): string => {
     if (filter === "all") return t("heartbeat.filterAllProjects");
     if (filter === "global") return t("heartbeat.scopeGlobal");
-    return map[filter] || filter.split("/").pop() || filter;
+    return map[filter] || splitWorkspaceTail(filter) || filter;
   };
 
   return (
@@ -512,7 +512,7 @@ export function HeartbeatView({ onOpenTopic, active = true, onBack = () => {} }:
                         if (key !== "global") {
                           items.push({
                             value: key,
-                            label: workspaceMap[key] || key.split("/").pop() || key,
+                            label: workspaceMap[key] || splitWorkspaceTail(key) || key,
                           });
                         }
                       }
@@ -650,7 +650,7 @@ export function HeartbeatView({ onOpenTopic, active = true, onBack = () => {} }:
                       const isSelected = detailOpen && editing?.id === task.id;
                       const nextRun = formatTaskNextRun(nextRunAt, now, t);
                       const scopeLabel = task.scope === "project" && task.workspaceRoot
-                        ? (workspaceMap[task.workspaceRoot] || task.workspaceRoot.split("/").pop() || task.workspaceRoot)
+                        ? (workspaceMap[task.workspaceRoot] || splitWorkspaceTail(task.workspaceRoot) || task.workspaceRoot)
                         : t("heartbeat.scopeGlobal");
                       return (
                         <div
@@ -734,7 +734,7 @@ export function HeartbeatView({ onOpenTopic, active = true, onBack = () => {} }:
                       const isExpanded = isGroupExpanded(key);
                       const label = key === "global"
                         ? t("heartbeat.scopeGlobal")
-                        : workspaceMap[key] || key.split("/").pop() || key;
+                        : workspaceMap[key] || splitWorkspaceTail(key) || key;
 
                       return (
                         <div key={key}>

@@ -362,17 +362,20 @@ export function describeCron(expr: string, t: HeartbeatTranslator): string {
 export function taskNextRunAt(task: HeartbeatTask, now = Date.now()): number | null {
   if (!task.enabled) return null;
   const interval = task.interval || "";
+  // 调度基准 = 真实运行时刻，或更晚的一次「消耗掉的 tick」（Goal hold、打不开话题）。
+  // 与后端 heartbeatScheduleBaseMillis 同口径，否则面板的「下次运行」会和引擎错开。
+  const base = Math.max(task.lastRunAt || 0, task.lastAttemptAt || 0);
+  const scheduled = base === (task.lastRunAt || 0) ? task : { ...task, lastRunAt: base };
   let next: number | null = null;
   // 周期任务（"24h|daily@22:00" / "168h|weekly:fri@16:00"）：按调度语义计算
-  // 下一个匹配时刻。已运行过（有 lastRunAt）的任务基于 lastRunAt 求下一时刻
+  // 下一个匹配时刻。已运行过（有基准时刻）的任务基于基准时刻求下一时刻
   // （heartbeatNextRunAt → heartbeat.schedule 的 nextCalendarRun，含月末
   // clamp/闰日/双周锚点/DST，与后端 previousHeartbeatScheduleAt 对齐）；离线
-  // 期间早该运行的任务，next 会落在过去 → 显示 dueSoon（当前应执行），而不是
-  // 跳到下一周期。从未运行的任务从创建时刻起算首次运行。
+  // 期间早该运行的任务，next 会落在过去 → 显示「已到期」，而不是跳到下一周期。
   const cycleMatch = interval.match(/^\d+[smh]\|(daily|weekly|biweekly|monthly|yearly)(?::([^@]*))?(?:@(\d{2}:\d{2}))?$/);
   if (cycleMatch) {
-    next = task.lastRunAt
-      ? heartbeatNextRunAt(task, now)
+    next = base
+      ? heartbeatNextRunAt(scheduled, now)
       : nextCycleRunAt(interval, task.createdAt || now, task.createdAt);
   } else {
     const cleaned = interval.replace(/\|.*$/, "");
@@ -380,13 +383,13 @@ export function taskNextRunAt(task: HeartbeatTask, now = Date.now()): number | n
     if (m) {
       // Plain interval with a time window: use the window-aware helper so the
       // displayed next run matches the backend (defers to the next opening
-      // instead of naively showing lastRunAt + interval outside the window).
+      // instead of naively showing base + interval outside the window).
       if (task.timeWindowStart || task.timeWindowEnd) {
-        next = heartbeatNextRunAt(task, now);
+        next = heartbeatNextRunAt(scheduled, now);
       } else {
-        if (!task.lastRunAt) return null;
+        if (!base) return null;
         const ms = parseInt(m[1]) * { s: 1000, m: 60000, h: 3600000 }[m[2] as "s" | "m" | "h"];
-        next = task.lastRunAt + ms;
+        next = base + ms;
       }
     } else if (isCronExpr(cleaned)) {
       next = nextCronRunAt(cleaned, now);
@@ -422,9 +425,19 @@ export function prepareTasksByNextRun(
     });
 }
 
+// 项目名兜底取路径末段；Windows 路径是反斜杠，只按 "/" 切会拿到整条路径。
+export function splitWorkspaceTail(path: string): string {
+  return path.split(/[\\/]/).filter(Boolean).pop() || "";
+}
+
 export function formatTaskNextRun(next: number | null, now: number, t: HeartbeatTranslator): string | null {
   if (next === null) return null;
-  if (next <= now) return t("heartbeat.dueSoon");
+  // 到期却没跑（被占用/被跳过）必须说清"已经晚了多久"：「即将触发」会一直停在那里。
+  if (next <= now) {
+    const ago = formatRelativeTime(next, now, t);
+    if (ago === t("heartbeat.justNow")) return t("heartbeat.dueSoon");
+    return t("heartbeat.overdue", { ago });
+  }
   const diff = next - now;
   // 剩余时间：如「下次运行 26 分钟后」/「下次运行 2 小时后」/「下次运行 2天3小时后」/「即将触发」
   const days = Math.floor(diff / 86400000);

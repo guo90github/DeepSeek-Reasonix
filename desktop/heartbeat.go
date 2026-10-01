@@ -42,7 +42,8 @@ type HeartbeatTask struct {
 	Scope                  string         `json:"scope,omitempty"`                  // "global" or "project"
 	WorkspaceRoot          string         `json:"workspaceRoot,omitempty"`          // project root path when scope="project"
 	TopicID                string         `json:"topicId,omitempty"`                // created topic, reused on re-run
-	LastRunAt              int64          `json:"lastRunAt,omitempty"`              // unix millis
+	LastRunAt              int64          `json:"lastRunAt,omitempty"`              // unix millis, moved only by a real run
+	LastAttemptAt          int64          `json:"lastAttemptAt,omitempty"`          // unix millis, a tick spent without running (Goal hold / no topic)
 	NewConversationEachRun bool           `json:"newConversationEachRun,omitempty"` // true = create new topic every run
 	RunHistory             []HeartbeatRun `json:"runHistory,omitempty"`             // recent executions (oldest first, capped)
 	CreatedAt              int64          `json:"createdAt,omitempty"`
@@ -381,7 +382,7 @@ func (e *HeartbeatEngine) resolveHeartbeatTopic(t HeartbeatTask, scope, workspac
 			meta, err := e.app.CreateTopic(scope, workspaceRoot, title)
 			if err != nil {
 				log.Printf("[heartbeat] CreateTopic(%q): %v", t.Title, err)
-				t.LastRunAt = time.Now().UnixMilli()
+				t.LastAttemptAt = time.Now().UnixMilli()
 				return t, "", false, false
 			}
 			topicID = meta.ID
@@ -400,7 +401,7 @@ func (e *HeartbeatEngine) resolveHeartbeatTopic(t HeartbeatTask, scope, workspac
 			meta, err := e.app.CreateTopic(scope, workspaceRoot, title)
 			if err != nil {
 				log.Printf("[heartbeat] CreateTopic(%q): %v", t.Title, err)
-				t.LastRunAt = time.Now().UnixMilli()
+				t.LastAttemptAt = time.Now().UnixMilli()
 				return t, "", false, false
 			}
 			topicID = meta.ID
@@ -433,7 +434,7 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 	}
 	if err != nil {
 		log.Printf("[heartbeat] OpenTab(%q): %s", t.Title, secrets.RedactError(err))
-		t.LastRunAt = time.Now().UnixMilli()
+		t.LastAttemptAt = time.Now().UnixMilli()
 		return t
 	}
 

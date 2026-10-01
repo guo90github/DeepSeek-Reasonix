@@ -68,6 +68,8 @@ export const heartbeatFeatureEn = {
   "heartbeat.unattendedOnHint": "Unattended driving is on: scheduled tasks keep themselves going. Click to turn it off; a change applies the next time the app starts.",
   "heartbeat.unattendedOffHint": "Unattended driving is off: tasks only run on their own schedule. Click to turn it on; a change applies the next time the app starts.",
   "heartbeat.unitDay": "d",
+  "heartbeat.overdue": "overdue — due {ago}",
+  "heartbeat.runHistoryLegacy": "Not in the run history (this run predates it)",
   "heartbeat.viewFlat": "Flat list",
   "heartbeat.viewGrouped": "Group by project",
 } as const;
@@ -146,6 +148,8 @@ const heartbeatFeatureZh = {
   "heartbeat.unattendedOnHint": "无人值守已开启：定时任务会自己持续推进。点击关闭；改动在重启程序后生效。",
   "heartbeat.unattendedOffHint": "无人值守已关闭：任务只按自己的时间表跑。点击开启；改动在重启程序后生效。",
   "heartbeat.unitDay": "天",
+  "heartbeat.overdue": "已到期：{ago}就该运行",
+  "heartbeat.runHistoryLegacy": "未入历史（本次运行早于历史功能）",
   "heartbeat.viewFlat": "纯列表",
   "heartbeat.viewGrouped": "按项目分组",
 } satisfies Record<HeartbeatFeatureKey, string>;
@@ -217,6 +221,8 @@ const heartbeatFeatureZhTW = {
   "heartbeat.unattendedOnHint": "無人值守已開啟：定時任務會自己持續推進。點擊關閉；改動在重啟程式後生效。",
   "heartbeat.unattendedOffHint": "無人值守已關閉：任務只按自己的時間表跑。點擊開啟；改動在重啟程式後生效。",
   "heartbeat.unitDay": "天",
+  "heartbeat.overdue": "已到期：{ago}就該執行",
+  "heartbeat.runHistoryLegacy": "未入歷史（本次執行早於歷史功能）",
   "heartbeat.viewFlat": "純列表",
   "heartbeat.viewGrouped": "按專案分組",
 } satisfies Record<HeartbeatFeatureKey, string>;

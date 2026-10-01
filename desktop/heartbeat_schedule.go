@@ -171,11 +171,20 @@ func cronDue(expr string, t time.Time) bool {
 		cronMatchField(fields[3], int(t.Month()), 1, 12)
 }
 
+// heartbeatScheduleBaseMillis is the timestamp the schedule counts from: the last
+// real run, or a later tick the scheduler spent without running (a Goal hold, a
+// refused resume, a topic it could not open). Display keeps using LastRunAt,
+// which only a real run moves.
+func heartbeatScheduleBaseMillis(t HeartbeatTask) int64 {
+	return max(t.LastRunAt, t.LastAttemptAt)
+}
+
 func heartbeatTaskDueAt(t HeartbeatTask, now time.Time) bool {
+	base := heartbeatScheduleBaseMillis(t)
 	// Try cron expression first
 	if isCronExpr(t.Interval) {
 		if cronDue(t.Interval, now) {
-			if t.LastRunAt == 0 || time.UnixMilli(t.LastRunAt).Before(now.Truncate(time.Minute)) {
+			if base == 0 || time.UnixMilli(base).Before(now.Truncate(time.Minute)) {
 				return true
 			}
 		}
@@ -186,7 +195,7 @@ func heartbeatTaskDueAt(t HeartbeatTask, now time.Time) bool {
 		if t.CreatedAt != 0 && scheduled.Before(time.UnixMilli(t.CreatedAt)) {
 			return false
 		}
-		if t.LastRunAt != 0 && !time.UnixMilli(t.LastRunAt).Before(scheduled) {
+		if base != 0 && !time.UnixMilli(base).Before(scheduled) {
 			return false
 		}
 		return !scheduled.After(now)
@@ -196,7 +205,7 @@ func heartbeatTaskDueAt(t HeartbeatTask, now time.Time) bool {
 	if err != nil || d <= 0 {
 		return false
 	}
-	baseMillis := t.LastRunAt
+	baseMillis := base
 	if baseMillis == 0 {
 		baseMillis = t.CreatedAt
 	}
@@ -393,8 +402,8 @@ func heartbeatScheduleAnchor(t HeartbeatTask, now time.Time) time.Time {
 	if t.CreatedAt != 0 {
 		return time.UnixMilli(t.CreatedAt)
 	}
-	if t.LastRunAt != 0 {
-		return time.UnixMilli(t.LastRunAt)
+	if base := heartbeatScheduleBaseMillis(t); base != 0 {
+		return time.UnixMilli(base)
 	}
 	return now
 }

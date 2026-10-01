@@ -117,6 +117,15 @@ could answer are cleared:
 - The new session anchors the same `goal` contract and continues; the old session
   stays on disk, readable, with a notice saying which session took the task over.
 
+### Run timestamps
+
+`lastRunAt` is moved **only by a real run**; a tick the driver spent without running (a
+Goal hold, a refused resume, a topic it could not open) records `lastAttemptAt` instead.
+The schedule counts from whichever is later, so a hold still postpones the next attempt by
+one interval, while the task list can show a real last run — and say a task is **overdue**
+(with how long) instead of "due soon" forever, which is what a skipped-behind-busy task
+used to look like.
+
 ## 7. Code map
 
 | File | Responsibility |

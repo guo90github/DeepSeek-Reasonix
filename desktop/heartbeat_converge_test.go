@@ -180,7 +180,7 @@ func TestHeartbeatUnattendedStepReplacesAHumanGoalAndKeepsGoing(t *testing.T) {
 	if stub.goal != "ship" {
 		t.Fatalf("goal = %q, want the task contract restored", stub.goal)
 	}
-	if task.LastRunAt != 0 {
+	if task.LastRunAt != 0 || task.LastAttemptAt != 0 {
 		t.Fatal("a re-anchored tick must go on to submit its prompt")
 	}
 }
@@ -192,8 +192,11 @@ func TestHeartbeatUnattendedStepHoldsARunningGoal(t *testing.T) {
 	if !engine.unattendedGoalStepWith(&task, stub, true) {
 		t.Fatal("a running Goal must hold the tick: its own continuation owns the next turn")
 	}
-	if task.LastRunAt == 0 {
+	if task.LastAttemptAt == 0 {
 		t.Fatal("a held tick must consume the interval, or it repeats every 30s")
+	}
+	if task.LastRunAt != 0 {
+		t.Fatal("a hold is not a run: LastRunAt is what the UI shows as the last run")
 	}
 	if stub.resumed || stub.anchored != "" {
 		t.Fatalf("holding modified the Goal: %+v", stub)
@@ -226,7 +229,10 @@ func TestHeartbeatUnattendedStepHoldsAndConsumesWhenResumeIsRefused(t *testing.T
 	if !engine.unattendedGoalStepWith(&task, stub, true) {
 		t.Fatal("a refused resume must not fall through to submitting a prompt")
 	}
-	if task.LastRunAt == 0 {
+	if task.LastAttemptAt == 0 {
 		t.Fatal("a refused resume must consume the interval instead of retrying every 30s")
+	}
+	if task.LastRunAt != 0 {
+		t.Fatal("a refused resume is not a run")
 	}
 }

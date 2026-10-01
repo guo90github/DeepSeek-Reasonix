@@ -14,7 +14,8 @@ export interface HeartbeatTask {
   scope?: string;      // "global" or "project"
   workspaceRoot?: string;
   topicId?: string;
-  lastRunAt?: number;  // unix millis
+  lastRunAt?: number;  // unix millis, moved only by a real run
+  lastAttemptAt?: number; // unix millis, a tick spent without running (Goal hold / no topic)
   newConversationEachRun?: boolean; // true = create new topic each run
   runHistory?: HeartbeatRun[];      // recent executions (oldest first)
   createdAt?: number;

@@ -270,6 +270,9 @@ func mergeHeartbeatRunUpdates(tasks []HeartbeatTask, updates map[string]Heartbea
 		if newerRun {
 			tasks[i].LastRunAt = update.LastRunAt
 		}
+		if update.LastAttemptAt > tasks[i].LastAttemptAt {
+			tasks[i].LastAttemptAt = update.LastAttemptAt
+		}
 		if tasks[i].CreatedAt == 0 && update.CreatedAt != 0 {
 			tasks[i].CreatedAt = update.CreatedAt
 		}
@@ -323,6 +326,7 @@ func mergeHeartbeatDiskRunHistory(submitted, disk []HeartbeatTask) []HeartbeatTa
 		}
 		out[i].TopicID = diskTask.TopicID
 		out[i].LastRunAt = diskTask.LastRunAt
+		out[i].LastAttemptAt = diskTask.LastAttemptAt
 		// Always union by At: once history reaches maxRunHistory, a new disk run
 		// replaces the oldest entry without changing length, so length comparison
 		// would incorrectly drop the engine's new run.
