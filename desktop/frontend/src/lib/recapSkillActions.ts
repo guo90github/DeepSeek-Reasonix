@@ -10,5 +10,6 @@ export function useRecapSkillActions() {
   const draftRecapTopicSkill = useCallback(async (sources: RecapSkillSource[], markdown: string): Promise<RecapSkillDraft> => app.DraftRecapTopicSkill(sources, markdown), []);
   const previewRecapMemory = useCallback(async (source: RecapSkillSource): Promise<RecapPreviewView> => app.PreviewRecapMemory(source), []);
   const previewRecapSkill = useCallback(async (sources: RecapSkillSource[]): Promise<RecapPreviewView> => app.PreviewRecapSkill(sources), []);
-  return { draftRecapSkill, draftRecapTopicSkill, previewRecapMemory, previewRecapSkill };
+  const recallRecordForSession = useCallback(async (sessionPath: string) => app.RecallRecordForSession(sessionPath), []);
+  return { draftRecapSkill, draftRecapTopicSkill, previewRecapMemory, previewRecapSkill, recallRecordForSession };
 }

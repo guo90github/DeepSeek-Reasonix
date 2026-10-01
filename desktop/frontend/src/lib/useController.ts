@@ -4542,11 +4542,8 @@ export function useController() {
   const closeRecapHandoff = useCallback(async (id: string, body: string, evidence: string, resolution: string): Promise<void> => { await app.CloseRecapHandoff(id, body, evidence, resolution); }, [app]);
   const reopenRecapHandoff = useCallback(async (id: string): Promise<void> => { await app.ReopenRecapHandoff(id); }, [app]);
   const generateSessionRecap = useCallback(async (sessionPath: string): Promise<boolean> => app.GenerateSessionRecap(sessionPath), [app]);
-  const { draftRecapSkill, draftRecapTopicSkill, previewRecapMemory, previewRecapSkill } = useRecapSkillActions();
+  const { draftRecapSkill, draftRecapTopicSkill, previewRecapMemory, previewRecapSkill, recallRecordForSession } = useRecapSkillActions();
   const listRecapInsights = useCallback(async (): Promise<SessionRecapInsight[]> => asArray<SessionRecapInsight>(await app.ListRecapInsights()), []);
-  // The recap page lists closed sessions, so a session's recall fingerprints are
-  // read by transcript path rather than by tab id.
-  const recallRecordForSession = useCallback(async (sessionPath: string) => app.RecallRecordForSession(sessionPath), [app]);
   const retrySessionHistory = useCallback(async (tabId?: string) => {
     const id = tabId || activeTabIdRef.current; if (!id) return;
     // A failed hydrate at startup usually means the tab controller build has

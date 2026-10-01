@@ -22,13 +22,14 @@ function ok(value: boolean, label: string) {
 const testDir = fileURLToPath(new URL(".", import.meta.url));
 const source = (relative: string) => readFileSync(resolve(testDir, relative), "utf8");
 
+const skillActions = source("../lib/recapSkillActions.ts");
 const controller = source("../lib/useController.ts");
 const adapter = source("../app-runtime/useAppRuntimeAdapter.ts");
 const builders = source("../app-shell/overlayBuilders.ts");
 const view = source("../app-shell/AppRuntimeView.tsx");
 
-ok(controller.includes("app.RecallRecordForSession(sessionPath)"),
-  "the controller reads a session's recall record by transcript path");
+ok(skillActions.includes("app.RecallRecordForSession(sessionPath)"),
+  "the recap action hook reads a session's recall record by transcript path");
 ok(controller.includes("listRecapInsights, recallRecordForSession,"),
   "the controller hands that reader to the frontends");
 ok(adapter.includes("recallRecordForSession: controller.recallRecordForSession,"),
