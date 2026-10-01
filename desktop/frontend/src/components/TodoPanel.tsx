@@ -48,6 +48,7 @@ function saveOpenState(stateKey: string, open: boolean): void {
 export function TodoPanel({
   stateKey,
   todos,
+  archive = EMPTY_ARCHIVE,
   running,
   pendingPrompt,
   onContinue,
@@ -56,6 +57,9 @@ export function TodoPanel({
 }: {
   stateKey: string;
   todos: Todo[];
+  // The board's archive: what finished in earlier lists. Read-only history, so
+  // it lists items and offers no action (requirement 17).
+  archive?: Todo[];
   running: boolean;
   pendingPrompt: boolean;
   onContinue?: () => void;
@@ -76,6 +80,8 @@ export function TodoPanel({
   const continueAction = !allDone && current && !running && !pendingPrompt ? onContinue : undefined;
   const summary = current?.activeForm || current?.content || todos[todos.length - 1]?.content || "";
   const [open, setOpen] = useState(() => loadOpenState(stateKey, shouldOpenTodoPanelByDefault()));
+  // The archive starts folded: it is history, not the work at hand.
+  const [archiveOpen, setArchiveOpen] = useState(false);
   // Phase rows expand by default; collapse state is per-batch (keyed by group
   // index) and resets on remount, unlike the shelf's persisted open state.
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
@@ -119,7 +125,8 @@ export function TodoPanel({
       ) : undefined}
     >
       {open && (
-        <ul className="todobar__list">
+        <>
+          <ul className="todobar__list">
           {groups.map((group, gi) => {
             if (group.phase && group.children.length > 0) {
               const status = normalizeTodoStatus(group.phase.status);
@@ -207,11 +214,45 @@ export function TodoPanel({
               </li>
             );
           })}
-        </ul>
+          </ul>
+          {archive.length > 0 && (
+            <div className="todobar__archive">
+              <span
+                role="button"
+                tabIndex={0}
+                aria-expanded={archiveOpen}
+                className="todobar__archive-head"
+                onClick={() => setArchiveOpen((value) => !value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setArchiveOpen((value) => !value);
+                  }
+                }}
+              >
+                <span className={`todobar__chevron${archiveOpen ? "" : " todobar__chevron--closed"}`}>▸</span>
+                <span className="todobar__text">{t("todo.archive")}</span>
+                <span className="todobar__chip">{archive.length}</span>
+              </span>
+              {archiveOpen && (
+                <ul className="todobar__sublist">
+                  {archive.map((todo, ai) => (
+                    <li key={ai} className="todobar__item todobar__item--sub todobar__item--completed">
+                      <span className="todobar__status todobar__status--completed">{t("todo.completed")}</span>
+                      <span className="todobar__text">{todo.content}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </>
       )}
     </PromptShelf>
   );
 }
+
+const EMPTY_ARCHIVE: Todo[] = [];
 
 function normalizeTodoStatus(status: Todo["status"]): "pending" | "in_progress" | "completed" {
   switch (String(status ?? "").trim()) {

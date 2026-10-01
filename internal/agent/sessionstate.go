@@ -51,6 +51,10 @@ type sessionRuntime struct {
 	// snapshot rather than letting reset blank it.
 	todoMu    sync.Mutex
 	todoState []evidence.TodoItem
+	// todoBoard is the shelf's queue and archive: the canonical list above is
+	// the newest word about the work, the board is everything still owed. See
+	// todo_board.go.
+	todoBoard TodoBoard
 
 	// lastPrefixShape records the previous provider request's cacheable prefix
 	// so usage events can explain prefix churn on the next request. Carried

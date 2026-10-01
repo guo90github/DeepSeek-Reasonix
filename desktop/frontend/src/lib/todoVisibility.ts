@@ -56,6 +56,38 @@ export function resolveTodoPanelTodos(
   return Array.isArray(canonical) ? canonical : [];
 }
 
+/**
+ * What the shelf shows: the board's queue (unfinished work across lists) first,
+ * then whatever the current list adds. Identity and dismissal never come from
+ * here — they stay on the canonical list — so showing history cannot resurrect
+ * a closed batch.
+ */
+export function mergeTodoBoardQueue(queue: Todo[] | null | undefined, current: Todo[]): Todo[] {
+  const owed = Array.isArray(queue) ? queue : [];
+  if (owed.length === 0) return current;
+  const seen = new Set(owed.map(todoItemKey));
+  const extra = current.filter((todo) => !seen.has(todoItemKey(todo)));
+  return extra.length === 0 ? owed : [...owed, ...extra];
+}
+
+function todoItemKey(todo: Todo): string {
+  const level = typeof todo.level === "number" ? todo.level : 0;
+  return `${String(todo.content ?? "")}\u0000${level}`;
+}
+
+/**
+ * Whether two meta views describe the same board: the batch id plus the queue
+ * and archive. Kept here so the meta comparison stays one line at its call site.
+ */
+export function sameTodoBoard(
+  a: { todoBatchId?: string; todoQueue?: Todo[] | null; todoArchive?: Todo[] | null },
+  b: { todoBatchId?: string; todoQueue?: Todo[] | null; todoArchive?: Todo[] | null },
+): boolean {
+  return a.todoBatchId === b.todoBatchId
+    && sameTodoList(a.todoQueue, b.todoQueue)
+    && sameTodoList(a.todoArchive, b.todoArchive);
+}
+
 export function sameTodoList(a: Todo[] | null | undefined, b: Todo[] | null | undefined): boolean {
   if (a === b) return true;
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
@@ -154,6 +186,16 @@ export function todoBatchKey(todos: Todo[]): string {
     content: String(todo.content ?? ""),
     level: typeof todo.level === "number" ? todo.level : 0,
   })));
+}
+
+/**
+ * The batch identity the shelf keys on: the host issues it, so editing a list
+ * keeps its batch (and a closed batch stays closed). The content-derived key is
+ * only a fallback for a backend that does not report one yet.
+ */
+export function todoBatchIdentity(hostBatchId: string | null | undefined, todos: Todo[]): string {
+  const issued = String(hostBatchId ?? "").trim();
+  return issued || todoBatchKey(todos);
 }
 
 export function scopedTodoBatchKey(scope: string | null | undefined, batchKey: string | null | undefined): string {

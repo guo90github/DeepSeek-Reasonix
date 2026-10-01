@@ -38,6 +38,7 @@ var sessionCarryOver = map[string]bool{
 	"checkpointState": true, // preflight rebinds with the transcript
 	"todoMu":          true,
 	"todoState":       true, // SetSession rebuilds it from the new snapshot
+	"todoBoard":       true, // rebuildTodoState replays the new transcript into it
 	// lastPrefixShape survives the swap today; the next request compares its
 	// prefix against the replaced conversation's shape. Left as found here.
 	"lastPrefixShape":     true,

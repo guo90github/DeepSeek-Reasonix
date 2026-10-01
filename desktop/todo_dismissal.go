@@ -26,6 +26,11 @@ func (a *App) DismissTodoBatchForTab(tabID, batchKey string) error {
 		if err := agent.RecordDismissedTodoBatch(path, batchKey); err != nil && firstErr == nil {
 			firstErr = err
 		}
+		// The close rides the batch identity, not the content: an edit to the
+		// same plan must not resurrect it (requirement 17).
+		if err := agent.CloseTodoBatchIdentity(path, batchKey); err != nil && firstErr == nil {
+			firstErr = err
+		}
 	}
 	return firstErr
 }

@@ -232,6 +232,9 @@ type Status interface {
 	Balance(ctx context.Context) (*billing.Balance, error)
 	Jobs() []jobs.View
 	Todos() []evidence.TodoItem
+	// TodoBoard is the shelf's queue and archive: everything the session still
+	// owes, across every list it has carried, plus what finished.
+	TodoBoard() agent.TodoBoard
 	// TodosSupervised reports whether an unfinished item in Todos is a
 	// commitment the host enforces (an active goal or plan mode) rather than the
 	// model's own note. Frontends label the panel and may let a note be dismissed.

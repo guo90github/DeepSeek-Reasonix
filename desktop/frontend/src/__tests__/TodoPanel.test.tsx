@@ -199,13 +199,17 @@ async function testChevronCollapsesSublistOnly() {
   await check("second click restores the sublist", () => Promise.resolve(q(".todobar__sublist") !== null));
 }
 
-async function testAllDoneAutoCollapses() {
+// The shelf deliberately does not fold itself when the work finishes: a
+// completed list stays visible until the user closes it (docs/40 §7.2, and
+// todo-panel-lifecycle.test.tsx pins the same contract for a restored batch).
+async function testAllDoneKeepsTheShelfOpenUntilClosed() {
   await renderPanel([{ content: "X", status: "in_progress" }, { content: "Y", status: "pending" }]);
   await openPanel();
   await check("shelf open before completion", () => Promise.resolve(!cardCollapsed()));
   await rerender([{ content: "X", status: "completed" }, { content: "Y", status: "completed" }]);
-  await check("shelf collapses when every todo completes", () => Promise.resolve(cardCollapsed()));
-  await check("list unmounts when collapsed", () => Promise.resolve(q(".todobar__list") === null));
+  await check("shelf stays open when every todo completes", () => Promise.resolve(!cardCollapsed()));
+  await check("list stays mounted", () => Promise.resolve(q(".todobar__list") !== null));
+  await check("a finished list offers close", () => Promise.resolve(headerButtons().length === 1));
 }
 
 const unfinished = [
@@ -269,7 +273,7 @@ async function main() {
   await cleanup();
   await testChevronCollapsesSublistOnly();
   await cleanup();
-  await testAllDoneAutoCollapses();
+  await testAllDoneKeepsTheShelfOpenUntilClosed();
   await cleanup();
   await testUnsupervisedListOffersClose();
   await cleanup();

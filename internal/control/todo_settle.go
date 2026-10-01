@@ -7,6 +7,7 @@ package control
 import (
 	"fmt"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/evidence"
 )
 
@@ -41,6 +42,14 @@ func (c *Controller) settleUnsupervisedTodos(startMessages int) {
 // that arms the final-readiness gate) rather than the model's own note. It reads
 // active() rather than deliveryScope() because frontends call this on the meta
 // path, and a display read must not assign a goal scope id.
+// TodoBoard reports the shelf's queue and archive; see agent.TodoBoard.
+func (c *Controller) TodoBoard() agent.TodoBoard {
+	if c.executor == nil {
+		return agent.TodoBoard{}
+	}
+	return c.executor.TodoBoardState()
+}
+
 func (c *Controller) TodosSupervised() bool {
 	if c.goals.active() {
 		return true

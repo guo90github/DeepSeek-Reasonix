@@ -34,6 +34,7 @@ import (
 	"reasonix/internal/sandbox"
 	"reasonix/internal/sessiontemp"
 	"reasonix/internal/shellparse"
+	"reasonix/internal/skill"
 	"reasonix/internal/taskcontract"
 	"reasonix/internal/tool"
 	"reasonix/internal/workspacelease"
@@ -161,6 +162,7 @@ func (a *Agent) withAgentContext(ctx context.Context) context.Context {
 	} else {
 		ctx = memory.WithoutQueue(ctx)
 	}
+	ctx = skill.WithUseRecorder(ctx, a.svc.skillRecorder)
 	return planmode.WithActive(ctx, a.planMode.Load())
 }
 
@@ -314,6 +316,14 @@ type Agent struct {
 	// agents. Unlike planMode it is not a collaboration toggle: it remains on
 	// for the agent's lifetime and validates proxy calls after resolution.
 	readOnlyExecution bool
+
+	// shellAsync is the configured speed tier for long shell calls; see
+	// ShellAsyncTier.
+	shellAsync ShellAsyncTier
+
+	// shellJobs maps a background job to the command that started it; see
+	// shell_job_receipts.go.
+	shellJobs shellJobCommands
 
 	// mutationDependencyBarrier records the first durable-state write that
 	// failed or was blocked in the current provider tool batch. executeOne
@@ -559,6 +569,9 @@ func (a *Agent) SetInteractionBroker(b mcpinteraction.Broker) { a.svc.interactio
 // SetMemoryQueue installs the sink the remember/forget tools use to apply a
 // memory change in the current session. The controller wires itself in.
 func (a *Agent) SetMemoryQueue(q memory.Queue) { a.svc.memQueue = q }
+
+// SetSkillUseRecorder installs the sink skill invocations are fingerprinted to.
+func (a *Agent) SetSkillUseRecorder(r skill.UseRecorder) { a.svc.skillRecorder = r }
 
 // SetPreEditHook installs the pre-edit snapshot hook (see onPreEdit). The
 // controller wires it to its per-session checkpoint store; nil disables capture.
@@ -898,6 +911,10 @@ type Options struct {
 	// authorized, non-destructive tools may run without readOnlyHint. Only
 	// NewPlannerAgent sets this; strict read-only sub-agents must not.
 	PlannerMCPExecution bool
+	// ShellAsync decides whether a shell call with a later call in its batch is
+	// started as a background job so the loop does not wait for it. The zero
+	// value keeps every call in the foreground.
+	ShellAsync ShellAsyncTier
 
 	// PlanModeReadOnlyTrustGate is retained for legacy controller compatibility.
 	// The main Plan execution path no longer invokes it.
@@ -1138,6 +1155,7 @@ func New(prov provider.Provider, tools *tool.Registry, session *Session, opts Op
 		},
 		readOnlyExecution:      opts.ReadOnlyExecution,
 		plannerMCPExecution:    opts.PlannerMCPExecution,
+		shellAsync:             opts.ShellAsync,
 		projectChecks:          append([]instruction.VerifyCheck(nil), opts.ProjectChecks...),
 		inheritedExec:          opts.InheritedExecution,
 		ablation:               opts.Ablation,
@@ -1416,8 +1434,12 @@ func (a *Agent) deliveryMutationCheckpointReady() bool {
 }
 
 func (a *Agent) setTodoState(todos []evidence.TodoItem) {
+	normalized := evidence.NormalizeSerialTodos(todos)
 	a.sess.todoMu.Lock()
-	a.sess.todoState = evidence.NormalizeSerialTodos(todos)
+	a.sess.todoState = normalized
+	// The board keeps what this list leaves unfinished, so a re-plan cannot
+	// make owed work invisible (requirement 17).
+	a.sess.todoBoard = MergeTodoBoard(a.sess.todoBoard, normalized)
 	a.sess.todoMu.Unlock()
 }
 
@@ -1513,35 +1535,16 @@ func (a *Agent) RebuildTodoState() {
 // fresh load or a rewind (the truncated history yields the historical state).
 // Empty after compaction drops the todo_write — no worse than no canonical list.
 func (a *Agent) rebuildTodoState(msgs []provider.Message) {
-	successful := successfulToolCallIDs(msgs)
-	var todos []evidence.TodoItem
-	baseIdx := -1
-	for i, msg := range msgs {
-		for _, tc := range msg.ToolCalls {
-			if tc.Name != "todo_write" || !successful[tc.ID] {
-				continue
-			}
-			rec := evidence.ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, true)
-			// A successful empty todo_write is an explicit clear. Preserve it as the
-			// latest base so history reloads do not resurrect an older non-empty list.
-			todos = evidence.NormalizeSerialTodos(rec.Todos)
-			baseIdx = i
-		}
-	}
-	if baseIdx < 0 {
+	todos, board, hasList := ReplayTodoHistory(msgs)
+	// The board is this transcript's history: rebuild it rather than merging into
+	// whatever the previous conversation left, so the shelf cannot leak across a
+	// swap.
+	a.sess.todoMu.Lock()
+	a.sess.todoBoard = board
+	a.sess.todoMu.Unlock()
+	if !hasList {
 		a.setTodoState(nil)
 		return
-	}
-	for i := baseIdx; i < len(msgs); i++ {
-		for _, tc := range msgs[i].ToolCalls {
-			if tc.Name != "complete_step" || !successful[tc.ID] {
-				continue
-			}
-			rec := evidence.ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, true)
-			if m, ok := evidence.MatchStep(rec.Step, todos); ok {
-				evidence.AdvanceSerialTodo(todos, m.Index-1)
-			}
-		}
 	}
 	a.setTodoState(todos)
 	a.consumeTodoOnlyReadinessMarkerIfResolved()

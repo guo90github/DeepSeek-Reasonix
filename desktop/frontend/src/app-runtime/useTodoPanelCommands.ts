@@ -7,8 +7,9 @@ import {
   resolveTodoPanelTodos,
   scopedTodoBatchKey,
   scopedTodoDismissalKey,
+  mergeTodoBoardQueue,
   shouldShowTodoPanel,
-  todoBatchKey,
+  todoBatchIdentity,
   todoContinueTarget,
   todoDismissalKey,
   todoPanelScope,
@@ -27,6 +28,12 @@ export type TodoPanelCommandsInput = {
     sessionPath?: string;
     eventChannel?: string;
     dismissedTodoBatches?: string[];
+    /** Host-issued batch identity; the content-derived key is only a fallback. */
+    todoBatchId?: string;
+    /** The board's unfinished queue, across every list this session carried. */
+    todoQueue?: Todo[] | null;
+    /** The board's archive: what finished, in order. */
+    todoArchive?: Todo[] | null;
     todosSupervised?: boolean;
   } | undefined | null;
   activeTab: TabMeta | undefined;
@@ -73,13 +80,26 @@ export function useTodoPanelCommands(input: TodoPanelCommandsInput) {
   const todoItem = todoEntry?.item ?? null;
   const metaTodos = remote ? undefined : input.meta?.canonicalTodos;
   const todosSupervised = input.meta?.todosSupervised === true;
-  const todos = useMemo(
+  const canonicalTodos = useMemo(
     () => resolveTodoPanelTodos(metaTodos, todoItem ? parseTodos(todoItem.args) : undefined),
     [metaTodos, todoItem],
   );
+  // The shelf shows what is still owed (the board's queue) plus the current
+  // list's own items. Dismissal and the batch identity below deliberately keep
+  // reading the canonical list, so history cannot resurrect a closed batch.
+  const todos = useMemo(
+    () => mergeTodoBoardQueue(remote ? undefined : input.meta?.todoQueue, canonicalTodos),
+    [canonicalTodos, input.meta?.todoQueue, remote],
+  );
   const [dismissedTodoKeys, setDismissedTodoKeys] = useState<Set<string>>(loadDismissedTodoKeys);
-  const todoKey = useMemo(() => todoDismissalKey(todos), [todos]);
-  const todoBatch = useMemo(() => todoBatchKey(todos), [todos]);
+  const todoKey = useMemo(() => todoDismissalKey(canonicalTodos), [canonicalTodos]);
+  // The board's archive is read-only history: the shelf may list it, never
+  // resume or dismiss from it.
+  const todoArchive = useMemo(
+    () => (remote ? [] : (input.meta?.todoArchive ?? [])),
+    [input.meta?.todoArchive, remote],
+  );
+  const todoBatch = useMemo(() => todoBatchIdentity(input.meta?.todoBatchId, todos), [input.meta?.todoBatchId, todos]);
   const todoScope = useMemo(
     () => todoPanelScope({ activeTab, activeTabId, eventChannel: remote ? undefined : input.meta?.eventChannel }),
     [activeTab, activeTabId, remote, input.meta?.eventChannel],
@@ -123,5 +143,5 @@ export function useTodoPanelCommands(input: TodoPanelCommandsInput) {
     void ports.sendToTab(targetTabId, prompt);
   });
 
-  return { showTodos, scopedTodoBatch, todos, todosSupervised, dismissTodos, handleTodoContinue };
+  return { showTodos, scopedTodoBatch, todos, todoArchive, todosSupervised, dismissTodos, handleTodoContinue };
 }

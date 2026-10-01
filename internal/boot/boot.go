@@ -1697,6 +1697,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		StateRoot:                    config.MemoryUserDir(),
 		ProjectChecks:                projectChecks,
 		Ablation:                     opts.Ablation,
+		ShellAsync:                   agent.ParseShellAsyncTier(cfg.Agent.ShellAsync),
 		WorkspaceLease:               workspaceLease,
 		CapabilityLedger:             capLedger,
 		CapabilityAudit:              capAudit,

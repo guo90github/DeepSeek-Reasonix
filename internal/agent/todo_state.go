@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"reasonix/internal/evidence"
+	"reasonix/internal/provider"
 )
 
 // SeedTodoState initializes the canonical task list from a host-generated
@@ -20,11 +21,67 @@ func (a *Agent) SeedTodoState(todos []evidence.TodoItem) {
 	a.setTodoState(todos)
 }
 
+// ReplayTodoHistory derives the canonical task list and the board from a
+// transcript: the latest successful todo_write is the base, every complete_step
+// after it advances an item, and every list the session carried folds into the
+// board so unfinished work stays visible. Deterministic from persisted messages,
+// which is what lets a host with no bound controller still show what a session
+// owes (docs/40 S2).
+func ReplayTodoHistory(msgs []provider.Message) ([]evidence.TodoItem, TodoBoard, bool) {
+	successful := successfulToolCallIDs(msgs)
+	var todos []evidence.TodoItem
+	var lists [][]evidence.TodoItem
+	baseIdx := -1
+	for i, msg := range msgs {
+		for _, tc := range msg.ToolCalls {
+			if tc.Name != "todo_write" || !successful[tc.ID] {
+				continue
+			}
+			rec := evidence.ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, true)
+			// A successful empty todo_write is an explicit clear. Preserve it as the
+			// latest base so history reloads do not resurrect an older non-empty list.
+			todos = evidence.NormalizeSerialTodos(rec.Todos)
+			lists = append(lists, todos)
+			baseIdx = i
+		}
+	}
+	board := TodoBoard{}
+	for _, list := range lists {
+		board = MergeTodoBoard(board, list)
+	}
+	if baseIdx < 0 {
+		return nil, board, false
+	}
+	for i := baseIdx; i < len(msgs); i++ {
+		for _, tc := range msgs[i].ToolCalls {
+			if tc.Name != "complete_step" || !successful[tc.ID] {
+				continue
+			}
+			rec := evidence.ReceiptFromToolCall(tc.Name, json.RawMessage(tc.Arguments), true, true)
+			if m, ok := evidence.MatchStep(rec.Step, todos); ok {
+				evidence.AdvanceSerialTodo(todos, m.Index-1)
+			}
+		}
+	}
+	return todos, board, true
+}
+
 // ReplaceTodoState mirrors a host-generated todo list into the canonical state.
 // It is used when the host, rather than the model, owns the full state transition.
 func (a *Agent) ReplaceTodoState(todos []evidence.TodoItem) {
 	a.setTodoState(todos)
 	a.recordTodoState(a.CanonicalTodoState())
+}
+
+// TodoBoardState returns a copy of the shelf's queue and archive: everything
+// this session still owes, plus what finished.
+func (a *Agent) TodoBoardState() TodoBoard {
+	a.sess.todoMu.Lock()
+	defer a.sess.todoMu.Unlock()
+	return TodoBoard{
+		Queue:   append([]evidence.TodoItem(nil), a.sess.todoBoard.Queue...),
+		Archive: append([]evidence.TodoItem(nil), a.sess.todoBoard.Archive...),
+	}
 }
 
 // CanonicalTodoState returns a copy of the host-reconstructed task list.
