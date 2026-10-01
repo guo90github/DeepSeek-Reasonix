@@ -550,6 +550,20 @@ func (c *Config) SetColdResumePrune(enabled bool) error {
 // SetCompactRatio updates the sole user-controlled automatic compaction
 // threshold. Allowed range is CompactRatioMin–CompactRatioMax; presets are
 // 0.70 / 0.80 / 0.85.
+// SetAgentShellAsync stores the speed tier for long shell calls. An unknown
+// tier is refused rather than silently stored: the tier decides when a command
+// runs in the background, so a typo must not become a silent behaviour change.
+func (c *Config) SetAgentShellAsync(tier string) error {
+	normalized := strings.ToLower(strings.TrimSpace(tier))
+	switch normalized {
+	case "", "off", "balanced", "fast":
+	default:
+		return fmt.Errorf("shell_async %q: must be off, balanced, or fast", tier)
+	}
+	c.Agent.ShellAsync = normalized
+	return nil
+}
+
 func (c *Config) SetCompactRatio(ratio float64) error {
 	if math.IsNaN(ratio) || math.IsInf(ratio, 0) || ratio < CompactRatioMin || ratio > CompactRatioMax {
 		return fmt.Errorf("compact ratio %v: must be between %.2f and %.2f", ratio, CompactRatioMin, CompactRatioMax)
