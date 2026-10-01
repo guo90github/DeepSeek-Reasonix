@@ -9,7 +9,7 @@ import { SessionRecapPage } from "../src/components/SessionRecapPage";
 import type { RecapOpenItem, SessionMeta, SessionRecap, SessionRecapEntry, SessionRecapInsight } from "../src/lib/types";
 
 const CARD_COUNT = 60;
-const sessionPath = (index: number) => `C:\\sessions\\202609${String((index % 28) + 1).padStart(2, "0")}-0900${index % 10}00.000000000-deepseek-flash.jsonl`;
+const sessionPath = (index: number) => `C:\\sessions\\202609${String((index % 28) + 1).padStart(2, "0")}-09${String(index % 60).padStart(2, "0")}00.000000000-deepseek-flash.jsonl`;
 
 function entry(index: number, kind: SessionRecapEntry["kind"], body: string): SessionRecapEntry {
   return {

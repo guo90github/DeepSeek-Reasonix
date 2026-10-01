@@ -4,6 +4,8 @@ import type { RecapOpenItem, RecapSkillDraft, SessionMeta, SessionRecap, Session
 import { useT } from "../lib/i18n";
 import { useManagementT } from "../lib/managementLocale";
 import { ManagementPageShell } from "./ManagementPageShell";
+import { ModalCloseButton } from "./ModalCloseButton";
+import { ResizableDrawer } from "./ResizableDrawer";
 import { groupByTopic } from "../lib/recapTopics";
 import { RecapRow } from "./RecapRow";
 import { RecapHeatmap } from "./RecapHeatmap";
@@ -139,9 +141,16 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   useEffect(() => () => { if (refreshTimer.current !== 0) window.clearTimeout(refreshTimer.current); }, []);
 
   const byPath = useMemo(() => new Map(sessions.map((meta) => [meta.path, meta])), [sessions]);
+  // A session that is no longer listed has only its file name left. Read that as a
+  // stamp rather than a log line: "2026-09-28 09:07 · deepseek-flash".
   const titleOf = useCallback((recap: { path: string }) => {
     const meta = byPath.get(recap.path);
-    return (meta?.title ?? "").trim() || (meta?.preview ?? "").trim() || recap.path.split(/[/\\]/).pop() || recap.path;
+    const named = (meta?.title ?? "").trim() || (meta?.preview ?? "").trim();
+    if (named !== "") return named;
+    const file = recap.path.split(/[/\\]/).pop() ?? recap.path;
+    const stamped = /^(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})\d{2}\.\d+-(.+)\.jsonl$/i.exec(file);
+    if (stamped) return `${stamped[1]}-${stamped[2]}-${stamped[3]} ${stamped[4]}:${stamped[5]} · ${stamped[6]}`;
+    return file.replace(/\.jsonl$/i, "") || recap.path;
   }, [byPath]);
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -496,56 +505,67 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       </details>
     )}
     {!loading && preview !== null && (
-      <div className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
-        <strong>{preview.kind === "memory" ? m("recapPreviewMemoryTitle") : m("recapPreviewSkillTitle")}</strong>
-        <span style={{ ...labelStyle, fontSize: 12 }}>
-          {preview.kind === "memory" ? m("recapPreviewMemoryHint") : m("recapPreviewSkillHint")}
-        </span>
-        {preview.kind === "memory" ? preview.drafts.map((draft) => (
-          <div key={draft.entry.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            <span style={{ ...labelStyle, fontSize: 12 }}>{draft.entry.body}</span>
-            {draft.view.reason !== undefined && draft.view.text === "" && (
-              <span style={{ ...labelStyle, fontSize: 12, color: "var(--warn, inherit)" }}>
-                {m("recapPreviewFailed", { reason: draft.view.reason })}</span>
-            )}
-            <textarea rows={2} value={draft.text} style={{ width: "100%" }}
-              onChange={(event) => setPreview((current) => current === null ? null : {
-                ...current,
-                drafts: current.drafts.map((item) => item.entry.id === draft.entry.id ? { ...item, text: event.target.value } : item),
-              })} />
-            {draft.view.promptTag !== "" && (
-              <span style={{ ...labelStyle, fontSize: 12 }}>
-                {m("recapPreviewProvenance", { tag: draft.view.promptTag, model: draft.view.model })}</span>
-            )}
+      /* A decision lives in the app's own right-side drawer, so the page behind it
+         keeps its full height instead of being pushed around by two textareas. */
+      <div style={{ position: "fixed", inset: 0, zIndex: "calc(var(--z-modal) + 2)" }}>
+      <ResizableDrawer onClose={() => setPreview(null)} subtle>
+        <header className="drawer__head">
+          <div>
+            <div className="drawer__title">{preview.kind === "memory" ? m("recapPreviewMemoryTitle") : m("recapPreviewSkillTitle")}</div>
+            <div className="drawer__summary">{preview.kind === "memory" ? m("recapPreviewMemoryHint") : m("recapPreviewSkillHint")}</div>
           </div>
-        )) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-            {preview.drafts[0] !== undefined && preview.drafts[0].view.reason !== undefined && preview.drafts[0].view.text === "" && (
-              <span style={{ ...labelStyle, fontSize: 12, color: "var(--warn, inherit)" }}>
-                {m("recapPreviewFailed", { reason: preview.drafts[0].view.reason })}</span>
-            )}
-            <textarea rows={14} value={preview.markdown} style={{ width: "100%", fontFamily: "monospace" }}
-              onChange={(event) => setPreview((current) => current === null ? null : { ...current, markdown: event.target.value })} />
-            {preview.drafts[0] !== undefined && preview.drafts[0].view.promptTag !== "" && (
-              <span style={{ ...labelStyle, fontSize: 12 }}>
-                {m("recapPreviewProvenance", { tag: preview.drafts[0].view.promptTag, model: preview.drafts[0].view.model })}</span>
-            )}
-          </div>
-        )}
-        <span style={{ display: "flex", gap: 6 }}>
-          <button className="btn btn--small recap-preview-confirm" type="button" disabled={busy !== ""}
-            onClick={() => void confirmPreview()}>{preview.kind === "memory" ? m("recapPreviewConfirmMemory") : m("recapPreviewConfirmSkill")}</button>
-          {preview.kind === "skill" && (
-            <button className="btn btn--small" type="button" disabled={busy !== ""}
-              onClick={() => {
-                const drafts = preview.drafts.map((draft) => draft.entry);
-                setPreview(null);
-                void (drafts.length === 1 ? makeDraft(drafts[0]) : draftGroupSkills(drafts));
-              }}>
-              {m("recapPreviewUseVerbatim")}</button>
+          <ModalCloseButton label={m("cancel")} onClick={() => setPreview(null)} />
+        </header>
+        <div className="drawer__body">
+          {preview.kind === "memory" ? preview.drafts.map((draft) => (
+            <section className="mem-section" key={draft.entry.id}>
+              <div className="mem-section__row">
+                <div className="mem-section__title">{draft.entry.body}</div>
+              </div>
+              {draft.view.reason !== undefined && draft.view.text === "" && (
+                <div className="mem-note" style={{ color: "var(--warn, inherit)" }}>
+                  {m("recapPreviewFailed", { reason: draft.view.reason })}</div>
+              )}
+              <textarea rows={3} value={draft.text} style={{ width: "100%", marginTop: 6 }}
+                onChange={(event) => setPreview((current) => current === null ? null : {
+                  ...current,
+                  drafts: current.drafts.map((item) => item.entry.id === draft.entry.id ? { ...item, text: event.target.value } : item),
+                })} />
+              {draft.view.promptTag !== "" && (
+                <div className="mem-note" style={{ marginTop: 4 }}>
+                  {m("recapPreviewProvenance", { tag: draft.view.promptTag, model: draft.view.model })}</div>
+              )}
+            </section>
+          )) : (
+            <section className="mem-section">
+              {preview.drafts[0] !== undefined && preview.drafts[0].view.reason !== undefined && preview.drafts[0].view.text === "" && (
+                <div className="mem-note" style={{ color: "var(--warn, inherit)" }}>
+                  {m("recapPreviewFailed", { reason: preview.drafts[0].view.reason })}</div>
+              )}
+              <textarea rows={14} value={preview.markdown} style={{ width: "100%", fontFamily: "monospace" }}
+                onChange={(event) => setPreview((current) => current === null ? null : { ...current, markdown: event.target.value })} />
+              {preview.drafts[0] !== undefined && preview.drafts[0].view.promptTag !== "" && (
+                <div className="mem-note" style={{ marginTop: 4 }}>
+                  {m("recapPreviewProvenance", { tag: preview.drafts[0].view.promptTag, model: preview.drafts[0].view.model })}</div>
+              )}
+            </section>
           )}
-          <button className="btn btn--small" type="button" onClick={() => setPreview(null)}>{m("cancel")}</button>
-        </span>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button className="btn btn--primary btn--small recap-preview-confirm" type="button" disabled={busy !== ""}
+              onClick={() => void confirmPreview()}>{preview.kind === "memory" ? m("recapPreviewConfirmMemory") : m("recapPreviewConfirmSkill")}</button>
+            {preview.kind === "skill" && (
+              <button className="btn btn--small" type="button" disabled={busy !== ""}
+                onClick={() => {
+                  const pending = preview.drafts.map((draft) => draft.entry);
+                  setPreview(null);
+                  void (pending.length === 1 ? makeDraft(pending[0]) : draftGroupSkills(pending));
+                }}>
+                {m("recapPreviewUseVerbatim")}</button>
+            )}
+            <button className="btn btn--small" type="button" onClick={() => setPreview(null)}>{m("cancel")}</button>
+          </div>
+        </div>
+      </ResizableDrawer>
       </div>
     )}
     {!loading && ungenerated.length > 0 && (
@@ -613,19 +633,24 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
         {rows.map((recap) => {
           const meta = byPath.get(recap.path);
-          return <li key={recap.path} className="management-notice" style={{ flexDirection: "column", alignItems: "stretch", gap: 4 }}>
-            <div style={{ display: "flex", gap: 12, alignItems: "baseline", flexWrap: "wrap", fontSize: 12 }}>
+          return <li key={recap.path} style={{ display: "flex", flexDirection: "column", gap: 6, padding: "10px 12px",
+            border: "1px solid var(--border)", borderRadius: 10, background: "var(--bg-elev)" }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap" }}>
               <span role="button" tabIndex={0} data-recap-toggle="" title={m("recapFoldHint")}
                 onClick={() => toggleCard(recap.path)}
                 onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); toggleCard(recap.path); } }}
-                style={{ cursor: "pointer" }}><strong>{titleOf(recap)}</strong></span>
-              {recap.entries.length > 0 && <span style={labelStyle}>{m("recapNoteCount", { n: recap.entries.length })}</span>}
-              {meta && <span style={labelStyle}>{t(meta.turns === 1 ? "history.turnOne" : "history.turnOther", { n: meta.turns })}</span>}
-              {recap.generatedAt !== "" && <span style={labelStyle}>{t("history.recapGeneratedAt")}：{formatStamp(recap.generatedAt)}</span>}
-              {recap.model !== "" && <span style={labelStyle}>{t("history.recapModel")}：{recap.model}</span>}
-              {recap.pending && <span style={labelStyle}>{m("recapPendingSince")}：{formatStamp(recap.pending.updatedAt)}</span>}
+                style={{ cursor: "pointer", fontSize: 14, fontWeight: 650, color: "var(--fg)" }}>{titleOf(recap)}</span>
               {meta && <button className="btn btn--small" type="button" onClick={() => { void resume(meta); onBack(); }}>
                 <ExternalLink size={13} />{m("recapOpen")}</button>}
+            </div>
+            {/* Two levels, not one line of equals: the session's own facts stay small
+                and dim, the title above them carries the weight. */}
+            <div style={{ display: "flex", gap: 10, alignItems: "baseline", flexWrap: "wrap", fontSize: 12, ...labelStyle }}>
+              {recap.entries.length > 0 && <span>{m("recapNoteCount", { n: recap.entries.length })}</span>}
+              {meta && <span>{t(meta.turns === 1 ? "history.turnOne" : "history.turnOther", { n: meta.turns })}</span>}
+              {recap.generatedAt !== "" && <span>{t("history.recapGeneratedAt")}：{formatStamp(recap.generatedAt)}</span>}
+              {recap.model !== "" && <span>{t("history.recapModel")}：{recap.model}</span>}
+              {recap.pending && <span>{m("recapPendingSince")}：{formatStamp(recap.pending.updatedAt)}</span>}
             </div>
             {recap.pending && <p style={{ margin: 0, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap", color: "var(--warn, inherit)" }}>
               <span>{m("recapPendingLine", { n: recap.pending.attempts, reason: recap.pending.reason })}</span>

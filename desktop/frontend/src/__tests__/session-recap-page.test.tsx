@@ -167,8 +167,8 @@ ok(scroller instanceof HTMLElement && scroller.style.minHeight === "160px" && sc
 
 ok(rootEl.textContent?.includes("Gamma 会话") === true, "a recap shows its session title");
 ok(rootEl.textContent?.includes("Alpha 会话") === true, "the other session title is shown too");
-ok(rootEl.textContent?.includes("20260901-120000.000000000-deepseek-flash.jsonl") === true,
-  "a recap whose session is not listed falls back to the file name");
+ok(rootEl.textContent?.includes("2026-09-01 12:00 · deepseek-flash") === true,
+  "a recap whose session is not listed reads its file name as a stamp");
 
 const order = () => cards().map((card) => [newest, middle, early, unlisted].find((goal) => card.textContent?.includes(goal)) ?? "?");
 const okOrder = (expected: string[], label: string) => {
