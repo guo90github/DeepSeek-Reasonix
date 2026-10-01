@@ -17,6 +17,20 @@ func (s heartbeatUsageStub) RuntimeStatus() control.RuntimeStatus { return contr
 
 func (s heartbeatUsageStub) ContextSnapshot() (int, int) { return s.used, s.window }
 
+// heartbeatContextStub reports both facts a real controller exposes: the numbers
+// and the provider's own verdict on the window.
+type heartbeatContextStub struct {
+	used      int
+	window    int
+	exhausted bool
+}
+
+func (s heartbeatContextStub) RuntimeStatus() control.RuntimeStatus { return control.RuntimeStatus{} }
+
+func (s heartbeatContextStub) ContextSnapshot() (int, int) { return s.used, s.window }
+
+func (s heartbeatContextStub) ContextExhausted() bool { return s.exhausted }
+
 func TestHeartbeatSpentWindowFollowsTheSwitchAndIgnoresTheGoal(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -30,6 +44,8 @@ func TestHeartbeatSpentWindowFollowsTheSwitchAndIgnoresTheGoal(t *testing.T) {
 		{"a window with room left", heartbeatUsageStub{used: 10_000, window: 100_000}, true, 0, false},
 		{"a configured threshold that is not reached", heartbeatUsageStub{used: 60_000, window: 100_000}, true, 70, false},
 		{"a configured threshold that is reached", heartbeatUsageStub{used: 60_000, window: 100_000}, true, 55, true},
+		{"a session that died on the window", heartbeatContextStub{exhausted: true}, true, 0, true},
+		{"a session that died on the window with the switch off", heartbeatContextStub{exhausted: true}, false, 0, false},
 		{"a controller that reports no usage", &heartbeatGoalCtrlStub{}, true, 0, false},
 		{"no controller", nil, true, 0, false},
 	}
@@ -39,6 +55,21 @@ func TestHeartbeatSpentWindowFollowsTheSwitchAndIgnoresTheGoal(t *testing.T) {
 				t.Fatalf("heartbeatSpentWindow = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// The provider's own answer outranks the numbers: a session that already failed
+// on the window is spent even when no window size was ever reported.
+func TestHeartbeatSessionSpentWithoutAnyWindowNumbers(t *testing.T) {
+	ctrl := heartbeatContextStub{exhausted: true}
+	if _, window := heartbeatContextNumbers(ctrl); window != 0 {
+		t.Fatalf("the stub must report no window, got %d", window)
+	}
+	if !heartbeatSessionSpent(ctrl, unattendedHandoffPercent) {
+		t.Fatal("a session whose turn died on the window must be spent")
+	}
+	if heartbeatSessionSpent(heartbeatContextStub{used: 1_000, window: 100_000}, unattendedHandoffPercent) {
+		t.Fatal("a session with room left and no failure must not be spent")
 	}
 }
 
@@ -110,6 +141,16 @@ func TestHeartbeatHandoffPrefaceStaysUsableWithoutAPath(t *testing.T) {
 	}
 	if strings.Contains(preface, "上一会话的完整记录在") {
 		t.Fatalf("preface %q must not claim a transcript path it does not have", preface)
+	}
+}
+
+// The session left behind must say where its task went.
+func TestHeartbeatHandoffNoticeNamesTheNewSession(t *testing.T) {
+	notice := heartbeatHandoffNotice("Heartbeat: 无人值守推进器")
+	for _, want := range []string{"上下文窗口已用尽", "已交接给新会话", "Heartbeat: 无人值守推进器", "本会话不再推进"} {
+		if !strings.Contains(notice, want) {
+			t.Fatalf("notice %q is missing %q", notice, want)
+		}
 	}
 }
 

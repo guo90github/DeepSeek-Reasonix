@@ -104,14 +104,18 @@ could answer are cleared:
 
 - Criterion: `ContextSnapshot()` usage ≥ **90%** of the window (`heartbeatWindowSpent`),
   configurable as `handoffPercent` in `heartbeat-tasks.json` (clamped to 50–99, absent
-  means the 90 default).
+  means the 90 default). A session whose last turn already **failed on the window** is
+  spent too, even when no window size was ever reported (`ContextExhausted`).
 - The criterion outranks the Goal hold: a running Goal drives its own turns, so a check
   placed after that hold would never fire for the long unattended run it exists for.
+- A turn that goes silent past the kernel's own stall bound (10 minutes) is **cancelled**
+  while unattended, so the next tick reaches this decision instead of skipping forever.
+  Attended sessions are never touched: there a long tool and a wedged one look identical.
 - Action: open a **fresh session**, switch `topicId` to it, and give it a one-shot
   preface carrying the goal contract and **the old transcript's path**, so the
   model reads what it needs instead of the driver inventing a summary.
 - The new session anchors the same `goal` contract and continues; the old session
-  stays on disk, readable.
+  stays on disk, readable, with a notice saying which session took the task over.
 
 ## 7. Code map
 

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"strings"
 )
@@ -34,6 +35,13 @@ type heartbeatContextUsage interface {
 	ContextSnapshot() (int, int)
 }
 
+// heartbeatContextExhausted reports a session whose last turn already died on
+// the provider's window. It is the only signal left when the model never
+// reported a window size, where the percentage check stays false forever.
+type heartbeatContextExhausted interface {
+	ContextExhausted() bool
+}
+
 // handoffPercentValue is the snapshotted threshold, normalized on read so a
 // hand-edited config cannot disable or over-eager the handoff.
 func (e *HeartbeatEngine) handoffPercentValue() int {
@@ -51,6 +59,26 @@ func heartbeatWindowSpent(used, window, percent int) bool {
 	return used*100 >= window*normalizeUnattendedHandoffPercent(percent)
 }
 
+// heartbeatContextNumbers is the usage half of the status port, zero when the
+// controller has no numbers to report.
+func heartbeatContextNumbers(ctrl heartbeatRuntimeStatus) (int, int) {
+	usage, ok := ctrl.(heartbeatContextUsage)
+	if !ok {
+		return 0, 0
+	}
+	return usage.ContextSnapshot()
+}
+
+// heartbeatSessionSpent reports whether this session must be left behind: spent
+// by the numbers, or already failed on the window by the provider's own answer.
+func heartbeatSessionSpent(ctrl heartbeatRuntimeStatus, percent int) bool {
+	if exhausted, ok := ctrl.(heartbeatContextExhausted); ok && exhausted.ContextExhausted() {
+		return true
+	}
+	used, window := heartbeatContextNumbers(ctrl)
+	return heartbeatWindowSpent(used, window, percent)
+}
+
 // heartbeatSpentWindow is the switch-gated read of the same decision. It is
 // consulted before the Goal hold: a running Goal drives its own turns, so a
 // check placed behind that hold never fires for the long run it exists for.
@@ -58,12 +86,7 @@ func heartbeatSpentWindow(ctrl heartbeatRuntimeStatus, unattended bool, percent 
 	if !unattended || ctrl == nil {
 		return false
 	}
-	usage, ok := ctrl.(heartbeatContextUsage)
-	if !ok {
-		return false
-	}
-	used, window := usage.ContextSnapshot()
-	return heartbeatWindowSpent(used, window, percent)
+	return heartbeatSessionSpent(ctrl, percent)
 }
 
 // heartbeatHandoffPreface tells the new session what it continues. The previous
@@ -82,16 +105,19 @@ func heartbeatHandoffPreface(task HeartbeatTask, oldSessionPath string) string {
 	return b.String()
 }
 
-// handoffUnattendedTask moves a window-spent task to a fresh session and reports
-// whether the caller should re-run this tick against the new topic.
-func (e *HeartbeatEngine) handoffUnattendedTask(t *HeartbeatTask, ctrl heartbeatRuntimeStatus, scope, workspaceRoot, title string) bool {
-	usage, ok := ctrl.(heartbeatContextUsage)
-	if !ok {
-		return false
-	}
-	used, window := usage.ContextSnapshot()
-	if !heartbeatWindowSpent(used, window, e.handoffPercentValue()) {
-		return false
+// heartbeatHandoffNotice is what the session left behind shows, so a person
+// reopening it learns where the task went instead of finding silence.
+func heartbeatHandoffNotice(newTitle string) string {
+	return "上下文窗口已用尽：任务已交接给新会话「" + newTitle + "」，本会话不再推进。"
+}
+
+// handoffUnattendedTask moves a spent task to a fresh session. It reports the
+// new session's title so the old one can say where the task went, and whether
+// the caller should re-run this tick against the new topic.
+func (e *HeartbeatEngine) handoffUnattendedTask(t *HeartbeatTask, ctrl heartbeatRuntimeStatus, scope, workspaceRoot, title string) (string, bool) {
+	used, window := heartbeatContextNumbers(ctrl)
+	if !heartbeatSessionSpent(ctrl, e.handoffPercentValue()) {
+		return "", false
 	}
 	oldPath := ""
 	if sessions, ok := ctrl.(interface{ SessionPath() string }); ok {
@@ -100,7 +126,7 @@ func (e *HeartbeatEngine) handoffUnattendedTask(t *HeartbeatTask, ctrl heartbeat
 	meta, err := e.app.CreateTopic(scope, workspaceRoot, title)
 	if err != nil {
 		log.Printf("[heartbeat] unattended %q could not open a handoff session: %v", t.Title, err)
-		return false
+		return "", false
 	}
 	e.mu.Lock()
 	if e.handoffPreface == nil {
@@ -109,8 +135,12 @@ func (e *HeartbeatEngine) handoffUnattendedTask(t *HeartbeatTask, ctrl heartbeat
 	e.handoffPreface[t.ID] = heartbeatHandoffPreface(*t, oldPath)
 	e.mu.Unlock()
 	t.TopicID = meta.ID
-	log.Printf("[heartbeat] unattended %q moved to a fresh session (context %d/%d)", t.Title, used, window)
-	return true
+	why := fmt.Sprintf("context %d/%d", used, window)
+	if window <= 0 {
+		why = "the last turn died on the context window"
+	}
+	log.Printf("[heartbeat] unattended %q moved to a fresh session (%s)", t.Title, why)
+	return meta.Title, true
 }
 
 // takeHandoffPrompt consumes the one-shot preface a handoff left for this task.

@@ -1117,6 +1117,7 @@ func (c *Controller) spawnGuardedTurn(ctx context.Context, cancel context.Cancel
 // beginRotation refuses while running or finishing, and the drain flips
 // finishing directly into running.
 func (c *Controller) finishGuardedTurn(err error, completion *guardedTurnCompletion) {
+	c.liveness.noteContextExhaustion(err)
 	c.memory.clearAutoRemember()
 	c.mu.Lock()
 	cancelRequested := c.canceling

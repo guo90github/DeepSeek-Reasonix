@@ -452,6 +452,7 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 		return t // don't update LastRunAt — retry next tick
 	}
 	if heartbeatControllerBusy(ctrl) {
+		e.cancelWedgedUnattendedTurn(t, ctrl)
 		log.Printf("[heartbeat] controller busy for %q, skipping", t.Title)
 		return t // don't change approval mode for an existing turn — retry next tick
 	}
@@ -471,8 +472,13 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 	// Spent windows and the switch are independent of a Goal, and they outrank
 	// the Goal hold below: a running Goal drives its own turns, so a window check
 	// placed behind that hold never fires for the long run it exists for.
-	if heartbeatSpentWindow(ctrl, e.unattendedEnabled(), e.handoffPercentValue()) && e.handoffUnattendedTask(&t, ctrl, scope, workspaceRoot, title) {
-		return e.executeTaskOwned(t)
+	if heartbeatSpentWindow(ctrl, e.unattendedEnabled(), e.handoffPercentValue()) {
+		if newTitle, handed := e.handoffUnattendedTask(&t, ctrl, scope, workspaceRoot, title); handed {
+			// The old session says where its task went, so a person reopening it
+			// is not left wondering why nothing is happening here any more.
+			e.app.noticeForTab(tabMeta.ID, heartbeatHandoffNotice(newTitle))
+			return e.executeTaskOwned(t)
+		}
 	}
 	if e.unattendedGoalStep(&t, ctrl) {
 		return t
