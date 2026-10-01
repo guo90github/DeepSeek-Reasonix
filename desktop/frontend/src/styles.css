@@ -22049,11 +22049,11 @@ body > .mermaid-diagram--fullscreen {
   cursor: pointer;
   background: none;
   color: var(--accent);
-  border-color: var(--border-strong);
+  border-color: var(--border);
 }
 
 .composer-guidance-item__room--link:hover {
-  background: var(--bg-hover);
+  background: var(--bg-hover, rgba(128, 128, 128, 0.08));
 }
 
 .composer-guidance-item__editor {
