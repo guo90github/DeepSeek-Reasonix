@@ -89,6 +89,9 @@ try {
     electronVersion,
     extraResources: [join(staging, "app"), join(staging, "icons"), join(staging, "build.json")],
     icon,
+    // A local electron zip skips @electron/get's SHASUMS256.txt fetch, which
+    // bypasses the cache on every run (packager.getElectronZipPath).
+    electronZipDir: (process.env.REASONIX_ELECTRON_ZIP_DIR ?? "").trim() || undefined,
   });
   options.sanitizePackageJson = [defaultSanitizePackageJson, (pkg) => sanitizeShellPackageJson(pkg, { version, productName: PRODUCT.name })];
   rmSync(options.out, { recursive: true, force: true });

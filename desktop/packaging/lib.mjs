@@ -96,7 +96,7 @@ export function buildInfo({ version, channel, commit, electronVersion, target, b
   };
 }
 
-export function packagerOptions({ target, version, identity, root, electronVersion, extraResources, icon }) {
+export function packagerOptions({ target, version, identity, root, electronVersion, extraResources, icon, electronZipDir }) {
   const numeric = numericVersion(version);
   const options = {
     dir: join(root, "electron"),
@@ -120,6 +120,7 @@ export function packagerOptions({ target, version, identity, root, electronVersi
     ignore: shellIgnore,
   };
   if (icon) options.icon = icon;
+  if (electronZipDir) options.electronZipDir = electronZipDir;
   if (target.packagerPlatform === "win32") {
     options.win32metadata = {
       CompanyName: identity.companyName,
