@@ -3,6 +3,7 @@ package board
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -21,6 +22,11 @@ type Board struct {
 	dir      string
 	logPath  string
 	lockPath string
+	// cache is the state this handle folded last, kept so the next write folds
+	// nothing instead of the whole log (§11.4 boundary ①). Writers on one handle are
+	// serialized by the board file lock, and readers never touch it.
+	cache      *State
+	cachedSize int64
 }
 
 // Receipt is what a caller learns about a write.
@@ -54,6 +60,46 @@ func Open(dir string) (*Board, error) {
 // Dir is the directory this board reads and writes.
 func (b *Board) Dir() string { return b.dir }
 
+// stateForWrite returns the state to validate against. It reuses the state this
+// handle folded last when the file has not grown behind its back, so a write costs a
+// stat instead of a full read and fold.
+func (b *Board) stateForWrite() (*State, error) {
+	info, err := os.Stat(b.logPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return NewState(), nil
+		}
+		return nil, fmt.Errorf("board: stat log: %w", err)
+	}
+	if b.cache != nil && b.cachedSize == info.Size() {
+		return b.cache, nil
+	}
+	read, err := readLog(b.logPath)
+	if err != nil {
+		return nil, err
+	}
+	st := Fold(read.Ops)
+	st.Truncated = read.Truncated
+	st.Skipped = read.Skipped
+	b.cache, b.cachedSize = st, info.Size()
+	return st, nil
+}
+
+// keepCache remembers that this state now matches the file on disk.
+func (b *Board) keepCache(st *State) {
+	info, err := os.Stat(b.logPath)
+	if err != nil {
+		b.dropCache()
+		return
+	}
+	b.cache, b.cachedSize = st, info.Size()
+}
+
+// dropCache forgets the folded state, so the next write reads the log again.
+func (b *Board) dropCache() {
+	b.cache, b.cachedSize = nil, 0
+}
+
 // Apply validates op against the folded log and appends it, returning the
 // receipt. A retried op id returns the first receipt instead of appending a
 // second record, so delivery retries cannot multiply an op.
@@ -71,18 +117,21 @@ func (b *Board) Apply(ctx context.Context, op Op) (Receipt, error) {
 	}
 	defer release()
 
-	read, err := readLog(b.logPath)
+	st, err := b.stateForWrite()
 	if err != nil {
 		return Receipt{}, err
 	}
-	st := Fold(read.Ops)
-	st.Truncated = read.Truncated
-	st.Skipped = read.Skipped
 	if op.Verb == VerbNoProgress {
 		return Receipt{}, reject(op.Verb, op.Node, ReasonSystemOnly)
 	}
 	if seq, dup := st.OpIDs[op.ID]; dup {
-		if !sameIntent(read.Ops, op) {
+		// A duplicate is a retry, not the hot path: read the log once to compare what
+		// this id was first used for.
+		previous, err := readLog(b.logPath)
+		if err != nil {
+			return Receipt{}, err
+		}
+		if !sameIntent(previous.Ops, op) {
 			return Receipt{}, reject(op.Verb, op.Node, ReasonIdempotencyConflict)
 		}
 		return Receipt{Seq: seq, Duplicate: true}, nil
@@ -94,9 +143,14 @@ func (b *Board) Apply(ctx context.Context, op Op) (Receipt, error) {
 	if err := applyOp(st, op); err != nil {
 		return Receipt{}, err
 	}
+	// Fold records the log's seq and id table as it reads; a cached state has to be
+	// told, or the next write would mint a seq twice and stop recognising retries.
+	st.Seq = op.Seq
+	st.OpIDs[op.ID] = op.Seq
 	if err := appendOp(b.logPath, op); err != nil {
 		return Receipt{}, err
 	}
+	b.keepCache(st)
 	return Receipt{Seq: op.Seq, State: nodeState(st, op.Node)}, nil
 }
 
@@ -167,11 +221,10 @@ func (b *Board) Sweep(ctx context.Context, now time.Time) ([]Receipt, error) {
 		return nil, err
 	}
 	defer release()
-	read, err := readLog(b.logPath)
+	st, err := b.stateForWrite()
 	if err != nil {
 		return nil, err
 	}
-	st := Fold(read.Ops)
 	var out []Receipt
 	for _, id := range st.sortedNodeIDs() {
 		if len(out) >= maxSweepPerCall {
@@ -189,10 +242,16 @@ func (b *Board) Sweep(ctx context.Context, now time.Time) ([]Receipt, error) {
 		if err := applyOp(st, op); err != nil {
 			continue
 		}
+		st.Seq = op.Seq
+		st.OpIDs[op.ID] = op.Seq
 		if err := appendOp(b.logPath, op); err != nil {
+			b.dropCache()
 			return out, err
 		}
 		out = append(out, Receipt{Seq: op.Seq, State: StateOpen})
+	}
+	if len(out) > 0 {
+		b.keepCache(st)
 	}
 	return out, nil
 }
