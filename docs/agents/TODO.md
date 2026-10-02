@@ -481,3 +481,10 @@
   另修一处必然的次生问题：`enrollAgentBus` 在**调用时**就把 `boardDir` 捕获进唤醒器，build 时入列为空 ⇒ 唤醒器拿着空板；
   恢复路径在 `SetAgentBus` 之后**重挂唤醒器**（与点击 join 同路径）。
   用例：`TestRestoreAgentBusEnrolmentUsesTheTabPathNotTheControllerPath`（无路径的控制器不得入列；给出标签路径后入列；重复恢复不扰动）。
+- **接续推进的缺环（本刀，dev.108）**：用户给出的可用解法 = **启动后往会话里自动发一条「继续」**（手输就能接上，
+  说明缺的不是机制而是"没人发起这一回合"）。落地：`desktop/unattended_resume.go` —— 上一次宿主运行是**非正常结束**
+  （`exitKindClean` 之外）且无人值守总开关为开、且该会话**有 Goal 契约**时，在标签发布完成处
+  （`finishStartupPublication` 之后、无锁）用与唤醒同一条 durable 路径 `TryEnqueueFollowup(control.InboxRequest{...})`
+  排入一条 `继续`，**每宿主运行每会话仅一次**（幂等键含 runID+会话路径）。
+  开关判断沿用 `heartbeat.unattendedEnabled()`（含崩溃连击降级），与"总开关是唯一闸门"的语义一致；无 Goal 的会话不注入。
+  用例：`desktop/unattended_resume_test.go`（判定表 5 例 + 真机语义那 4 条断言）。

@@ -508,8 +508,9 @@ func (a *App) startup(ctx context.Context) {
 	a.heartbeat = newHeartbeatEngine(a)
 	a.heartbeat.Start()
 	// What the run before this one did has to be decided before this run's marker
-	// overwrites the evidence, and stated where the next reader can find it.
-	recordPreviousRunExit()
+	// overwrites the evidence, and stated where the next reader can find it. An unclean
+	// end is also what tells the resume hook that a turn was interrupted.
+	notePreviousHostRunExit(recordPreviousRunExit())
 	// The exit note is this run's own record of how it ends; the host-state marker
 	// next to it is what the watchdog and the restart policy read.
 	noteDesktopRunStarted()

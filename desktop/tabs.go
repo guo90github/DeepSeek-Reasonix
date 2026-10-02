@@ -4001,6 +4001,10 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 	keepBuildContext = true
 	a.mu.Unlock()
 	a.finishStartupPublication(tab, ctrl, appCtx)
+	// A host that was killed mid-turn comes back with every session idle, and nothing on
+	// this side asks them to carry on: an unattended session with a contract gets the
+	// resume turn queued for it instead of sitting still until someone types it.
+	a.resumeUnattendedSessionAfterAnInterruptedRun(tab, ctrl)
 }
 
 type sessionBinding struct {
