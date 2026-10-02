@@ -66,6 +66,14 @@ func watchdogDecideNow() watchdogDecision {
 	return watchdogDecide(outcome, startedAt, time.Now(), exe)
 }
 
+// watchdogMarkerSummary states what the marker says at this tick. Every skip reason turns
+// on these three fields, so recording them separates "the marker was never written" from
+// "the marker says attended now" without a re-run.
+func watchdogMarkerSummary() string {
+	outcome := hostStateBeforeLaunch()
+	return fmt.Sprintf("marker: seen=%t unattended=%t dead=%t pid=%d", outcome.Seen, outcome.Unattended, outcome.Dead, outcome.PID)
+}
+
 func hasWatchdogFlag(args []string) bool {
 	for _, arg := range args {
 		if strings.TrimSpace(arg) == watchdogFlag {
@@ -125,7 +133,10 @@ func maybeRunDesktopWatchdog(args []string) (bool, int) {
 	decision := watchdogDecideNow()
 	if !decision.Launch {
 		slog.Debug("desktop watchdog: nothing to do", "reason", decision.Reason)
-		writeWatchdogLogLine("skip", decision.Reason, "")
+		// The reason alone cannot tell "no marker" from "a marker that says attended", and a
+		// marker that changed after its launch hid once behind exactly that gap: record what
+		// the marker says at this tick (2026-10-03).
+		writeWatchdogLogLine("skip", decision.Reason, watchdogMarkerSummary())
 		return true, 0
 	}
 	cmd := proc.VisibleCommand(decision.Exe)
