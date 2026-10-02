@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/event"
 )
 
 // BA2 (docs/70 §2.3): the pre-turn block states recent verdicts and counts only —
-// never a prompt, a command, or a path — and it drops the oldest round first when
-// the budget is tight.
+// never a prompt, a command, or a path.
 func TestRenderTurnProgressStatesVerdictsAndCounts(t *testing.T) {
 	outcomes := []agent.TurnOutcome{
 		{TurnSeq: 1, Verdict: agent.TurnVerdictDelivered},
@@ -48,13 +48,14 @@ func TestRenderTurnProgressStatesVerdictsAndCounts(t *testing.T) {
 	}
 }
 
-func TestRenderTurnProgressIsEmptyWithoutDataAndHonoursItsBudget(t *testing.T) {
+// U-4 decided the block carries no character budget (docs/70 §五): the builder
+// renders every round it is handed — the window is the controller's — and an
+// undefined verdict collapses to one enum word instead of leaking sidecar text.
+func TestRenderTurnProgressIsUncappedAndNormalisesTheVerdict(t *testing.T) {
 	if got := renderTurnProgress(nil, 0); got != "" {
 		t.Fatalf("an empty session renders nothing, got %q", got)
 	}
 
-	// The controller caps the window at three rounds, but the builder trims on its
-	// own: a longer slice than the budget allows drops the oldest rounds first.
 	outcomes := make([]agent.TurnOutcome, 0, 12)
 	for turn := 1; turn <= 12; turn++ {
 		outcomes = append(outcomes, agent.TurnOutcome{
@@ -62,19 +63,47 @@ func TestRenderTurnProgressIsEmptyWithoutDataAndHonoursItsBudget(t *testing.T) {
 		})
 	}
 	block := renderTurnProgress(outcomes, 5)
-	if len([]rune(block)) > turnProgressBudget {
-		t.Fatalf("block is %d runes, over the %d budget:\n%s", len([]rune(block)), turnProgressBudget, block)
+	if !strings.Contains(block, "turn 1:") || !strings.Contains(block, "turn 12:") {
+		t.Fatalf("the builder renders every round it is given:\n%s", block)
 	}
-	if strings.Contains(block, "turn 1:") {
-		t.Fatalf("over-budget blocks must drop the oldest round:\n%s", block)
-	}
-	if !strings.Contains(block, "turn 12:") {
-		t.Fatalf("the newest round must survive:\n%s", block)
+	if len([]rune(block)) < 400 {
+		t.Fatalf("block is only %d runes — a character budget crept back in:\n%s", len([]rune(block)), block)
 	}
 
-	// A pathological single line is clipped rather than sent whole.
-	long := renderTurnProgress([]agent.TurnOutcome{{TurnSeq: 1, Verdict: strings.Repeat("x", 400)}}, 0)
-	if len([]rune(long)) > turnProgressBudget {
-		t.Fatalf("a long verdict was not clipped: %d runes", len([]rune(long)))
+	odd := renderTurnProgress([]agent.TurnOutcome{{TurnSeq: 1, Verdict: strings.Repeat("x", 400)}}, 0)
+	if !strings.Contains(odd, "turn 1: unknown") || strings.Contains(odd, "xxx") {
+		t.Fatalf("an undefined verdict leaked into the block: %q", odd)
+	}
+	if len([]rune(odd)) > 120 {
+		t.Fatalf("undefined verdict should render as one enum word, got %d runes: %q", len([]rune(odd)), odd)
+	}
+}
+
+// The three-round window is the controller's own bound (U-4: at most 3 rounds).
+func TestRecentTurnOutcomesKeepsTheNewestThreeRounds(t *testing.T) {
+	dir := t.TempDir()
+	path := agent.NewSessionPath(dir, "window")
+	session := agent.NewSession("fixture system")
+	exec := agent.New(nil, nil, session, agent.Options{}, event.Discard)
+	c := New(Options{Executor: exec, Sink: event.Discard, SessionDir: dir})
+	defer c.Close()
+	c.SetFreshSessionPath(path)
+
+	for turn := 1; turn <= 5; turn++ {
+		outcome := agent.TurnOutcome{TurnSeq: turn, Verdict: agent.TurnVerdictDelivered}
+		if err := agent.UpdateBranchMeta(path, false, func(meta *agent.BranchMeta) error {
+			agent.AppendTurnOutcome(meta, outcome)
+			return nil
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := c.recentTurnOutcomes()
+	if len(got) != turnProgressRounds {
+		t.Fatalf("window = %d rounds, want %d: %+v", len(got), turnProgressRounds, got)
+	}
+	if got[0].TurnSeq != 3 || got[len(got)-1].TurnSeq != 5 {
+		t.Fatalf("window should hold the newest rounds oldest-first, got %+v", got)
 	}
 }

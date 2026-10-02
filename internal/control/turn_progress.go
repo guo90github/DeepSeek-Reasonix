@@ -15,15 +15,15 @@ import (
 // The kernel's obligation "ids" are descriptive sentences (they name commands),
 // so they do not enter this block: the model already receives them through the
 // final-readiness channel at the moment the gate blocks an answer.
-const (
-	turnProgressRounds  = 3
-	turnProgressBudget  = 400
-	turnProgressLineCap = 160
-)
+//
+// No character budget: U-4 decided none (docs/70 §五), and the block cannot run
+// away — the controller caps the window at turnProgressRounds and every line is
+// an enum word plus small counters (see turnProgressVerdict).
+const turnProgressRounds = 3
 
 // renderTurnProgress is the whole block builder: outcomes oldest first, then the
-// open-obligation count. Older rounds are dropped first when the budget is tight,
-// and an empty input renders nothing at all.
+// open-obligation count. The window is the controller's; an empty input renders
+// nothing at all.
 func renderTurnProgress(outcomes []agent.TurnOutcome, openObligations int) string {
 	lines := make([]string, 0, len(outcomes)+1)
 	for _, outcome := range outcomes {
@@ -35,23 +35,12 @@ func renderTurnProgress(outcomes []agent.TurnOutcome, openObligations int) strin
 	if len(lines) == 0 {
 		return ""
 	}
-	for len(lines) > 1 {
-		block := wrapTurnProgress(lines)
-		if len([]rune(block)) <= turnProgressBudget {
-			return block
-		}
-		lines = lines[min(1, len(lines)-1):]
-	}
 	return wrapTurnProgress(lines)
 }
 
 // renderTurnOutcomeLine states one turn's verdict and the counters it carries.
 func renderTurnOutcomeLine(outcome agent.TurnOutcome) string {
-	verdict := strings.TrimSpace(outcome.Verdict)
-	if verdict == "" {
-		verdict = agent.TurnVerdictDelivered
-	}
-	line := fmt.Sprintf("- turn %d: %s", outcome.TurnSeq, verdict)
+	line := fmt.Sprintf("- turn %d: %s", outcome.TurnSeq, turnProgressVerdict(outcome.Verdict))
 	if count := outcome.MissingCount; count > 0 {
 		line += fmt.Sprintf(", %d open obligation(s)", count)
 	}
@@ -61,15 +50,24 @@ func renderTurnOutcomeLine(outcome agent.TurnOutcome) string {
 	if outcome.Recovered > 0 {
 		line += ", recovered"
 	}
-	return clipTurnProgressLine(line)
+	return line
 }
 
-func clipTurnProgressLine(line string) string {
-	runes := []rune(line)
-	if len(runes) <= turnProgressLineCap {
-		return line
+// turnProgressVerdict normalises the stored verdict to the kit's enum. Empty is
+// the delivered default (AppendTurnOutcome writes it that way); a value the kit
+// does not define renders as unknown instead of leaking whatever the sidecar
+// held — which is what bounds the block without a character budget.
+func turnProgressVerdict(verdict string) string {
+	switch strings.ToLower(strings.TrimSpace(verdict)) {
+	case "", agent.TurnVerdictDelivered:
+		return agent.TurnVerdictDelivered
+	case agent.TurnVerdictBlocked:
+		return agent.TurnVerdictBlocked
+	case agent.TurnVerdictAborted:
+		return agent.TurnVerdictAborted
+	default:
+		return "unknown"
 	}
-	return string(runes[:turnProgressLineCap-1]) + "…"
 }
 
 func wrapTurnProgress(lines []string) string {

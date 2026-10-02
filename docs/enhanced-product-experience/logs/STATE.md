@@ -8,7 +8,7 @@
 | 编号 | 状态 | 证据（提交 / 命令 / 关键文件） |
 |---|---|---|
 | 第七 记忆分层 | **已验收** | 代码 `530f80d43`；占用对比与落地见 `docs/50` §十：常驻段 改造前 **42,749** B → 改造后 **16,307** B，比值 **0.381 ≤ 1/2 ✓**；第一层改为「标签 + ≤50 rune 摘要 + 事实 id 句柄」（`internal/memory/index.go` 的 `maxFirstLayerRunes`/`firstLayerText`），索引 39,080 → 13,749 B、最长行 1,162 → 211 B；第二层走 `memory read <id>` / `search`。验证：`go test ./internal/memory/`、`go test ./internal/control/`（32.6s）、`go test -v ./internal/boot/`（150.1s）全绿 |
-| 第八 前置/后置 | 待验收（BA2 留白） | `530f80d43` 含 BA1a/BA1b（`internal/agent/turn_outcome.go`、`internal/control/{turn_outcome_record,turn_progress}.go`），回合结束链路可见。BA2 前置块（U-4 已决：默认开、最多 3 轮、不设字符上限）未做 ⇒ 目前不加分也不扣判据 |
+| 第八 前置/后置 | **已验收（代码侧）** | 后置：`530f80d43` 的 BA1a/BA1b（`internal/agent/turn_outcome.go`、`internal/control/{turn_outcome_record,turn_progress}.go`）——回合结束把 `TurnOutcome`（verdict/计数/义务）落进会话侧车，内容无关。前置：**BA2 已落地**（`internal/control/turn_progress.go` + 接线 `input.go:218`）——回合尾注入 `<turn-progress>`（最近 3 轮 + 未满足义务计数）；**已按 U-4 去掉块预算/行上限**，改判词枚举归一化。验证：`internal/boot` 的 `TestEffectTurnProgressRidesTheBodyNotThePrefix` PASS（前缀与工具面逐字节不变）+ `internal/control` 三条（内容只来自记录、窗口 3 轮、无上限）PASS。真机观感并入 B-1 |
 | 第九 异步/档位 | 待验收（缺真机） | `ce72be09a`（`internal/agent/shell_async.go`、`[agent] shell_async`）+ `internal/boot/loop_async_effect_test.go` 实测 **2137ms→18ms**；档位控件 `ShellAsyncTierField.tsx` + 11 测试（`cffe2df3a`）。**缺**：真机观感（档位默认 off，新建会话生效） |
 | 第十 多开 | 部分（按 A-30 收窄） | `32ee36c82`（`lib/viewPlacement.ts`、`store/viewPlacements.ts`、`FloatingViewLayer.tsx` + 2 测试）+ 挂载点 `cffe2df3a`。**缺**：后台标签完整面板（需把 `ChatPaneRegion` region props 按 tabId 参数化）、真机 #2/#5 |
 | 第十一 双主线 | 待验收（缺真机） | `530f80d43`：`internal/event/delivery.go` 的 `DeliveryClass` 四分类 + 唯一入口守卫；U-2 已决（**排队**） |
@@ -19,14 +19,17 @@
 
 ## 2. 当前单元（2026-10-03 · 本轮）
 
-**第十二 降幅复跑 ⇒ 实测 97 → 42，判据 ≤20 未达标。** 方法＝同轨迹重放原转录（`…20260930-053754.970846500-*.jsonl`，只读）：按序重放 `role=tool` 记录，维护「每条路径上模型写过的行」（成功写入先退役被替换行、再加入产出行），被拦调用只要目标行**全部**在该集合内即判「不再被拦」。
-基线 97 逐项复现（53 STALE + 44 MISSING）；复跑后 55 条不再被拦、残余 42（33 从未被写过 / 4 `bash` / 5 行段部分覆盖）；未建模的外部改动只会让残余更多 ⇒ 42 是**同轨迹上界**。详见 `docs/10` §十一。
+**第八 BA2 对齐 U-4 并验收 ⇒ 第八（代码侧）已验收。** BA2 的前置块本身在 `530f80d43` 已落地（`internal/control/turn_progress.go` + `input.go:218` 接线），
+本轮做的是**纠正与固定**：删掉与 U-4「不设字符上限」相抵的 `turnProgressBudget=400` / `turnProgressLineCap=160`，改用 `turnProgressVerdict`
+把判词归一化到枚举（未定义→`unknown`）——不是靠截断、而是靠"能进这个块的东西只有枚举词与小计数"来保证不跑量；
+并补测试：窗口＝最新 3 轮（`TestRecentTurnOutcomesKeepsTheNewestThreeRounds`）、无上限、未定义判词不泄漏文本。
+验证：`internal/boot` 的 `TestEffectTurnProgressRidesTheBodyNotThePrefix` PASS（前缀与工具面逐字节不变）；`internal/control` 三条 PASS。
 
 ## 3. 下一步（下一轮直接照做）
 
-**第八 BA2 前置块**（`docs/70` §五，U-4 已决参数：默认开、最多 3 轮、不设字符上限）——
-这是 9 条里**唯一还可以自主做完**的功能留白（第十二的降到 ≤20 需要拍板，其余 6 条缺真机）。
-做完写 `internal/boot` 的「前缀与工具面逐字节不变」effect test。
+**阶段收口：全量门禁 + 总结报告**（立项书验收 5）。按仓库自己的门禁跑：
+`go build ./...`、`go vet ./...`、`go test ./internal/... ./desktop/...`、`make lint`、`make frontend-check`、`go run ./tools/repolint`；
+把结果与既有红逐条登记，然后更新 `docs/99-总结报告.md`（第八/第七 已验收、第十二 未达标 + D-2、其余待真机）。
 
 不要一轮做两件。
 
@@ -47,13 +50,10 @@
 - 立项书验收 5（全量门禁）**本轮未复跑**：`go build ./...`、`go vet ./...`、`make frontend-check` 上次绿；
   `make lint` 18 条既有、`go test ./internal/... ./desktop/...` 失败全属既有类别（symlink 权限 / E2E / vision / packaging）。
 - 真机未做：第九、第十 #2/#5、第十四、第十六、第十七三条。
-- 第八 BA2 前置块未做（U-4 已决参数：默认开 / 最多 3 轮 / 不加字符上限）。
+- 第八 BA2 **已完成**（前置块去上限 + 枚举归一化，见 §2；`internal/boot` effect test 与 `internal/control` 三条 PASS）；真机观感并入 B-1。
 - 第十后台标签完整面板未做（A-30 收窄后属未做的原始需求 #5 部分）。
 - 第七 达标已复测（`docs/50` §10.6，0.381 ≤ 1/2）；**召回质量抽查未做**——索引变短后模型选事实的准确度属真机观察项，并入 B-1。
 - 第十二 复跑**未建模**外部改动（格式化/别的会话改动）与模型自身轨迹变化，两者都只会让残余 ≥42；真实复合降幅要一次真跑才看得到。
 
-END-UNIT: 第十二 降幅复跑完成并落档（`docs/10` §十一：97 → **42**，判据 ≤20 **未达标**），原因与三条出路已登记为待拍板 D-2；
-下一步＝第八 BA2 前置块（9 条里唯一还能自主做完的功能留白）。
-
-END-UNIT: 第七 落地并复测**达标**（常驻 42,749 → 16,307 字节，比值 0.381），台账第 1 行已翻「已验收」；
-下一步＝第十二降幅复跑（97 → ≤20，方法先定死再跑）。
+END-UNIT: 第八 BA2 按 U-4 纠正（去块预算/行上限，改判词枚举归一化）并补窗口测试，第八翻「已验收（代码侧）」；
+下一步＝阶段收口（全量门禁 + `docs/99-总结报告.md`）。
