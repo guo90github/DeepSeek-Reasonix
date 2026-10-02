@@ -60,10 +60,10 @@ func Open(dir string) (*Board, error) {
 // Dir is the directory this board reads and writes.
 func (b *Board) Dir() string { return b.dir }
 
-// stateForWrite returns the state to validate against. It reuses the state this
-// handle folded last when the file has not grown behind its back, so a write costs a
-// stat instead of a full read and fold.
-func (b *Board) stateForWrite() (*State, error) {
+// foldedState returns the state this handle folds to, reusing the state folded last
+// when the file has not grown behind its back, so a write and a read cost a stat
+// instead of a full read and fold (T4-8).
+func (b *Board) foldedState() (*State, error) {
 	info, err := os.Stat(b.logPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -117,7 +117,7 @@ func (b *Board) Apply(ctx context.Context, op Op) (Receipt, error) {
 	}
 	defer release()
 
-	st, err := b.stateForWrite()
+	st, err := b.foldedState()
 	if err != nil {
 		return Receipt{}, err
 	}
@@ -143,10 +143,12 @@ func (b *Board) Apply(ctx context.Context, op Op) (Receipt, error) {
 	if err := applyOp(st, op); err != nil {
 		return Receipt{}, err
 	}
-	// Fold records the log's seq and id table as it reads; a cached state has to be
-	// told, or the next write would mint a seq twice and stop recognising retries.
+	// Fold records the log's seq, id table and applied count as it reads; a cached
+	// state has to be told every one of them, or the next write mints a seq twice,
+	// stops recognising retries, or reports an applied count that never moved.
 	st.Seq = op.Seq
 	st.OpIDs[op.ID] = op.Seq
+	st.Applied++
 	if err := appendOp(b.logPath, op); err != nil {
 		return Receipt{}, err
 	}
@@ -203,14 +205,43 @@ func (b *Board) Snapshot(ctx context.Context, now time.Time) (*State, error) {
 		return nil, err
 	}
 	defer release()
-	read, err := readLog(b.logPath)
+	st, err := b.foldedState()
 	if err != nil {
 		return nil, err
 	}
-	st := Fold(read.Ops)
-	st.Truncated = read.Truncated
-	st.Skipped = read.Skipped
-	return st, nil
+	// A caller keeps what it is given, so the folded state is copied out rather than
+	// shared: the next write appends to those very nodes (T4-8 ②).
+	return st.Clone(), nil
+}
+
+// Clone returns a copy a caller may keep and mutate. Node slices are copied too,
+// because a later write appends to them through the cache this clone came from.
+func (st *State) Clone() *State {
+	if st == nil {
+		return nil
+	}
+	out := *st
+	out.Nodes = make(map[string]*Node, len(st.Nodes))
+	for id, n := range st.Nodes {
+		if n == nil {
+			out.Nodes[id] = nil
+			continue
+		}
+		clone := *n
+		clone.Deps = append([]string(nil), n.Deps...)
+		clone.Asserts = append([]Assertion(nil), n.Asserts...)
+		clone.Refutes = append([]Refutation(nil), n.Refutes...)
+		if n.Bounds != nil {
+			bounds := *n.Bounds
+			clone.Bounds = &bounds
+		}
+		out.Nodes[id] = &clone
+	}
+	out.OpIDs = make(map[string]uint64, len(st.OpIDs))
+	for id, seq := range st.OpIDs {
+		out.OpIDs[id] = seq
+	}
+	return &out
 }
 
 // Sweep reclaims expired claims. Any participant may call it at the start of a
@@ -221,7 +252,7 @@ func (b *Board) Sweep(ctx context.Context, now time.Time) ([]Receipt, error) {
 		return nil, err
 	}
 	defer release()
-	st, err := b.stateForWrite()
+	st, err := b.foldedState()
 	if err != nil {
 		return nil, err
 	}
@@ -244,6 +275,7 @@ func (b *Board) Sweep(ctx context.Context, now time.Time) ([]Receipt, error) {
 		}
 		st.Seq = op.Seq
 		st.OpIDs[op.ID] = op.Seq
+		st.Applied++
 		if err := appendOp(b.logPath, op); err != nil {
 			b.dropCache()
 			return out, err
