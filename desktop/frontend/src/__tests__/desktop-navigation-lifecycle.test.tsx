@@ -43,7 +43,10 @@ const ports: Parameters<typeof useDesktopNavigation>[0]["ports"] = {
 };
 function Probe({ visible = "A" }: { visible?: string }) {
   useRemoteTabOpened(meta => { calls.push(`resource:${meta.id}`); }, () => {});
-  api = useDesktopNavigation({ visible: { tabId: visible, sessionKey: visible }, ports,
+  // dev-2's split layout is deliberately not single-surface (useAppShellStores.ts:
+  // only workbench/creation are), and it opens an extra topic session through the
+  // legacy path; this file covers the one-surface styles.
+  api = useDesktopNavigation({ visible: { tabId: visible, sessionKey: visible }, ports, singleSurface: true,
     setTabRevealSignal: () => { calls.push("reveal-tab"); }, setTranscriptRevealSignal: () => { calls.push("reveal-transcript"); },
     setProjectRevision: () => { calls.push("project"); }, setHistory: () => { calls.push("history-close"); },
     t: ((key: string) => key) as Translator, showToast: message => { calls.push(`notice:${message}`); },
@@ -96,7 +99,7 @@ try {
   const history = api.enqueueNavigation({ kind: "resume-session", session: { scope: "global", topicId: "history", path: "history.jsonl" } as SessionMeta });
   await finish("history", history);
   assert.ok(calls.includes("open:history"), "resuming a session activates its topic surface");
-  assert.ok(!calls.includes("tab-session"), "every layout style takes the surface path, never a legacy tab");
+  assert.ok(!calls.includes("tab-session"), "one-surface layout styles take the surface path, never a legacy tab");
   assert.ok(calls.includes("history-close"));
 
   calls.length = 0;
