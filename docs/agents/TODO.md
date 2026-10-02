@@ -74,6 +74,12 @@
 - [x] T5-3 有界点对点 `ask`/`answer` + 回执通道（`results/<correlation>.json`）→ 链上记账 hop/token、`ask` 开链设 TTL、过期即 `expired`；
       `results.go` 原子替换 + correlation 必可作文件名 + 状态封闭集；命令面 `AgentBusAsk/Answer` + `Post/ReadAgentBusResult`
 - [ ] T5-4 跨进程目标带令牌；超速返回 `rate_limited` → `rate_limited` 已落（`agentbus.RefuseRate`，命令面原样透传 typed）；
+      **进展 2026-10-02**：投递原语已落 `desktop/agentbus_deliver.go`（`POST <base>/inbox/items`、`Authorization: Bearer`、
+      `idempotencyKey` = 唤醒 key、寻址 header 由调用方给；缺 host/缺 token 本地拒收、目标拒绝必须上抛；`httptest` 真实往返测试）。
+      **接线缝隙已定位（省下一轮走错路）**：桌面侧的远程面是 `desktop/remote_*.go`（`remote_config_edit.go` / `remote_credential_watchdog.go` /
+      `remote_app.go` …），**不是** `internal/agentd`——实测 `grep -n "agentd\." desktop/*.go` 为空，桌面并不用 agentd 的 `Record`/`TokenFile`。
+      **下一刀**：从 `remote_*` 面取 base URL 与凭证（+ 会话路径寻址），把 `routeAgentBusWake` 的"本进程找不到即报错"改成"带令牌投递"，
+      再做**两进程**验收（唤醒真的穿过进程边界）
       **跨进程带令牌未做**（属宿主/传输层：随 T5-5 的宿主路由一起接）
 - [x] T5-5 就绪即事件唤醒（`interval` 只兜底）→ 内核侧已落：`internal/agentbus/wake.go`（`WakeTargets` 从 op 日志 + 话题面派生目标，
       key 由工作集合派生 ⇒ 每 tick 幂等）+ `internal/control/agentbus_wake.go`（`SetAgentBusWaker` 宿主路由、不唤醒自己、失败释放 key 重试）
