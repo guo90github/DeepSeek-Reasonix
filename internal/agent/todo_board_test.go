@@ -131,3 +131,58 @@ func TestReplayTodoHistoryRebuildsTheBoardFromATranscript(t *testing.T) {
 		t.Fatalf("a transcript with no list reports none")
 	}
 }
+
+// A retitled step is the same step: an id survives the rewrite, so a rename
+// updates the entry it already has instead of queuing the old wording as new
+// work for the shelf to show.
+func TestMergeTodoBoardTreatsARetitleAsTheSameStep(t *testing.T) {
+	board := MergeTodoBoard(TodoBoard{}, []evidence.TodoItem{
+		{Content: "改两条描述", Status: "in_progress", StepID: "plan_step_01"},
+		{Content: "验证并提交", Status: "pending", StepID: "plan_step_02"},
+	})
+	board = MergeTodoBoard(board, []evidence.TodoItem{
+		{Content: "改两条描述 + 重生 golden", Status: "completed", StepID: "plan_step_01"},
+		{Content: "串行跑验证并提交", Status: "in_progress", StepID: "plan_step_02"},
+	})
+
+	eqBoard(t, board.Queue, []string{"串行跑验证并提交:in_progress"}, "a retitled unfinished step is owed once, newest wording")
+	eqBoard(t, board.Archive, []string{"改两条描述 + 重生 golden:completed"}, "its archived entry takes the newest wording in place")
+}
+
+// A list without ids is freehand, where wording is all there is: a retitle stays
+// new work and the old wording is still owed — the pre-id behaviour.
+func TestMergeTodoBoardKeepsTextIdentityForFreehandLists(t *testing.T) {
+	board := MergeTodoBoard(TodoBoard{}, []evidence.TodoItem{{Content: "改两条描述", Status: "in_progress"}})
+	board = MergeTodoBoard(board, []evidence.TodoItem{{Content: "改两条描述 + 重生 golden", Status: "completed"}})
+
+	eqBoard(t, board.Queue, []string{"改两条描述:in_progress"}, "a retitle without an id is still new work")
+	eqBoard(t, board.Archive, []string{"改两条描述 + 重生 golden:completed"}, "and the finished wording archives separately")
+}
+
+// The incident's shape, replayed: three lists, one id per step, every list
+// rewording what it carried. Restoring owes one step, not a ghost per wording.
+func TestReplayTodoHistoryCollapsesRetitlesByStepID(t *testing.T) {
+	msgs := []provider.Message{
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "c1", Name: "todo_write", Arguments: `{"todos":[{"content":"改两条描述","status":"in_progress","step_id":"s1"},{"content":"补回归用例","status":"pending","step_id":"s2"},{"content":"串行验证并提交","status":"pending","step_id":"s3"}]}`}}},
+		{Role: provider.RoleTool, ToolCallID: "c1", Content: "ok"},
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "c2", Name: "todo_write", Arguments: `{"todos":[{"content":"改两条描述 + 重生 golden","status":"completed","step_id":"s1"},{"content":"补回归用例（两侧）","status":"completed","step_id":"s2"},{"content":"串行跑验证","status":"in_progress","step_id":"s3"}]}`}}},
+		{Role: provider.RoleTool, ToolCallID: "c2", Content: "ok"},
+		{Role: provider.RoleAssistant, ToolCalls: []provider.ToolCall{{ID: "c3", Name: "todo_write", Arguments: `{"todos":[{"content":"改两条描述 + 重生 golden（已验）","status":"completed","step_id":"s1"},{"content":"补回归用例（两侧 + 单测）","status":"completed","step_id":"s2"},{"content":"串行跑验证并提交","status":"in_progress","step_id":"s3"}]}`}}},
+		{Role: provider.RoleTool, ToolCallID: "c3", Content: "ok"},
+	}
+
+	todos, board, hasList := ReplayTodoHistory(msgs)
+	if !hasList {
+		t.Fatalf("the transcript carries three lists")
+	}
+	eqBoard(t, todos, []string{
+		"改两条描述 + 重生 golden（已验）:completed",
+		"补回归用例（两侧 + 单测）:completed",
+		"串行跑验证并提交:in_progress",
+	}, "the canonical list is the latest word")
+	eqBoard(t, board.Queue, []string{"串行跑验证并提交:in_progress"}, "one owed step, under its newest wording")
+	eqBoard(t, board.Archive, []string{
+		"改两条描述 + 重生 golden（已验）:completed",
+		"补回归用例（两侧 + 单测）:completed",
+	}, "each finished step archives once, newest wording")
+}

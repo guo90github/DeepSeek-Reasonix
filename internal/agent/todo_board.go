@@ -41,9 +41,13 @@ func MergeTodoBoard(board TodoBoard, incoming []evidence.TodoItem) TodoBoard {
 		queue = append(queue, item)
 	}
 	archive := append([]evidence.TodoItem(nil), board.Archive...)
-	archived := make(map[string]struct{}, len(archive))
-	for _, item := range archive {
-		archived[todoBoardKey(item)] = struct{}{}
+	archivedAt := make(map[string]int, len(archive))
+	for i, item := range archive {
+		if key := todoBoardKey(item); key != "" {
+			if _, seen := archivedAt[key]; !seen {
+				archivedAt[key] = i
+			}
+		}
 	}
 
 	finished := make(map[string]struct{}, len(incoming))
@@ -55,8 +59,11 @@ func MergeTodoBoard(board TodoBoard, incoming []evidence.TodoItem) TodoBoard {
 		if todoBoardFinished(item) {
 			finished[key] = struct{}{}
 			delete(index, key)
-			if _, done := archived[key]; !done {
-				archived[key] = struct{}{}
+			if at, seen := archivedAt[key]; seen {
+				// A retitled step keeps its place but takes the newest wording.
+				archive[at] = item
+			} else {
+				archivedAt[key] = len(archive)
 				archive = append(archive, item)
 			}
 			continue
@@ -83,8 +90,13 @@ func MergeTodoBoard(board TodoBoard, incoming []evidence.TodoItem) TodoBoard {
 	return TodoBoard{Queue: tailOf(queue, todoBoardLimit), Archive: tailOf(archive, todoBoardLimit)}
 }
 
-// todoBoardKey identifies one item across lists: its text and nesting.
+// todoBoardKey identifies one item across lists: its stable step id when the
+// list carries one, otherwise its text and nesting (the fallback for a hand-
+// written list). An id survives a retitle, so a rename never queues new work.
 func todoBoardKey(item evidence.TodoItem) string {
+	if id := strings.TrimSpace(item.StepID); id != "" {
+		return "step\x00" + id
+	}
 	text := strings.TrimSpace(item.Content)
 	if text == "" {
 		return ""

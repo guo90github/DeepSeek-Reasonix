@@ -19,7 +19,7 @@ function eq<T>(actual: T, expected: T, label: string) {
   }
 }
 
-type Todo = { content: string; status?: string; level?: number };
+type Todo = { content: string; status?: string; level?: number; step_id?: string };
 
 const finished: Todo[] = [
   { content: "定义数据模型", status: "completed", level: 0 },
@@ -103,6 +103,37 @@ eq(
 eq(mergeTodoBoardQueue([], replaced), replaced, "an empty queue leaves the current list alone");
 eq(mergeTodoBoardQueue(undefined, replaced), replaced, "an absent queue (older host) leaves it alone");
 eq(mergeTodoBoardQueue(historical, historical).length, 1, "the same item is never listed twice");
+
+// --- retitle identity: the queue's copy and the current list are one step ---
+
+// Before the id-first key, a rewording put the same step on the shelf twice: the
+// queued ghost plus the current row. One step, one row.
+const queuedOld: Todo[] = [{ content: "改两条描述", status: "in_progress", level: 0, step_id: "plan_step_01" }];
+const retitledStep: Todo[] = [
+  { content: "改两条描述 + 重生 golden", status: "in_progress", level: 0, step_id: "plan_step_01" },
+  { content: "串行验证并提交", status: "pending", level: 0, step_id: "plan_step_02" },
+];
+eq(
+  mergeTodoBoardQueue(queuedOld, retitledStep)
+    .map((todo) => todo.content)
+    .join(","),
+  "改两条描述,串行验证并提交",
+  "a retitled step is one row: the queued copy and the current one share its step_id",
+);
+
+// A step the queue no longer owes (it finished) still shows up from the list.
+const queuedElsewhere: Todo[] = [{ content: "串行验证并提交", status: "pending", level: 0, step_id: "plan_step_02" }];
+const doneNow: Todo[] = [
+  { content: "改两条描述 + 重生 golden", status: "completed", level: 0, step_id: "plan_step_01" },
+  { content: "串行验证并提交", status: "in_progress", level: 0, step_id: "plan_step_02" },
+];
+eq(
+  mergeTodoBoardQueue(queuedElsewhere, doneNow)
+    .map((todo) => todo.content)
+    .join(","),
+  "串行验证并提交,改两条描述 + 重生 golden",
+  "a finished step the queue no longer owes appears once, from the current list",
+);
 
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
 if (failed > 0) process.exit(1);

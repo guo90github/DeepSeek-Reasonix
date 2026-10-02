@@ -70,7 +70,12 @@ export function mergeTodoBoardQueue(queue: Todo[] | null | undefined, current: T
   return extra.length === 0 ? owed : [...owed, ...extra];
 }
 
+// Identity, mirroring the host board: a stable step id when the list carries
+// one, otherwise text and nesting. Keying on text alone made a retitled step
+// look like new work, so the old wording stayed owed and never cleared.
 function todoItemKey(todo: Todo): string {
+  const id = String(todo.step_id ?? "").trim();
+  if (id) return `step\u0000${id}`;
   const level = typeof todo.level === "number" ? todo.level : 0;
   return `${String(todo.content ?? "")}\u0000${level}`;
 }

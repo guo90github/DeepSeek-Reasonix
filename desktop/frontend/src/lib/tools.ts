@@ -129,6 +129,7 @@ export interface Todo {
   status: TodoStatus | string;
   activeForm?: string;
   level?: number; // 0 = phase, 1 = sub-step of the phase above it
+  step_id?: string; // stable identity: the board and the panel key on it when present
 }
 
 // parseTodos pulls the task list out of a todo_write call's args.
