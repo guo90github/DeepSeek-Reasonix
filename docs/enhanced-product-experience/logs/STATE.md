@@ -14,7 +14,7 @@
 | 第十一 双主线 | **已验收（代码判据）** | `530f80d43`：`internal/event/delivery.go` 的 `DeliveryClass` 四分类 + 唯一入口守卫（结构性声明表）；验证 `go test ./internal/control/ -run 'Delivery\|TailSites\|Notice\|Inbox\|Wake'` ok、`go test ./internal/event/` ok；U-2 已决（**排队**） |
 | 第十二 报错根治 | 待验收（降幅**未达**判据） | `759810f30`（写入即证据 / 拦截即给下一步 / 作业回执闭环 / 起动≠跑过）+ `internal/boot/write_reread_effect_test.go`；`docs/10` §十一 复跑：基线 97 → **残余 37**（降幅 62%；仪器已按门禁真实规则修正，见 §11.2.1），判据要 ≤20 ⇒ **未达标**；残余 = 33「目标**改动行**从未被写过」+ 4 `bash` 不透明写者（A-2/A-4 已被 §9.2/§9.3 用安全理由否证，A-1 覆盖 60 条）。**待拍板 D-2** |
 | 第十四 回顾展示 | **已验收（代码判据）** | `cffe2df3a`：`RecapHeatmap.tsx/.css` + `lib/recapHeatmap.ts` + `SessionRecapPage` 接线——`recap-heatmap` **22 PASS**、`recap-heatmap-component` **18 PASS**（含主题 token/退役变量检查）、`session-recap-page` 全 PASS（含热力图筛选与召回条联动）；U-3 已决（30 天/日格） |
-| 第十六 召回记录 | **已验收（代码判据）** | 内核 `530f80d43`（记录含 turnSeq/injected/omitted，正文不入）+ `desktop/recall_record_view.go`(+test)；前端 `RecapRecallStrip.tsx` **21 PASS**（折叠计数/展开列事实 id 与技能名/不渲染正文）+ `recap-recall-wiring` 全 PASS（controller→前端→页面整条接线）+ 并入既有记忆面板（`footer-memory-module` **7 PASS**） |
+| 第十六 召回记录 | **已验收（代码判据）** | 内核 `530f80d43`（记录含 turnSeq/injected/omitted，正文不入）+ `desktop/recall_record_view.go`(+test)；前端展示落在**既有面板**上：召回条 `RecapRecallStrip.tsx` **21 PASS**（折叠计数/展开列事实 id 与技能名/不渲染正文）+ `recap-recall-wiring` 全 PASS（controller→前端→页面整条接线），落点为回顾页的会话详情（设计见 `docs/50` §2.2「怎么查」第 1 条）；记忆面板侧显示本轮召回条与事实列表（`footer-memory-module` **7 PASS**）。**注**：若你要的是"记忆面板里也能逐轮看召回记录"，那是一处新增（host 侧按 tab 读记录 + 面板区块），未做，见 §5 |
 | 第十七 待办队列 | **已验收（代码判据）** | `014f3f71b`（批次身份 S1、队列+归档 S3、归档界面+S2 重放，含 agent.go/boot.go 接线）；**本轮复跑**：`todo-queue-repro` **19 PASS**、`TodoPanel` **35 PASS**、`todo-archive-section` **11 PASS**，宿主 `todo_history_replay_test.go` ok ⇒ 三类混乱各有回归测试由红转绿 |
 
 ## 2. 当前单元（2026-10-03 · 本轮）
@@ -46,6 +46,7 @@
 
 - 立项书验收 5（全量门禁）**已复跑**（见 §2 上一轮与 `docs/99` §一标准 5）：三项绿；lint 30 条 / repolint 7 条 / 测试失败全部落在别的会话文件。
 - 超出验收判据的留白：第十「后台标签多面板并行」（A-30 收窄，需把 `ChatPaneRegion` 的 region props 按 tabId 参数化，且需真机验证）。
+- 第十六 的**可选加深**：把逐轮召回记录也放进**记忆面板**（现按设计落在回顾页会话详情，`docs/50` §2.2）。要做需先加 host 侧"按 tab 读记录"的命令 + 面板区块，属新增而非修缺陷。
 - 第七 的**召回质量**（索引变短后模型选事实的准确度）属真机观察项，并入 B-1 可选确认。
 - 第十二 复跑**未建模**外部改动与模型自身轨迹变化，两者都只会让残余更高；真实复合降幅要一次真跑才看得到（现测残余 **37**，见 `docs/10` §11.2.1）。
 
