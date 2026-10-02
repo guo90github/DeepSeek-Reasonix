@@ -171,6 +171,14 @@
       `{ID, Title}`，op 与状态里都没有 kind/marker ⇒ "哪些节点算验收节点"**无法表达**，此时写判定就是替使用者发明 ✗。
       三个选项与后果见 `AGENT_BUS.md` **§13.10**。**与该决定无关的那半可以先行**：无未决矛盾（`contested` / 未决审议）；
       而"证据链完整"其实**已由 `decide(done)` 的门槛保证**（有可核对证据 + 非产出者复跑 ⇒ 见 T3-1/T3-8/T6-5）。
+      **内核那一半已落（2026-10-02，取 §13.10 的 A：交付物 = 依赖图的根）**：`internal/agentbus/landing.go` 的
+      `AssessLanding(state, hearings)` 折出 `Landing{Landed, Reason, Blockers}`；阻塞原因**逐条给地址**（节点 id + 状态/原因），
+      同一节点只报**最可操作的那条**（在争 > 升级/按规则收口 > 缺失 > 被放弃 > 未完成），不只说"没做完"。
+      用例 `landing_test.go`（6 条，`go test -count=1 ./internal/agentbus/...` 三包 ok）：交付物未完成 ⇒ 不落地；
+      **被 `refute` 后仍 `contested` ⇒ 不落地，且必须报"争议"而不是泛泛的未完成**；全 done 但审议未决（open / escalate /
+      undecided-by-rule）⇒ 不落地，`stands` ⇒ 落地；缺失依赖与被放弃依赖各报其类；空板不落地；两次读结果一致。
+      **仍未做**：把该判定接到 Goal（"宣告落地"对齐 `complete`）——它与 §13.8 的"开工前查授权"、§13.9 的"宿主接纳"
+      **是同一道门的三侧**，宜一并接（见 §13.10 末段）。
 - [ ] T9-6 N≈100：任意杀掉 20% 后仍收敛；不超预算；无 429 风暴
 - [x] T9-7 存在一次真实的「缺能力 → 派生获取能力节点 → 完成」链路 → `internal/agentbus/capability_gap_e2e_test.go`
       `TestACapabilityGapIsClosedByAnObtainedStep`：认领 → 报缺口（**释放租约**、状态 `capability_gap`、`Ready` 为假）→ `require` 派生
@@ -226,6 +234,11 @@
 - [x] **T7-5**（S5）`Sweep` 单次上限 256（按 node id 排序，故无永久饥饿）：把上限与语义写进文档，并在调度侧决定 tick 频率
       → **规则已写进契约**（`AGENT_BUS.md` §11.3：单次上限只约束"一次调用的写入量"，不约束"板能否恢复"——被跳过的过期认领由**下一次调用**按 id 序继续回收 ⇒ 无永久饥饿）；
       实测 `internal/agentbus/board/sweep_cap_test.go`（一次 256 + 一次余量 + 一次 0，全部 owner 清空）
+- [ ] **T8-4**（S6）争议信号的判据**漏一种**：`observe.go` 用 `len(n.Refutes) > 0 && n.Outcome == ""` 认"refutations, no verdict"，
+      **先 `done` 后被 `refute` 的节点报不出来** ✗ —— `applyRefute` 只改状态、不动 `Outcome` ⇒ 该节点 `Outcome` 仍是 `done`，
+      而状态已是 `contested` ⇒ 这场争议在人侧**看不见**（T9-5 的判定改用状态机自己的答案 `StateContested` 才避开这个坑）。
+      修法：信号也改判 `State == board.StateContested`，并补一条"done 后被 refute ⇒ 仍要报争议"的用例；
+      注意这会让这类节点**新出现**一张卡/一条信号 ⇒ 属用户可见变化，单独一刀并在提交信息里说明。
 
 ## 输入材料（本目录内，非清单项）
 

@@ -1003,3 +1003,15 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 
 **并记一处形状**：这条决定与 §13.8 的"**开工前查授权**"、§13.9 的"**宿主接纳（槽位/队列）**"**是同一道门的两侧**——
 三者都在问"谁、在什么时候、被允许推进哪一步"。这道门一旦立起来，三处应当**一并接**；分散接会出现三套半截判据 ✗。
+
+**A 已实现（2026-10-02）**：`internal/agentbus/landing.go` 的 `AssessLanding(state, hearings) *Landing` ——
+交付物 = **依赖图的根**（`rootsOf`，零 schema 改动 ✓）；逐条给出阻塞原因（节点 id + 状态/原因），同一节点只报
+**最可操作的那条**（在争 `contested` > 悬念 `deliberating` / `escalated` / `undecided` > `missing` > `abandoned` > `not_done`），
+`Reason` 一行说清"没落地、因为什么"。用例 `landing_test.go` 六条：交付物未完成；**被 `refute` 后仍 `contested` ⇒
+必须报"争议"而不是泛泛的未完成**；全 done 但审议未决（open / escalate / undecided-by-rule）⇒ 不落地，`stands` ⇒ 落地；
+缺失依赖、被放弃依赖各报其类；空板不落地；两次读结果一致。
+**仍未做**：把它接到 Goal（"宣告落地"对齐 `complete`）——与 §13.8、§13.9 同为那道门的一侧，宜一并接 ✗。
+
+**实现中顺带发现（已挂 TODO T8-4）**：`observe.go` 的争议信号判据 `len(n.Refutes) > 0 && n.Outcome == ""`
+**漏掉"先 `done` 后被 `refute`"的节点** ✗ —— `applyRefute` 只改状态、不动 `Outcome` ⇒ 该节点 `Outcome` 仍是 `done`，
+状态却已是 `contested` ⇒ 那场争议在人侧看不见。本条判定改用状态机自己的答案 `StateContested` 才避开；信号那侧须单独修。
