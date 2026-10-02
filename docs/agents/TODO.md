@@ -195,8 +195,11 @@
       旧代码下 `TestACapabilityGapDoesNotLetTheWorkerAuthorizeItself` **红**；修法 = 产出者改从 **op 日志**派生
       （非授权类 `assert` 的 actor ∪ `claim` 的 actor，与 `applyDecide` 对"产出者"的定义一致），`Authorized` 改为委托
       `AuthorizedGrants`（原先两份重复逻辑 ✗）；修后两用例绿、四个既有 grant 用例无回归。
-      **仍缺（如实记，同 S5 一类）**：`agentbus.Authorized`/`AuthorizedGrants` 在**生产代码里没有调用方**（实读 grep 零命中，
-      命中的都是无关的 `mcpServerAuthorized`）⇒ 内核侧链路完整，**会话侧还没人拿它把关**（缺"开工前查授权"那道门）
+      **仍缺（如实记，并已按 T2-5 更正口径）**：`agentbus.Authorized`/`AuthorizedGrants` 在**生产代码里没有调用方**
+      （实测 grep 零命中；同名的 `mcpServerAuthorized` 无关）⇒ 内核侧可核，**人侧还没地方看**。按 T2-5 这里**不该**加
+      "没授权就不许开工"的前置闸门 ✗（把关在证据 + 审议 + 人读面），所以缺的是**读面**：谁批了哪个节点。
+      实测 `AgentBusTasks`（T4-5 所说的"人读行投影"）**同样零调用方** ⇒ 读面只能挂在**面板真正在用的**
+      `AgentBusBriefing` 那条线上，而"某节点是谁批的"属**节点详情** ⇒ **与 `onOpenNode` 下钻是同一个待定选择**（见 T8-3）。
 
 ## T10 S8 PR 元数据门 + 打包
 
