@@ -189,6 +189,11 @@
       可省的是"读文件 + 重新 fold"，不是全部成本。要真正去掉 O(n)，得做增量 fold 或写时复制状态——那是更大的设计，
       下一刀必须先说清"能省掉哪一段"，不许承诺"读变成 O(1)"
       **第一次实现尝试：失败并已回滚（2026-10-02，如实留痕）**。做法是"让 `Snapshot` 走同一个按句柄大小校验的缓存 + 返回 `Clone()`"。
+      **第二次探针（2026-10-02）推翻了我上一轮的假设**：把 `Snapshot` 直接接到缓存（连 `Clone()` 都不要）后，
+      **连不含任何"绕过板子改文件"的 `TestAssertOnUnknownNodeCreatesItOpen` 也失败（applied = 0, want 1）** ⇒
+      真因**不是**"大小判据对半行/坏行不够"，而是更基本的东西（这些用例写完之后读回来的路径本身就没走通）。
+      探针已回滚，树保持绿。**下一刀从这里开始**：先搞清这些用例"写→读"用的是哪条路径（`Snapshot` / `Board.Ops` / 直接 `readLog`），
+      再谈缓存——别再照着"新鲜度判据不够"这个错方向改。
       结果**打红 5 个既有用例**：`TestNextWriterRepairsTheTornTail`（applied = 1, want 2）、`TestCorruptMidFileLineIsSkippedAndCounted`（计数）、
       `TestRepairScansPastTheWindow`（applied = 0, want 1）、`TestKilledWriterLeavesAFoldableLog`（applied = 5, want 6）、
       `TestAssertOnUnknownNodeCreatesItOpen`。已 `git checkout` 回滚，未提交。
