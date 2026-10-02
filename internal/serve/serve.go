@@ -1662,11 +1662,14 @@ func (s *Server) todos(w http.ResponseWriter, _ *http.Request) {
 		Status     string `json:"status"`
 		ActiveForm string `json:"activeForm,omitempty"`
 		Level      int    `json:"level,omitempty"`
+		// StepID is the item's stable identity: a remote client that keys on it
+		// matches what the local panel does, so a retitle cannot read as new work.
+		StepID string `json:"step_id,omitempty"`
 	}
 	raw := s.ctl().Todos()
 	out := make([]todoItem, len(raw))
 	for i, t := range raw {
-		out[i] = todoItem{Content: t.Content, Status: t.Status, ActiveForm: t.ActiveForm, Level: t.Level}
+		out[i] = todoItem{Content: t.Content, Status: t.Status, ActiveForm: t.ActiveForm, Level: t.Level, StepID: t.StepID}
 	}
 	writeJSON(w, out)
 }
