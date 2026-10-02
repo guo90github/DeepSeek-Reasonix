@@ -20,7 +20,16 @@ type agentBusState struct {
 	mu          sync.Mutex
 	dir         string
 	participant string
-	cursor      uint64
+	cursors     agentBusCursors
+	limits      agentbus.TalkLimits
+}
+
+// agentBusCursors are this participant's "delivered up to" watermarks, one per
+// surface. They share a lifetime, so they travel as one value rather than as
+// independent fields.
+type agentBusCursors struct {
+	board uint64
+	talk  uint64
 }
 
 // SetAgentBus enrols this session on the board stored at dir under an explicit
@@ -166,13 +175,13 @@ func (b *agentBusState) participantID(c *Controller) string {
 func (b *agentBusState) currentCursor() uint64 {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.cursor
+	return b.cursors.board
 }
 
 func (b *agentBusState) advance(seq uint64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	if seq > b.cursor {
-		b.cursor = seq
+	if seq > b.cursors.board {
+		b.cursors.board = seq
 	}
 }

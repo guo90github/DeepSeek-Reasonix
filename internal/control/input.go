@@ -207,6 +207,11 @@ func (c *Controller) composeWithGoal(
 	if block := c.agentBusTurnBlock(); block != "" {
 		text = "<agentbus-view>\n" + block + "</agentbus-view>\n\n" + text
 	}
+	// Free talk reaches this turn only where it names us: the block carries the
+	// lines addressed to this participant and a count of the rest (AGENT_BUS §3.2).
+	if block := c.agentBusTalkBlock(); block != "" {
+		text = "<agentbus-talk>\n" + block + "</agentbus-talk>\n\n" + text
+	}
 	if includeHookContext {
 		// The session's own progress: recent verdicts and open obligations. Like
 		// the blocks below it rides the turn body, never the stable prefix.
