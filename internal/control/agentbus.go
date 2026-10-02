@@ -22,6 +22,11 @@ type agentBusState struct {
 	participant string
 	cursors     agentBusCursors
 	limits      agentbus.TalkLimits
+	// waker is the host's routing for ready-work wakes; nil means wake nobody.
+	waker func(context.Context, agentbus.WakeTarget) error
+	// woken remembers the last work set each participant was woken for, so a host
+	// may re-run the sweep every tick without waking anyone twice.
+	woken map[string]string
 }
 
 // agentBusCursors are this participant's "delivered up to" watermarks, one per
@@ -102,7 +107,17 @@ func (c *Controller) ApplyAgentBusOp(ctx context.Context, op board.Op) (board.Re
 	if err != nil {
 		return board.Receipt{}, err
 	}
-	return brd.Apply(ctx, op)
+	receipt, err := brd.Apply(ctx, op)
+	if err != nil {
+		return receipt, err
+	}
+	// The writer that makes work startable wakes whoever asked for it rather than
+	// waiting for a tick: work that can begin now should begin now (AGENT_BUS §13.2).
+	// A replayed write adds nothing, so it wakes nobody.
+	if !receipt.Duplicate {
+		c.WakeAgentBus(ctx)
+	}
+	return receipt, nil
 }
 
 // AgentBusTask is one board node as the human side renders it: flat rows the task

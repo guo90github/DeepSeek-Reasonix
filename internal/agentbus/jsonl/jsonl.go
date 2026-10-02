@@ -111,10 +111,7 @@ func RepairTornTail(path string) (bool, error) {
 	if size == 0 {
 		return false, nil
 	}
-	start := size - RepairWindow
-	if start < 0 {
-		start = 0
-	}
+	start := max(size-RepairWindow, 0)
 	newSize := int64(-1)
 	for {
 		buf := make([]byte, size-start)
@@ -129,9 +126,7 @@ func RepairTornTail(path string) (bool, error) {
 			newSize = 0
 			break
 		}
-		if start -= RepairWindow; start < 0 {
-			start = 0
-		}
+		start = max(start-RepairWindow, 0)
 	}
 	if newSize == size {
 		return false, nil

@@ -66,11 +66,19 @@
 
 ## T5 S3 交流三档
 
-- [ ] T5-1 自由对话 `say` + 话题边界（轮数/预算/静默窗口触顶即收口）
-- [ ] T5-2 默认不灌上下文（只投点名与摘要）
-- [ ] T5-3 有界点对点 `ask`/`answer` + 回执通道（`results/<correlation>.json`）
-- [ ] T5-4 跨进程目标带令牌；超速返回 `rate_limited`
-- [ ] T5-5 就绪即事件唤醒（`interval` 只兜底）
+- [x] T5-1 自由对话 `say` + 话题边界（轮数/预算/静默窗口触顶即收口）→ `internal/agentbus/talk.go`（`ApplyTalk` 只按**已记录状态**判接受；
+      `TopicLapsed` 是派生谓词，收口由 `CloseLine` 产出记录、下一个写者追加——重放不依赖读取时刻）+ `talklog.go`（写事务内 `CloseLapsed`）
+- [x] T5-2 默认不灌上下文（只投点名与摘要）→ `Digest(topic, participant, cursor)`：只给点名行 + 其余计数；
+      turn-tail `<agentbus-talk>`（单轮封顶 50 行 + `truncated=true` + `hidden=`）见 `internal/control/agentbus_talk.go`
+- [x] T5-3 有界点对点 `ask`/`answer` + 回执通道（`results/<correlation>.json`）→ 链上记账 hop/token、`ask` 开链设 TTL、过期即 `expired`；
+      `results.go` 原子替换 + correlation 必可作文件名 + 状态封闭集；命令面 `AgentBusAsk/Answer` + `Post/ReadAgentBusResult`
+- [ ] T5-4 跨进程目标带令牌；超速返回 `rate_limited` → `rate_limited` 已落（`agentbus.RefuseRate`，命令面原样透传 typed）；
+      **跨进程带令牌未做**（属宿主/传输层：随 T5-5 的宿主路由一起接）
+- [x] T5-5 就绪即事件唤醒（`interval` 只兜底）→ 内核侧已落：`internal/agentbus/wake.go`（`WakeTargets` 从 op 日志 + 话题面派生目标，
+      key 由工作集合派生 ⇒ 每 tick 幂等）+ `internal/control/agentbus_wake.go`（`SetAgentBusWaker` 宿主路由、不唤醒自己、失败释放 key 重试）
+      + 写路径发起（`ApplyAgentBusOp` 非 replay 时唤醒）；**宿主侧路由（谁安装 waker：桌面多 tab / serve / 远端）未接**，下一刀
+- [ ] T5-6 **节点记录 `Requester`**（`require`/`assert`/`split` 写入），使"谁要这个节点"回到折出状态——目前只能从 op 轨迹派生，
+      见 `docs/agents/AGENT_BUS.md` §13.3 的缺口说明
 
 ## T6 S4 审议与裁决
 
