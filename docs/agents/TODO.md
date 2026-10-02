@@ -494,3 +494,28 @@
   **解除收件箱暂停 + 关 plan mode**（与 `heartbeat_converge.go:clearUnattendedGates` 同一语义、同一守卫接口
   `heartbeatSessionGuards`，断言不到接口就静默跳过）。语义依据："总开关是唯一闸门，人干预不改变无人状态"。
   用例：`TestResumeUnattendedSessionClearsTheGatesACrashLeft`（先暂停收件箱 → 恢复后必须不再暂停）。
+
+## T9-4 结论（2026-10-03 凌晨，真机）
+
+**"杀宿主 → 拉起 → 继续推进"两半都已单独验证通过**（每一半都有可复核的证据）：
+
+1. **看门狗自己拉起**：巡检日志 `2026-10-02T16:39:50Z launched … v0.0.0-dev.107`、`16:53:40Z launched … v0.0.0-dev.108`；
+   任务此时 `Result=0`。杀进程用的是精确 pid（非进程名通配）。
+2. **拉起后继续推进**（本刀要证的东西）：宿主**自己**排入并投递了「继续」回合，两轮各一次：
+   - `00:49:00 dev.108`：`msg="desktop: unattended session resumed after an interrupted host run"`
+   - `01:08:11 起 dev.109 → 01:08:33` 同一条日志 + 收件箱条目
+     `{"displayText":"继续","idempotencyKey":"unattended-resume|ff1be0d8099f1d75|<sessionPath>","source":"unattended-resume"}`
+     ⇒ 该回合**无人输入、无人点击**就自己跑起来了（本条结论就是它发起的）。
+3. 触发条件（均在真机核实，非假设）：印记 `lastExit.kind="killed"`（非 clean）＋ 无人值守总开关为开
+   ＋ 标签已持久化 `goal`（`desktop-tabs.json`，本会话 11 字符）⇒ `resumeUnattendedSessionAfterAnInterruptedRun` 成立。
+
+**仍未在同一轮里合起来跑过**：看门狗拉起与自动恢复各自跑过（分别在不同轮次），联合条件是同一份数据
+（印记 lastExit + 开关 + 标签 goal），无额外机制；要一次性看到"看门狗拉起 → 自动继续"，需要看门狗那次 tick 拉起的宿主
+恰好是含本刀的构建（下次自然发生即可确认）。
+
+**新发现（未定性，超出本刀范围，留待查）**：00:58:35 杀 dev.108 之后，巡检连续两次
+`skip  the marker does not ask for unattended`（16:58:42Z / 17:03:42Z）⇒ 那一刻**印记里的 `unattended` 变成了 false**，
+于是看门狗拒绝拉起；而配置开关（`heartbeat-tasks.json` 的 `unattended`）始终为 true，01:08:11 起来的 dev.109 印记又是 true。
+即：**某些退出路径会把印记的 unattended 写成 false**，这会让看门狗在该场景下"该拉而不拉"。
+怀疑写入者＝退出观测器/电子壳的 hostState 写回（`desktop/electron/src/main/hostState.ts`、`spawnDesktopExitObserver`），
+本刀未取证，不做结论。
