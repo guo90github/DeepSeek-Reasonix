@@ -69,6 +69,13 @@ function tabMeta(): TabMeta {
     tokenMode: "full",
     active: true,
     cwd: "/repo",
+    // The startup shape: the shell already knows the session, the controller's meta
+    // has not adopted it yet — that difference is what makes the recovery worker
+    // hydrate (and therefore fetch context/effort).
+    sessionPath: "/repo/.reasonix/sessions/live.jsonl",
+    sessionRevision: 1,
+    sessionDigest: "digest-live",
+    sessionGeneration: 1,
   };
 }
 
@@ -285,6 +292,14 @@ const root = createRoot(rootEl);
 
 await act(async () => {
   root.render(<Probe />);
+  await flushPromises();
+});
+
+// The controller's recovery worker — which hydrates the tab and so triggers the
+// initial context/effort fetch — only loads after the shell's resync signal
+// (controllerEventRecovery.ts listens on "desktop:resync").
+await act(async () => {
+  desktopStub.emit("desktop:resync");
   await flushPromises();
 });
 
