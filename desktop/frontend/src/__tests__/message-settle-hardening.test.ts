@@ -48,11 +48,11 @@ console.log("\nmessage settle hardening");
 {
   let s = user(initialState, "第一问", 1);
   s = started(s, "t1");
-  eq(s.items.some((it) => it.kind === "assistant" && it.id === "a:t1"), true, "turn_started opens the anchor bubble");
+  eq(s.items.some((it) => it.kind === "assistant" && it.id === "a:t1:0"), true, "turn_started opens the anchor bubble");
   s = delta(s, "reasoning", "思考中");
   s = delta(s, "text", "第一答");
   const done = ev(s, { kind: "message", text: "第一答", reasoning: "思考中" });
-  const assistant = done.items.find((it): it is Extract<typeof it, { kind: "assistant" }> => it.kind === "assistant" && it.id === "a:t1");
+  const assistant = done.items.find((it): it is Extract<typeof it, { kind: "assistant" }> => it.kind === "assistant" && it.id === "a:t1:0");
   eq(assistant?.text, "第一答", "message settles the anchor bubble text");
   eq(assistant?.streaming, false, "message stops streaming");
   eq(done.live, undefined, "message clears the live stream");
@@ -83,7 +83,7 @@ console.log("\nmessage settle hardening");
   let s = user(initialState, "空回合", 3);
   s = started(s, "t3");
   const cleared = ev(s, { kind: "message" });
-  eq(cleared.items.some((it) => it.kind === "assistant" && it.id === "a:t3"), false, "empty message removes the empty bubble");
+  eq(cleared.items.some((it) => it.kind === "assistant" && it.id === "a:t3:0"), false, "empty message removes the empty bubble");
 }
 
 // 4. Empty message with no settle target is a full no-op (identity-preserving):
@@ -108,13 +108,13 @@ console.log("\nmessage settle hardening");
   s = delta(s, "reasoning", "思考");
   s = delta(s, "text", "流式答案");
   const done = ev(s, { kind: "message" });
-  const assistant = done.items.find((it): it is Extract<typeof it, { kind: "assistant" }> => it.kind === "assistant" && it.id === "a:t6");
+  const assistant = done.items.find((it): it is Extract<typeof it, { kind: "assistant" }> => it.kind === "assistant" && it.id === "a:t6:0");
   eq(assistant?.text, "流式答案", "message without text keeps the streamed answer");
   eq(assistant?.reasoning, "思考", "message without reasoning keeps the streamed reasoning");
 }
 
 // 6. A stale currentAssistant mirror must not win over the active turn's
-//    anchor: the message settles a:t2, not the old a:t1 the mirror still names.
+//    anchor: the message settles a:t2:0, not the old a:t1:0 the mirror still names.
 {
   let s = user(initialState, "第一问", 7);
   s = started(s, "t1");
@@ -124,10 +124,10 @@ console.log("\nmessage settle hardening");
   s = started(s, "t2");
   s = delta(s, "text", "第二答");
   // Force the stale mirror: currentAssistant still names turn 1's bubble.
-  s = { ...s, currentAssistant: "a:t1" };
+  s = { ...s, currentAssistant: "a:t1:0" };
   const done = ev(s, { kind: "message", text: "第二答终" });
-  const t2 = done.items.find((it): it is Extract<typeof it, { kind: "assistant" }> => it.kind === "assistant" && it.id === "a:t2");
-  const t1 = done.items.find((it): it is Extract<typeof it, { kind: "assistant" }> => it.kind === "assistant" && it.id === "a:t1");
+  const t2 = done.items.find((it): it is Extract<typeof it, { kind: "assistant" }> => it.kind === "assistant" && it.id === "a:t2:0");
+  const t1 = done.items.find((it): it is Extract<typeof it, { kind: "assistant" }> => it.kind === "assistant" && it.id === "a:t1:0");
   eq(t2?.text, "第二答终", "anchor wins over the stale mirror");
   eq(t1?.text, "第一答", "the previous turn's answer is not overwritten");
 }
@@ -180,7 +180,7 @@ console.log("\nmessage settle hardening");
   eq(assistants.length, 3, "one assistant item per model round");
   eq(assistants[0]?.text, "第一轮回答", "round 1 answer survives");
   eq(assistants[0]?.reasoning, "第一轮思考", "round 1 reasoning survives");
-  eq(assistants[1]?.id, "a:t11:2", "round 2 gets its own item");
+  eq(assistants[1]?.id, "a:t11:1", "round 2 gets its own item");
   eq(assistants[1]?.text, "第二轮回答", "round 2 answer survives");
   eq(assistants[1]?.reasoning, "第二轮思考", "round 2 reasoning survives");
   eq(assistants[2]?.text, "第三轮回答", "round 3 answer survives");

@@ -16,7 +16,14 @@ export function removeEmptyAssistantItems(items: Item[]): Item[] {
 
 /** Allocate one provider sampling segment without changing the backend turn identity. */
 export function ensureAssistant(s: State): State {
-  if (s.currentAssistant && s.items.some((item) => item.kind === "assistant" && item.id === s.currentAssistant)) return s;
+  // A mirror naming a bubble outside the active turn is stale delivery: reusing it
+  // would land this turn's answer inside an earlier turn's bubble.
+  const turnPrefix = s.activeTurnId ? `a:${s.activeTurnId}:` : "";
+  const mirror = s.currentAssistant;
+  const reusable = Boolean(mirror)
+    && (!turnPrefix || mirror!.startsWith(turnPrefix))
+    && s.items.some((item) => item.kind === "assistant" && item.id === mirror);
+  if (reusable) return s;
   const ordinal = s.assistantSegmentOrdinal;
   const id = s.activeTurnId ? `a:${s.activeTurnId}:${ordinal}` : `a${s.seq}`;
   const item: AssistantItem = { kind: "assistant", id, text: "", reasoning: "", streaming: true, wasStreamed: true, searchSources: s.pendingSearchSources?.length ? s.pendingSearchSources : undefined };

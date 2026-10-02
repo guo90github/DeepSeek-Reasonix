@@ -1103,17 +1103,24 @@ function settleCurrentAssistant(s: State, now = Date.now()): State {
 // dropped rather than appended under a newer turn's question or overwrite its
 // stream. Inside the region the round currently streaming wins (a later
 // round's message must settle its own item, never an earlier round's), then
-// the turn anchor (`a:<turnId>`), then the newest assistant item.
+// the active turn's own segment (`a:<turnId>:<ordinal>`), then the newest
+// assistant item.
 function resolveSettledAssistant(s: State): Extract<Item, { kind: "assistant" }> | undefined {
-  const anchorId = s.activeTurnId ? `a:${s.activeTurnId}` : undefined;
+  // Matching the bare `a:<turnId>` form never hit once ids gained the ordinal
+  // suffix (assistantItems.ensureAssistant), so the anchor branch was dead and a
+  // stale currentAssistant mirror could steal a later turn's answer.
+  const anchorPrefix = s.activeTurnId ? `a:${s.activeTurnId}:` : undefined;
   let anchored: Extract<Item, { kind: "assistant" }> | undefined;
   let fallback: Extract<Item, { kind: "assistant" }> | undefined;
   for (let i = s.items.length - 1; i >= 0; i--) {
     const it = s.items[i];
     if (it.kind === "user") break; // newest turn region ends at the last user
     if (it.kind !== "assistant") continue;
-    if (s.currentAssistant && it.id === s.currentAssistant) return it;
-    if (anchorId && it.id === anchorId) anchored = it;
+    // A mirror naming an item outside the active turn is stale delivery: let the
+    // anchor (or the newest item in the region) win, so a later turn's answer
+    // cannot land on an earlier turn's bubble.
+    if (s.currentAssistant && it.id === s.currentAssistant && (!anchorPrefix || it.id.startsWith(anchorPrefix))) return it;
+    if (anchorPrefix && it.id.startsWith(anchorPrefix)) anchored = it;
     if (!fallback) fallback = it;
   }
   return anchored ?? fallback;
@@ -1657,7 +1664,13 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
       const now = Date.now();
       const settled = endTurnModelActivity(s, now, true);
       const active = ensureAssistant(settled);
-      const id = active.currentAssistant!;
+      // Settle the bubble that owns the open stream — a stale currentAssistant
+      // mirror must never win. With no open stream, the mirror is already vetted
+      // against this turn by ensureAssistant.
+      const liveId = active.live?.id;
+      const id = liveId && active.items.some((it) => it.kind === "assistant" && it.id === liveId)
+        ? liveId
+        : active.currentAssistant!;
       // The settle target's own content is inherited only when the answer lands
       // back on it. A new sampling segment — the usual shape once a tool round
       // closed the previous one — carries just what it produced: restating the
