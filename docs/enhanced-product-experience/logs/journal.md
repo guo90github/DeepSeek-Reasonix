@@ -1,3 +1,4 @@
 # journal · 追加式流水（一行一轮）
 
 - 2026-10-03 02:1x ｜ 单元：台账对齐现实 ｜ 结果：`git status` 0 项、7 个提交全在 HEAD 祖先链、产出目录 39 文件已跟踪；STATE.md 覆盖式改正过期描述 ｜ 证据：`git log -1 --format=%s <7 hashes>` 逐个存在 + `git merge-base --is-ancestor cffe2df3a HEAD` 通过 + `git ls-files docs/enhanced-product-experience | wc -l` = 39 ｜ 提交：`git log -1 --format=%h -- docs/enhanced-product-experience/logs/`
+- 2026-10-03 02:5x ｜ 单元：第七 常驻占用对比测量（单元 A） ｜ 结果：常驻段 改造前 **42,749 B** → 改造后 **41,638 B**，比值 **0.974，未达 ≤1/2**；瓶颈＝索引段 38,280 B / 91 条（中位 359 B、最长 1,162 B），即"第一层 ≤50 字"未落实；方案投影（无长链接 + ≤50 字）索引 8,807 B ⇒ 常驻 11,365 B ⇒ 0.27 ｜ 证据：HEAD 真渲染器 `BackgroundDataBlock()`=41638 与本轮会话快照 `Background memory=41638` 逐字节相同 ✅多源；改造前侧＝复制记忆库剥掉 `activation:` 行后跑同一渲染器（42,749）｜ 落档 `docs/50` §十（含仪器与可复跑命令）
