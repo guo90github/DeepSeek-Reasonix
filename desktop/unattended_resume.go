@@ -78,11 +78,21 @@ func lastRealUserInstruction(ctrl control.SessionAPI) string {
 		if text == "" {
 			text = strings.TrimSpace(msg.RawContent)
 		}
-		if text != "" {
-			return text
+		if text == "" || isHostRecoveryText(text) {
+			continue
 		}
+		return text
 	}
 	return ""
+}
+
+// isHostRecoveryText reports the host's own interruption notice, which reaches the session
+// as the last user-role message but is not something the user asked for: quoting it back as
+// "the instruction you were on" hands the model a wrapper instead of a task.
+func isHostRecoveryText(text string) bool {
+	text = strings.TrimSpace(text)
+	return strings.HasPrefix(text, "<interrupted-turn-recovery>") ||
+		strings.HasPrefix(text, "[interrupted-turn-recovery]")
 }
 
 func clipRunes(s string, limit int) string {

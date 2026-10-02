@@ -586,3 +586,22 @@
 - 解析顺序改为：`tab.goal` → `desktop-tabs.json` 该条目 → **契约粘存**（唯一 App 不会重写的地方）。
 - 用例：`TestUnattendedGoalContractSurvivesTheTabFileErasingIt`、`TestUnattendedGoalContractResolutionRecordsWhatItSees`。
 - 语义：契约只有**明确丢弃**才会消失（清会话），与"总开关是唯一闸门、人干预不改变无人状态"一致。
+
+### T9-4「拉起后自动接续」端到端通过 + 内容修正（dev.113/114，2026-10-03 凌晨）
+
+**终验证据（三处相互独立）**
+- 探针：`01:35:23` 杀宿主（procs=0）→ `01:35:24` 调巡检
+- 看门狗：`2026-10-02T17:35:24Z launched restoring an unattended host that is gone … v0.0.0-dev.113`
+- 宿主自己发的钩子行：`01:35:34.294 desktop: unattended session resumed after an interrupted host run … chars=668`
+  ⇒ 排入的是**668 字符的接续简报**（不是两个字）；同轮另两条无 Goal 会话正确被拒（`unattended resume declined … contractLen=0`）。
+- 本会话随后**在无任何人工输入**的情况下自己收到了那封简报并开始这一轮 —— 即"杀 → 拉起 → 自动接续推进"闭环成立。
+
+**这一条链最后收敛到 9 刀**（每一刀都由真机证据推动，非猜测）：
+dev.106 入列持久 → dev.107 恢复挂在会话绑定处 + 重挂唤醒器 → dev.108 拉起后自动排恢复回合 →
+dev.109 自己解除崩溃留下的闸门（收件箱暂停/plan mode）→ dev.110 巡检诊断（印记三要素）→
+dev.111 停止状态不再擦契约 → dev.112 恢复回合改为带上下文简报 → dev.113 契约粘存（App 重写 tabs 也擦不掉）→
+dev.114 简报过滤宿主自己的中断包装文本（`<interrupted-turn-recovery>` 不是指令）。
+
+**诚实备注（复验前提）**：本次复验前，我**手工把契约种入粘存**一次 —— 因为更早的构建已经把该会话的契约从
+`desktop-tabs.json` 里擦掉了（那时还没有 dev.113）。产品路径的捕获是自动的（载入标签时 + 解析命中时），
+所以**从 dev.113 起**用户设定的任何 Goal 都会被记住；对"契约已被旧版擦掉"的会话，需要重新设定一次 Goal 才会恢复。

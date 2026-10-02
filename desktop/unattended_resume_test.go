@@ -216,3 +216,17 @@ func TestUnattendedGoalContractResolutionRecordsWhatItSees(t *testing.T) {
 		t.Fatalf("contract = %q, want the goal recorded while it was visible", got)
 	}
 }
+
+// The host's interruption notice arrives as the last user-role message, but it is not an
+// instruction: quoting it as "the instruction you were on" gives the model a wrapper.
+func TestLastRealUserInstructionSkipsTheHostsRecoveryNotice(t *testing.T) {
+	if !isHostRecoveryText("<interrupted-turn-recovery>\nThe previous turn was interrupted.") {
+		t.Fatal("the host's recovery wrapper is not an instruction")
+	}
+	if !isHostRecoveryText("  [interrupted-turn-recovery] ...") {
+		t.Fatal("the bracketed form is the same notice")
+	}
+	if isHostRecoveryText("继续验证 T9-4") {
+		t.Fatal("a real instruction must not be filtered out")
+	}
+}
