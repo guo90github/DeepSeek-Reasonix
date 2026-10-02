@@ -112,6 +112,20 @@
       **先补一层"参与者目录"**（板级 `participants.json`：participant → host base URL + session path + 令牌引用，由各宿主入列时写入），
       再改 `routeAgentBusWake` 查表投递。详见 `AGENT_BUS.md` §13.3 的第二个缺口条目
       **跨进程带令牌未做**（属宿主/传输层：随 T5-5 的宿主路由一起接）
+      **真机进展（2026-10-02，dev.101 后的第一轮真机验收）**：已补齐两处生产缺口并实测——
+      ① `internal/control` 新增 `AgentBusAnnounce/AgentBusWithdraw`（把"我在哪说话"写进板目录），
+      `boot.Options` 新增 `AgentBusHost/TokenFile`（入列即公告），`internal/cli` 新增
+      `REASONIX_AGENTBUS_DIR/ID/HOST/TOKEN_FILE` 环境入口（任何进程都能入列）+ serve 绑定会话路径后**补一次公告**
+      （boot 期公告早于路径存在，会退化成"落到前台会话"——真机上抓到的时序缺陷，已修）。
+      ② **真机两进程已验到接收侧**：源码构建的真实 `serve` 进程写入
+      `{"participant":"bob","host":"http://127.0.0.1:8899","sessionPath":…,"tokenFile":…}`；
+      用公告令牌 + 公告会话头 `POST /inbox/items` ⇒ **202**（宿主机日志同一行），无令牌/错令牌 ⇒ **401**；
+      唤醒文本落进接收方**自己的会话文件**。且该 headless 宿主用真实工具写出了跨进程的第一个 op
+      （`seq 1 assert demo` / `seq 2 require demo→dep key`，actor=bob ⇒ bob 成为 `key` 的请求者）。
+      **仍缺（本轮实测发现的新缺口）**：ⓐ **headless 宿主不装 waker**（只有桌面 `enrollAgentBus` 装）⇒ CLI/serve 的写入
+      **谁都不唤醒**（含它自己；bob 写完 `require` 后其会话未出现 `<agentbus-wake>` 即可复现）——要与宿主 tick 一起补；
+      ⓑ 桌面**只发不收**（自身不跑 serve，入列时公告不出地址）⇒ 桌面作目标仍需 agentd 托管 serve；
+      ⓒ 发送侧由**桌面**驱动的那半实测待做（需桌面会话先入列 + 一个非重复写入触发 `WakeAgentBus`）。
 - [x] T5-5 就绪即事件唤醒（`interval` 只兜底）→ 内核侧已落：`internal/agentbus/wake.go`（`WakeTargets` 从 op 日志 + 话题面派生目标，
       key 由工作集合派生 ⇒ 每 tick 幂等）+ `internal/control/agentbus_wake.go`（`SetAgentBusWaker` 宿主路由、不唤醒自己、失败释放 key 重试）
       + 写路径发起（`ApplyAgentBusOp` 非 replay 时唤醒）。**宿主侧路由未接**，但缝已定死：桌面 `tabs map[string]*WorkspaceTab` + `tab.Ctrl`，
