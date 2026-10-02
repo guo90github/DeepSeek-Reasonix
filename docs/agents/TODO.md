@@ -133,8 +133,10 @@
       ③ 前端**组件**已落：`AgentBusPanel.tsx`（只画卡片与下钻行；孤儿/停滞的严重度排序与内核一致；
       下钻是 `onOpenNode(node)` 回调，交由宿主决定怎么打开）+ 11 条文案 × 3 份 locale + 单测
       `src/__tests__/agentbus-panel.test.tsx`（12 项断言，含用 jsdom+act 真的点一次下钻）；
-      **仍未做**：把面板挂进某个界面（需要生成契约 `desktopContract.generated.ts` 里的 `AgentBusBriefing`，
-      以及面板的视觉样式——本次刻意不新增 CSS 以免动打包尺寸预算）
+      ④ **已挂进界面**（用户选定落点：工作区面板新增一节）：契约由**反射 `App` 类型**生成（`cd desktop && go run . -emit-contract frontend/src/generated`）
+      ⇒ `DESKTOP_COMMANDS`/DTO/`GeneratedDesktopCommands` 自动带上 `AgentBusBriefing`；`lib/bridge.ts` 补声明 + mock（**守卫就是 `tsc`**）；
+      `WorkspaceAgentBusSection.tsx`（取数与"读不到"分开）挂在 `WorkspacePanel.tsx` 的 body 开头（`refreshKey = tabId|sessionPath`）。
+      **仍未做**：`onOpenNode` 下钻暂留空（先只读显示）；视觉样式只用了最小内联，未新增 CSS
 
 ## T9 S7 e2e + 无人值守贯通 + 百级压测
 

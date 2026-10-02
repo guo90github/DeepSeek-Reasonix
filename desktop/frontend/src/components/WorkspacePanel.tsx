@@ -76,6 +76,7 @@ import { Markdown } from "./Markdown";
 import { Tooltip } from "./Tooltip";
 import { AnchoredPopover } from "./AnchoredPopover";
 import { MarkdownImageTabContext } from "./MarkdownImageContext";
+import { WorkspaceAgentBusSection } from "./WorkspaceAgentBusSection";
 import { WorkspaceMediaPreview } from "./WorkspaceMediaPreview";
 import { buildWorkspacePathBreadcrumbs, WorkspacePathBreadcrumbs } from "./WorkspacePathBreadcrumbs";
 import { WorkspaceTreeRow, type WorkspaceTreeRowData } from "./WorkspaceTreeRow";
@@ -1625,6 +1626,7 @@ export function WorkspacePanel({
           onContextMenu={openSelectionMenu}
           onMouseUp={showSelectionToolbar}
         >
+          <WorkspaceAgentBusSection refreshKey={`${workspaceTabId}|${sessionPath ?? ""}`} />
           {viewMode === "changed" && activeVerificationRevealRequest && visibleCompletionSummary ? (
             <WorkspaceTurnResult key={activeVerificationRevealRequest.id} ref={verificationSummaryRef} summary={visibleCompletionSummary} qualityFloor={qualityFloor} tabId={workspaceTabId} sessionPath={sessionPath ?? ""} initialView={activeVerificationRevealRequest.view} onAllChanges={() => { onDismissTurnResult?.(); }} />
           ) : viewMode === "changed" && scopedChangeRows ? (
