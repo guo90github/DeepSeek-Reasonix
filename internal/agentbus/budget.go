@@ -242,7 +242,9 @@ func SubtreeRoot(st *board.State, node string) string {
 		seen[root] = true
 		next := ""
 		for _, dep := range n.Deps {
-			if dep == "" {
+			// A missing dependency is not a subtree: a broken edge must never move a
+			// node into a subtree nobody can act on.
+			if _, ok := st.Nodes[dep]; !ok {
 				continue
 			}
 			if next == "" || dep < next {

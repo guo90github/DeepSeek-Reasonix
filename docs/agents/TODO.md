@@ -121,8 +121,12 @@
 
 ## T8 S6 观测聚合（人读）
 
-- [ ] T8-1 按子树折叠、只显异常/争议/停滞/孤儿，可下钻
-- [ ] T8-2 首屏不画 >N 张卡片（阈值可配）；孤儿与停滞必现
+- [x] T8-1 按子树折叠、只显异常/争议/停滞/孤儿，可下钻 → `internal/agentbus/observe.go`：`Observe` 折叠 board+queue+hearing →
+      `Briefing`（**只给出事的子树画卡片**，健康的只计数）；`Signal` 带下钻地址（subtree/node/kind/detail）；规则见 §13.5
+- [x] T8-2 首屏不画 >N 张卡片（阈值可配）；孤儿与停滞必现 → `ObserveLimits{MaxCards, MaxSignals}`（默认 12/40）；
+      `SignalKind.Mandatory()`（orphan/stalled）**不受上限影响**，被裁的计入 `Hidden`，卡片超限计入 `HiddenCards`；
+      用例 `TestObserveAlwaysShowsOrphansAndStalls`（上限 1 时孤儿与两处停滞全在，多余争议被裁并计数）
+- [ ] T8-3 **面板接线**（下一刀）：桌面侧消费 `Briefing`（Virtuoso 卡片 + 下钻），事件族随 S6 一起定
 
 ## T9 S7 e2e + 无人值守贯通 + 百级压测
 
