@@ -23,7 +23,8 @@
 - [x] T2-1 视图/摘要规格 → 已定，见 `docs/agents/AGENT_BUS.md` **§13.1**（谁生成 / 三种投影 / 行字段集 / ≤8 KiB 且 ≤200 行 / 游标增量不重发 / 超限取前 K 且计数可见 / 头部字节不变）
 - [x] T2-2 「就绪」事件发起者 → 已定，见 **§13.2**（主路径 = 让依赖变 `done` 的写入者在同一事务内发；兜底 = 宿主每 tick 扫描幂等；每参与者每 tick 最多一条唤醒）
 - [ ] T2-3 预算与既有旋钮对齐：`GoalTokenBudget`（`internal/config/config.go:1301`）/ spend budget / `REASONIX_SKIP_BUDGET` 谁统谁，超限后 Goal 变 `blocked` 还是 `complete`
-- [ ] T2-4 **并发槽的持久队列落点**：槽满「排队而非失败」需要一个持久队列，而既有 inbox 是**会话级**且嵌套 fail-fast —— 定死后再做 S5
+- [x] T2-4 **并发槽的持久队列落点** → 已定：队列落 `<board>/queue.jsonl`（与 board/messages/hearings 同层，复用 `internal/agentbus/jsonl` + `filelock`），
+      槽位为**本机 host 级**、队列为**板级**；领取复用 S1 租约语义，不新增并发原语。见 `docs/agents/AGENT_BUS.md` §13.4
 - [ ] T2-5 **能力的授权链**：缺能力派生「获取能力」子节点时，谁批装依赖/改仓库（`CapabilityGrant` 交集 vs 新授权）
 
 ## T3 S1 黑板内核 — **已完成**（`internal/agentbus/board`：6 源文件 + 6 测试文件；提交 `1b40a2f1d`）
@@ -101,10 +102,15 @@
 
 ## T7 S5 集群调度与预算
 
-- [ ] T7-1 **本机 host 级**并发槽 + 排队（槽满排队而非失败；跨机不在 v1）
-- [ ] T7-2 四级预算（board → 子树 → 节点 → 回合）+ 触顶即暂停、现场保留
-- [ ] T7-3 调度四则：关键路径优先 / 批量领取 / 同子树亲和 / 最难优先
-- [ ] T7-4 预算只被验收节点消耗（做工不消耗总预算）
+- [ ] T7-1 **本机 host 级**并发槽 + 排队（槽满排队而非失败；跨机不在 v1）→ **规格已定**（§13.4：队列 = `<board>/queue.jsonl`，
+      槽位 = 本机 host 级）；**实现留 S5 第二刀**（入队/领取/槽位计数）
+- [x] T7-2 四级预算（board → 子树 → 节点 → 回合）+ 触顶即暂停、现场保留 → `internal/agentbus/budget.go`：`Charge` 走 node+turn、
+      `Settle` 走 board+subtree；拒绝**命名到具体层级**（`budget_board`/`budget_subtree`/`budget_node`/`budget_turn`）且不改账；
+      `Remaining` 取最紧一级；拒绝语义 = "现在不行"（停手保留现场，不做放弃路径）
+- [ ] T7-3 调度四则：关键路径优先 / 批量领取 / 同子树亲和 / 最难优先 → 留（排序建议，不改变 FIFO 可见性）
+- [x] T7-4 预算只被验收节点消耗（做工不消耗总预算）→ `TestWorkDoesNotSpendTheBoardAllowance`（20 次做工后板级 spend = 0）；
+      `Settle` 只认 `Outcome == done`（否则 `not_accepted`），且同一节点重复结算**不重复计费**（`Charge.Duplicate`）；
+      `SubtreeRoot` 由依赖向上走派生子树归属（`TestSubtreeRootWalksDependenciesUp`）
 
 ## T8 S6 观测聚合（人读）
 
