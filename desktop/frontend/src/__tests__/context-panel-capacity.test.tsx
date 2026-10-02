@@ -48,6 +48,8 @@ function installDom() {
   globalThis.Node = dom.window.Node;
   globalThis.HTMLElement = dom.window.HTMLElement;
   globalThis.Event = dom.window.Event;
+  // Node's own navigator.language is the HOST locale; install jsdom's for determinism.
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
   globalThis.ResizeObserver = TestResizeObserver;
   return dom;
 }

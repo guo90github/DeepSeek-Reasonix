@@ -52,6 +52,8 @@ function installDom() {
   globalThis.MouseEvent = dom.window.MouseEvent;
   globalThis.requestAnimationFrame = dom.window.requestAnimationFrame.bind(dom.window);
   globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame.bind(dom.window);
+  // Node's own navigator.language is the HOST locale; install jsdom's for determinism.
+  Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
   globalThis.ResizeObserver = TestResizeObserver;
   Object.defineProperty(window, "matchMedia", {
     configurable: true,

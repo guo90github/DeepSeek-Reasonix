@@ -14,6 +14,8 @@ import { useActivityBarStore } from "../store/activityBar";
 
 const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost", pretendToBeVisual: true });
 class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
+// Node's own navigator.language is the HOST locale; install jsdom's for determinism.
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage,
   IS_REACT_ACT_ENVIRONMENT: true, ResizeObserver: TestResizeObserver });
 (dom.window as unknown as { ResizeObserver: unknown }).ResizeObserver = TestResizeObserver;

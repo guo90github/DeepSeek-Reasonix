@@ -44,6 +44,8 @@ poll.setJob(job); poll.setJob(null); await flush();
 assert.equal(pending.length, 3, "hide before dispatch cancels queued work");
 
 const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost/", pretendToBeVisual: true });
+// Node's own navigator.language is the HOST locale; install jsdom's for determinism.
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
 Object.assign(globalThis, {
   window: dom.window, document: dom.window.document, Node: dom.window.Node,
   localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true,

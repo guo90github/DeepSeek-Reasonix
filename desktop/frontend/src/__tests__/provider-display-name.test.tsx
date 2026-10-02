@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import {LocaleProvider} from '../lib/i18n';
 import type {ProviderView} from '../lib/types';
 const dom=new JSDOM('<div id="root"></div>',{url:'http://localhost',pretendToBeVisual:true});
+// Node's own navigator.language is the HOST locale; install jsdom's for determinism.
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
 Object.assign(globalThis,{window:dom.window,document:dom.window.document,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true});
 const {createRoot}=await import('react-dom/client');
 const {ProviderEditor,providerAccessGroups}=await import('../components/SettingsPanel');

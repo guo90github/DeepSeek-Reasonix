@@ -12,6 +12,8 @@ import { LocaleProvider, useT } from "../lib/i18n";
 import { ToastProvider } from "../lib/toast";
 
 const dom = new JSDOM("<div id='root'></div>", { url: "http://localhost" });
+// Node's own navigator.language is the HOST locale; install jsdom's for determinism.
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
 Object.assign(globalThis, { window: dom.window, document: dom.window.document, localStorage: dom.window.localStorage,
   KeyboardEvent: dom.window.KeyboardEvent, IS_REACT_ACT_ENVIRONMENT: true });
 const root = createRoot(document.getElementById("root")!);
