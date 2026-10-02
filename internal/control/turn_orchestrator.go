@@ -557,6 +557,12 @@ func goalPauseFromRunError(err error) (cause, reason string, ok bool) {
 		if reason == "" {
 			reason = "the Goal reached its spend budget"
 		}
+		// The pause names the axis it crossed. Reporting every budget stop as spend
+		// would hide a token stop behind the wrong name, which is how the token axis
+		// came to look dead while it was actually firing.
+		if strings.TrimSpace(info.Key) == budgetAxisToken {
+			return stopCauseBudgetTokens, reason, true
+		}
 		return stopCauseBudgetSpend, reason, true
 	}
 	return "", "", false
