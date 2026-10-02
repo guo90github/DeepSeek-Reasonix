@@ -628,6 +628,12 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 - **唤醒失败释放 key**，下一个 tick 重试，不静默吞掉。
 - **路由是宿主的责任**：内核只决定"谁、为什么"；`SetAgentBusWaker` 由宿主安装（同进程兄弟会话的 inbox、别的 tab、别的机器），未安装 = 谁都不唤醒（安全默认），宿主自己的 tick 扫描仍是兜底。
 - **待补（真缺口）**：让 `require` / `assert` / `split` 在节点上记录 `Requester`，唤醒即可回到折出状态、不再读 op 日志；届时 §13.2 的"所属子树"规则可以按 `Requester` 直接派生。
+- **待补（第二个真缺口，2026-10-02 接 T5-4 时发现）**：**唤醒目标没有地址**。`WakeTarget` 只有 `Participant`，没有 host、也没有 session path；
+  而跨进程投递必须**寻址**——serve 的 `/inbox/items` 若不带 session header 就落进该宿主**前台**（它自己会为此告警），
+  带错地址则被 `target_unreachable` 拒。也就是说"带令牌投递给持有者"在当前数据结构下**不可能**：
+  桌面能在本进程按 `AgentBusParticipant()` 找到 tab，但**没有任何一张表回答"这个 participant 在哪个宿主、哪个 session"**。
+  **最小可行修法（下一刀）**：板级 `participants.json`（participant → host base URL + session path + 令牌文件引用），
+  由各宿主在自己入列时写入、可用板锁与 `jsonl` 同族机制维护；届时 `routeAgentBusWake` 的"找不到本进程即报错"改为查表后带令牌投递。
 
 ### 13.4 并发槽与队列落点（T2-4 定案，2026-10-02）
 

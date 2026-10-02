@@ -80,6 +80,10 @@
       `remote_app.go` …），**不是** `internal/agentd`——实测 `grep -n "agentd\." desktop/*.go` 为空，桌面并不用 agentd 的 `Record`/`TokenFile`。
       **下一刀**：从 `remote_*` 面取 base URL 与凭证（+ 会话路径寻址），把 `routeAgentBusWake` 的"本进程找不到即报错"改成"带令牌投递"，
       再做**两进程**验收（唤醒真的穿过进程边界）
+      **⚠️ 按原设想接不上（2026-10-02 核对后发现）**：`WakeTarget` 只有 `Participant`，**没有 host、也没有 session path**，
+      而跨进程投递必须寻址（serve 不带 session header 就落前台并告警，带错则 `target_unreachable`）⇒
+      **先补一层"参与者目录"**（板级 `participants.json`：participant → host base URL + session path + 令牌引用，由各宿主入列时写入），
+      再改 `routeAgentBusWake` 查表投递。详见 `AGENT_BUS.md` §13.3 的第二个缺口条目
       **跨进程带令牌未做**（属宿主/传输层：随 T5-5 的宿主路由一起接）
 - [x] T5-5 就绪即事件唤醒（`interval` 只兜底）→ 内核侧已落：`internal/agentbus/wake.go`（`WakeTargets` 从 op 日志 + 话题面派生目标，
       key 由工作集合派生 ⇒ 每 tick 幂等）+ `internal/control/agentbus_wake.go`（`SetAgentBusWaker` 宿主路由、不唤醒自己、失败释放 key 重试）
