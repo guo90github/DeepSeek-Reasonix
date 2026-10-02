@@ -319,9 +319,21 @@ func cliProfileBuildOptions(modelName string, maxStepsOverride int, requireKey b
 		Ablation:             overrides.Ablation,
 		SessionTemp:          overrides.SessionTemp,
 		MCPProcessEnv:        overrides.MCPProcessEnv,
+		AgentBusDir:          agentBusEnv("REASONIX_AGENTBUS_DIR"),
+		AgentBusID:           agentBusEnv("REASONIX_AGENTBUS_ID"),
+		AgentBusHost:         agentBusEnv("REASONIX_AGENTBUS_HOST"),
+		AgentBusTokenFile:    agentBusEnv("REASONIX_AGENTBUS_TOKEN_FILE"),
 	}
 	opts.MCPHostProfile = plugin.HostProfileForInteractive(overrides.InteractiveHost)
 	return opts
+}
+
+// agentBusEnv is the headless enrolment seam: any Reasonix process can join a board by
+// environment, which is what makes a plain `serve` a real participant other hosts can
+// wake. A host with no endpoint leaves REASONIX_AGENTBUS_HOST empty and is then a wake
+// sender only. Empty values mean "not enrolled", the same as an unset option.
+func agentBusEnv(name string) string {
+	return strings.TrimSpace(os.Getenv(name))
 }
 
 type cliPermissionMode struct {

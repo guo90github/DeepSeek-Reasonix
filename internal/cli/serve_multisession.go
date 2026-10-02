@@ -3,11 +3,13 @@ package cli
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 
 	"reasonix/internal/boot"
 	"reasonix/internal/config"
 	"reasonix/internal/control"
+	"reasonix/internal/i18n"
 	"reasonix/internal/remote/bootstrap"
 	"reasonix/internal/serve"
 )
@@ -51,9 +53,22 @@ func setupCLIMultiSessionProfile(ctx context.Context, model string, maxSteps int
 
 func newCLIMultiSessionServer(ctrl *control.Controller, bc *serve.Broadcaster, tag *serve.SessionTagSink, cfg config.ServeConfig, leases *control.SessionLeaseKeeper, buildOpts boot.Options) *serve.Server {
 	tag.SetPath(ctrl.SessionPath())
+	announceAgentBusSession(ctrl, buildOpts)
 	srv := serve.New(ctrl, bc, cfg)
 	srv.SetControllerBuildOptions(buildOpts)
 	srv.RegisterSessionTag(ctrl, tag)
 	_ = srv.SetSessionLeases(leases)
 	return srv
+}
+
+// announceAgentBusSession republishes this session's address now that serve has bound a
+// path: the boot-time announcement lands before that path exists, and an addressed wake
+// is better than one that has to fall back to the host's foreground session.
+func announceAgentBusSession(ctrl *control.Controller, opts boot.Options) {
+	if opts.AgentBusDir == "" || opts.AgentBusHost == "" {
+		return
+	}
+	if err := ctrl.AgentBusAnnounce(opts.AgentBusHost, opts.AgentBusTokenFile); err != nil {
+		fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, "agentbus announce:", err)
+	}
 }

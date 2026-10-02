@@ -68,6 +68,43 @@ func (c *Controller) AgentBusEnrolled() bool {
 	return c.agentBus != nil
 }
 
+// AgentBusAnnounce publishes where this session speaks from, so another host can wake
+// it. A host that serves its own sessions passes its base URL and token file; a host
+// with no endpoint (the desktop before it runs a serve) leaves it unannounced, and a
+// wake addressed here is then refused rather than dropped silently.
+func (c *Controller) AgentBusAnnounce(host, tokenFile string) error {
+	state, err := c.agentBusForTalk()
+	if err != nil {
+		return err
+	}
+	directory, err := agentbus.OpenParticipantDirectory(state.dir)
+	if err != nil {
+		return err
+	}
+	_, err = directory.Announce(context.Background(), agentbus.ParticipantRef{
+		Participant: state.participantID(c),
+		Host:        strings.TrimSpace(host),
+		SessionPath: c.SessionPath(),
+		TokenFile:   strings.TrimSpace(tokenFile),
+		At:          time.Now().UTC(),
+	})
+	return err
+}
+
+// AgentBusWithdraw retires this session's address: a session that left the board must
+// not keep being woken somewhere it no longer is.
+func (c *Controller) AgentBusWithdraw() error {
+	state, err := c.agentBusForTalk()
+	if err != nil {
+		return err
+	}
+	directory, err := agentbus.OpenParticipantDirectory(state.dir)
+	if err != nil {
+		return err
+	}
+	return directory.Withdraw(context.Background(), state.participantID(c))
+}
+
 // AgentBusView peeks at this participant's view without advancing the cursor.
 // Frontends and diagnostics read it; the turn path consumes deltas instead.
 func (c *Controller) AgentBusView(now time.Time) (agentbus.View, bool) {

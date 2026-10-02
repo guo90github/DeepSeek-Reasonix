@@ -154,6 +154,11 @@ type Options struct {
 	// back to the session branch id). Empty AgentBusDir means not enrolled.
 	AgentBusDir string
 	AgentBusID  string
+	// AgentBusHost and AgentBusTokenFile are where this host's sessions speak from
+	// (base URL plus the token file a caller reads to wake them). Announced to the
+	// board on enrolment; empty means this host can send wakes but not receive them.
+	AgentBusHost      string
+	AgentBusTokenFile string
 	// SharedHost is an optional plugin.Host shared across controllers for the
 	// same workspace root. When set, boot.Build reuses its running clients
 	// instead of creating new subprocesses, and the caller manages the host's
@@ -1939,6 +1944,14 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	ctrl := control.New(ctrlOpts)
 	if opts.AgentBusDir != "" {
 		ctrl.SetAgentBus(opts.AgentBusDir, opts.AgentBusID)
+		// A host that serves its own sessions tells the board where they speak from, so
+		// another host can wake them. The desktop passes nothing here (it serves no
+		// session endpoint yet) and is then a wake sender only.
+		if opts.AgentBusHost != "" {
+			if err := ctrl.AgentBusAnnounce(opts.AgentBusHost, opts.AgentBusTokenFile); err != nil {
+				slog.Warn("boot: agentbus announce", "err", err)
+			}
+		}
 	}
 	bindRecapLane(context.Background(), cfg, ctrl, sink, effectiveResolver, proxySpec)
 	// Bind a private host's children to the controller that owns them: one

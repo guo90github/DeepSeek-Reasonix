@@ -2,11 +2,13 @@ package control
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"reasonix/internal/agentbus"
 	"reasonix/internal/agentbus/board"
 	"reasonix/internal/event"
 )
@@ -156,5 +158,51 @@ func TestAgentBusUnwiredWriteFails(t *testing.T) {
 	}
 	if _, ok := c.AgentBusTasks(time.Now().UTC()); ok {
 		t.Fatal("an unenrolled controller has no human rows")
+	}
+}
+
+// A host that serves its own sessions publishes where they speak from, and a session
+// that leaves stops being an address others keep waking.
+func TestAgentBusAnnouncePublishesAndWithdrawsThisHostsAddress(t *testing.T) {
+	c := newAgentBusTestController(t)
+	dir := t.TempDir()
+	tokenFile := filepath.Join(t.TempDir(), "serve.token")
+	if err := os.WriteFile(tokenFile, []byte("secret"), 0o600); err != nil {
+		t.Fatalf("token file: %v", err)
+	}
+	c.SetAgentBus(dir, "alice")
+
+	if err := c.AgentBusAnnounce("http://127.0.0.1:8977", tokenFile); err != nil {
+		t.Fatalf("announce: %v", err)
+	}
+	directory, err := agentbus.OpenParticipantDirectory(dir)
+	if err != nil {
+		t.Fatalf("open directory: %v", err)
+	}
+	ref, ok, err := directory.Lookup("alice")
+	if err != nil || !ok {
+		t.Fatalf("lookup = (%+v, %v, %v), want the announced address", ref, ok, err)
+	}
+	if ref.Host != "http://127.0.0.1:8977" || ref.TokenFile != tokenFile || ref.SessionPath != c.SessionPath() {
+		t.Fatalf("ref = %+v, want this host's endpoint and session", ref)
+	}
+
+	if err := c.AgentBusWithdraw(); err != nil {
+		t.Fatalf("withdraw: %v", err)
+	}
+	if _, ok, err := directory.Lookup("alice"); err != nil || ok {
+		t.Fatalf("lookup after withdraw = (%v, %v), want the address gone", ok, err)
+	}
+}
+
+// An unenrolled controller has no address to publish: announcing must say so instead of
+// writing an address for a board this session is not on.
+func TestAgentBusAnnounceNeedsABoard(t *testing.T) {
+	c := newAgentBusTestController(t)
+	if err := c.AgentBusAnnounce("http://127.0.0.1:1", ""); err == nil {
+		t.Fatal("an unenrolled controller must refuse to announce")
+	}
+	if err := c.AgentBusWithdraw(); err == nil {
+		t.Fatal("an unenrolled controller has nothing to withdraw")
 	}
 }
