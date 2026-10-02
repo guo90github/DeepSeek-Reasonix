@@ -801,3 +801,16 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 - **尚未读清的一跳** ✗：`GoalTokenBudget` 目前只到 `control.Options`（`controller.go` 的 `goalTokenBudget`），
   而 `taskBudgetLimit` 在 `internal/agent` ⇒ 需要确认 **Agent 是否已经能看到该值**（若不能，就得补一跳 control → agent 的装配），
   以及 `TaskBudget` 是否已有 token 字段。**这两点必须先读清再改**，不要凭"应该能拿到"动手。
+
+**两点读清（2026-10-02）：token 轴其实是"死的"，但只死在**没有人填上限**这一处** —— 工作量因此缩到最小：
+
+| 读到的 | 结论 |
+|---|---|
+| `internal/agent/run_budget.go` 的 `TaskBudget{Cost, Wall, Tokens}` | **token 字段早就存在**，且 `normalizeTaskBudget` 会把它归一（负值 = 不设）⇒ 与其它轴的语义规则一致 ✓ |
+| 同文件的 `promptTokens` / `outputTokens` 与每回合累加 | **token 用量也一直在记**（`b.promptTokens += usage.PromptTokens` …）✓ |
+| `grep -rn "GoalTokenBudget" internal/agent/` | **零命中** ⇒ agent 侧**看不到这个配置**，`taskBudgetLimit` 从不填 `Tokens` ⇒ 轴因此永远不触发 |
+
+⇒ **token 复活的最小实现** = ① 补一跳装配（`Boot`/`control.Options` → agent 的预算配置）把 `GoalTokenBudget` 送到 agent；
+② `taskBudgetLimit` 把 `TaskBudget.Tokens` 填上（0/负 = 不设 ⇒ 关配置时行为不变 ✓）；③ 用例照
+`task_budget_gate_test.go` 的"cost/time/未配置"三态补 `tokens` 那一态，再补 control 侧按 axis 分派 `budget_spend` / `budget_tokens`。
+**仍待确认**（下一刀第一件事）：`exceeded` 是否已经处理 `Tokens` 分支（该函数体本轮未读到 ✗）——若是，则实现只剩上述 ① ②。
