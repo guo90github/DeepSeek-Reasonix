@@ -50,11 +50,14 @@ type AbandonRequest struct {
 
 // Node is one unit of work as the folded log sees it.
 type Node struct {
-	ID           string          `json:"id"`
-	Title        string          `json:"title,omitempty"`
-	State        NodeState       `json:"state"`
-	Deps         []string        `json:"deps,omitempty"`
-	Owner        string          `json:"owner,omitempty"`
+	ID    string    `json:"id"`
+	Title string    `json:"title,omitempty"`
+	State NodeState `json:"state"`
+	Deps  []string  `json:"deps,omitempty"`
+	Owner string    `json:"owner,omitempty"`
+	// Requesters are the participants that asked for this node: whichever assert, split
+	// or require created it, plus every later require that named it as a dependency.
+	Requesters   []string        `json:"requesters,omitempty"`
 	Deadline     time.Time       `json:"deadline,omitzero"`
 	Bounds       *Bounds         `json:"bounds,omitempty"`
 	Asserts      []Assertion     `json:"asserts,omitempty"`
@@ -64,6 +67,21 @@ type Node struct {
 	OutcomeActor string          `json:"outcomeActor,omitempty"`
 	NoProgress   int             `json:"noProgress,omitempty"`
 	LastSeq      uint64          `json:"lastSeq"`
+}
+
+// noteRequester records that a participant asked for this node: once per participant, in
+// the order they asked. Who asked is otherwise only in the op trail, where a reader that
+// holds just the fold cannot find it (AGENT_BUS §13.2).
+func noteRequester(n *Node, actor string) {
+	if n == nil || strings.TrimSpace(actor) == "" {
+		return
+	}
+	for _, existing := range n.Requesters {
+		if existing == actor {
+			return
+		}
+	}
+	n.Requesters = append(n.Requesters, actor)
 }
 
 // Ready reports the derived readiness predicate: the node may start once every
@@ -280,6 +298,7 @@ func applyAssert(st *State, op Op) error {
 	n.Asserts = append(n.Asserts, Assertion{
 		Actor: op.Actor, At: op.At, Seq: op.Seq, Evidence: op.Evidence, Summary: op.Reason,
 	})
+	noteRequester(n, op.Actor)
 	if len(n.Refutes) > 0 {
 		n.State = StateContested
 	}
@@ -380,6 +399,7 @@ func applySplit(st *State, op Op) error {
 		created := st.nodeOrCreate(child.ID)
 		created.Title = child.Title
 		created.LastSeq = op.Seq
+		noteRequester(created, op.Actor)
 		n.Deps = append(n.Deps, child.ID)
 	}
 	n.State = StateBlocked
@@ -415,6 +435,7 @@ func applyRequire(st *State, op Op) error {
 		created.Title = op.Dep.Title
 		created.LastSeq = op.Seq
 	}
+	noteRequester(st.Nodes[depID], op.Actor)
 	n.Deps = append(n.Deps, depID)
 	n.State = StateBlocked
 	n.LastSeq = op.Seq

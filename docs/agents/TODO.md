@@ -104,8 +104,17 @@
       + 写路径发起（`ApplyAgentBusOp` 非 replay 时唤醒）。**宿主侧路由未接**，但缝已定死：桌面 `tabs map[string]*WorkspaceTab` + `tab.Ctrl`，
       路由 = 找到 `Ctrl.AgentBusParticipant() == target.Participant` 的那个 tab，再 `TryEnqueueFollowup(control.InboxRequest{Submit:…, Source: "agentbus",
       Idempotency: target.Key})`（`TryEnqueueFollowup` 在会话空闲时会触发派发 ⇒ 唤醒真的会起回合）；`AgentBusParticipant()` 本轮已可从内核读出
-- [ ] T5-6 **节点记录 `Requester`**（`require`/`assert`/`split` 写入），使"谁要这个节点"回到折出状态——目前只能从 op 轨迹派生，
+- [x] T5-6 **节点记录 `Requester`**（`require`/`assert`/`split` 写入），使"谁要这个节点"回到折出状态——目前只能从 op 轨迹派生，
       见 `docs/agents/AGENT_BUS.md` §13.3 的缺口说明
+      → **已落地（2026-10-02）**：`board.Node.Requesters []string`（去重、按"谁先问"的顺序），由**创建该节点的那个 op** 写入——
+      `assert` 写在被断言的节点上、`split` 写在每个新建子节点上、`require` 写在**它要的那个依赖**上（即"谁要这个节点"，与
+      `WakeTargets` 读 op 的 `(op.Actor, op.Dep.ID)` 对一一对应 ✓）。**它其实纯派生**：折叠时从 op 的 `Actor` 得到 ⇒
+      盘上 op 日志 schema **没有任何变化**，旧日志折出来同样有值 ✓（也因此 `Clone` 必须深拷贝这个新切片 —— 已补，并有用例守门 ✓）。
+      用例：`board/requester_test.go` 4 条（创建者入列、同一人问两次只记一次且保序、真实板上每个节点都有 requester、
+      **克隆不共享该切片**）+ `requester_e2e_test.go` 2 条（**"谁要这个节点"可从折出状态回答**：op 轨迹派生的每个唤醒目标，
+      都必须能在折叠态的 `Requesters` 里找到 ✓，并验证折叠态还多知道"创建者"这一层 ✓；重开文件后折叠结果与顺序一致 ✓）。
+      **仍未做（下一刀）**：让唤醒面**不再读 op**（`WakeInput.Ops` 目前仍用于 `board.Fold(in.Ops)` 与 require 扫描 ✓ ⇒ 改成扫
+      折叠态的 `Requesters` + `Deps` 即可，`Waiting` 可由反向边扫描得出）—— 本轮的等价性用例正是为它准备的安全网 ✓。
 
 ## T6 S4 审议与裁决
 

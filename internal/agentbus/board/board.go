@@ -229,6 +229,7 @@ func (st *State) Clone() *State {
 		}
 		clone := *n
 		clone.Deps = append([]string(nil), n.Deps...)
+		clone.Requesters = append([]string(nil), n.Requesters...)
 		clone.Asserts = append([]Assertion(nil), n.Asserts...)
 		clone.Refutes = append([]Refutation(nil), n.Refutes...)
 		if n.Bounds != nil {

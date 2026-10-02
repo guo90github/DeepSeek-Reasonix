@@ -627,7 +627,11 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 - **唤醒 key 由工作集合派生**（sha256，不含时间）⇒ 宿主每个 tick 都可以重跑而**幂等**；只有工作集合变化才再唤醒一次。
 - **唤醒失败释放 key**，下一个 tick 重试，不静默吞掉。
 - **路由是宿主的责任**：内核只决定"谁、为什么"；`SetAgentBusWaker` 由宿主安装（同进程兄弟会话的 inbox、别的 tab、别的机器），未安装 = 谁都不唤醒（安全默认），宿主自己的 tick 扫描仍是兜底。
-- **待补（真缺口）**：让 `require` / `assert` / `split` 在节点上记录 `Requester`，唤醒即可回到折出状态、不再读 op 日志；届时 §13.2 的"所属子树"规则可以按 `Requester` 直接派生。
+- **已补（2026-10-02，T5-6）**：`require` / `assert` / `split` 现在都在**它们创建的那个节点**上记录 `Requester`
+  （`board.Node.Requesters []string`，去重且保序）⇒ "谁要这个节点"**回到折出状态** ✓，不再只能从 op 轨迹派生。
+  它是**纯派生**的（折叠时读 op 的 `Actor`）⇒ 盘上 schema 不变、旧日志折出来同样有值 ✓。**唤醒面本身仍读 op**（`WakeInput.Ops`
+  既用于 `Fold` 也用于 require 扫描）⇒ 改成扫折叠态是**下一刀**，等价性已由 `internal/agentbus/requester_e2e_test.go` 守门 ✓。
+  届时 §13.2 的"所属子树"规则可以按 `Requester` 直接派生。
 - **待补（第二个真缺口，2026-10-02 接 T5-4 时发现）**：**唤醒目标没有地址**。`WakeTarget` 只有 `Participant`，没有 host、也没有 session path；
   而跨进程投递必须**寻址**——serve 的 `/inbox/items` 若不带 session header 就落进该宿主**前台**（它自己会为此告警），
   带错地址则被 `target_unreachable` 拒。也就是说"带令牌投递给持有者"在当前数据结构下**不可能**：
