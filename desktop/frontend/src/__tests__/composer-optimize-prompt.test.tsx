@@ -90,19 +90,61 @@ function installDom() {
   return dom;
 }
 
-function installBridgeApp(methods: Record<string, unknown>) {
-  (window as unknown as { go: { main: { App: Record<string, unknown> } } }).go = {
-    go: undefined,
-    main: {
-      App: {
-        Commands: async () => [],
-        Models: async () => [],
-        ModelsForTab: async () => [],
-        ...methods,
-      },
-    },
-  } as never;
+// The desktop host is the Electron channel now: bridge.app resolves a method only
+// when contract.commands lists it (lib/desktopHost.ts), so the stubs must be
+// declared there. A Wails window.go assignment no longer reaches app.<method>, and
+// the dev mock then answers instead — including its own OptimizePrompt stream.
+const hostListeners = new Map<string, Set<(...args: unknown[]) => void>>();
+
+function registerHostListener(event: string, handler: (...args: unknown[]) => void): () => void {
+  const set = hostListeners.get(event) ?? new Set<(...args: unknown[]) => void>();
+  set.add(handler);
+  hostListeners.set(event, set);
+  return () => { set.delete(handler); };
 }
+
+function emitHostEvent(event: string, ...args: unknown[]): void {
+  for (const handler of hostListeners.get(event) ?? []) handler(...args);
+}
+
+function installBridgeApp(methods: Record<string, unknown>) {
+  const app: Record<string, unknown> = {
+    Commands: async () => [],
+    Models: async () => [],
+    ModelsForTab: async () => [],
+    ...methods,
+  };
+  (window as unknown as { reasonixDesktop: unknown }).reasonixDesktop = {
+    kind: "electron",
+    contract: { protocolVersion: 1, digest: "test", commands: Object.keys(app) },
+    platform: { os: "darwin", arch: "arm64", versions: {} },
+    invoke: async (method: string, args: unknown[]) => {
+      const fn = app[method] as ((...a: unknown[]) => unknown) | undefined;
+      return fn ? await fn(...(args ?? [])) : undefined;
+    },
+    on: registerHostListener,
+    native: {
+      openExternal: async () => {},
+      clipboard: { writeText: async () => true, readText: async () => "" },
+      window: {
+        setTheme() {},
+        setBackgroundColour() {},
+        getBounds: async () => ({ x: 0, y: 0, width: 0, height: 0, maximised: false }),
+        isMaximised: async () => false,
+        minimise() {},
+        toggleMaximise() {},
+        close() {},
+      },
+      getPathForFile: () => "",
+      onServiceState: () => () => {},
+    },
+  };
+}
+
+let composerRoot: Root | null = null;
+// Each renderComposer call must start from a fresh component instance; the key
+// remounts the subtree inside the single reused root.
+let mountSeq = 0;
 
 async function renderComposer(props: Partial<Parameters<typeof Composer>[0]> = {}) {
   const rootEl = document.getElementById("root");
@@ -113,7 +155,10 @@ async function renderComposer(props: Partial<Parameters<typeof Composer>[0]> = {
   // fires. Dynamic import after installDom matches the repo's working
   // portal-input tests (blank-project-dialog.test.tsx).
   const { createRoot } = await import("react-dom/client");
-  const root: Root = createRoot(rootEl);
+  // One root per container: calling createRoot again on #root leaves the previous
+  // tree alive, and its async updates (the optimize stream) then paint into the
+  // new tree's DOM — the cross-talk this suite's stream assertions were seeing.
+  const root: Root = composerRoot ?? (composerRoot = createRoot(rootEl));
   const currentProps: Parameters<typeof Composer>[0] = {
     running: false,
     collaborationMode: "normal",
@@ -142,7 +187,7 @@ async function renderComposer(props: Partial<Parameters<typeof Composer>[0]> = {
       <LocaleProvider>
         <ToastProvider>
           <div className="chat-pane">
-            <Composer {...currentProps} />
+            <Composer key={++mountSeq} {...currentProps} />
           </div>
         </ToastProvider>
       </LocaleProvider>,
@@ -219,6 +264,9 @@ const TEST_TAB_ID = "optimize-tab";
 async function emitChunk(chunk: string) {
   await act(async () => {
     __emitMockOptimizePromptChunk(TEST_TAB_ID, chunk);
+    // With a host installed the bridge subscribes through its event channel and
+    // never touches the mock listener set, so drive both here.
+    emitHostEvent("prompt-optimize:chunk", TEST_TAB_ID, chunk);
     // The composer coalesces stream deltas per animation frame (createRafBatch,
     // like the turn stream), so wait one frame for the batch to flush.
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
@@ -229,6 +277,7 @@ async function emitChunk(chunk: string) {
 async function emitDone() {
   await act(async () => {
     __emitMockOptimizePromptDone(TEST_TAB_ID);
+    emitHostEvent("prompt-optimize:done", TEST_TAB_ID);
     await flushTimers();
   });
 }
@@ -383,6 +432,7 @@ async function main() {
     // into later blocks or keep the process alive.
     await act(async () => {
       root.unmount();
+      composerRoot = null; // the shared root is gone; the next render re-creates it
     });
   }
 
