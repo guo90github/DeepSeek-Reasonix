@@ -56,9 +56,9 @@ func TestObserveAlwaysShowsOrphansAndStalls(t *testing.T) {
 	stalled.Deadline = talkBase.Add(-time.Minute)
 	stuck := obsNode("stuck", board.StateOpen)
 	stuck.NoProgress = 2
-	disputed := obsNode("disputed", board.StateOpen)
+	disputed := obsNode("disputed", board.StateContested)
 	disputed.Refutes = []board.Refutation{{Actor: "alice"}}
-	contested := obsNode("contested", board.StateOpen)
+	contested := obsNode("contested", board.StateContested)
 	contested.Refutes = []board.Refutation{{Actor: "bob"}}
 
 	digest := Observe(obsState(orphan, stalled, stuck, disputed, contested), nil, nil, talkBase, ObserveLimits{MaxSignals: 1})
@@ -91,8 +91,10 @@ func TestObserveNamesTheReasonForEachSignal(t *testing.T) {
 		{"a lapsed lease", &board.Node{ID: "n", State: board.StateClaimed,
 			Owner: "bob", Deadline: talkBase.Add(-time.Second)}, SignalStalled},
 		{"recorded no progress", &board.Node{ID: "n", State: board.StateOpen, NoProgress: 3}, SignalStalled},
-		{"refuted without a verdict", &board.Node{ID: "n", State: board.StateOpen,
+		{"refuted and not yet ruled on", &board.Node{ID: "n", State: board.StateContested,
 			Refutes: []board.Refutation{{Actor: "alice"}}}, SignalDisputed},
+		{"refuted after it was decided", &board.Node{ID: "n", State: board.StateContested,
+			Outcome: board.OutcomeDone, Refutes: []board.Refutation{{Actor: "alice"}}}, SignalDisputed},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,6 +109,31 @@ func TestObserveNamesTheReasonForEachSignal(t *testing.T) {
 				t.Fatalf("card worst = %q, want %q", digest.Cards[0].Worst, tc.want)
 			}
 		})
+	}
+}
+
+// T8-4: a dispute that arrived *after* the verdict still has to be visible. A refutation
+// puts a finished step back into `contested`, so the state machine knows it even though the
+// node's Outcome still says done — and a hand-made state cannot show that, so this one is
+// folded from real ops.
+func TestObserveReportsADisputeThatArrivedAfterTheVerdict(t *testing.T) {
+	state := testState(t,
+		assertOp("publish", "planner"),
+		claimOp("publish", "worker"),
+		doneOp("publish", "worker", "verifier"),
+		board.Op{
+			Verb: board.VerbRefute, Node: "publish", Actor: "skeptic",
+			Reason: "the test does not cover the migration",
+		},
+	)
+	node := state.Nodes["publish"]
+	if node.State != board.StateContested || node.Outcome != board.OutcomeDone {
+		t.Fatalf("setup: publish = %s/%s, want contested with its old verdict still recorded",
+			node.State, node.Outcome)
+	}
+	digest := Observe(state, nil, nil, talkBase, ObserveLimits{})
+	if got := signalNodes(digest, SignalDisputed); len(got) != 1 || got[0] != "publish" {
+		t.Fatalf("disputes = %v, want the step that was refuted after it finished", got)
 	}
 }
 

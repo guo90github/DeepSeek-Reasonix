@@ -266,11 +266,18 @@
 - [x] **T7-5**（S5）`Sweep` 单次上限 256（按 node id 排序，故无永久饥饿）：把上限与语义写进文档，并在调度侧决定 tick 频率
       → **规则已写进契约**（`AGENT_BUS.md` §11.3：单次上限只约束"一次调用的写入量"，不约束"板能否恢复"——被跳过的过期认领由**下一次调用**按 id 序继续回收 ⇒ 无永久饥饿）；
       实测 `internal/agentbus/board/sweep_cap_test.go`（一次 256 + 一次余量 + 一次 0，全部 owner 清空）
-- [ ] **T8-4**（S6）争议信号的判据**漏一种**：`observe.go` 用 `len(n.Refutes) > 0 && n.Outcome == ""` 认"refutations, no verdict"，
+- [x] **T8-4**（S6）争议信号的判据**漏一种**：`observe.go` 用 `len(n.Refutes) > 0 && n.Outcome == ""` 认"refutations, no verdict"，
       **先 `done` 后被 `refute` 的节点报不出来** ✗ —— `applyRefute` 只改状态、不动 `Outcome` ⇒ 该节点 `Outcome` 仍是 `done`，
       而状态已是 `contested` ⇒ 这场争议在人侧**看不见**（T9-5 的判定改用状态机自己的答案 `StateContested` 才避开这个坑）。
       修法：信号也改判 `State == board.StateContested`，并补一条"done 后被 refute ⇒ 仍要报争议"的用例；
       注意这会让这类节点**新出现**一张卡/一条信号 ⇒ 属用户可见变化，单独一刀并在提交信息里说明。
+      → **已修（2026-10-02）**：判据改为**状态机自己的答案** `State == board.StateContested`（`refute` 是唯一让它成立的动词），
+      并把 detail 的措辞从"no verdict"改成"**awaiting a verdict**"——后者对"先 done 后被 refute"才是准确的说法。
+      用例：表里新增一条 `refuted_after_it_was_decided`（`StateContested` + `Outcome=done` ⇒ 必须报争议），
+      另加一条**真实折叠**的 `TestObserveReportsADisputeThatArrivedAfterTheVerdict`（手工夹具证明不了这个缺陷 ✗，
+      它自己在断言里同时确认"状态 contested 而 Outcome 仍是 done"这个前提 ✓）。
+      **同时修掉两处让缺陷活下来的夹具** ✗：`observe_test.go` 原先把争议节点造成 `StateOpen` + `Refutes`（真实折叠造不出这种组合 ✗）
+      ⇒ 改成 `StateContested`；这正是"单测过、真机/真折叠挂"的典型盲区 ✓。
 
 ## 输入材料（本目录内，非清单项）
 

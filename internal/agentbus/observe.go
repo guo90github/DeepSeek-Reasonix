@@ -171,11 +171,14 @@ func (f *observeFolder) board(now time.Time) {
 			c.Stalled++
 			f.signals = append(f.signals, Signal{Kind: SignalStalled, Subtree: subtree, Node: id, Detail: detail})
 		}
-		if len(n.Refutes) > 0 && n.Outcome == "" {
+		// `contested` is the state machine's own answer to "challenged, not yet ruled on".
+		// Counting refutations against an empty Outcome instead would hide a step refuted
+		// *after* it was decided: its Outcome still says done (T8-4).
+		if n.State == board.StateContested {
 			c.Disputed++
 			f.signals = append(f.signals, Signal{
 				Kind: SignalDisputed, Subtree: subtree, Node: id,
-				Detail: fmt.Sprintf("%d refutations, no verdict", len(n.Refutes)),
+				Detail: fmt.Sprintf("%d refutations, awaiting a verdict", len(n.Refutes)),
 			})
 		}
 	}
