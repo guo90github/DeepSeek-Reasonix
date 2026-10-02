@@ -122,26 +122,30 @@ func shouldResumeUnattendedSession(interrupted, unattended bool, goal string, al
 	return interrupted && unattended && strings.TrimSpace(goal) != "" && !alreadyQueued
 }
 
-// unattendedGoalContract is the Goal the user gave this session, taken from the tab or,
-// when the tab's own copy is empty, from the persisted tab file. A crashed host leaves the
-// goal's status stopped, and the running-goal accessor reports a stopped goal as no goal —
-// which is how an unattended session ended up with nothing to resume (2026-10-03).
+// unattendedGoalContract is the Goal the user gave this session, looked up in the order that
+// survives a crash: the tab's own copy, the persisted tab file, then the contract store — the
+// only one the desktop never rewrites. A stopped goal reports as no goal through the running
+// accessor, which is how an unattended session ended up with nothing to resume (2026-10-03).
 func unattendedGoalContract(tab *WorkspaceTab, sessionPath string) string {
 	if tab != nil {
 		if goal := strings.TrimSpace(tab.goal); goal != "" {
+			rememberUnattendedGoalContract(sessionPath, goal)
 			return goal
 		}
 	}
 	key := sessionRuntimeKey(sessionPath)
-	if key == "" {
-		return ""
-	}
-	for _, entry := range loadTabsFile().Tabs {
-		if sessionRuntimeKey(strings.TrimSpace(entry.SessionPath)) == key {
-			return strings.TrimSpace(entry.Goal)
+	if key != "" {
+		for _, entry := range loadTabsFile().Tabs {
+			if sessionRuntimeKey(strings.TrimSpace(entry.SessionPath)) != key {
+				continue
+			}
+			if goal := strings.TrimSpace(entry.Goal); goal != "" {
+				rememberUnattendedGoalContract(sessionPath, goal)
+				return goal
+			}
 		}
 	}
-	return ""
+	return rememberedUnattendedGoalContract(sessionPath)
 }
 
 // resumeUnattendedSessionAfterAnInterruptedRun queues that turn once per host run per

@@ -572,3 +572,17 @@
 
 用例：`TestUnattendedResumeTextNamesTheContextAndForbidsImprovising`、
 `TestResumeUnattendedSessionQueuesTheContextualBrief`（断言入列条目的 `Preview` 里确实带着契约与"被中断"）。
+
+### 契约必须活在 App 不会重写的地方（dev.113，2026-10-03，真机定位）
+
+**上次修复不够的证据**：dev.112 复验日志里钩子自己说了 —— `unattended resume declined interrupted=true contractLen=0`
+（诊断日志是我为自己加的）。而探针**确实**把契约写回了 `desktop-tabs.json`（写回条目数=1），却在 App 启动后被**再次擦掉**：
+保存走的是 `currentTabGoal(tab)`＝**活控制器的 `Goal()`**，停止状态的控制器报空 ⇒ dev.111 只堵了 `tab.goal` 那条支路，
+这条支路照样把契约写成空（复核：该条目 `goal` 又变回不存在）。
+
+**修复**：新增 `desktop/unattended_contract_store.go` —— `<state home>/unattended-contracts.json`，按会话路径**粘存契约**：
+- 写入时机：① 载入标签时（`app.go` 的 `rememberUnattendedGoalContract(entry.SessionPath, entry.Goal)`，契约还可见的最后一刻）；
+  ② 解析契约命中时（`unattendedGoalContract` 内 seen ⇒ remember）。
+- 解析顺序改为：`tab.goal` → `desktop-tabs.json` 该条目 → **契约粘存**（唯一 App 不会重写的地方）。
+- 用例：`TestUnattendedGoalContractSurvivesTheTabFileErasingIt`、`TestUnattendedGoalContractResolutionRecordsWhatItSees`。
+- 语义：契约只有**明确丢弃**才会消失（清会话），与"总开关是唯一闸门、人干预不改变无人状态"一致。

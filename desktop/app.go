@@ -779,6 +779,9 @@ func (a *App) restoreOrBuildTabs() {
 			// from re-seeding the cleared goal into the rotated session. A
 			// session without a sidecar keeps the persisted goal (legacy).
 			tab.goal = runningTabSessionGoal(strings.TrimSpace(entry.SessionPath), strings.TrimSpace(entry.Goal))
+			// The persisted goal is the last place the contract is still visible before a
+			// save rewrites it from a stopped goal: keep it where no save can reach it.
+			rememberUnattendedGoalContract(entry.SessionPath, entry.Goal)
 			tab.toolApprovalMode = normalizeToolApprovalMode(entry.ToolApprovalMode)
 			if tab.toolApprovalMode == control.ToolApprovalAsk && tabModeHasAutoApproveTools(entry.Mode) {
 				tab.toolApprovalMode = control.ToolApprovalYolo

@@ -170,3 +170,49 @@ func TestResumeUnattendedSessionQueuesTheContextualBrief(t *testing.T) {
 	}
 	t.Fatalf("no %s item in %+v", unattendedResumeSource, snapshot.Items)
 }
+
+// The contract has to outlive the desktop's own tab file, which is rewritten from a stopped
+// goal and therefore erases it on the next save (found on a real machine, 2026-10-03).
+func TestUnattendedGoalContractSurvivesTheTabFileErasingIt(t *testing.T) {
+	_, ctrl, home := agentBusEnrolApp(t)
+	t.Setenv("REASONIX_HOME", home)
+	session := ctrl.SessionPath()
+	rememberUnattendedGoalContract(session, "把 docs 做完")
+
+	if got := rememberedUnattendedGoalContract(session); got != "把 docs 做完" {
+		t.Fatalf("remembered contract = %q, want the contract", got)
+	}
+	// Neither the tab nor the persisted file knows it any more: the store still does.
+	if got := unattendedGoalContract(&WorkspaceTab{}, session); got != "把 docs 做完" {
+		t.Fatalf("contract = %q, want the remembered one", got)
+	}
+	if got := rememberedUnattendedGoalContract(session + "-other"); got != "" {
+		t.Fatalf("contract = %q, want nothing for another session", got)
+	}
+}
+
+// Seeing a contract is what keeps it: resolution has to record it, or the first save after a
+// stop is the last time the desktop ever sees the goal text.
+func TestUnattendedGoalContractResolutionRecordsWhatItSees(t *testing.T) {
+	_, ctrl, home := agentBusEnrolApp(t)
+	t.Setenv("REASONIX_HOME", home)
+	session := ctrl.SessionPath()
+	body, err := json.Marshal(desktopTabsFile{Tabs: []desktopTabEntry{
+		{ID: "tab_x", SessionPath: session, Goal: "把 docs 做完"},
+	}})
+	if err != nil {
+		t.Fatalf("marshal tabs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(home, tabsFileName), body, 0o644); err != nil {
+		t.Fatalf("write tabs: %v", err)
+	}
+	if got := unattendedGoalContract(&WorkspaceTab{}, session); got != "把 docs 做完" {
+		t.Fatalf("contract = %q, want the persisted goal", got)
+	}
+	if err := os.Remove(filepath.Join(home, tabsFileName)); err != nil {
+		t.Fatalf("remove tabs: %v", err)
+	}
+	if got := unattendedGoalContract(&WorkspaceTab{}, session); got != "把 docs 做完" {
+		t.Fatalf("contract = %q, want the goal recorded while it was visible", got)
+	}
+}
