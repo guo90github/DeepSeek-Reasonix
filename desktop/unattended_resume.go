@@ -71,6 +71,28 @@ func (a *App) resumeUnattendedSessionAfterAnInterruptedRun(tab *WorkspaceTab, ct
 		slog.Warn("desktop: queue the unattended resume turn", "err", err, "session", sessionPath)
 		return false
 	}
+	resumeUnattendedGates(ctrl, sessionPath)
 	slog.Info("desktop: unattended session resumed after an interrupted host run", "session", sessionPath)
 	return true
+}
+
+// resumeUnattendedGates takes down the gates a crash leaves behind. After a recovered
+// queue the inbox is paused, and the resume turn would then sit as 待处理引导 until
+// somebody clicks 继续执行 — and nobody is there in an unattended run. The master switch
+// decides whether the session is unattended; a human being present changes nothing.
+func resumeUnattendedGates(ctrl control.SessionAPI, sessionPath string) {
+	guards, ok := ctrl.(heartbeatSessionGuards)
+	if !ok {
+		return
+	}
+	if guards.PlanMode() {
+		guards.SetPlanMode(false)
+	}
+	if guards.InboxSnapshot().Paused {
+		if err := guards.SetInboxPaused(false); err != nil {
+			slog.Warn("desktop: resume the inbox of an unattended session", "err", err, "session", sessionPath)
+			return
+		}
+		slog.Info("desktop: unattended session resumed its paused inbox", "session", sessionPath)
+	}
 }

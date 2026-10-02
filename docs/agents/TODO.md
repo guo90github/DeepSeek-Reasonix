@@ -488,3 +488,9 @@
   排入一条 `继续`，**每宿主运行每会话仅一次**（幂等键含 runID+会话路径）。
   开关判断沿用 `heartbeat.unattendedEnabled()`（含崩溃连击降级），与"总开关是唯一闸门"的语义一致；无 Goal 的会话不注入。
   用例：`desktop/unattended_resume_test.go`（判定表 5 例 + 真机语义那 4 条断言）。
+- **还差的最后一步（本刀，dev.109）**：真机截图显示排入的「继续」**停在"待处理引导"里等确认**（横幅：已恢复 N 条待处理指令 /
+  收件箱已暂停 / 按钮「继续执行」「保持暂停」）⇒ 崩溃恢复**故意把收件箱暂停**是安全门，但无人值守时没人去点它。
+  落地：`desktop/unattended_resume.go` 的 `resumeUnattendedGates` —— 排入「继续」之后，对该会话
+  **解除收件箱暂停 + 关 plan mode**（与 `heartbeat_converge.go:clearUnattendedGates` 同一语义、同一守卫接口
+  `heartbeatSessionGuards`，断言不到接口就静默跳过）。语义依据："总开关是唯一闸门，人干预不改变无人状态"。
+  用例：`TestResumeUnattendedSessionClearsTheGatesACrashLeft`（先暂停收件箱 → 恢复后必须不再暂停）。

@@ -59,3 +59,26 @@ func TestResumeUnattendedSessionQueuesOncePerHostRun(t *testing.T) {
 		t.Fatal("a clean exit interrupted nothing")
 	}
 }
+
+// A recovered queue is paused, so the resume turn would wait for a click on 继续执行 that
+// nobody is there to make: the unattended session has to take that gate down itself
+// (the user's screenshot of the banner, 2026-10-03).
+func TestResumeUnattendedSessionClearsTheGatesACrashLeft(t *testing.T) {
+	app, ctrl, _ := agentBusEnrolApp(t)
+	t.Cleanup(func() { notePreviousHostRunExit(desktopExitVerdict{}) })
+	notePreviousHostRunExit(desktopExitVerdict{Kind: exitKindKilled})
+	app.heartbeat = &HeartbeatEngine{unattended: true}
+	if err := ctrl.SetInboxPaused(true); err != nil {
+		t.Fatalf("pause the inbox: %v", err)
+	}
+	if !ctrl.InboxSnapshot().Paused {
+		t.Fatal("the inbox has to start paused for this to mean anything")
+	}
+
+	if !app.resumeUnattendedSessionAfterAnInterruptedRun(&WorkspaceTab{goal: "把 docs 做完"}, ctrl) {
+		t.Fatal("the resume turn must be queued")
+	}
+	if ctrl.InboxSnapshot().Paused {
+		t.Fatal("the unattended resume must leave no paused inbox behind")
+	}
+}
