@@ -126,6 +126,14 @@
       **谁都不唤醒**（含它自己；bob 写完 `require` 后其会话未出现 `<agentbus-wake>` 即可复现）——要与宿主 tick 一起补；
       ⓑ 桌面**只发不收**（自身不跑 serve，入列时公告不出地址）⇒ 桌面作目标仍需 agentd 托管 serve；
       ⓒ 发送侧由**桌面**驱动的那半实测待做（需桌面会话先入列 + 一个非重复写入触发 `WakeAgentBus`）。
+      **✅ 双向真机已验（2026-10-02 夜，dev.104，真实进程）**：桌面会话入列（`agent_bus{action=view}` 返回
+      `board default as 20261002-095233.…`）→ 本会话两次 `assert` 落板（`seq 4` / `seq 6`，actor=本会话）；
+      第二次写入落板时间 `15:24:19.6Z` 与 **bob 的 serve 日志同一秒**的 `POST /inbox/items status=202` 对上，
+      且 bob **自己的会话文件**出现 `The board woke you: it has work only you can move right now.` 与
+      `startable now: key`（×10）⇒ **桌面按地址簿、用公告令牌，把跨进程唤醒真投给了另一个进程**。
+      **顺手核出的一条内核规则**：`Board.Apply` **不扫租约**（写板后板上没有 `no_progress`）⇒ 过期认领的节点
+      不算 `ready`，所以第一次唤醒"无人可投"（不是缺陷：Sweep 属宿主 tick/显式调用）；让持有者自己
+      `release` 之后再写，唤醒立刻命中。仍缺：ⓐ（headless 无 waker）照旧。
 - [x] T5-5 就绪即事件唤醒（`interval` 只兜底）→ 内核侧已落：`internal/agentbus/wake.go`（`WakeTargets` 从 op 日志 + 话题面派生目标，
       key 由工作集合派生 ⇒ 每 tick 幂等）+ `internal/control/agentbus_wake.go`（`SetAgentBusWaker` 宿主路由、不唤醒自己、失败释放 key 重试）
       + 写路径发起（`ApplyAgentBusOp` 非 replay 时唤醒）。**宿主侧路由未接**，但缝已定死：桌面 `tabs map[string]*WorkspaceTab` + `tab.Ctrl`，
@@ -227,6 +235,16 @@
 - [x] T9-3 运行时依赖：节点/边数由参与者新增 → `e2e_test.go` 的 `TestParticipantsGrowTheTreeWhileItRuns`：
       planner 开板后，browser 在运行中 `require` 出一个新步骤、splitter 再 `split` 成两个子节点；新读者看到同一棵树、重放不丢节点
 - [ ] T9-4 无人值守贯通：杀掉桌面进程 → 既有看门狗拉起 → 黑板继续被推进（`docs/UNATTENDED.md` §11 自认此链未真机验收，**第一次必须端到端**）
+      **第一次真机尝试（2026-10-02 夜，dev.104）：检测那一半 ✓，拉起那一半未观测到，原因是节奏不是逻辑** ——
+      用户打开无人值守开关后，App 自己就**跟随开关**注册了看门狗（日志 `followed the unattended switch unattended=true`
+      + `policy applied enabled=true registered=true`）；我按精确 pid 杀掉桌面（脚本化、日志落
+      `C:\Users\guosj\Desktop\t94\`）后，标记如实记下**非正常退出**：`lastExit = {"kind":"killed", … "uncleanStreak":1}` ✓。
+      但**计划任务当时的 `NextRunTime` 是 23:32:32，而杀进程是 23:28:32** ⇒ 下一次唤醒要等到被杀后约 4 分钟；
+      用户在 23:31:15（停摆 2 分 43 秒）就手动启动了 App，**窗口没到**。⇒ 实测得到的真实属性：**OS 看门狗的恢复延迟上界 =
+      任务节奏（约 5 分钟），不是秒级**。另外：`--watchdog` 模式本身安全可用（宿主存活时静默 no-op、exit 0、不注册不启动）。
+      **仍待做**：一次"杀 → **不手动重启** → 等 ≥6 分钟"的完整窗口观测（这才算 T9-4 通过）；另半条"黑板继续被推进"需
+      被拉起的宿主里有带契约的会话（无人值守语义见记忆：总开关是唯一闸门）。
+      **另一件如实记录**：为验证启用的看门狗最终已回到 `enabled=false / not registered`（我承诺的"跑完恢复"状态成立）。
 - [x] T9-5 任务级落地：验收节点全 `done` + 无未决矛盾才宣告完成
       **前置缺口（2026-10-02 读清，先定再写）**：**内核里没有"验收节点"这个概念** ✗ —— `board.NodeSpec` 只有
       `{ID, Title}`，op 与状态里都没有 kind/marker ⇒ "哪些节点算验收节点"**无法表达**，此时写判定就是替使用者发明 ✗。
