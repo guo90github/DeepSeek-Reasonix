@@ -71,3 +71,14 @@ func (c *Controller) AgentBusParticipant() string {
 	}
 	return state.participantID(c)
 }
+
+// AgentBusDir reports the board this session is enrolled on, so a host can hand the
+// board to its waker: a wake that no local tab owns must be routed using that board's
+// address book, not another one's. Empty means this session is off the board.
+func (c *Controller) AgentBusDir() string {
+	state, err := c.agentBusForTalk()
+	if err != nil {
+		return ""
+	}
+	return state.dir
+}

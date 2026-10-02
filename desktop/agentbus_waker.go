@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 
 	"reasonix/internal/agentbus"
@@ -17,7 +18,10 @@ func (a *App) enrollAgentBus(ctrl control.SessionAPI) {
 	if !ok {
 		return
 	}
-	bus.SetAgentBusWaker(a.routeAgentBusWake)
+	boardDir := bus.AgentBusDir()
+	bus.SetAgentBusWaker(func(ctx context.Context, target agentbus.WakeTarget) error {
+		return a.routeAgentBusWakeOn(ctx, boardDir, target)
+	})
 	// Off the build path on purpose: the sweep may enqueue a turn, and a controller
 	// that is still being published must not be asked to start one synchronously.
 	go bus.WakeAgentBus(context.Background())
@@ -26,11 +30,44 @@ func (a *App) enrollAgentBus(ctrl control.SessionAPI) {
 // routeAgentBusWake hands a wake to the tab that speaks as the participant. The wake
 // becomes a durable follow-up keyed by the wake itself, so a repeat collapses and an
 // idle session actually gets a turn out of it.
-func (a *App) routeAgentBusWake(ctx context.Context, target agentbus.WakeTarget) error {
-	tab := a.agentBusWakeRecipient(target.Participant)
-	if tab == nil {
-		return fmt.Errorf("desktop: no tab owns agentbus participant %q", target.Participant)
+func (a *App) routeAgentBusWakeOn(ctx context.Context, boardDir string, target agentbus.WakeTarget) error {
+	if tab := a.agentBusWakeRecipient(target.Participant); tab != nil {
+		return enqueueAgentBusWake(tab, target)
 	}
+	return a.deliverAgentBusWakeRemotely(ctx, boardDir, target)
+}
+
+// deliverAgentBusWakeRemotely asks the board's address book where this participant
+// speaks from and posts the wake there with that host's token. No address is a
+// refusal, never a drop: a wake nobody receives must be visible to its sender.
+func (a *App) deliverAgentBusWakeRemotely(ctx context.Context, boardDir string, target agentbus.WakeTarget) error {
+	if strings.TrimSpace(boardDir) == "" {
+		return fmt.Errorf("desktop: no board to route the wake for %q", target.Participant)
+	}
+	directory, err := agentbus.OpenParticipantDirectory(boardDir)
+	if err != nil {
+		return err
+	}
+	ref, ok, err := directory.Lookup(target.Participant)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return fmt.Errorf("desktop: no tab and no address owns agentbus participant %q", target.Participant)
+	}
+	token, err := readAgentBusToken(ref.TokenFile)
+	if err != nil {
+		return err
+	}
+	return deliverAgentBusWake(ctx, nil, AgentBusDelivery{
+		BaseURL:       ref.Host,
+		Token:         token,
+		SessionHeader: agentBusSessionHeader,
+		SessionPath:   ref.SessionPath,
+	}, target)
+}
+
+func enqueueAgentBusWake(tab *WorkspaceTab, target agentbus.WakeTarget) error {
 	text := agentBusWakePrompt(target)
 	_, err := tab.Ctrl.TryEnqueueFollowup(control.InboxRequest{
 		Submit:      text,
@@ -39,6 +76,20 @@ func (a *App) routeAgentBusWake(ctx context.Context, target agentbus.WakeTarget)
 		Idempotency: target.Key,
 	})
 	return err
+}
+
+// readAgentBusToken reads the token file a host announced: the secret itself never
+// travels in the address book, only where to find it.
+func readAgentBusToken(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("desktop: the announced address carries no token file")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("desktop: read agentbus token: %w", err)
+	}
+	return strings.TrimSpace(string(raw)), nil
 }
 
 // agentBusWakeRecipient finds the tab that owns a participant. It is the whole

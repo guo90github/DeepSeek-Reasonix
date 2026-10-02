@@ -298,6 +298,8 @@ type Settings interface {
 type AgentBusControl interface {
 	// AgentBusParticipant names the session on its board; empty means none.
 	AgentBusParticipant() string
+	// AgentBusDir names the board itself, so a host can route a wake that belongs to it.
+	AgentBusDir() string
 	// SetAgentBusWaker installs the host's routing for ready-work wakes.
 	SetAgentBusWaker(func(context.Context, agentbus.WakeTarget) error)
 	// WakeAgentBus wakes whoever has work waiting and reports how many were woken.

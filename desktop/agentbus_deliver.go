@@ -17,6 +17,11 @@ import (
 // somebody prompted (AGENT_BUS §3.2).
 const agentBusInboxPath = "/inbox/items"
 
+// agentBusSessionHeader carries the addressed session. The name belongs to the serve
+// endpoint (internal/serve/session_fence.go, unexported there), so it is stated once
+// here as wire protocol rather than guessed at each call site.
+const agentBusSessionHeader = "X-Reasonix-Session-Path"
+
 // AgentBusDelivery is where one wake goes when the participant is not in this
 // process: the host's base URL, the bearer token that host published, and the
 // session header it reads to know which session the wake is for.
