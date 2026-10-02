@@ -128,8 +128,10 @@
 - [x] T8-2 首屏不画 >N 张卡片（阈值可配）；孤儿与停滞必现 → `ObserveLimits{MaxCards, MaxSignals}`（默认 12/40）；
       `SignalKind.Mandatory()`（orphan/stalled）**不受上限影响**，被裁的计入 `Hidden`，卡片超限计入 `HiddenCards`；
       用例 `TestObserveAlwaysShowsOrphansAndStalls`（上限 1 时孤儿与两处停滞全在，多余争议被裁并计数）
-- [ ] T8-3 **面板接线**（分两半）：**control 读面已落**（`AgentBusBriefing(now)` + `SetAgentBusObserveLimits` + `AgentBusParticipant()`，
-      用例 `internal/control/agentbus_observe_test.go`）；**桌面侧未接**（消费 `Briefing` 画卡片 + 下钻，事件族随 S6 定）
+- [ ] T8-3 **面板接线**（三段，前两段已落）：① control 读面 `AgentBusBriefing`/`SetAgentBusObserveLimits`/`AgentBusParticipant`；
+      ② 桌面**绑定** `App.AgentBusBriefing()` → 扁平 JSON 视图（`desktop/agentbus_briefing.go` + 用例，含"没有活动会话/未入列"两种诚实的报错）；
+      ③ **前端面板本身未做**：组件 + i18n + 单测 + 打包预算（445 个既有前端单测、`make frontend-check` 是 `tsc --noEmit`），
+      需要单独一刀，不能与内核改动混在一起
 
 ## T9 S7 e2e + 无人值守贯通 + 百级压测
 
