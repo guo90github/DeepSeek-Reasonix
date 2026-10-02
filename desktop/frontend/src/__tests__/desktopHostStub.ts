@@ -33,6 +33,7 @@ export interface DesktopHostStub {
 export function installDesktopHostStub(commands: object, options: DesktopHostStubOptions = {}): DesktopHostStub {
   const ref = { current: commands as Record<string, unknown> };
   const events = new Map<string, Set<(...data: unknown[]) => void>>();
+  const reportedUnstubbed = new Set<string>();
   const host: ReasonixDesktopHost = {
     kind: "electron",
     contract: {
@@ -46,7 +47,16 @@ export function installDesktopHostStub(commands: object, options: DesktopHostStu
     platform: { os: "darwin", arch: "arm64", versions: {} },
     invoke: (method, args) => {
       const fn = ref.current[method];
-      if (typeof fn !== "function") return Promise.reject(new Error(`unstubbed desktop command ${method}`));
+      if (typeof fn !== "function") {
+        // Surface the gap instead of letting callers' .catch(() => {}) swallow it:
+        // an unstubbed command usually means the stub set drifted from the
+        // activation contract the product now calls.
+        if (!reportedUnstubbed.has(method)) {
+          reportedUnstubbed.add(method);
+          process.stdout.write(`  [host-stub] unstubbed command: ${method}\n`);
+        }
+        return Promise.reject(new Error(`unstubbed desktop command ${method}`));
+      }
       return Promise.resolve((fn as (...a: unknown[]) => unknown)(...args));
     },
     on: (name, cb) => {
