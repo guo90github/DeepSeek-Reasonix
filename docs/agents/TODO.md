@@ -20,15 +20,15 @@
 
 ## T2 补规格（**必须在对应阶段开工前完成**）
 
-- [ ] T2-1 视图/摘要规格：谁生成、多大、多久刷新、字段集 + **如何廉价物化「我的子树」**（O(N²) 闸的实际落点）
-- [ ] T2-2 「就绪」事件的发起者：完成者 / 宿主 / 编排者扫描——定死一个，否则退回轮询（S3/S5 接缝）
+- [x] T2-1 视图/摘要规格 → 已定，见 `docs/agents/AGENT_BUS.md` **§13.1**（谁生成 / 三种投影 / 行字段集 / ≤8 KiB 且 ≤200 行 / 游标增量不重发 / 超限取前 K 且计数可见 / 头部字节不变）
+- [x] T2-2 「就绪」事件发起者 → 已定，见 **§13.2**（主路径 = 让依赖变 `done` 的写入者在同一事务内发；兜底 = 宿主每 tick 扫描幂等；每参与者每 tick 最多一条唤醒）
 - [ ] T2-3 预算与既有旋钮对齐：`GoalTokenBudget`（`internal/config/config.go:1301`）/ spend budget / `REASONIX_SKIP_BUDGET` 谁统谁，超限后 Goal 变 `blocked` 还是 `complete`
 - [ ] T2-4 **并发槽的持久队列落点**：槽满「排队而非失败」需要一个持久队列，而既有 inbox 是**会话级**且嵌套 fail-fast —— 定死后再做 S5
 - [ ] T2-5 **能力的授权链**：缺能力派生「获取能力」子节点时，谁批装依赖/改仓库（`CapabilityGrant` 交集 vs 新授权）
 
-## T3 S1 黑板内核 — **已完成**（`internal/agentbus/board`：6 源文件 + 7 测试文件；提交 = 本轮那条 `feat(agentbus)`，用 `git log -1 -- internal/agentbus` 可查）
+## T3 S1 黑板内核 — **已完成**（`internal/agentbus/board`：6 源文件 + 6 测试文件；提交 `1b40a2f1d`）
 
-规格：`docs/agents/AGENT_BUS.md` §11.1 + §11.3（实现期修正）。`go test ./internal/agentbus/board/` → `ok`。
+规格：`docs/agents/AGENT_BUS.md` §11.1 + §11.3（实现期修正）+ §11.4（第二轮评审处置）。`go test ./internal/agentbus/board/` → `ok`。
 
 - [x] T3-1 非法迁移拒收（带原因）→ `transition_test.go` `TestIllegalTransitionsAreRejectedWithReason`（26 用例逐条断 reason）+ `TestRejectedOpsLeaveNoTrace`
 - [x] T3-2 重放幂等 / 重复 id 不追加 → `TestDuplicateOpIDDoesNotAppendTwice`、`TestFoldCountsDuplicateIDs`
