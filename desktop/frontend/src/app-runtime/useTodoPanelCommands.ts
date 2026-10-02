@@ -40,6 +40,10 @@ export type TodoPanelCommandsInput = {
   activeTabId: string | undefined;
   remote: boolean;
   remoteReady: boolean;
+  /** A remote tab's canonical list, from its snapshot (absent on older hosts). */
+  remoteTodos?: Todo[] | null;
+  /** A remote tab's board from its snapshot: the queue it owes and its archive. */
+  remoteBoard?: { queue?: Todo[] | null; archive?: Todo[] | null } | null;
   controllerReady: boolean;
   sessionKey: string;
   operations: ReturnType<typeof useSessionOperations>;
@@ -78,7 +82,17 @@ export function useTodoPanelCommands(input: TodoPanelCommandsInput) {
     return null;
   }, [items]);
   const todoItem = todoEntry?.item ?? null;
-  const metaTodos = remote ? undefined : input.meta?.canonicalTodos;
+  // A remote tab takes its list and board from that host's snapshot; a tab whose
+  // controller is bound here keeps reading the local meta.
+  const boardQueue = useMemo(
+    () => (remote ? input.remoteBoard?.queue ?? undefined : input.meta?.todoQueue),
+    [remote, input.remoteBoard?.queue, input.meta?.todoQueue],
+  );
+  const boardArchive = useMemo(
+    () => (remote ? input.remoteBoard?.archive : input.meta?.todoArchive),
+    [remote, input.remoteBoard?.archive, input.meta?.todoArchive],
+  );
+  const metaTodos = remote ? input.remoteTodos : input.meta?.canonicalTodos;
   const todosSupervised = input.meta?.todosSupervised === true;
   const canonicalTodos = useMemo(
     () => resolveTodoPanelTodos(metaTodos, todoItem ? parseTodos(todoItem.args) : undefined),
@@ -88,16 +102,16 @@ export function useTodoPanelCommands(input: TodoPanelCommandsInput) {
   // list's own items. Dismissal and the batch identity below deliberately keep
   // reading the canonical list, so history cannot resurrect a closed batch.
   const todos = useMemo(
-    () => mergeTodoBoardQueue(remote ? undefined : input.meta?.todoQueue, canonicalTodos),
-    [canonicalTodos, input.meta?.todoQueue, remote],
+    () => mergeTodoBoardQueue(boardQueue, canonicalTodos),
+    [boardQueue, canonicalTodos],
   );
   const [dismissedTodoKeys, setDismissedTodoKeys] = useState<Set<string>>(loadDismissedTodoKeys);
   const todoKey = useMemo(() => todoDismissalKey(canonicalTodos), [canonicalTodos]);
   // The board's archive is read-only history: the shelf may list it, never
   // resume or dismiss from it.
   const todoArchive = useMemo(
-    () => (remote ? [] : (input.meta?.todoArchive ?? [])),
-    [input.meta?.todoArchive, remote],
+    () => (boardArchive ?? []),
+    [boardArchive],
   );
   const todoBatch = useMemo(() => todoBatchIdentity(input.meta?.todoBatchId, todos), [input.meta?.todoBatchId, todos]);
   const todoScope = useMemo(

@@ -42,7 +42,7 @@
 ## 5. 分阶段
 
 - **P0**（已落地）：serve 端点 + 边界用例；桌面取数、`todoBoard` 成员与契约重生成。
-- **P1**：前端消费（含前端侧的类型化解析）+ 远端回归用例（把 `todo-queue-repro.test.ts` 的 S3 断言按 `remote: true` 再跑一遍）。
+- **P1**（已落地）：前端消费 + 远端回归用例。实现记录：远端取值走 `useRemoteSession` 新增的 `todos` / `todoBoard`（在它的两处快照消费点解析：`reconcileHistory` 与 hydrate），经 `useAppSessionComposition` 传进 `useTodoPanelCommands`；三处 `remote ? undefined :` 改为「远端取快照、本地取 meta」，远端缺失时退回 canonical/live。回归用例 = `remote-todo-wire.test.ts`（解析器 + 合并的远端镜像）。
 - **P2（本仓库外）**：手机端解析 `step_id`，必要时再消费 board。
 
 ## 6. 验收

@@ -142,6 +142,34 @@ export function parseTodos(args: string): Todo[] {
   }
 }
 
+// parseRemoteTodos reads the wire shape /todos and /todos/board share. Anything
+// without content and status is dropped: a remote payload must not put a row on
+// the panel that the local path could never produce.
+export function parseRemoteTodos(raw: unknown): Todo[] {
+  if (!Array.isArray(raw)) return [];
+  const out: Todo[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const item = entry as Record<string, unknown>;
+    if (typeof item.content !== "string" || typeof item.status !== "string") continue;
+    out.push({
+      content: item.content,
+      status: item.status,
+      activeForm: typeof item.activeForm === "string" ? item.activeForm : undefined,
+      level: typeof item.level === "number" ? item.level : undefined,
+      step_id: typeof item.step_id === "string" ? item.step_id : undefined,
+    });
+  }
+  return out;
+}
+
+// parseRemoteBoard splits the /todos/board payload into its two sides, each one
+// through the same item parser the canonical list uses.
+export function parseRemoteBoard(raw: unknown): { queue: Todo[]; archive: Todo[] } {
+  const board = (raw && typeof raw === "object" ? raw : {}) as { queue?: unknown; archive?: unknown };
+  return { queue: parseRemoteTodos(board.queue), archive: parseRemoteTodos(board.archive) };
+}
+
 function plusMinus(original: string, modified: string): { add: number; del: number } {
   let add = 0;
   let del = 0;

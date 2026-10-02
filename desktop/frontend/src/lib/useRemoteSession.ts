@@ -5,6 +5,7 @@ import type { CancelOutcome } from "./inboxCancel";
 import { initialState, reducer, type ControllerLiveStore, type State } from "./useController";
 import type { CheckpointMeta, CollaborationMode, CommandInfo, EffortInfo, GoalRuntime, GoalStatus, HistoryMessage, QualityFloor, RemoteTabStateValue, TabMeta, ToolApprovalMode, WireEvent } from "./types";
 import type { RemoteAskAnswer } from "./remoteTypes";
+import { parseRemoteBoard, parseRemoteTodos, type Todo } from "./tools";
 
 const loadRemoteSurface = () => import("../components/RemoteSessionSurface");
 
@@ -42,6 +43,9 @@ export interface RemoteSessionApi {
   /** The serve's label for the active model, for the composer capsule. */
   modelLabel: string;
   commands: CommandInfo[];
+  /** The remote host's task list and board, as its snapshot last reported them. */
+  todos: Todo[];
+  todoBoard: { queue: Todo[]; archive: Todo[] };
   composerProfile?: {
     collaborationMode: CollaborationMode;
     toolApprovalMode: ToolApprovalMode;
@@ -222,6 +226,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
   const [surfaceGeneration, setSurfaceGeneration] = useState(0);
   const [promptError, setPromptError] = useState("");
   const [hydrated, setHydrated] = useState(false);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [todoBoard, setTodoBoard] = useState<{ queue: Todo[]; archive: Todo[] }>({ queue: [], archive: [] });
   const transcriptRef = useRef(transcript);
   const liveListenersRef = useRef(new Set<() => void>());
   const hydratedRef = useRef(false);
@@ -279,6 +285,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
     eventTurnIdRef.current = undefined;
     setModelLabel("");
     setCommands([]);
+    setTodos([]);
+    setTodoBoard({ queue: [], archive: [] });
     setComposerProfile(undefined);
     setGoalRuntime(undefined);
     setEffortInfo(undefined);
@@ -313,6 +321,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
         const messages = Array.isArray(snap.history) ? (snap.history as HistoryMessage[]) : [];
         const checkpoints = remoteCheckpoints(snap.checkpoints);
         setCommands(Array.isArray(snap.commands) ? snap.commands as CommandInfo[] : []);
+        setTodos(parseRemoteTodos(snap.todos));
+        setTodoBoard(parseRemoteBoard(snap.todoBoard));
         setTranscript((current) => {
           let next = reducer(current, { type: "history", messages, remote: true });
           next = reducer(next, { type: "checkpoints", checkpoints });
@@ -416,6 +426,8 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
           applyRemoteStatus(status);
           const checkpoints = remoteCheckpoints(snap.checkpoints);
           setCommands(Array.isArray(snap.commands) ? snap.commands as CommandInfo[] : []);
+          setTodos(parseRemoteTodos(snap.todos));
+          setTodoBoard(parseRemoteBoard(snap.todoBoard));
           const replay = [
             ...(Array.isArray(snap.pendingEvents) ? snap.pendingEvents : []),
             ...bufferedEventsRef.current,
@@ -759,6 +771,7 @@ export function useRemoteSession(tabId: string | undefined, initial?: RemoteTabS
 
   return {
     state, error, transcript, liveStore, hydrated, running: transcript.running, modelLabel, commands,
+    todos, todoBoard,
     composerProfile, goalRuntime, effort, surfaceGeneration, promptError, submit, runManagementCommand, compact, cancelTurn,
     approve, resolvePlanDecision, answer, clearExtensionForm, rewind, setModel, setEffort, setQualityFloor, pauseGoal, resumeGoal, steer, cancelJob,
     drainApprovals, retryHydration,

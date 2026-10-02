@@ -503,6 +503,8 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     activeTabId,
     remote: remoteSurfaceActive,
     remoteReady: remoteComposerReady,
+    remoteTodos: remoteSession.todos,
+    remoteBoard: remoteSession.todoBoard,
     controllerReady,
     sessionKey: activeSessionIdentity,
     operations: sessionOperations,
