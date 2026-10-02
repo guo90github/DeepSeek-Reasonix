@@ -130,7 +130,9 @@ func TestIndexMarksPinnedFacts(t *testing.T) {
 	if !strings.Contains(index, "[project/project pinned]") {
 		t.Fatalf("index must mark pinned facts:\n%s", index)
 	}
-	if strings.Contains(index, "plain-fact.md) — [project/project pinned]") {
-		t.Fatalf("relevant facts must not carry the pinned marker:\n%s", index)
+	for line := range strings.SplitSeq(index, "\n") {
+		if strings.Contains(line, "[plain fact]") && strings.Contains(line, "pinned") {
+			t.Fatalf("relevant facts must not carry the pinned marker: %s", line)
+		}
 	}
 }

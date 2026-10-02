@@ -126,7 +126,8 @@ func TestStoreSaveAndIndex(t *testing.T) {
 	}
 
 	idx := s.Index()
-	if !strings.Contains(idx, "prefers-tabs.md") || !strings.Contains(idx, "User prefers tabs") {
+	// One bounded glance per fact: label, id handle, marker, summary start.
+	if !strings.Contains(idx, "- [prefers tabs](mem-") || !strings.Contains(idx, " — [global/user pinned] User prefers tabs") {
 		t.Fatalf("index missing entry:\n%s", idx)
 	}
 
@@ -178,7 +179,7 @@ func TestStoreOverwriteDoesNotDuplicateIndex(t *testing.T) {
 		}
 	}
 	idx := s.Index()
-	if n := strings.Count(idx, "note.md"); n != 1 {
+	if n := strings.Count(idx, "- [note]("); n != 1 {
 		t.Fatalf("want exactly 1 index line for note, got %d:\n%s", n, idx)
 	}
 	if !strings.Contains(idx, "second version") || strings.Contains(idx, "first version") {
@@ -235,7 +236,7 @@ func TestStoreSaveTitleInIndexAndFrontmatter(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if idx := s.Index(); !strings.Contains(idx, "[Prefers tabs](global/tabs-rule.md)") {
+	if idx := s.Index(); !strings.Contains(idx, "- [Prefers tabs](mem-") {
 		t.Fatalf("index link should use the title label:\n%s", idx)
 	}
 	if got := s.List()[0].Title; got != "Prefers tabs" {
@@ -250,7 +251,7 @@ func TestStoreIndexLabelFallsBackToDeKebabbedName(t *testing.T) {
 	if _, err := s.Save(Memory{Name: "likes-go", Description: "d", Type: TypeUser, Body: "b"}); err != nil {
 		t.Fatal(err)
 	}
-	if idx := s.Index(); !strings.Contains(idx, "[likes go](global/likes-go.md)") {
+	if idx := s.Index(); !strings.Contains(idx, "- [likes go](mem-") {
 		t.Fatalf("missing-title label should de-kebab the name:\n%s", idx)
 	}
 }
@@ -275,10 +276,10 @@ func TestStoreDelete(t *testing.T) {
 		t.Fatalf("archive files = %v, want one alpha archive", archived)
 	}
 	idx := s.Index()
-	if strings.Contains(idx, "alpha.md") {
+	if strings.Contains(idx, "- [alpha](") {
 		t.Fatalf("deleted entry still in index:\n%s", idx)
 	}
-	if !strings.Contains(idx, "beta.md") {
+	if !strings.Contains(idx, "- [beta](") {
 		t.Fatalf("unrelated entry lost on delete:\n%s", idx)
 	}
 	if names := s.List(); len(names) != 1 || names[0].Name != "beta" {
@@ -342,7 +343,7 @@ func TestStoreDeleteRepairsReadOnlyMemoryFile(t *testing.T) {
 	if len(archived) != 1 || !strings.HasSuffix(archived[0], "-locked.md") {
 		t.Fatalf("archive files = %v, want one locked archive", archived)
 	}
-	if strings.Contains(s.Index(), "locked.md") {
+	if strings.Contains(s.Index(), "- [locked](") {
 		t.Fatalf("deleted read-only entry still in index:\n%s", s.Index())
 	}
 }
@@ -366,7 +367,7 @@ func TestStoreArchiveReturnsArchivePath(t *testing.T) {
 	if !strings.Contains(string(body), "body") {
 		t.Fatalf("archive missing memory body:\n%s", body)
 	}
-	if strings.Contains(s.Index(), "old-fact.md") {
+	if strings.Contains(s.Index(), "- [old fact](") {
 		t.Fatalf("archived memory still in index:\n%s", s.Index())
 	}
 	archived := s.ListArchived()
@@ -404,10 +405,10 @@ func TestStoreArchiveFlushesStaleIndexWithoutFile(t *testing.T) {
 		t.Fatalf("Archive should return no path for missing file, got %q", archive)
 	}
 	idx := s.Index()
-	if strings.Contains(idx, "alpha.md") {
+	if strings.Contains(idx, "- [alpha](") {
 		t.Fatalf("stale index line should be removed:\n%s", idx)
 	}
-	if !strings.Contains(idx, "beta.md") {
+	if !strings.Contains(idx, "- [beta](") {
 		t.Fatalf("unrelated index line should remain:\n%s", idx)
 	}
 }
@@ -556,7 +557,7 @@ func TestStoreGlobalAndProject(t *testing.T) {
 
 	// Index merges both directories
 	idx := s.Index()
-	if !strings.Contains(idx, "prefers-tabs") || !strings.Contains(idx, "build-target") {
+	if !strings.Contains(idx, "- [prefers tabs](") || !strings.Contains(idx, "- [build target](") {
 		t.Fatalf("index should contain both global and project memories:\n%s", idx)
 	}
 
@@ -618,7 +619,8 @@ func TestStoreSaveRemovesStaleCopyWhenScopeChanges(t *testing.T) {
 		t.Fatalf("active copy = %+v, want new project body", list[0])
 	}
 	idx := s.Index()
-	if strings.Contains(idx, "old global") || !strings.Contains(idx, "new project") {
+	// The move shows as one entry under the project scope, with no global twin.
+	if strings.Count(idx, "- [same name](") != 1 || !strings.Contains(idx, "— [project/feedback]") || strings.Contains(idx, "— [global/feedback]") {
 		t.Fatalf("merged index should reflect new scope only:\n%s", idx)
 	}
 }
@@ -791,7 +793,7 @@ func TestStoreIndexDeduplicatesAcrossDirs(t *testing.T) {
 	}
 
 	idx := s.Index()
-	count := strings.Count(idx, name+".md")
+	count := strings.Count(idx, "- [prefers tabs](")
 	if count != 1 {
 		t.Fatalf("want exactly 1 index line for %s, got %d:\n%s", name, count, idx)
 	}

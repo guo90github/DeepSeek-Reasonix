@@ -66,7 +66,10 @@ func TestSaveMemoryRefreshesBackgroundSnapshotWithoutLegacyUpdate(t *testing.T) 
 	}
 
 	background := c.Memory().BackgroundDataBlock()
-	if !strings.Contains(background, "response-language") || !strings.Contains(background, body) {
+	// The pinned body rides the snapshot; the entry carries the label, the
+	// fact's stable id, and the bounded summary.
+	if !strings.Contains(background, "- [response language](mem-") ||
+		!strings.Contains(background, "preferred response language") || !strings.Contains(background, body) {
 		t.Fatalf("saved memory missing from refreshed background snapshot:\n%s", background)
 	}
 	if composed := c.Compose("hello"); strings.Contains(composed, "<memory-update>") || composed != "hello" {
@@ -137,7 +140,8 @@ func TestRestoreArchivedMemoryRefreshesBackgroundSnapshotWithoutLegacyUpdate(t *
 		t.Fatalf("restored memory = %+v", restored)
 	}
 	background := c.Memory().BackgroundDataBlock()
-	if !strings.Contains(background, "build-contract") || !strings.Contains(background, "project build contract") {
+	if !strings.Contains(background, "- [build contract]("+first.Memory.ID+")") ||
+		!strings.Contains(background, "project build contract") {
 		t.Fatalf("restored memory missing from refreshed background snapshot:\n%s", background)
 	}
 	if composed := c.Compose("continue"); strings.Contains(composed, "<memory-update>") || composed != "continue" {
@@ -226,7 +230,9 @@ func TestRestoreMemoryRefreshesBackgroundSnapshotWithoutLegacyUpdate(t *testing.
 		t.Fatalf("revision history = %+v", revisions)
 	}
 	background := c.Memory().BackgroundDataBlock()
-	if !strings.Contains(background, "release-target") || !strings.Contains(background, "v1") {
+	// The refreshed snapshot shows the restored revision: same entry, and the
+	// bounded summary is the restored description again.
+	if !strings.Contains(background, "- [release target]("+first.Memory.ID+")") || !strings.Contains(background, " v1") {
 		t.Fatalf("restored revision missing from refreshed background snapshot: %q", background)
 	}
 	if composed := c.Compose("continue"); strings.Contains(composed, "<memory-update>") || composed != "continue" {

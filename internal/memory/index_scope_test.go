@@ -22,21 +22,19 @@ func TestIndexShowsBothScopesWithOverrideAnnotation(t *testing.T) {
 	})
 
 	index := store.Index()
-	for _, want := range []string{
-		"(project/deploy-region.md)",
-		"(global/deploy-region.md)",
-		"(overridden by project/deploy-region.md)",
-	} {
+	// Both scopes stay visible, each entry linked by its own stable id; only
+	// the shadow annotation names the winning fact.
+	for _, want := range []string{"](mem-proj)", "](mem-glob)", "(overridden by project/deploy-region.md)"} {
 		if !strings.Contains(index, want) {
 			t.Fatalf("index missing %q:\n%s", want, index)
 		}
 	}
-	if strings.Contains(index, "](deploy-region.md)") {
-		t.Fatalf("provider index must never use unqualified references:\n%s", index)
+	if strings.Contains(index, "](project/") || strings.Contains(index, "](global/") {
+		t.Fatalf("provider index must link ids, never paths:\n%s", index)
 	}
 	// The project entry (the recall winner) must not carry the annotation.
 	for line := range strings.SplitSeq(index, "\n") {
-		if strings.Contains(line, "(project/deploy-region.md)") && strings.Contains(line, "overridden") {
+		if strings.Contains(line, "](mem-proj)") && strings.Contains(line, "overridden") {
 			t.Fatalf("winning project entry wrongly annotated: %s", line)
 		}
 	}

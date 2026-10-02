@@ -7,7 +7,7 @@
 
 | 编号 | 状态 | 证据（提交 / 命令 / 关键文件） |
 |---|---|---|
-| 第七 记忆分层 | 待验收（数字已量 · **未达 ≤1/2**） | 代码已提交 `530f80d43`；**占用对比已量**（`docs/50` §十）：常驻段 改造前 **42,749** B → 改造后 **41,638** B，比值 **0.974（未达标）**；瓶颈＝索引段 38,280 B（91 条，中位 359 B/条，最长 1,162 B），即"第一层 ≤50 字"未落实。**方案**：`docs/50` §十.4（实测投影索引 8,807 B ⇒ 常驻 11,365 B ⇒ 0.27） |
+| 第七 记忆分层 | **已验收** | 代码 `530f80d43`；占用对比与落地见 `docs/50` §十：常驻段 改造前 **42,749** B → 改造后 **16,307** B，比值 **0.381 ≤ 1/2 ✓**；第一层改为「标签 + ≤50 rune 摘要 + 事实 id 句柄」（`internal/memory/index.go` 的 `maxFirstLayerRunes`/`firstLayerText`），索引 39,080 → 13,749 B、最长行 1,162 → 211 B；第二层走 `memory read <id>` / `search`。验证：`go test ./internal/memory/`、`go test ./internal/control/`（32.6s）、`go test -v ./internal/boot/`（150.1s）全绿 |
 | 第八 前置/后置 | 待验收（BA2 留白） | `530f80d43` 含 BA1a/BA1b（`internal/agent/turn_outcome.go`、`internal/control/{turn_outcome_record,turn_progress}.go`），回合结束链路可见。BA2 前置块（U-4 已决：默认开、最多 3 轮、不设字符上限）未做 ⇒ 目前不加分也不扣判据 |
 | 第九 异步/档位 | 待验收（缺真机） | `ce72be09a`（`internal/agent/shell_async.go`、`[agent] shell_async`）+ `internal/boot/loop_async_effect_test.go` 实测 **2137ms→18ms**；档位控件 `ShellAsyncTierField.tsx` + 11 测试（`cffe2df3a`）。**缺**：真机观感（档位默认 off，新建会话生效） |
 | 第十 多开 | 部分（按 A-30 收窄） | `32ee36c82`（`lib/viewPlacement.ts`、`store/viewPlacements.ts`、`FloatingViewLayer.tsx` + 2 测试）+ 挂载点 `cffe2df3a`。**缺**：后台标签完整面板（需把 `ChatPaneRegion` region props 按 tabId 参数化）、真机 #2/#5 |
@@ -19,21 +19,18 @@
 
 ## 2. 当前单元（2026-10-03 · 本轮）
 
-**第七 常驻占用对比已量（`docs/50` §十）** —— 常驻段 改造前 **42,749** B → 改造后 **41,638** B，比值 **0.974，未达 ≤1/2**。
-仪器＝现 HEAD 真渲染器（`BackgroundDataBlock()`+`PolicyBlock()`），改造前侧＝同一渲染器跑在「剥掉 `activation:` 行」的同一份库上
-（复现"全部 global user/feedback 正文常驻"）；交叉验证 ✅ 本轮会话快照报 `Background memory=41638`，与渲染器逐字节相同。
+**第七 落地并复测 ⇒ 已验收。** 改动：`internal/memory/index.go` 的第一层渲染（链接改事实 id、标签+摘要共用 50 rune 预算）；
+受影响断言逐条按原意改写 + 新增 `internal/memory/index_first_layer_test.go`。复测（同一量体程序、真实库 91 条事实）：
+常驻段 **42,749 → 16,307 字节（0.381）**、索引 **39,080 → 13,749**、最长行 **1,162 → 211** 字节。
+验证：`go vet ./internal/memory/ ./internal/control/`；`go test ./internal/memory/`；`go test ./internal/control/`（32.6s）；
+`go test -v ./internal/boot/`（150.1s，全绿）。
 
 ## 3. 下一步（下一轮直接照做）
 
-**实施第七的「第一层 ≤50 字」（方案见 `docs/50` §十.4）** —— 这是把第七推上「已验收」的唯一剩余动作：
-1. 先查 `memory` 工具的 `read` 接受什么句柄（名字 / 路径 / id —— `rg` 工具定义），据此决定索引行是否保留短句柄；
-   无合适短句柄就让第二层走既有 `search`（自动召回本就走 BM25/CJK 索引，不依赖可见索引行）。
-2. 改 `internal/memory` 的索引渲染：每条 `- [scope/type] ≤50 字摘要（+ 短句柄，如有）`，去掉长 kebab 链接。
-3. 复测：真渲染器重量占用（回填 `docs/50` §十）+ 更新受影响断言（`internal/memory`、`internal/control/session_context_test.go`）+ 抽查召回质量。
-4. 完成标志：`docs/50` §十 出现达标数字、台账第 1 行翻「已验收」。
-
-之后：**第十二降幅复跑**（先判「窗口未覆盖」vs「写入产出行」各占多少 ⇒ A-1 能覆盖多少；
-语料用原转录 `.../sessions/20260930-053754.970846500-*.jsonl`，只读；`session-65-raw.json` 的 args 被截断到 ~201 字符，不够精细）。
+**第十二降幅复跑**（`docs/10` §8.5/§9.1 自认未证）：按 `SESSION-65-FAILURES.md` 口径，
+读证据门类拦截（`WRITE_EVIDENCE_STALE` + `WRITE_EVIDENCE_MISSING`）**97 → ≤20**。
+先定方法再跑：判语料里「窗口未覆盖」与「写入产出行」各占多少 ⇒ 决定 A-1 能覆盖多少；
+语料用原转录 `.../sessions/20260930-053754.970846500-*.jsonl`（只读；`session-65-raw.json` 的 args 被截断到 ~201 字符，不够精细）。
 
 不要一轮做两件。
 
@@ -52,7 +49,7 @@
 - 真机未做：第九、第十 #2/#5、第十四、第十六、第十七三条。
 - 第八 BA2 前置块未做（U-4 已决参数：默认开 / 最多 3 轮 / 不加字符上限）。
 - 第十后台标签完整面板未做（A-30 收窄后属未做的原始需求 #5 部分）。
-- 第七 达标复测未做：方案（第一层 ≤50 字）实施后须重量占用数字，并抽查召回质量。
+- 第七 达标已复测（`docs/50` §10.6，0.381 ≤ 1/2）；**召回质量抽查未做**——索引变短后模型选事实的准确度属真机观察项，并入 B-1。
 
-END-UNIT: 第七 常驻占用已量并落档（`docs/50` §十；42,749 B → 41,638 B，比值 0.974，**未达标** ⇒ 台账不翻「已验收」）；
-方案已定（第一层 ≤50 字，实测投影 0.27），下一步＝实施该方案并复测。
+END-UNIT: 第七 落地并复测**达标**（常驻 42,749 → 16,307 字节，比值 0.381），台账第 1 行已翻「已验收」；
+下一步＝第十二降幅复跑（97 → ≤20，方法先定死再跑）。
