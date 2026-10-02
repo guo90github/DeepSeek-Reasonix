@@ -143,9 +143,11 @@
 - [x] T9-1 杀掉编排者，未完成节点仍被认领推进 → `internal/agentbus/takeover_test.go`（真文件四幕：编排者开板并认领一步后**被丢掉**，
       幸存者只拿文件 `Sweep`→认领→完成，再从队列 `Take` 做完停放的那步；第三个新读者折出「无必现信号」且重放同结局）。
       **并抓到真缺陷**：已 `done` 的节点因历史 `NoProgress` 被报「停滞」⇒ 修 `stallReason`（完工节点不是活症状）
-- [ ] T9-2 一次 `refute` 改变结果 → **一半完成、一半挂起（附因）**：refute 本身带证据被接受已验证（`e2e_test.go`）；
-      但"改变结局"所许可的动词与前置条件**必须先对齐 S1 规格**——实测 `revert` 在该节点被判 `illegal_transition`，
-      而 `abandon`+`decide(abandoned)` 不改下游结论（依赖被弃 ≠ 下游已完成被推翻）。用例以 `t.Skip` 显式挂起，不猜
+- [x] T9-2 一次 `refute` 改变结果 → `e2e_test.go` 的 `TestARefutationChangesTheEnding`，**按 §11.1 迁移表写而不是靠试**：
+      `refute` 落在 `done` 上 ⇒ `contested`（结论受质疑，**且不牵连依赖它的已完成工作**）；`revert`（只接受 `done`/`stale`）
+      ⇒ 自身回 `open`、**下游 `done` 变 `stale`**；三条板各自折出各自结局、各自重放一致。
+      先前挂起的原因已定案：**是我的顺序错**（先 refute 再 revert ⇒ 节点已是 `contested` ⇒ 必判 `illegal_transition`），
+      且"下游变 stale"**只由 `revert` 传播**（`abandon` 有意不传播：依赖被放弃 ≠ 下游已完成被推翻）
 - [x] T9-3 运行时依赖：节点/边数由参与者新增 → `e2e_test.go` 的 `TestParticipantsGrowTheTreeWhileItRuns`：
       planner 开板后，browser 在运行中 `require` 出一个新步骤、splitter 再 `split` 成两个子节点；新读者看到同一棵树、重放不丢节点
 - [ ] T9-4 无人值守贯通：杀掉桌面进程 → 既有看门狗拉起 → 黑板继续被推进（`docs/UNATTENDED.md` §11 自认此链未真机验收，**第一次必须端到端**）

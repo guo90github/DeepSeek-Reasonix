@@ -66,52 +66,78 @@ func planAndFinish(t *testing.T, dir string) {
 	}
 }
 
-// TestOneRefutationChangesTheEnding is T9-2: the same work, one extra refutation from
-// someone who did not produce it, and the ending differs — because the refutation is
-// in the log, not in an opinion. Replaying either log lands in the same place.
-func TestOneRefutationChangesTheEnding(t *testing.T) {
+// TestARefutationChangesTheEnding is T9-2, written against the S1 migration table
+// (§11.1) rather than against a guess:
+//
+//   - `refute` on any state but abandoned/stale ends in `contested`;
+//   - `revert` is accepted on `done` or `stale`, and only it propagates: a downstream
+//     `done` becomes `stale`. `abandon` deliberately does not — an abandoned
+//     dependency does not retroactively falsify finished work that rested on it.
+//
+// All three boards fold their own log to their own ending, and folding again agrees.
+func TestARefutationChangesTheEnding(t *testing.T) {
 	ctx := context.Background()
-	undisputed := t.TempDir()
-	disputed := t.TempDir()
-	planAndFinish(t, undisputed)
-	planAndFinish(t, disputed)
 
-	b, err := board.Open(disputed)
+	quiet := t.TempDir()
+	questioned := t.TempDir()
+	takenBack := t.TempDir()
+	for _, dir := range []string{quiet, questioned, takenBack} {
+		planAndFinish(t, dir)
+	}
+
+	questioningBoard, err := board.Open(questioned)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
-	// A refutation from someone who did not produce the work is accepted with evidence.
-	// That much is verified here.
-	if _, err := b.ApplyAll(ctx,
-		board.Op{Verb: board.VerbRefute, Node: "schema", Actor: "skeptic", Reason: "the test does not cover the migration", Evidence: e2eEvidence()},
-	); err != nil {
+	if _, err := questioningBoard.Apply(ctx, board.Op{
+		Verb: board.VerbRefute, Node: "schema", Actor: "skeptic",
+		Reason: "the test does not cover the migration", Evidence: e2eEvidence(),
+	}); err != nil {
 		t.Fatalf("refute: %v", err)
 	}
-	// What turns a refutation into a different ending is not settled here: `revert` on
-	// this node is refused with illegal_transition, and `abandon`+`decide(abandoned)`
-	// leaves the dependent's verdict alone. The verb and its precondition have to come
-	// from the S1 spec rather than from a guess, so this half stays open (T9-2).
-	t.Skip("T9-2 待定：refute 改变结局所许可的动词与前置条件需先与 S1 规格对齐（revert 在此被判 illegal_transition；abandon+decide(abandoned) 不改下游结论）")
-
-	quiet := e2eSnapshot(t, undisputed)
-	loud := e2eSnapshot(t, disputed)
-	if got := quiet.Nodes["design"].State; got != board.StateDone {
-		t.Fatalf("undisputed design = %q, want it simply done", got)
+	undoingBoard, err := board.Open(takenBack)
+	if err != nil {
+		t.Fatalf("open: %v", err)
 	}
-	if got := loud.Nodes["schema"].State; got == board.StateDone {
-		t.Fatalf("refuted schema state = %q, want the conclusion taken back", got)
-	}
-	if loud.Nodes["design"].State == quiet.Nodes["design"].State {
-		t.Fatalf("the refutation changed nothing: both endings report design as %q", loud.Nodes["design"].State)
+	if _, err := undoingBoard.Apply(ctx, board.Op{
+		Verb: board.VerbRevert, Node: "schema", Actor: "skeptic",
+		Reason: "the conclusion does not hold", Evidence: e2eEvidence(),
+	}); err != nil {
+		t.Fatalf("revert a finished step: %v", err)
 	}
 
-	// The ending is a property of the log: fold it again and land in the same place.
-	replayed := e2eSnapshot(t, disputed)
-	if replayed.Nodes["design"].State != loud.Nodes["design"].State {
-		t.Fatalf("replay diverged: %q then %q", loud.Nodes["design"].State, replayed.Nodes["design"].State)
+	plain := e2eSnapshot(t, quiet)
+	refuted := e2eSnapshot(t, questioned)
+	reverted := e2eSnapshot(t, takenBack)
+
+	if got := plain.Nodes["schema"].State; got != board.StateDone {
+		t.Fatalf("undisputed schema = %q, want it simply done", got)
 	}
-	if replayed.Nodes["schema"].State != loud.Nodes["schema"].State {
-		t.Fatalf("replay changed the schema state: %q then %q", loud.Nodes["schema"].State, replayed.Nodes["schema"].State)
+	// A refutation puts the conclusion in question without touching anyone else.
+	if got := refuted.Nodes["schema"].State; got != board.StateContested {
+		t.Fatalf("refuted schema = %q, want contested", got)
+	}
+	if refuted.Nodes["design"].State != plain.Nodes["design"].State {
+		t.Fatalf("a refutation alone must not falsify work that depended on it: %q then %q",
+			plain.Nodes["design"].State, refuted.Nodes["design"].State)
+	}
+	// Taking the conclusion back is what reaches the work that rested on it.
+	if got := reverted.Nodes["schema"].State; got != board.StateOpen {
+		t.Fatalf("reverted schema = %q, want it back to open", got)
+	}
+	if got := reverted.Nodes["design"].State; got != board.StateStale {
+		t.Fatalf("design = %q, want stale once its basis was taken back", got)
+	}
+
+	// Each ending is a property of its own log, not of a process.
+	for _, dir := range []string{questioned, takenBack} {
+		first := e2eSnapshot(t, dir)
+		again := e2eSnapshot(t, dir)
+		for _, node := range []string{"schema", "design"} {
+			if first.Nodes[node].State != again.Nodes[node].State {
+				t.Fatalf("%s/%s replayed to %q then %q", dir, node, first.Nodes[node].State, again.Nodes[node].State)
+			}
+		}
 	}
 }
 
