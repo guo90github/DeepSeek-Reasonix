@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"reasonix/internal/agent"
 	"reasonix/internal/agentbus/board"
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -45,13 +44,9 @@ model = "x"
 	}
 	defer ctrl.Close()
 
-	// A session's board identity is its branch id; a controller minted without a
-	// path has none, so name one here exactly as a host would.
-	ctrl.SetSessionPath(filepath.Join(dir, "sessions", "board-peer.jsonl"))
-	participant := agent.BranchID(ctrl.SessionPath())
-	if participant == "" {
-		t.Fatal("no session identity to address on a board")
-	}
+	// A pathless session has no branch id, so the host names its board identity
+	// explicitly instead of guessing one from a path.
+	participant := "board-peer"
 	busDir := filepath.Join(dir, "agentbus-board")
 	sessions, err := board.Open(busDir)
 	if err != nil {
@@ -64,7 +59,7 @@ model = "x"
 	); err != nil {
 		t.Fatalf("apply ops: %v", err)
 	}
-	ctrl.SetAgentBusDir(busDir)
+	ctrl.SetAgentBus(busDir, participant)
 
 	if err := ctrl.Run(context.Background(), "reply ok"); err != nil {
 		t.Fatalf("Run: %v", err)

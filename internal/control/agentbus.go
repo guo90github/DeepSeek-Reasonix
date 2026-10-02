@@ -2,7 +2,9 @@ package control
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -21,18 +23,20 @@ type agentBusState struct {
 	cursor      uint64
 }
 
-// SetAgentBusDir enrols this session on the board stored at dir. An empty dir
-// opts out, and an opted-out controller composes exactly as it did before the
-// feature existed.
-func (c *Controller) SetAgentBusDir(dir string) {
+// SetAgentBus enrols this session on the board stored at dir under an explicit
+// participant id. An empty dir opts out; an empty id falls back to the session's
+// branch id, and when the session has none either the participant sees nothing —
+// a board identity is never guessed from a path.
+func (c *Controller) SetAgentBus(dir, participant string) {
 	dir = strings.TrimSpace(dir)
+	participant = strings.TrimSpace(participant)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if dir == "" {
 		c.agentBus = nil
 		return
 	}
-	c.agentBus = &agentBusState{dir: dir}
+	c.agentBus = &agentBusState{dir: dir, participant: participant}
 }
 
 // AgentBusView peeks at this participant's view without advancing the cursor.
@@ -71,6 +75,65 @@ func (c *Controller) agentBusTurnBlock() string {
 
 // agentBusSnapshot folds the board for this participant. A board that cannot be
 // read contributes nothing: an unreachable view must never break a turn.
+// errAgentBusUnwired reports a write attempted by a session that never joined a
+// board; the kernel refuses instead of inventing a scope.
+var errAgentBusUnwired = errors.New("control: this session is not enrolled on a board")
+
+// ApplyAgentBusOp writes one op to the board this session is enrolled on. The
+// board validates it and a refusal comes back typed (board.IsReject), so a caller
+// reports why rather than guessing.
+func (c *Controller) ApplyAgentBusOp(ctx context.Context, op board.Op) (board.Receipt, error) {
+	c.mu.Lock()
+	bus := c.agentBus
+	c.mu.Unlock()
+	if bus == nil {
+		return board.Receipt{}, errAgentBusUnwired
+	}
+	brd, err := board.Open(bus.dir)
+	if err != nil {
+		return board.Receipt{}, err
+	}
+	return brd.Apply(ctx, op)
+}
+
+// AgentBusTask is one board node as the human side renders it: flat rows the task
+// tree nests by Deps, so the panel needs no new storage.
+type AgentBusTask struct {
+	ID         string
+	Title      string
+	State      board.NodeState
+	Owner      string
+	Deps       []string
+	Ready      bool
+	Refuted    bool
+	NoProgress int
+	LastSeq    uint64
+}
+
+// AgentBusTasks projects the whole board into human rows, sorted by id so two
+// reads of the same board agree.
+func (c *Controller) AgentBusTasks(now time.Time) ([]AgentBusTask, bool) {
+	bus, st := c.agentBusSnapshot(now)
+	if bus == nil {
+		return nil, false
+	}
+	ids := make([]string, 0, len(st.Nodes))
+	for id := range st.Nodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := make([]AgentBusTask, 0, len(ids))
+	for _, id := range ids {
+		n := st.Nodes[id]
+		out = append(out, AgentBusTask{
+			ID: n.ID, Title: n.Title, State: n.State, Owner: n.Owner,
+			Deps: append([]string(nil), n.Deps...), Ready: n.Ready(st),
+			Refuted: len(n.Refutes) > 0, NoProgress: n.NoProgress, LastSeq: n.LastSeq,
+		})
+	}
+	return out, true
+}
+
 func (c *Controller) agentBusSnapshot(now time.Time) (*agentBusState, *board.State) {
 	c.mu.Lock()
 	bus := c.agentBus

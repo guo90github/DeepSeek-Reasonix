@@ -149,6 +149,11 @@ type Options struct {
 	// SessionDir overrides where persisted chat transcripts are written. When
 	// empty, the shared CLI/global session directory is used.
 	SessionDir string
+	// AgentBusDir enrols the built controller on the blackboard stored there;
+	// AgentBusID is the participant id it reads and writes under (empty falls
+	// back to the session branch id). Empty AgentBusDir means not enrolled.
+	AgentBusDir string
+	AgentBusID  string
 	// SharedHost is an optional plugin.Host shared across controllers for the
 	// same workspace root. When set, boot.Build reuses its running clients
 	// instead of creating new subprocesses, and the caller manages the host's
@@ -1928,6 +1933,9 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// reviewer. Controllers that want one inject it explicitly; otherwise Goal
 	// uses the deterministic host policy.
 	ctrl := control.New(ctrlOpts)
+	if opts.AgentBusDir != "" {
+		ctrl.SetAgentBus(opts.AgentBusDir, opts.AgentBusID)
+	}
 	bindRecapLane(context.Background(), cfg, ctrl, sink, effectiveResolver, proxySpec)
 	// Bind a private host's children to the controller that owns them: one
 	// controller, one true session. A shared host serves several controllers, so

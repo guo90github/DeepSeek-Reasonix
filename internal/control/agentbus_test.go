@@ -58,7 +58,7 @@ func TestAgentBusTurnBlockCarriesOnlyMyViewAndAdvancesTheCursor(t *testing.T) {
 		busAssert("mine", participant),
 		busAssert("theirs", "someone-else"),
 	)
-	c.SetAgentBusDir(dir)
+	c.SetAgentBus(dir, "")
 
 	first := c.agentBusTurnBlock()
 	if first == "" {
@@ -97,11 +97,11 @@ func TestSetAgentBusDirEmptyOptsOut(t *testing.T) {
 	dir := t.TempDir()
 	c := newAgentBusTestController(t)
 	applyBusOps(t, dir, busAssert("mine", c.parentSessionID()))
-	c.SetAgentBusDir(dir)
+	c.SetAgentBus(dir, "")
 	if c.agentBusTurnBlock() == "" {
 		t.Fatal("wired board should produce a block")
 	}
-	c.SetAgentBusDir("")
+	c.SetAgentBus("", "")
 	if block := c.agentBusTurnBlock(); block != "" {
 		t.Fatalf("opting out must stop the block, got %q", block)
 	}
@@ -112,8 +112,49 @@ func TestSetAgentBusDirEmptyOptsOut(t *testing.T) {
 
 func TestUnreadableBoardLeavesTheTurnIntact(t *testing.T) {
 	c := newAgentBusTestController(t)
-	c.SetAgentBusDir(filepath.Join(t.TempDir(), "missing-as-a-file"))
+	c.SetAgentBus(filepath.Join(t.TempDir(), "missing-as-a-file"), "")
 	if block := c.agentBusTurnBlock(); block != "" {
 		t.Fatalf("a board that cannot be read must contribute nothing, got %q", block)
+	}
+}
+
+func TestAgentBusWritePathAndHumanRows(t *testing.T) {
+	dir := t.TempDir()
+	c := newAgentBusTestController(t)
+	c.SetAgentBus(dir, "alice")
+	bg := context.Background()
+	if _, err := c.ApplyAgentBusOp(bg, busAssert("design", "alice")); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	rows, ok := c.AgentBusTasks(time.Now().UTC())
+	if !ok || len(rows) != 1 || rows[0].ID != "design" || !rows[0].Ready {
+		t.Fatalf("rows = %+v ok=%v, want one ready node", rows, ok)
+	}
+	if !strings.Contains(c.agentBusTurnBlock(), "node id=design") {
+		t.Fatal("a written op must reach its author's next turn")
+	}
+}
+
+func TestAgentBusRefusalIsTyped(t *testing.T) {
+	dir := t.TempDir()
+	c := newAgentBusTestController(t)
+	c.SetAgentBus(dir, "alice")
+	bg := context.Background()
+	if _, err := c.ApplyAgentBusOp(bg, busAssert("n", "alice")); err != nil {
+		t.Fatalf("apply: %v", err)
+	}
+	_, err := c.ApplyAgentBusOp(bg, board.Op{Verb: board.VerbClaim, Node: "n", Actor: "alice", Deadline: time.Now().UTC().Add(time.Hour)})
+	if reason, ok := board.IsReject(err); !ok || reason != board.ReasonMissingBounds {
+		t.Fatalf("refusal = (%q, %v), want missing_bounds", reason, ok)
+	}
+}
+
+func TestAgentBusUnwiredWriteFails(t *testing.T) {
+	c := newAgentBusTestController(t)
+	if _, err := c.ApplyAgentBusOp(context.Background(), busAssert("n", "alice")); err == nil {
+		t.Fatal("an unenrolled controller must refuse to write")
+	}
+	if _, ok := c.AgentBusTasks(time.Now().UTC()); ok {
+		t.Fatal("an unenrolled controller has no human rows")
 	}
 }
