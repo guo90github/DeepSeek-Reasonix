@@ -823,3 +823,26 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
   ⇒ **装配跳已经存在**（上下文注入的形态）⇒ token 复活 = **在注入 `TaskBudget` 的地方把 `GoalTokenBudget` 也填上**（0 = 不设 ⇒ 行为不变）；
 - 于是三步收敛为：①（唯一的代码改动）在注入处填 `Tokens`；② 照 `task_budget_gate_test.go` 的 `"cost"` 那一态补 `"token"`（含未配置不拦）；
   ③ control 侧 `goalPauseFromRunError` 目前把 `Kind == "task_budget"` 一律映射成 `budget_spend` ✗ ⇒ **按暂停的 `Key` 分派**（`"token"` ⇒ `budget_tokens`）。
+
+### 13.9 账本宿主与记账时机（T4-8 之外的最后一处 S5 落地，2026-10-02 定规格）
+
+**问题**：`agentbus.Ledger`（四级预算 + 本机槽位）机制就绪，但**生产里没有任何地方创建它** ⇒ 定"谁持有、哪个 tick 记账"。
+
+**谁持有：宿主进程一份**。理由是 §13.4 已经定过——**槽位是本机 host 级**，而板/子树/节点/回合四级额度是
+**按 board 记账**的（`Ledger` 的键形如 `board:<name>` / `subtree:…`）⇒ **一份账本可以服务同一进程里的多个板**。
+所以它属于**宿主对象**（桌面 `App` / serve 服务），由宿主构造并**下发给各控制器**，形态照 `SetAgentBusWaker` 的先例
+（`SetAgentBusLedger(ledger)` 之类的小接口），而不是让每个会话各自持一份（那会让"宿主全局槽位"名不副实）。
+
+**哪个 tick 记账：两处，都在既有检查点上，不新增时钟**。
+
+| 动作 | 位置 | 语义 |
+|---|---|---|
+| `Charge`（节点 + 回合额度 = **做工的额度**） | **既有每回合预算闸门**（`internal/agent/run_loop.go` 回合前那一处，`TaskBudget` 也在这里判） | "这一步还能不能开工"；与既有 `exceeded` 同一检查点，**不另开一处记账** |
+| `Settle`（board + 子树额度 = **验收的额度**） | **板的写路径**（`control.ApplyAgentBusOp` 里 `decide(done)` 成功之后） | 只有**被验收**的节点消耗总预算（T7-4）；重复结算由 `Ledger.settled` 去重 |
+
+**配置翻译**：§13.7 的操作者旋钮在**装配处翻译一次**成 `BudgetLimits`（`internal/boot` 正是 `GoalTokenBudget` 已有的流经之地），
+拒绝发生在账本里（`IsBudgetReject` 命名到层级），超限的 Goal 语义按 §13.7 = `blocked`。
+
+**残余（如实记）**：**墙钟轴（`time`）没有自己的停止原因**——`goalPauseFromPause` 目前把它也记成 `budget_spend`
+（`internal/control` 的停止原因闭集里没有 `budget_time`）。要么补一个自有原因，要么在文档里明确"墙钟越限按 spend 记"，
+**两者选一**，不要留着不说。
