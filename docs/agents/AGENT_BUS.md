@@ -780,3 +780,14 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 
 两者**不是同一个账本、也不该合并**：前者决定"这次 Run 还跑不跑"，后者决定"这个板上的这一步能不能开工"。
 上一段把二者写成一件事是错的，此处更正。
+
+**token 复活的落点再收窄（2026-10-02 继续读代码）**：闸门**本来就是按轴通用的**，不需要照抄一段逻辑：
+
+- `internal/agent/run_loop.go` 的回合前检查是 `if axis, detail := a.task.budget.exceeded(a.taskBudgetLimit(ctx)); axis != "" { … armFinalizationRound(… axis: axis …) }`
+  ⇒ **谁超了就拿谁的名字起暂停**；暂停信息已经带 `axis`（`internal/agent/errors.go` 的
+  `RunPauseInfo{Kind: "task_budget", Key: budget.axis, HostOwned: true}`），control 侧再把它映射成 Goal 停止原因。
+- ⇒ **token 复活 = 给预算跟踪器补上 token 这条轴**：① `taskBudgetLimit(ctx)` 要能从 `GoalTokenBudget` 给出 token 上限
+  （默认 0 = 不设 ⇒ 行为与现在一致）；② 让 token 用量落在该轴上（`run_loop.go` 每回合已有 `ObserveUsage(usage)`，
+  需确认它喂的是同一条预算对象）；③ 于是 `exceeded` 会以 `axis == "tokens"` 返回，暂停与映射**自动**走通。
+- **测试模板**：`internal/agent/task_budget_gate_test.go` 已经断言 `info.Kind == "task_budget" && info.Key == "cost"`
+  ⇒ token 那条照它写（`Key == "tokens"`），再补 control 侧的映射分派（`budget_spend` / `budget_tokens`）。
