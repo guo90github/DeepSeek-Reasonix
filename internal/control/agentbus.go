@@ -24,6 +24,8 @@ type agentBusState struct {
 	limits      agentbus.TalkLimits
 	// hearingLimits bound this session's deliberations; zero leaves them off.
 	hearingLimits agentbus.HearingLimits
+	// observeLimits tune how much the human first screen carries; zero uses defaults.
+	observeLimits agentbus.ObserveLimits
 	// waker is the host's routing for ready-work wakes; nil means wake nobody.
 	waker func(context.Context, agentbus.WakeTarget) error
 	// woken remembers the last work set each participant was woken for, so a host

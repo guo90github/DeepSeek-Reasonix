@@ -77,7 +77,9 @@
       **跨进程带令牌未做**（属宿主/传输层：随 T5-5 的宿主路由一起接）
 - [x] T5-5 就绪即事件唤醒（`interval` 只兜底）→ 内核侧已落：`internal/agentbus/wake.go`（`WakeTargets` 从 op 日志 + 话题面派生目标，
       key 由工作集合派生 ⇒ 每 tick 幂等）+ `internal/control/agentbus_wake.go`（`SetAgentBusWaker` 宿主路由、不唤醒自己、失败释放 key 重试）
-      + 写路径发起（`ApplyAgentBusOp` 非 replay 时唤醒）；**宿主侧路由（谁安装 waker：桌面多 tab / serve / 远端）未接**，下一刀
+      + 写路径发起（`ApplyAgentBusOp` 非 replay 时唤醒）。**宿主侧路由未接**，但缝已定死：桌面 `tabs map[string]*WorkspaceTab` + `tab.Ctrl`，
+      路由 = 找到 `Ctrl.AgentBusParticipant() == target.Participant` 的那个 tab，再 `TryEnqueueFollowup(control.InboxRequest{Submit:…, Source: "agentbus",
+      Idempotency: target.Key})`（`TryEnqueueFollowup` 在会话空闲时会触发派发 ⇒ 唤醒真的会起回合）；`AgentBusParticipant()` 本轮已可从内核读出
 - [ ] T5-6 **节点记录 `Requester`**（`require`/`assert`/`split` 写入），使"谁要这个节点"回到折出状态——目前只能从 op 轨迹派生，
       见 `docs/agents/AGENT_BUS.md` §13.3 的缺口说明
 
@@ -126,7 +128,8 @@
 - [x] T8-2 首屏不画 >N 张卡片（阈值可配）；孤儿与停滞必现 → `ObserveLimits{MaxCards, MaxSignals}`（默认 12/40）；
       `SignalKind.Mandatory()`（orphan/stalled）**不受上限影响**，被裁的计入 `Hidden`，卡片超限计入 `HiddenCards`；
       用例 `TestObserveAlwaysShowsOrphansAndStalls`（上限 1 时孤儿与两处停滞全在，多余争议被裁并计数）
-- [ ] T8-3 **面板接线**（下一刀）：桌面侧消费 `Briefing`（Virtuoso 卡片 + 下钻），事件族随 S6 一起定
+- [ ] T8-3 **面板接线**（分两半）：**control 读面已落**（`AgentBusBriefing(now)` + `SetAgentBusObserveLimits` + `AgentBusParticipant()`，
+      用例 `internal/control/agentbus_observe_test.go`）；**桌面侧未接**（消费 `Briefing` 画卡片 + 下钻，事件族随 S6 定）
 
 ## T9 S7 e2e + 无人值守贯通 + 百级压测
 
