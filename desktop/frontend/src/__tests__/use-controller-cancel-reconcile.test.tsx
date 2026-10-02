@@ -58,6 +58,10 @@ function tabMeta(overrides: Partial<TabMeta> = {}): TabMeta {
     tokenMode: "full",
     active: true,
     cwd: "/repo",
+    sessionPath: SESSION_PATH,
+    sessionRevision: 1,
+    sessionDigest: "digest-a",
+    sessionGeneration: 1,
     ...overrides,
   };
 }
@@ -111,6 +115,8 @@ let interruptError: Error | null = null;
 let effortCalls = 0;
 let checkpointHistoryCalls = 0;
 let historyLoads = 0;
+const SESSION_PATH = "/repo/.reasonix/sessions/a.jsonl";
+let hydratedSession = false;
 let checkpointLoads = 0;
 let turnReplayCalls = 0;
 const context: ContextInfo = { used: 0, window: 100, sessionTokens: 0 };
@@ -120,7 +126,7 @@ const desktopStub = installDesktopHostStub(({
   main: {
     App: {
       ListTabs: async () => [tabMeta({ running: backendRunning, cancellable: backendRunning })],
-      MetaForTab: async () => meta(),
+      MetaForTab: async () => (hydratedSession ? { ...meta(), sessionPath: SESSION_PATH, sessionGeneration: 1 } : meta()),
       ContextUsageForTab: async () => context,
       EffortForTab: async () => effort,
       SetEffortForTab: async () => {
@@ -136,6 +142,7 @@ const desktopStub = installDesktopHostStub(({
       HistoryForTab: async () => [],
       HistorySliceForTab: async (tabID: string, req: HistorySliceRequest) => {
         historyLoads += 1;
+        hydratedSession = true;
         return historySliceFromMessages(
           tabID,
           [{ role: "user", content: "hello", createdAt: Date.now(), checkpointTurn: 0 }],
@@ -214,6 +221,12 @@ await act(async () => {
   root.render(<Probe />);
   await flushPromises();
 });
+
+await act(async () => {
+  desktopStub.emit("desktop:resync");
+  await flushPromises();
+});
+
 await waitFor("active tab", () => controller?.activeTabId === "tab-a");
 await act(async () => {
   await flushPromises(50);
