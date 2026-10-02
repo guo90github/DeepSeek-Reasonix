@@ -152,6 +152,11 @@
       ⇒ `DESKTOP_COMMANDS`/DTO/`GeneratedDesktopCommands` 自动带上 `AgentBusBriefing`；`lib/bridge.ts` 补声明 + mock（**守卫就是 `tsc`**）；
       `WorkspaceAgentBusSection.tsx`（取数与"读不到"分开）挂在 `WorkspacePanel.tsx` 的 body 开头（`refreshKey = tabId|sessionPath`）。
       **仍未做**：`onOpenNode` 下钻暂留空（先只读显示）；视觉样式只用了最小内联，未新增 CSS
+      **读面已就绪（2026-10-02）**：内核 `internal/agentbus/detail.go` 的 `DescribeNode(state, hearings, ops, node)`
+      给出**节点详情**（状态 / 依赖 / 是否可开工 / 争议与其理由 / **授权是谁批的、为什么** / 是否在审议与判决），
+      授权**只从 op 日志取**（§13.8：哪条 `assert` 是授权属 provenance，折叠态带不了）。control 侧 `AgentBusNodeDetail(node)`
+      照 `AgentBusBriefing` 的形状挂上（未入列会话 ⇒ `false` ✓）。用例：内核 4 条（含"自授权不算授权"与"未知节点报缺失"）、
+      control 2 条。**剩下的是界面**：桌面绑定 + 契约再生成 + `bridge.ts` 声明/mock + 面板里只读展开 + 文案 ×3 locale + 组件用例。
 
 ## T9 S7 e2e + 无人值守贯通 + 百级压测
 
