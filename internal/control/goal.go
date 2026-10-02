@@ -40,12 +40,8 @@ const (
 // Stop causes distinguish a safe pause from a genuine block. Removed numeric
 // causes remain migration-only constants so old sidecars can be normalized.
 const (
-	stopCauseBudgetTurns = "budget_turns" // legacy; the class-derived turn quota is gone
-	stopCauseBudgetSpend = "budget_spend"
-	// budgetAxisToken is the axis name the agent's budget gate reports when the token
-	// limit is the one crossed (internal/agent/run_budget.go).
-	budgetAxisToken        = "token"
-	stopCauseBudgetTokens  = "budget_tokens"
+	stopCauseBudgetTurns   = "budget_turns" // legacy; the class-derived turn quota is gone
+	stopCauseBudgetSpend   = "budget_spend"
 	stopCauseNoProgress    = "no_progress"     // legacy; never written by current runtime
 	stopCauseGoalRunBudget = "goal_run_budget" // legacy; the per-Run round ceiling is gone
 	stopCauseGoalStuck     = "goal_stuck"
