@@ -762,3 +762,21 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
   且停止原因是 `budget_tokens`；③ 关掉该配置（默认值）时**行为与现在一致**（跑到跑完或叫停）——即复活不得改变未配置用户的语义。
 - **记账点先定再写**：与 §13.7 开头同一问题——谁持有账本/在哪个 tick 记账。若 `budget_spend` 已有明确记账点，
   token 就挂在**同一点**上，不另开一处。
+
+**记账点在哪里（2026-10-02 读出，不再"先定再写"）**：`budget_spend` 的记账点**不在 control 里的账本**，而在**agent 层的"运行暂停"**：
+
+- `internal/control/turn_orchestrator.go` 的 `goalPauseFromRunError`：`agent.InspectRunPause(err)` 给出 `Kind == "task_budget" && HostOwned`
+  ⇒ 映射成 `stopCauseBudgetSpend`（`goal.go:541` 落成停止原因）；
+- ⇒ **token 复活的正确落点**是两处、且都在既有形状内：① `internal/agent` 侧让**token** 预算也产生同一种
+  `task_budget` 运行暂停（spend 那条已有）；② `turn_orchestrator` 的这段映射按**是哪一种预算**分别给
+  `budget_spend` / `budget_tokens`。不需要新机制，只需要让暂停信息里带上"哪个预算"。
+
+**另一条必须说清的澄清**：这条 **Goal 预算（agent 层运行暂停）与 §S5 的 `agentbus.Ledger`（四级预算）是两回事**——
+
+| | 粒度与层 | 现状 |
+|---|---|---|
+| Goal 预算（spend/token/time） | **一次无人值守 Run** 的累计，agent → control 的状态迁移 | spend 在写；token 待复活（本节） |
+| §S5 `Ledger` | **一个板**上的 board/子树/节点/回合四级允许量，内核记账与拒绝（`IsBudgetReject`） | 机制就绪、**尚无宿主**（谁持有、哪个 tick 记账仍待定） |
+
+两者**不是同一个账本、也不该合并**：前者决定"这次 Run 还跑不跑"，后者决定"这个板上的这一步能不能开工"。
+上一段把二者写成一件事是错的，此处更正。
