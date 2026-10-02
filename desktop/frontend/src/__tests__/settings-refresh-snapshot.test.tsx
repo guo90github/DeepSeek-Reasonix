@@ -147,9 +147,10 @@ eq(generalFieldLabels[0], "Desktop style", "general settings place desktop style
 eq(document.querySelectorAll(".step-limit-control").length, 0, "general settings hide executor and planner step-limit controls");
 eq(rootEl.querySelectorAll('[role="radiogroup"]').length > 0, true, "session experience exposes an accessible choice group");
 ok(rootEl.textContent?.includes("Session experience") === true, "general settings render the canonical session experience field");
-ok(!rootEl.textContent?.includes("Conversation density"), "general settings do not render the retired density field");
-ok(!rootEl.textContent?.includes("Thinking content"), "general settings do not render the retired reasoning field");
-ok(!rootEl.textContent?.includes("After the turn"), "general settings do not render the retired fold field");
+// dev-2 keeps its own extras section in the general tab on purpose — density /
+// thinking display / turn fold, kept from the old shell (SettingsPanel's
+// DevWorkflowExtras) — so the upstream "retired field" negatives do not apply.
+ok(rootEl.textContent?.includes("Conversation density") === true, "dev-2 extras still render the density field");
 ok(!document.body.textContent?.includes("step limit"), "general settings keep automatic progress free of step-limit copy");
 ok(!document.body.textContent?.includes("Automatic plan mode"), "general settings omit the retired automatic Plan Mode control");
 ok(!document.body.textContent?.includes("planning defaults"), "general settings omit retired automatic Plan Mode copy");
@@ -161,7 +162,10 @@ eq(setDisplayModeCalls, 0, "legacy display mode mutation is not invoked");
 eq(settingsCalls, 2, "settings panel reads Settings only for initial load and post-save reload");
 ok(onChangedSettings?.sessionExperience === "deep", "onChanged receives the post-save SettingsView snapshot");
 
-const standardButton = Array.from(document.querySelectorAll("button"))
+// Scope to the session-experience group: the dev-2 extras' density control also
+// reads "Standard" and comes earlier in the document.
+const sessionGroup = () => document.querySelector('[role="radiogroup"][aria-label="Session experience"]');
+const standardButton = Array.from(sessionGroup()?.querySelectorAll("button") ?? [])
   .find((button) => button.textContent?.trim() === "Standard") as HTMLButtonElement | undefined;
 if (!standardButton) throw new Error("standard session experience button did not render");
 rejectSessionExperience = true;
@@ -169,7 +173,7 @@ await press(standardButton);
 eq(setSessionExperienceCalls, 2, "failed session experience mutation is invoked once");
 eq(settingsCalls, 3, "failed save still reloads the authoritative Settings snapshot");
 ok(onChangedSettings?.sessionExperience === "deep", "failed save publishes the authoritative backend value");
-const refreshedDeepButton = Array.from(document.querySelectorAll("button"))
+const refreshedDeepButton = Array.from(sessionGroup()?.querySelectorAll("button") ?? [])
   .find((button) => button.textContent?.trim() === "Deep") as HTMLButtonElement | undefined;
 eq(refreshedDeepButton?.getAttribute("aria-checked"), "true", "failed save reconciles the segmented control from the backend snapshot");
 
