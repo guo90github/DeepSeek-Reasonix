@@ -66,6 +66,7 @@ const OWNED_ELSEWHERE = new Map(Object.entries({
   "statusbar-workspace.test.tsx": "test:remote",
   "updater-shared-state.test.tsx": "test:updater",
   "window-state-ordering.test.ts": "test:window-state",
+  "topicbar-region.test.tsx": "test:app-lifecycle (needs the svg stub register)",
 }));
 
 const keepGoing = process.argv.includes("--keep-going");

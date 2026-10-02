@@ -20,6 +20,10 @@ class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
 // not advertise native InputEvent support.
 Object.defineProperty(dom.window.HTMLElement.prototype, "attachEvent", { configurable: true, value: () => {} });
 Object.defineProperty(dom.window.HTMLElement.prototype, "detachEvent", { configurable: true, value: () => {} });
+// detectLocale falls back to navigator.language, and Node's own global navigator
+// reports the HOST locale (zh here) — plain assignment is a no-op because Node
+// defines it as a read-only getter. Install jsdom's so the copy is deterministic.
+Object.defineProperty(globalThis, "navigator", { configurable: true, value: dom.window.navigator });
 
 // Import ReactDOM and the component only after installing the DOM so React
 // selects its native input-event path instead of the legacy IE polyfill.
