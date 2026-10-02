@@ -245,6 +245,26 @@
       **仍待做**：一次"杀 → **不手动重启** → 等 ≥6 分钟"的完整窗口观测（这才算 T9-4 通过）；另半条"黑板继续被推进"需
       被拉起的宿主里有带契约的会话（无人值守语义见记忆：总开关是唯一闸门）。
       **另一件如实记录**：为验证启用的看门狗最终已回到 `enabled=false / not registered`（我承诺的"跑完恢复"状态成立）。
+
+      **第二次尝试（同一夜，走完整窗口）：改判 + 找到真正的卡点 —— 看门狗任务从未自动触发。**
+      - **更正一处误判**：第一次的脚本日志里那句 `看门狗已拉起：新 runId=… 用时 165s` **是误判** —— 那个新宿主是**用户手动启动**的；
+        脚本只判"新 runId + 活 pid"，**无法区分看门狗与人工**。⇒ 至今**没有任何一次观察到看门狗自己拉起 App**。
+      - **权威证据**：`ReasonixDesktopWatchdog` 任务的 `LastRunTime` 恒为 `1999-11-30`（从未运行）、`NextRunTime` 停在过期点不推进；
+        而 `Start-ScheduledTask`（由调度器拉起任务本体）立即成功（`LastRunTime` 推进、`Result=0`）⇒ **任务本体没问题，是触发器不响**。
+      - **注册条件继承了 Windows 默认值**（`schtasks /Create /SC MINUTE /MO 5` 没带电池豁免）：
+        `DisallowStartIfOnBatteries=True / StopIfGoingOnBatteries=True / StartWhenAvailable=False`。
+        手工改成 `False/False/True`（PowerShell `Set-ScheduledTask`，**不需要提权**）后**仍然不自动触发** ⇒ 电池选项只是其一。
+      - **对照实验排除"机器整体失效"**：自建一个 `-Once` 最小任务（同样用 `Register-ScheduledTask`，条件放开），
+        在 `NextRunTime=23:40:40` 之后 **23:41:00 自然跑成功**（写出了标记文件）⇒ 本机计划任务**能**自动触发，
+        **缺陷看守门狗任务的触发器/注册**（具体成因仍未定：`Microsoft-Windows-TaskScheduler/Operational` 日志未启用，读不到原因）。
+      - **脚本教训（写下来免得下次再踩）**：从宿主进程树里起的脚本会被**连坐**（Windows Job Object，`Start-Process` 也逃不掉）——
+        第一次的脚本其实活到把结论写完，第二次改用**计划任务方式**启动探针才不随 App 死；另外探针不能只判"新 runId"，
+        必须有"是不是看门狗启动的"的判据（例如任务 `LastRunTime` 同时推进 / 出现 watchdog 运行日志）。
+      - **产品侧待办（本轮由此浮出的真缺陷）**：① 注册时不要继承电池限制（用 `/XML` 或补一步 `Set-ScheduledTask`，
+        并把 `StartWhenAvailable` 打开）；② **在真机上验证触发器真的会响**（判据：任务 `LastRunTime` 自然推进或出现 watchdog 运行日志），
+        否则 `WatchdogStatus` 显示 `registered=true` 是**假的安心**；③ `WatchdogStatus` 建议加"上次运行时间"，让"从未运行"可见。
+      - **仍待做**：看门狗修好之后再走一次"杀 → 不手动重启 → 等窗口"的完整验收；另半条"黑板继续被推进"需被拉起的宿主里有带契约的会话。
+      - 机器状态：所有探针任务已删除（`*T94*` 无残留），看门狗已回到 `enabled=false / not registered`。
 - [x] T9-5 任务级落地：验收节点全 `done` + 无未决矛盾才宣告完成
       **前置缺口（2026-10-02 读清，先定再写）**：**内核里没有"验收节点"这个概念** ✗ —— `board.NodeSpec` 只有
       `{ID, Title}`，op 与状态里都没有 kind/marker ⇒ "哪些节点算验收节点"**无法表达**，此时写判定就是替使用者发明 ✗。
