@@ -2,8 +2,10 @@ package control
 
 import (
 	"context"
+	"time"
 
 	"reasonix/internal/agent"
+	"reasonix/internal/agentbus"
 	"reasonix/internal/billing"
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/command"
@@ -289,6 +291,23 @@ type Settings interface {
 // SessionAPI is the full driving port — the composition of every sub-port. A
 // rich frontend (the HTTP server, the desktop app, the TUI) depends on this;
 // leaner frontends (bot, acp) depend on just the sub-ports they use.
+// AgentBusControl is the coordination surface a host needs: who this session is on
+// the board, where a wake should be routed, whether there is work waiting, and the
+// human first screen. It stays narrow so a host can assert it on whichever port it
+// already holds, without every SessionAPI implementation growing these methods.
+type AgentBusControl interface {
+	// AgentBusParticipant names the session on its board; empty means none.
+	AgentBusParticipant() string
+	// SetAgentBusWaker installs the host's routing for ready-work wakes.
+	SetAgentBusWaker(func(context.Context, agentbus.WakeTarget) error)
+	// WakeAgentBus wakes whoever has work waiting and reports how many were woken.
+	WakeAgentBus(ctx context.Context) int
+	// AgentBusBriefing folds the board, queue and deliberations for the first screen.
+	AgentBusBriefing(now time.Time) (agentbus.Briefing, bool)
+}
+
+var _ AgentBusControl = (*Controller)(nil)
+
 type SessionAPI interface {
 	Lifecycle
 	TurnControl

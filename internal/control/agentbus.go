@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"reasonix/internal/agent"
 	"reasonix/internal/agentbus"
 	"reasonix/internal/agentbus/board"
 )
@@ -203,4 +204,11 @@ func (b *agentBusState) advance(seq uint64) {
 	if seq > b.cursors.board {
 		b.cursors.board = seq
 	}
+}
+
+// parentSessionID is the identity a session falls back to when no participant was
+// given explicitly: the branch id derived from its session path. It lives here with
+// the rest of the board identity so the controller struct stays as it was.
+func (c *Controller) parentSessionID() string {
+	return agent.BranchID(c.SessionPath())
 }

@@ -13,7 +13,14 @@ var errTabControllerExtensionsChanged = errors.New("desktop: controller extensio
 // buildTabControllerBoot is a thin wrapper around boot.Build so the large
 // controller assembly path can stay under function-size / complexity budgets.
 func (a *App) buildTabControllerBoot(ctx context.Context, opts boot.Options) (control.SessionAPI, error) {
-	return boot.Build(ctx, opts)
+	ctrl, err := boot.Build(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	// A controller joins the board's wake routing the moment it exists, so work parked
+	// while no tab owned it is picked up here instead of waiting for a sweep.
+	a.enrollAgentBus(ctrl)
+	return ctrl, nil
 }
 
 // buildTabControllerBootFenced keeps optimistic builds concurrent with each

@@ -101,94 +101,127 @@ func Observe(state *board.State, queue *QueueState, hearings *HearingState, now 
 		lim.MaxSignals = DefaultMaxSignals
 	}
 
-	cards := map[string]*Card{}
-	card := func(subtree string) *Card {
-		if c, ok := cards[subtree]; ok {
-			return c
-		}
-		c := &Card{Subtree: subtree, Worst: SignalUndecided}
-		cards[subtree] = c
+	folder := &observeFolder{state: state, cards: map[string]*Card{}}
+	folder.board(now)
+	folder.deliberations(hearings)
+	folder.queue(queue)
+
+	briefing := &Briefing{HealthySubtrees: folder.healthySubtrees()}
+	attention := folder.attention()
+	if len(attention) > lim.MaxCards {
+		briefing.HiddenCards = len(attention) - lim.MaxCards
+		attention = attention[:lim.MaxCards]
+	}
+	briefing.Cards = attention
+	briefing.Signals, briefing.Hidden = capSignals(folder.signals, lim.MaxSignals)
+	return briefing
+}
+
+// observeFolder collects cards and signals while the surfaces are folded, so the
+// fold reads as one purpose per method instead of one very long function.
+type observeFolder struct {
+	state   *board.State
+	cards   map[string]*Card
+	signals []Signal
+}
+
+func (f *observeFolder) card(subtree string) *Card {
+	if c, ok := f.cards[subtree]; ok {
 		return c
 	}
-	signals := []Signal{}
-	add := func(kind SignalKind, subtree, node, detail string) {
-		signals = append(signals, Signal{Kind: kind, Subtree: subtree, Node: node, Detail: detail})
-	}
-	subtreeOf := func(node, hint string) string {
-		if state == nil {
-			return hint
-		}
-		// Parked work may name a node the board no longer holds: then the subtrees it
-		// was parked under is the only thing we know about it.
-		if _, ok := state.Nodes[node]; !ok && hint != "" {
-			return hint
-		}
-		return SubtreeRoot(state, node)
-	}
+	c := &Card{Subtree: subtree}
+	f.cards[subtree] = c
+	return c
+}
 
-	if state != nil {
-		for _, id := range sortedNodeIDs(state) {
-			n := state.Nodes[id]
-			subtree := SubtreeRoot(state, id)
-			c := card(subtree)
-			c.Nodes++
-			switch n.State {
-			case board.StateDone:
-				c.Done++
-			case board.StateClaimed:
-				c.AtWork++
-			}
-			if n.State != board.StateDone && n.State != board.StateAbandoned {
-				if detail := orphanReason(state, n); detail != "" {
-					c.Orphans++
-					add(SignalOrphan, subtree, id, detail)
-				}
-			}
-			if detail := stallReason(n, now); detail != "" {
-				c.Stalled++
-				add(SignalStalled, subtree, id, detail)
-			}
-			if len(n.Refutes) > 0 && n.Outcome == "" {
-				c.Disputed++
-				add(SignalDisputed, subtree, id, fmt.Sprintf("%d refutations, no verdict", len(n.Refutes)))
+// subtreeOf resolves where a node belongs. Parked work may name a node the board no
+// longer holds: then the subtree it was parked under is all we know about it.
+func (f *observeFolder) subtreeOf(node, hint string) string {
+	if f.state == nil {
+		return hint
+	}
+	if _, ok := f.state.Nodes[node]; !ok && hint != "" {
+		return hint
+	}
+	return SubtreeRoot(f.state, node)
+}
+
+func (f *observeFolder) board(now time.Time) {
+	if f.state == nil {
+		return
+	}
+	for _, id := range sortedNodeIDs(f.state) {
+		n := f.state.Nodes[id]
+		subtree := SubtreeRoot(f.state, id)
+		c := f.card(subtree)
+		c.Nodes++
+		switch n.State {
+		case board.StateDone:
+			c.Done++
+		case board.StateClaimed:
+			c.AtWork++
+		}
+		if n.State != board.StateDone && n.State != board.StateAbandoned {
+			if detail := orphanReason(f.state, n); detail != "" {
+				c.Orphans++
+				f.signals = append(f.signals, Signal{Kind: SignalOrphan, Subtree: subtree, Node: id, Detail: detail})
 			}
 		}
-	}
-
-	if hearings != nil {
-		for _, node := range sortedHearingNodes(hearings) {
-			h := hearings.Hearings[node]
-			subtree := subtreeOf(node, "")
-			c := card(subtree)
-			switch {
-			case h.Open:
-				c.Disputed++
-				add(SignalDisputed, subtree, node, "under deliberation")
-			case h.Verdict == VerdictEscalate:
-				add(SignalEscalated, subtree, node, "escalated to a human")
-			case h.Verdict == VerdictUndecided:
-				add(SignalUndecided, subtree, node, "closed by rule: nobody may call it settled")
-			default:
-				continue
-			}
+		if detail := stallReason(n, now); detail != "" {
+			c.Stalled++
+			f.signals = append(f.signals, Signal{Kind: SignalStalled, Subtree: subtree, Node: id, Detail: detail})
+		}
+		if len(n.Refutes) > 0 && n.Outcome == "" {
+			c.Disputed++
+			f.signals = append(f.signals, Signal{
+				Kind: SignalDisputed, Subtree: subtree, Node: id,
+				Detail: fmt.Sprintf("%d refutations, no verdict", len(n.Refutes)),
+			})
 		}
 	}
+}
 
-	if queue != nil {
-		for _, entry := range queue.Next(0) {
-			// Parked work is waiting for a slot, which is normal: it is a count, not
-			// a signal. Only work that cannot ever run earns a card.
-			card(subtreeOf(entry.Node, entry.Subtree)).Parked++
+func (f *observeFolder) deliberations(hearings *HearingState) {
+	if hearings == nil {
+		return
+	}
+	for _, node := range sortedHearingNodes(hearings) {
+		h := hearings.Hearings[node]
+		subtree := f.subtreeOf(node, "")
+		c := f.card(subtree)
+		switch {
+		case h.Open:
+			c.Disputed++
+			f.signals = append(f.signals, Signal{Kind: SignalDisputed, Subtree: subtree, Node: node, Detail: "under deliberation"})
+		case h.Verdict == VerdictEscalate:
+			f.signals = append(f.signals, Signal{Kind: SignalEscalated, Subtree: subtree, Node: node, Detail: "escalated to a human"})
+		case h.Verdict == VerdictUndecided:
+			f.signals = append(f.signals, Signal{
+				Kind: SignalUndecided, Subtree: subtree, Node: node,
+				Detail: "closed by rule: nobody may call it settled",
+			})
 		}
 	}
+}
 
-	digest := &Briefing{}
-	for _, c := range cards {
+func (f *observeFolder) queue(queue *QueueState) {
+	if queue == nil {
+		return
+	}
+	for _, entry := range queue.Next(0) {
+		// Parked work waits for a slot, which is normal: it is a count, not a signal.
+		f.card(f.subtreeOf(entry.Node, entry.Subtree)).Parked++
+	}
+}
+
+// attribute resolves each card's worst signal and how many it carries.
+func (f *observeFolder) attribute() []Card {
+	for _, c := range f.cards {
 		c.Signals = 0
 		c.Worst = ""
 	}
-	for _, signal := range signals {
-		c := cards[signal.Subtree]
+	for _, signal := range f.signals {
+		c := f.cards[signal.Subtree]
 		if c == nil {
 			continue
 		}
@@ -197,30 +230,56 @@ func Observe(state *board.State, queue *QueueState, hearings *HearingState, now 
 			c.Worst = signal.Kind
 		}
 	}
-
-	attention := make([]Card, 0, len(cards))
-	for _, c := range cards {
+	out := make([]Card, 0, len(f.cards))
+	for _, c := range f.cards {
 		if c.Signals == 0 {
-			digest.HealthySubtrees++
 			continue
 		}
-		attention = append(attention, *c)
+		out = append(out, *c)
 	}
-	sort.Slice(attention, func(i, j int) bool {
-		if severity(attention[i].Worst) != severity(attention[j].Worst) {
-			return severity(attention[i].Worst) < severity(attention[j].Worst)
-		}
-		if attention[i].Signals != attention[j].Signals {
-			return attention[i].Signals > attention[j].Signals
-		}
-		return attention[i].Subtree < attention[j].Subtree
-	})
-	if len(attention) > lim.MaxCards {
-		digest.HiddenCards = len(attention) - lim.MaxCards
-		attention = attention[:lim.MaxCards]
-	}
-	digest.Cards = attention
+	return out
+}
 
+// healthySubtrees counts the subtrees that raised no signal at all.
+func (f *observeFolder) healthySubtrees() int {
+	healthy := 0
+	for _, c := range f.cards {
+		if c.Signals == 0 && f.cardHasNoSignal(c.Subtree) {
+			healthy++
+		}
+	}
+	return healthy
+}
+
+func (f *observeFolder) cardHasNoSignal(subtree string) bool {
+	for _, signal := range f.signals {
+		if signal.Subtree == subtree {
+			return false
+		}
+	}
+	return true
+}
+
+// attention lists the subtrees that need a card, worst first and busiest next: a
+// screen shows what hurts most, not what happens to sort first.
+func (f *observeFolder) attention() []Card {
+	out := f.attribute()
+	sort.Slice(out, func(i, j int) bool {
+		if severity(out[i].Worst) != severity(out[j].Worst) {
+			return severity(out[i].Worst) < severity(out[j].Worst)
+		}
+		if out[i].Signals != out[j].Signals {
+			return out[i].Signals > out[j].Signals
+		}
+		return out[i].Subtree < out[j].Subtree
+	})
+	return out
+}
+
+// capSignals keeps every mandatory signal and fills the rest of the room with the
+// worst of what is left, counting whatever did not fit instead of dropping it
+// silently (T8-2).
+func capSignals(signals []Signal, room int) ([]Signal, int) {
 	sort.SliceStable(signals, func(i, j int) bool {
 		if severity(signals[i].Kind) != severity(signals[j].Kind) {
 			return severity(signals[i].Kind) < severity(signals[j].Kind)
@@ -230,18 +289,19 @@ func Observe(state *board.State, queue *QueueState, hearings *HearingState, now 
 		}
 		return signals[i].Node < signals[j].Node
 	})
-	room := lim.MaxSignals
+	var kept []Signal
+	hidden := 0
 	for _, signal := range signals {
 		if signal.Kind.Mandatory() || room > 0 {
-			digest.Signals = append(digest.Signals, signal)
+			kept = append(kept, signal)
 			if !signal.Kind.Mandatory() {
 				room--
 			}
 			continue
 		}
-		digest.Hidden++
+		hidden++
 	}
-	return digest
+	return kept, hidden
 }
 
 // orphanReason reports work that can never start: a node whose dependency is gone,
