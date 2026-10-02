@@ -3,6 +3,7 @@
 import { createTranscriptHarness } from "./transcript-dom-harness";
 import type { Item } from "../lib/useController";
 import type { WireCompletionSummary } from "../lib/types";
+import { en } from "../locales/en";
 
 let passed = 0;
 let failed = 0;
@@ -66,15 +67,15 @@ try {
     onOpenChanges: (summary?: WireCompletionSummary) => { changesOpens.push(summary); },
     onOpenVerification: (summary: WireCompletionSummary) => { verificationOpens.push(summary); },
   });
-  ok(harness.container.textContent?.includes("Turn result"), "result stays visible outside the process fold");
+  ok(harness.container.textContent?.includes(en["notice.completionChangesTitle"]), "result stays visible outside the process fold");
   ok(harness.container.textContent?.includes("Change statistics unavailable"), "legacy mutations do not become file counts");
   ok(!harness.container.textContent?.includes("balanced"), "compact notice exposes no internal enum values");
-  const button = Array.from(harness.container.querySelectorAll("button")).find((node) => node.textContent?.includes("View changes"));
+  const button = Array.from(harness.container.querySelectorAll("button")).find((node) => node.textContent?.includes(en["notice.completionViewChanges"]));
   ok(button, "completion notice offers a View changes action");
   button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   await harness.flush();
   ok(changesOpens[0] === earlierSummary, "View changes delegates the clicked historical summary");
-  const verifyButtons = Array.from(harness.container.querySelectorAll("button")).filter((node) => /View check details/.test(node.textContent ?? ""));
+  const verifyButtons = Array.from(harness.container.querySelectorAll("button")).filter((node) => node.textContent?.includes(en["notice.completionViewVerification"]));
   ok(verifyButtons.length === 2, "each completion notice offers a Turn verification action");
   verifyButtons[0]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   verifyButtons[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

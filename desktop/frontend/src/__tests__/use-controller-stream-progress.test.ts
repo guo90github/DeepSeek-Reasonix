@@ -14,6 +14,7 @@
 
 import { initialState, promptEventClock, reducer } from "../lib/useController";
 import type { WireEvent } from "../lib/types";
+import { en } from "../locales/en";
 
 let passed = 0;
 let failed = 0;
@@ -114,7 +115,12 @@ function ev(s: typeof initialState, e: WireEvent) {
     },
   });
   const suppressedNotice = suppressed.items[suppressed.items.length - 1];
-  eq(suppressedNotice?.kind === "notice" ? suppressedNotice.title : "", "Turn result", "required suppression retains the fixed result title");
+  eq(
+    suppressedNotice?.kind === "notice" ? suppressedNotice.title : "",
+    en["notice.completionChangesTitle"],
+    "required suppression keeps the completion notice title",
+  );
+  eq(suppressedNotice?.kind === "notice" ? suppressedNotice.level : "", "warn", "required suppression still flags attention");
 
   const restarted = ev(after, { kind: "turn_started" });
   eq(restarted.completionSummary, undefined, "a new turn clears the previous turn's quality details");
