@@ -878,3 +878,14 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
   ——两个记账点、一处注入、一处翻译，**全部落在 `control` + `boot`**，`internal/agent` 与 `internal/agentbus` 都不动 ✓。
 - 于是 §13.9 的实现收敛为**一个 control/boot 切片**（我这一场最熟的那类）：Options 注入 → boot 翻译 `BudgetLimits`
   → 绑定点 `Charge` → 验收点 `Settle` → 用例（装配值到达账本上限；`Settle` 只认验收节点；超限 Goal 为 `blocked`）。
+
+**动手前又核出一处前提错误（2026-10-02）：§13.7 的"把旋钮翻译成 `BudgetLimits`"不成立** ✗。
+
+- **作用域不同**：`GoalTokenBudget` / `TaskCostBudget` / `TaskTimeBudgetMinutes` 是**一次 Run 的累计**（agent 层，
+  决定"这次 Run 还跑不跑"，§13.7 已澄清）；而 `agentbus.BudgetLimits` 是**一个板上的四级额度**
+  （board / 子树 / 节点 / 回合，决定"这个板上这一步能不能开工"）。**一个是"跑"的账，一个是"板"的账** ⇒ 不存在 1:1 映射 ✗。
+- ⇒ §13.9 第 2 步（`boot` 装配处翻译旋钮 → `BudgetLimits`）**应当删掉** ✗。`Ledger` 的四级上限需要**它自己的来源**
+  （板上策略：谁定、从哪读——例如每板设置或板目录里的策略文件），这是一个**尚未决定**的问题 ✓，不能拿 Goal 旋钮冒充 ✗。
+- ⇒ §13.9 的落地只剩三步（§13.9 里其余部分不变）：① `boot.Options` 注入 `AgentBusLedger`；② `Charge` 挂
+  `turn_orchestrator.go` 的绑定点、`Settle` 挂 `ApplyAgentBusOp` 的 `decide(done)` 之后；③ 用例（装配值到达账本上限、
+  只认验收节点、超限 Goal `blocked`）——**外加一件新待办**：决定板级四级额度的来源（本稿不替使用者发明 ✗）。
