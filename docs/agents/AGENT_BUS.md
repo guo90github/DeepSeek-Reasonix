@@ -739,3 +739,15 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
   （即"超限 ⇒ `blocked`"这条口径**已有实现路径**，只是本轮**未逐行确认**哪一个分支正是预算耗尽的那一个 ✗）。
 - ⇒ 所以本节的"统属"结论不变（配置=设定、账本=机制），但**落地顺序要改**：先给账本找宿主（谁持有、何时记账），
   再谈把哪些旋钮映射到哪一级上限；**不要**先写"翻译"代码而假定账本已存在。
+
+**逐行核对结果（2026-10-02，收窄上一段的说法）**：`internal/control/goal.go` 里停止原因是**被标注过历史的**——
+
+| 停止原因 | 代码自述 |
+|---|---|
+| `stopCauseBudgetSpend` = `budget_spend` | **当前在写**的那一条 |
+| `stopCauseBudgetTokens` = `budget_tokens` | `// legacy; never written by current runtime` ⇒ **`GoalTokenBudget` 很可能已是死配置**（字段仍在、仍被装进 `control.Options`，但运行时从不写这条停止原因） |
+| `stopCauseBudgetTurns` / `stopCauseGoalRunBudget` | 同为 legacy（回合配额与每 Run 上限都已废弃） |
+
+⇒ 上一段说的"超限 ⇒ `blocked` 已有实现路径"**只对 `budget_spend` 成立**；**token 那一路未经证实、且有反证**。
+因此 T2-3 的落地还多一条待办：**先判定 `GoalTokenBudget` 是要复活（真的在运行时记账并写 `budget_tokens`）
+还是标记为废弃（从配置与 Options 里撤掉）**——两种都行，但必须选一种，不能让"配置项存在而无人读"的中间态留着。
