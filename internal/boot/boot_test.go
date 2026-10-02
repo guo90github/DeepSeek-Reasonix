@@ -2300,6 +2300,7 @@ func contractEntryNames(entries []tool.ContractEntry) []string {
 // role setting under identical configuration (core tools + host-control tools).
 func unifiedBootToolNames() []string {
 	return []string{
+		"agent_bus",
 		"ask",
 		"bash",
 		"bash_output",

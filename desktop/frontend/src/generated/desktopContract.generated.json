@@ -664,6 +664,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/agentbus_apply.go",
+      "name": "AgentBusApply",
+      "owner": "App.AgentBusApply",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.AgentBusApplyArgs"
+        }
+      ],
+      "result": {
+        "kind": "string"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "args"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.AgentBusApply"
+      },
+      "sources": [
+        "desktop/agentbus_apply.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/agentbus_briefing.go",
       "name": "AgentBusBriefing",
       "owner": "App.AgentBusBriefing",
@@ -680,6 +706,46 @@
       },
       "sources": [
         "desktop/agentbus_briefing.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/agentbus_enrol.go",
+      "name": "AgentBusJoin",
+      "owner": "App.AgentBusJoin",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.AgentBusStatusView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.AgentBusJoin"
+      },
+      "sources": [
+        "desktop/agentbus_enrol.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/agentbus_enrol.go",
+      "name": "AgentBusLeave",
+      "owner": "App.AgentBusLeave",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.AgentBusStatusView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.AgentBusLeave"
+      },
+      "sources": [
+        "desktop/agentbus_enrol.go"
       ]
     },
     {
@@ -706,6 +772,26 @@
       },
       "sources": [
         "desktop/agentbus_detail.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
+      "domain": "desktop/agentbus_enrol.go",
+      "name": "AgentBusStatus",
+      "owner": "App.AgentBusStatus",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.AgentBusStatusView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.AgentBusStatus"
+      },
+      "sources": [
+        "desktop/agentbus_enrol.go"
       ]
     },
     {
@@ -21073,6 +21159,79 @@
         }
       ]
     },
+    "main.AgentBusApplyArgs": {
+      "fields": [
+        {
+          "name": "action",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "node",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "title",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reason",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "outcome",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "ref",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reproducedBy",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "steps",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "children",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.AgentBusChildArg"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "dep",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.AgentBusChildArg"
+            },
+            "kind": "nullable"
+          }
+        }
+      ]
+    },
     "main.AgentBusAuthorizationView": {
       "fields": [
         {
@@ -21207,6 +21366,22 @@
         }
       ]
     },
+    "main.AgentBusChildArg": {
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "title",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
     "main.AgentBusNodeDetailView": {
       "fields": [
         {
@@ -21326,6 +21501,40 @@
         },
         {
           "name": "detail",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.AgentBusStatusView": {
+      "fields": [
+        {
+          "name": "enrolled",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "participant",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "board",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "boardDir",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "defaultDir",
           "type": {
             "kind": "string"
           }

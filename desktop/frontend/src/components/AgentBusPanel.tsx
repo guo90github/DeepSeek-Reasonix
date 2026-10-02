@@ -3,6 +3,7 @@
 
 import { useT } from "../lib/i18n";
 import type { DictKey } from "../locales/en";
+import type { ReactNode } from "react";
 
 export type AgentBusCardView = {
   subtree: string;
@@ -115,8 +116,22 @@ function AgentBusNodeDetail({ detail, onClose }: {
   );
 }
 
-export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseDetail }: {
-  view: AgentBusBriefingView;
+// Head is the panel's own title row, shared by the board view and the "not on a board
+// yet" view so the entry always looks like the same section.
+function Head({ who, enrol }: { who: string; enrol?: ReactNode }) {
+  const t = useT();
+  return (
+    <header className="agentbus-panel__head" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+      <strong>{t("agentbus.title")}</strong>
+      <span>{t("agentbus.participant", { who })}</span>
+      {enrol}
+    </header>
+  );
+}
+
+export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseDetail, enrol, notice }: {
+  /** The board's first screen; null means this session is not on a board yet. */
+  view?: AgentBusBriefingView | null;
   /** Opens a node; the host decides what opening means (fetch, navigate, both). */
   onOpenNode?: (node: string) => void;
   /** The step that was opened, once its record has been read. */
@@ -124,22 +139,33 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
   /** Shown while that record is being read, or when it could not be read. */
   detailNotice?: string;
   onCloseDetail?: () => void;
+  /** The join/leave control: the host owns the enrolment, so it owns this too. */
+  enrol?: ReactNode;
+  /** One line about the section's own state — joining, pending identity, a failure. */
+  notice?: string;
 }) {
   const t = useT();
-  const cards = [...view.cards].sort((left, right) => {
+  const who = (view?.participant ?? "") || t("agentbus.unwired");
+  const cards = view ? [...view.cards].sort((left, right) => {
     const bySeverity = severityOf(left.worst) - severityOf(right.worst);
     if (bySeverity !== 0) return bySeverity;
     if (left.signals !== right.signals) return right.signals - left.signals;
     return left.subtree.localeCompare(right.subtree);
-  });
-  const who = view.participant || t("agentbus.unwired");
+  }) : [];
+
+  if (!view) {
+    return (
+      <section className="agentbus-panel" aria-label={t("agentbus.title")}>
+        <Head who={who} enrol={enrol} />
+        {notice ? <p className="agentbus-panel__notice">{notice}</p> : null}
+      </section>
+    );
+  }
 
   return (
     <section className="agentbus-panel" aria-label={t("agentbus.title")}>
-      <header className="agentbus-panel__head" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-        <strong>{t("agentbus.title")}</strong>
-        <span>{t("agentbus.participant", { who })}</span>
-      </header>
+      <Head who={who} enrol={enrol} />
+      {notice ? <p className="agentbus-panel__notice">{notice}</p> : null}
       {cards.length === 0 ? (
         <p className="agentbus-panel__clear">{t("agentbus.clear", { n: view.healthySubtrees })}</p>
       ) : null}

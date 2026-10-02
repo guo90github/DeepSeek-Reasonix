@@ -1,5 +1,134 @@
 [
   {
+    "Name": "agent_bus",
+    "Description": "Shared blackboard for multi-agent work: record what must be true, claim a step before working on it, and let a step be done only with evidence someone else can re-run. One board is shared by every participant, so a node's state — not this conversation — is the source of truth. action=view lists the nodes addressed to you; use it before claiming. claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason. A refusal comes back as a reason (illegal transition, missing evidence, unknown node): read it and fix the op instead of retrying it unchanged.",
+    "ReadOnly": false,
+    "Schema": {
+      "properties": {
+        "action": {
+          "description": "view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale).",
+          "enum": [
+            "view",
+            "assert",
+            "claim",
+            "heartbeat",
+            "release",
+            "decide",
+            "refute",
+            "split",
+            "require",
+            "capability_gap",
+            "abandon",
+            "revert"
+          ],
+          "type": "string"
+        },
+        "children": {
+          "description": "split only: the child nodes replacing this one.",
+          "items": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "dep": {
+          "description": "require only: the dependency the node waits for.",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "type": "object"
+        },
+        "evidence": {
+          "description": "Evidence for assert/abandon and for decide(done): each item needs a ref (command, path, test, URL) that another participant can check.",
+          "items": {
+            "properties": {
+              "kind": {
+                "description": "e.g. test, command, file, url",
+                "type": "string"
+              },
+              "note": {
+                "type": "string"
+              },
+              "ref": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ref"
+            ],
+            "type": "object"
+          },
+          "type": "array"
+        },
+        "leaseSeconds": {
+          "description": "claim/heartbeat: how long the lease lasts before someone else may take the step (default 900).",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "node": {
+          "description": "Node id. Required for every action except view and split.",
+          "type": "string"
+        },
+        "outcome": {
+          "description": "decide only.",
+          "enum": [
+            "done",
+            "blocked",
+            "abandoned"
+          ],
+          "type": "string"
+        },
+        "output": {
+          "description": "claim only: optional description of what the step produces.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why: required by refute, capability_gap and abandon (for capability_gap: what you need, what you tried, why it did not work).",
+          "type": "string"
+        },
+        "reproducedBy": {
+          "description": "decide(done) only: who re-ran the evidence; must not be the participant that produced it.",
+          "type": "string"
+        },
+        "steps": {
+          "description": "claim only: how many steps this work may take (bounds).",
+          "minimum": 1,
+          "type": "integer"
+        },
+        "title": {
+          "description": "Human-readable title; used when the action creates the node (require/split children).",
+          "type": "string"
+        },
+        "tokens": {
+          "description": "claim only: optional token ceiling for the work.",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "type": "object"
+    }
+  },
+  {
     "Name": "ask",
     "Description": "Ask the user one or more multiple-choice questions when you hit a decision that is genuinely theirs to make — one you can't resolve from the request, the code, or sensible defaults. The frontend shows the options for the user to pick; their choices are returned to you. Prefer this over asking in prose for any real fork (which approach, which library, scope). Don't use it for decisions with an obvious default — pick the sensible option and proceed. Tool-approval modes such as YOLO do not answer these questions for the user. Each question has a short `header` (a tab label), the `question` text, 2-4 `options` (each a `label` and optional `description`; put any recommended option first), and `multiSelect` when more than one may apply.",
     "ReadOnly": true,

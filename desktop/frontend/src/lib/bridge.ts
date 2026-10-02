@@ -225,6 +225,10 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   HeartbeatTriggerNow(id: string): Promise<void>;
   AgentBusBriefing(): Promise<import("../generated/desktopContract.generated").AgentBusBriefingView>;
   AgentBusNodeDetail(node: string): Promise<import("../generated/desktopContract.generated").AgentBusNodeDetailView>;
+  AgentBusStatus(): Promise<import("../generated/desktopContract.generated").AgentBusStatusView>;
+  AgentBusJoin(): Promise<import("../generated/desktopContract.generated").AgentBusStatusView>;
+  AgentBusLeave(): Promise<import("../generated/desktopContract.generated").AgentBusStatusView>;
+  AgentBusApply(args: import("../generated/desktopContract.generated").AgentBusApplyArgs): Promise<string>;
   HeartbeatGenerateID(): Promise<string>;
   WatchdogStatus(): Promise<import("../generated/desktopContract.generated").WatchdogStatusView>;
   SetWatchdogEnabled(enabled: boolean): Promise<import("../generated/desktopContract.generated").WatchdogStatusView>;
@@ -5152,6 +5156,18 @@ function makeMockApp(): AppBindings {
         node, title: "", state: "open", owner: "", ready: true, deps: [], noProgress: 0,
         refutations: [], authorizations: [], deliberating: false, verdict: "",
       };
+    },
+    async AgentBusStatus() {
+      return { enrolled: false, participant: "", board: "", boardDir: "", defaultDir: "mock/agentbus/default" };
+    },
+    async AgentBusJoin() {
+      return { enrolled: true, participant: "mock", board: "default", boardDir: "mock/agentbus/default", defaultDir: "mock/agentbus/default" };
+    },
+    async AgentBusLeave() {
+      return { enrolled: false, participant: "", board: "", boardDir: "", defaultDir: "mock/agentbus/default" };
+    },
+    async AgentBusApply() {
+      return "assert on \"build\" recorded at seq 1";
     },
     async HeartbeatGenerateID() { return "mock-" + Date.now().toString(36); },
     async ListTasks() { return []; },

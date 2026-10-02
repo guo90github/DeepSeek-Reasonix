@@ -1,0 +1,315 @@
+package builtin
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"reasonix/internal/agentbus"
+	"reasonix/internal/agentbus/board"
+	"reasonix/internal/tool"
+)
+
+func init() { tool.RegisterBuiltin(agentBusBoard{}) }
+
+// errNoBoard is what a session that never joined a board is told. The fix is a UI
+// action, so the message names where it lives.
+var errNoBoard = errors.New("this session is not on a board: the user joins one from the collaboration entry in the status bar")
+
+// BoardPort is the blackboard as one tool call needs it: the control layer owns the
+// enrolment and the board file, so a call forwards one op and reads back the view that
+// session is allowed to see. This package never imports the controller (layering:
+// internal/tool/builtin must not import internal/control), so a host — where the
+// controller lives — supplies the implementation.
+type BoardPort interface {
+	// BoardIdentity names the board directory and the participant speaking on it. An
+	// error is the host's own reason (e.g. the session is not built yet); an empty
+	// directory means this session joined nothing.
+	BoardIdentity() (participant, boardDir string, err error)
+	BoardView(now time.Time) (agentbus.View, error)
+	ApplyBoardOp(ctx context.Context, op board.Op) (board.Receipt, error)
+}
+
+// NewAgentBusTool binds the blackboard tool to a session's board. A nil port keeps the
+// tool in the registry but refusing: the tool list is part of the cache-stable prefix,
+// so it must not appear and disappear as a session joins or leaves a board.
+func NewAgentBusTool(port BoardPort) tool.Tool { return agentBusBoard{port: port} }
+
+// BindBoardPort rebinds an already-registered board tool, so an assembly that adds
+// tools before the controller exists can hand it the port afterwards.
+func BindBoardPort(t tool.Tool, port BoardPort) (tool.Tool, bool) {
+	b, ok := t.(agentBusBoard)
+	if !ok {
+		return nil, false
+	}
+	b.port = port
+	return b, true
+}
+
+type agentBusBoard struct{ port BoardPort }
+
+func (agentBusBoard) Name() string { return "agent_bus" }
+
+func (agentBusBoard) Description() string {
+	return "Shared blackboard for multi-agent work: record what must be true, claim a step before working on it, and let a step be done only with evidence someone else can re-run. One board is shared by every participant, so a node's state — not this conversation — is the source of truth. " +
+		"action=view lists the nodes addressed to you; use it before claiming. " +
+		"claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason. " +
+		"A refusal comes back as a reason (illegal transition, missing evidence, unknown node): read it and fix the op instead of retrying it unchanged."
+}
+
+func (agentBusBoard) Schema() json.RawMessage {
+	return json.RawMessage(`{
+"type":"object",
+"properties":{
+  "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","capability_gap","abandon","revert"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale)."},
+  "node":{"type":"string","description":"Node id. Required for every action except view and split."},
+  "title":{"type":"string","description":"Human-readable title; used when the action creates the node (require/split children)."},
+  "reason":{"type":"string","description":"Why: required by refute, capability_gap and abandon (for capability_gap: what you need, what you tried, why it did not work)."},
+  "outcome":{"type":"string","enum":["done","blocked","abandoned"],"description":"decide only."},
+  "evidence":{"type":"array","description":"Evidence for assert/abandon and for decide(done): each item needs a ref (command, path, test, URL) that another participant can check.","items":{"type":"object","properties":{"kind":{"type":"string","description":"e.g. test, command, file, url"},"ref":{"type":"string"},"note":{"type":"string"}},"required":["ref"]}},
+  "reproducedBy":{"type":"string","description":"decide(done) only: who re-ran the evidence; must not be the participant that produced it."},
+  "children":{"type":"array","description":"split only: the child nodes replacing this one.","items":{"type":"object","properties":{"id":{"type":"string"},"title":{"type":"string"}},"required":["id"]}},
+  "dep":{"type":"object","description":"require only: the dependency the node waits for.","properties":{"id":{"type":"string"},"title":{"type":"string"}},"required":["id"]},
+  "steps":{"type":"integer","description":"claim only: how many steps this work may take (bounds).","minimum":1},
+  "tokens":{"type":"integer","description":"claim only: optional token ceiling for the work."},
+  "output":{"type":"string","description":"claim only: optional description of what the step produces."},
+  "leaseSeconds":{"type":"integer","description":"claim/heartbeat: how long the lease lasts before someone else may take the step (default 900).","minimum":1}
+},
+"required":["action"]
+}`)
+}
+
+// The board is shared state: a call always reads or writes work other sessions own,
+// so it is never parallelised with the rest of a batch.
+func (agentBusBoard) ReadOnly() bool { return false }
+
+const agentBusDefaultLease = 900 * time.Second
+
+type agentBusEvidenceArg struct {
+	Kind string `json:"kind"`
+	Ref  string `json:"ref"`
+	Note string `json:"note"`
+}
+
+type agentBusNodeArg struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+}
+
+type agentBusArgs struct {
+	Action       string                `json:"action"`
+	Node         string                `json:"node"`
+	Title        string                `json:"title"`
+	Reason       string                `json:"reason"`
+	Outcome      string                `json:"outcome"`
+	ReproducedBy string                `json:"reproducedBy"`
+	Evidence     []agentBusEvidenceArg `json:"evidence"`
+	Children     []agentBusNodeArg     `json:"children"`
+	Dep          *agentBusNodeArg      `json:"dep"`
+	Steps        int                   `json:"steps"`
+	Tokens       int64                 `json:"tokens"`
+	Output       string                `json:"output"`
+	LeaseSeconds int                   `json:"leaseSeconds"`
+}
+
+func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string, error) {
+	var in agentBusArgs
+	if err := json.Unmarshal(args, &in); err != nil {
+		return "", fmt.Errorf("invalid args: %w", err)
+	}
+	action := strings.ToLower(strings.TrimSpace(in.Action))
+	if action == "" {
+		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, capability_gap, abandon, revert")
+	}
+	if action == "view" {
+		return t.readBoard()
+	}
+	actor, _, err := t.identity()
+	if err != nil {
+		return "", err
+	}
+	op, err := t.opFor(action, actor, in)
+	if err != nil {
+		return "", err
+	}
+	return t.apply(op)
+}
+
+// identity names the board and who is speaking on it. The host's own error passes
+// through untouched: it says something this package cannot know.
+func (t agentBusBoard) identity() (participant, boardDir string, err error) {
+	if t.port == nil {
+		return "", "", errNoBoard
+	}
+	participant, boardDir, err = t.port.BoardIdentity()
+	if err != nil {
+		return "", "", err
+	}
+	if strings.TrimSpace(boardDir) == "" {
+		return "", "", errNoBoard
+	}
+	return strings.TrimSpace(participant), boardDir, nil
+}
+
+// readBoard renders the view this participant is allowed to see: owned work, work
+// waiting on it, and whatever it asked for. A session with no board says so rather than
+// showing an empty one.
+func (t agentBusBoard) readBoard() (string, error) {
+	participant, boardDir, err := t.identity()
+	if err != nil {
+		return "", err
+	}
+	view, err := t.port.BoardView(time.Now().UTC())
+	if err != nil {
+		return "", err
+	}
+	head := fmt.Sprintf("board %s as %s\n", boardName(boardDir), participant)
+	body := strings.TrimSpace(view.Render())
+	if body == "" {
+		return head + "nothing on this board is addressed to you right now", nil
+	}
+	return head + body, nil
+}
+
+func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, error) {
+	op := board.Op{Verb: board.Verb(action), Node: strings.TrimSpace(in.Node), Actor: actor}
+	switch action {
+	case "assert":
+		op.Evidence = evidenceOf(in.Evidence)
+	case "claim":
+		op.Deadline = time.Now().UTC().Add(leaseOf(in.LeaseSeconds))
+		bounds := &board.Bounds{Steps: in.Steps, Tokens: in.Tokens, Output: strings.TrimSpace(in.Output)}
+		if bounds.Steps <= 0 {
+			return board.Op{}, fmt.Errorf("claim needs bounds: pass steps (how many steps this work may take)")
+		}
+		op.Bounds = bounds
+		if title := strings.TrimSpace(in.Title); title != "" {
+			op.Reason = title
+		}
+	case "heartbeat":
+		op.Deadline = time.Now().UTC().Add(leaseOf(in.LeaseSeconds))
+	case "release":
+		op.Verb = board.VerbRelease
+	case "decide":
+		outcome, err := outcomeOf(in.Outcome)
+		if err != nil {
+			return board.Op{}, err
+		}
+		op.Outcome = outcome
+		op.Evidence = evidenceOf(in.Evidence)
+		op.ReproducedBy = strings.TrimSpace(in.ReproducedBy)
+	case "refute", "capability_gap", "abandon":
+		op.Reason = strings.TrimSpace(in.Reason)
+		op.Evidence = evidenceOf(in.Evidence)
+	case "split":
+		if len(in.Children) == 0 {
+			return board.Op{}, fmt.Errorf("split needs children: at least one {id, title}")
+		}
+		op.Children = specsOf(in.Children)
+	case "require":
+		if in.Dep == nil || strings.TrimSpace(in.Dep.ID) == "" {
+			return board.Op{}, fmt.Errorf("require needs dep: {id, title} the node waits for")
+		}
+		op.Dep = &board.NodeSpec{ID: strings.TrimSpace(in.Dep.ID), Title: strings.TrimSpace(in.Dep.Title)}
+	case "revert":
+	default:
+		return board.Op{}, fmt.Errorf("unknown action %q: one of view, assert, claim, heartbeat, release, decide, refute, split, require, capability_gap, abandon, revert", action)
+	}
+	return op, nil
+}
+
+// apply forwards one op and reports what the board decided. A refusal is the board's
+// answer, not a tool failure: it comes back as text so the model can correct the op.
+func (t agentBusBoard) apply(op board.Op) (string, error) {
+	receipt, err := t.port.ApplyBoardOp(context.Background(), op)
+	if err != nil {
+		if reason, rejected := board.IsReject(err); rejected {
+			return fmt.Sprintf("refused (%s): the board did not accept %s on %q — %s", reason, op.Verb, op.Node, rejectHint(reason)), nil
+		}
+		return "", err
+	}
+	if receipt.Duplicate {
+		return fmt.Sprintf("%s on %q was already recorded (seq %d); nothing changed", op.Verb, op.Node, receipt.Seq), nil
+	}
+	return fmt.Sprintf("%s on %q recorded at seq %d", op.Verb, op.Node, receipt.Seq), nil
+}
+
+func evidenceOf(items []agentBusEvidenceArg) []board.Evidence {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]board.Evidence, 0, len(items))
+	for _, item := range items {
+		ref := strings.TrimSpace(item.Ref)
+		if ref == "" {
+			continue
+		}
+		out = append(out, board.Evidence{Kind: strings.TrimSpace(item.Kind), Ref: ref, Note: strings.TrimSpace(item.Note)})
+	}
+	return out
+}
+
+func specsOf(items []agentBusNodeArg) []board.NodeSpec {
+	out := make([]board.NodeSpec, 0, len(items))
+	for _, item := range items {
+		id := strings.TrimSpace(item.ID)
+		if id == "" {
+			continue
+		}
+		out = append(out, board.NodeSpec{ID: id, Title: strings.TrimSpace(item.Title)})
+	}
+	return out
+}
+
+func outcomeOf(raw string) (board.Outcome, error) {
+	switch board.Outcome(strings.ToLower(strings.TrimSpace(raw))) {
+	case board.OutcomeDone, board.OutcomeBlocked, board.OutcomeAbandoned:
+		return board.Outcome(strings.ToLower(strings.TrimSpace(raw))), nil
+	default:
+		return "", fmt.Errorf("decide needs an outcome: done, blocked or abandoned")
+	}
+}
+
+func leaseOf(seconds int) time.Duration {
+	if seconds <= 0 {
+		return agentBusDefaultLease
+	}
+	return time.Duration(seconds) * time.Second
+}
+
+// rejectHint turns a board refusal into the correction the caller should make. The
+// reasons are the kernel's own closed set; anything new stays unexplained rather than
+// guessed at.
+func rejectHint(reason string) string {
+	switch reason {
+	case board.ReasonMissingEvidence:
+		return "pass evidence with a ref another participant can check"
+	case board.ReasonMissingReason:
+		return "pass a reason that says why"
+	case board.ReasonMissingDeadline:
+		return "claim and heartbeat need a deadline (leaseSeconds)"
+	case board.ReasonMissingBounds:
+		return "claim needs bounds (steps)"
+	case board.ReasonMissingActor:
+		return "this session has no identity on the board yet"
+	case board.ReasonUnknownNode:
+		return "no node by that id on this board; create it with require, split or assert"
+	case board.ReasonIllegalTransition:
+		return "another participant's state does not allow this: read action=view first"
+	case board.ReasonNotOwner:
+		return "only the claimer may do this: claim the node first, or ask its owner"
+	default:
+		return "the board's reason is in the message above"
+	}
+}
+
+func boardName(dir string) string {
+	dir = strings.TrimRight(strings.TrimSpace(dir), `/\`)
+	if idx := strings.LastIndexAny(dir, `/\`); idx >= 0 {
+		return dir[idx+1:]
+	}
+	return dir
+}

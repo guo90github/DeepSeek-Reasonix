@@ -737,6 +737,10 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// Register the full built-in inventory for use_capability dispatch. The
 	// provider-visible surface is narrowed later via SetProviderVisibleTools.
 	addBuiltins(reg, enabledBuiltins, writeRoots, writeRootSet, bashSpec, bashTimeout, searchSpec, stderr, root, proxySpec, forbidReadRoots, readPathResolver, sessionGuard, managedConfig, opts.FileOverlay, opts.TerminalRunner, sessionTemp, fileWriteReceipt)
+	// The board tool forwards to the controller built later in this function, so its
+	// port resolves ctrlRef lazily (the extension UI hub's seam) and an unjoined
+	// session refuses honestly. It replaces the unbound instance addBuiltins added.
+	reg.Add(builtin.NewAgentBusTool(&boardToolPort{ctrl: &ctrlRef}))
 	addWebSearch(reg, cfg, entry, proxySpec, sink)
 	if opts.BrowserExecutor != nil {
 		for _, t := range browser.Tools(opts.BrowserExecutor) {

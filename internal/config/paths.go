@@ -313,6 +313,9 @@ func appendUniquePath(paths []string, path string) []string {
 // unavailable.
 func ReasonixHomeDir() string { return reasonixHomeDir() }
 
+// UserSupportDir is the state home: sessions, boards and caches live under it.
+func UserSupportDir() string { return userSupportDir() }
+
 // RemoteStateDir is local state for the remote-SSH module (the managed
 // known_hosts file, cached host metadata): <Reasonix home>/remote. Routed
 // through the home resolver so REASONIX_HOME isolation holds.

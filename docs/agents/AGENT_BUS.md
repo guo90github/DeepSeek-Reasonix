@@ -1041,3 +1041,21 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 `repeatedCompleteMayFinish` 可放行的集合里）⇒ "完整声明被拒 ⇒ 继续做工"与"重复声明也不放过"两条既有规则**自动适用** ✓。
 入列但读不到板 ⇒ 按拒绝处理 ✗；未入列会话 ⇒ 原样不动 ✓（守护 T4-4 的"未接线即零变化"）。用例 2 条（含"被 `refute` ⇒
 不许 complete 且原因点名争议"）。
+
+### 13.11 会话面入口：工具与桌面（2026-10-02 落地，回应"看不到变化"）
+
+**落地前的事实**：内核与读面早已就绪，但**会话侧没有任何入口** —— `boot.Options.AgentBusDir` 全仓无人赋值、
+`ApplyAgentBusOp` 除 control 内部审议外无调用方、`internal/tool/` 下**零** agentbus 工具（而 §编排 假定"会话 ⇒ 有黑板工具"）。
+⇒ 用户看到的是"面板永远未入列、看板永远空"。
+
+| 入口 | 承载 | 说明 |
+|---|---|---|
+| 模型工具 `agent_bus` | `internal/tool/builtin/agentbus.go` + boot 的 `boardToolPort`（**按调用惰性解析**控制器，沿用扩展 UI hub 的缝） | 12 个动作；**常驻注册**（工具清单属 cache-stable 前缀，不随入列/离开增减）；内核 typed 拒绝以"该改什么"回给模型 |
+| 人的面板操作 | `AgentBusControls.tsx` → `desktop.AgentBusApply` → **调用同一个工具** | 人类与模型不可能对动词理解不一致；回答就是看板自己的话（记录了什么 / 为何拒收 + 怎么改） |
+| 入列与可见入口 | `desktop/agentbus_enrol.go` + 工作区面板「协作」节 + 状态栏常驻 chip（有异常带计数） | 默认板 `<state home>/agentbus/default`；未入列**无徽标也不轮询**；点开就是同一个协作面 |
+
+**代价（如实记）**：`agent_bus` 常驻 ⇒ 每个会话的 provider 可见工具面变一次（golden 实测 `ToolSchemaTokens` 5150 → 5975，
+`SystemHash` 不变、`ToolsHash`/`PrefixHash` 变）。若改成"只在入列的会话里出现"，代价是中途入列必须重启会话才生效 —— 未选。
+
+**已知边界**：`assert` 建的节点**没有 Title**（标题只由 `require`/`split` 的 `NodeSpec` 带）⇒ 面板"新建根节点"后只显示 id；
+要让标题上人读面，须给 op 增可选 `Title`（**内核 op schema 变更**，须同步 §11.1），属独立一刀，本轮未做。

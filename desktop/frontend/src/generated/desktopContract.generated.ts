@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:8b1684af7a0dd29d204d0396c4bbc916ac1b5cf5d85eb0764608084867c1a85b";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:9d60ff68016abbf37b14c6ea189956195c2feb4001c5a92793730e729ee90572";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -30,8 +30,12 @@ export const DESKTOP_COMMANDS = [
   "AddRemoteHost",
   "AddRemoteProject",
   "AddSkillPath",
+  "AgentBusApply",
   "AgentBusBriefing",
+  "AgentBusJoin",
+  "AgentBusLeave",
   "AgentBusNodeDetail",
+  "AgentBusStatus",
   "AnswerMCPInteractionForTab",
   "AnswerMCPInteractionForTurn",
   "AnswerPromptForTab",
@@ -1524,6 +1528,19 @@ export interface ActiveWorkView {
   jobs: JobView[];
 }
 
+export interface AgentBusApplyArgs {
+  action: string;
+  node: string;
+  title: string;
+  reason: string;
+  outcome: string;
+  ref: string;
+  reproducedBy: string;
+  steps: number;
+  children: AgentBusChildArg[];
+  dep?: AgentBusChildArg | null;
+}
+
 export interface AgentBusAuthorizationView {
   actor: string;
   reason: string;
@@ -1552,6 +1569,11 @@ export interface AgentBusCardView {
   disputed: number;
 }
 
+export interface AgentBusChildArg {
+  id: string;
+  title: string;
+}
+
 export interface AgentBusNodeDetailView {
   node: string;
   title: string;
@@ -1576,6 +1598,14 @@ export interface AgentBusSignalView {
   subtree: string;
   node: string;
   detail: string;
+}
+
+export interface AgentBusStatusView {
+  enrolled: boolean;
+  participant: string;
+  board: string;
+  boardDir: string;
+  defaultDir: string;
 }
 
 export interface AgentView {
@@ -4635,8 +4665,12 @@ export interface GeneratedDesktopCommands {
   AddRemoteHost(arg0: RemoteHostInput): Promise<RemoteHostView>;
   AddRemoteProject(arg0: string, arg1: string): Promise<RemoteProjectView>;
   AddSkillPath(arg0: string): Promise<void>;
+  AgentBusApply(arg0: AgentBusApplyArgs): Promise<string>;
   AgentBusBriefing(): Promise<AgentBusBriefingView>;
+  AgentBusJoin(): Promise<AgentBusStatusView>;
+  AgentBusLeave(): Promise<AgentBusStatusView>;
   AgentBusNodeDetail(arg0: string): Promise<AgentBusNodeDetailView>;
+  AgentBusStatus(): Promise<AgentBusStatusView>;
   AnswerMCPInteractionForTab(arg0: string, arg1: string, arg2: string, arg3: Record<string, unknown>): Promise<void>;
   AnswerMCPInteractionForTurn(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: Record<string, unknown>): Promise<void>;
   AnswerPromptForTab(arg0: string, arg1: string, arg2: string, arg3: QuestionAnswer[]): Promise<void>;

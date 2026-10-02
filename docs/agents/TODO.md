@@ -178,7 +178,7 @@
 - [x] T8-2 首屏不画 >N 张卡片（阈值可配）；孤儿与停滞必现 → `ObserveLimits{MaxCards, MaxSignals}`（默认 12/40）；
       `SignalKind.Mandatory()`（orphan/stalled）**不受上限影响**，被裁的计入 `Hidden`，卡片超限计入 `HiddenCards`；
       用例 `TestObserveAlwaysShowsOrphansAndStalls`（上限 1 时孤儿与两处停滞全在，多余争议被裁并计数）
-- [ ] T8-3 **面板接线**（三段，前两段已落）：① control 读面 `AgentBusBriefing`/`SetAgentBusObserveLimits`/`AgentBusParticipant`；
+- [x] T8-3 **面板接线**（三段，前两段已落）：① control 读面 `AgentBusBriefing`/`SetAgentBusObserveLimits`/`AgentBusParticipant`；
       ② 桌面**绑定** `App.AgentBusBriefing()` → 扁平 JSON 视图（`desktop/agentbus_briefing.go` + 用例，含"没有活动会话/未入列"两种诚实的报错）；
       ③ 前端**组件**已落：`AgentBusPanel.tsx`（只画卡片与下钻行；孤儿/停滞的严重度排序与内核一致；
       下钻是 `onOpenNode(node)` 回调，交由宿主决定怎么打开）+ 11 条文案 × 3 份 locale + 单测
@@ -259,9 +259,49 @@
       实测 `AgentBusTasks`（T4-5 所说的"人读行投影"）**同样零调用方** ⇒ 读面只能挂在**面板真正在用的**
       `AgentBusBriefing` 那条线上，而"某节点是谁批的"属**节点详情** ⇒ **与 `onOpenNode` 下钻是同一个待定选择**（见 T8-3）。
 
+## T11 会话面入口（工具 + 桌面可见入口）——2026-10-02 落地
+
+> 起因（用户）：**"落地了大量功能但我看不到任何变化"**。核对后确认不是收益小，而是**入口全断**：
+> `SetAgentBus` 只被 `boot.go` 调用而 `Options.AgentBusDir` 全仓无人赋值；`ApplyAgentBusOp` 除 control 内部审议外无调用方；
+> `internal/tool/` 下**零** agentbus 工具（而契约 §编排 明写"会话 ⇒ 有黑板工具"）。据此用户拍板三处
+> （`dec-a949001ee01408ff`）：入列=**桌面显式开关** + 默认板 `<state home>/agentbus/default`；写侧=**工具面 + 面板人工操作都做**；
+> 落点=**顶栏/停靠坞可见入口（带异常徽标）**。
+
+- [x] T11-1 **入列缝**：`AgentBusControl` 增加 `SetAgentBus`/`AgentBusEnrolled`（此前只有 boot 能设、前端读不到）；
+      `internal/config/paths.go` 导出 `UserSupportDir()`（正规解析，桌面不再自己拼环境变量）；
+      `desktop/agentbus_enrol.go` 加 `AgentBusStatus`/`AgentBusJoin`/`AgentBusLeave`（默认板 `<state home>/agentbus/default`，
+      join 后顺手装唤醒路由并扫一次）。**"设了板"≠"已有身份"**：无会话路径的会话如实显示"已加入，发一条消息后生效"。
+      用例 `desktop/agentbus_enrol_test.go` 3 条 + `internal/control` 全套 ok。
+- [x] T11-2 **工作区面板入口**：`WorkspaceAgentBusSection.tsx` 先问状态再问板——未入列显示「未入列」+ 板路径 + 〔加入看板〕，
+      已入列显示板视图 + 〔离开看板〕；`AgentBusPanel.tsx` 的 `view` 可为 `null`（未在板上）并新增 `enrol`/`notice`。
+      `styles.css` 补协作面板样式（此前该面板**完全没有 CSS**，是裸文本）。用例 12 条。
+- [x] T11-3 **常显入口 + 徽标**：`AgentBusStatusItem.tsx` 挂在 `StatusBar.tsx` 里（与 Remote/Jobs 同级的常驻 chip，
+      **不受状态栏偏好开关限制**，因此无需去设置里打开）；未入列**无徽标也不轮询**；已入列时徽标 = 首屏信号条数
+      （被 `observe` 上限裁掉的 `hidden` 不计），点击弹出**同一个协作面**（复用 section ⇒ 入口与面板不可能各说一套）；
+      刷新=挂载/开合/窗口 focus + **仅入列时** 30s 轻轮询且页面可见才读。用例 6 条。
+- [x] T11-4 **模型工具面 `agent_bus`**（`internal/tool/builtin/agentbus.go`，12 动作 `view`/`assert`/`claim`/`heartbeat`/`release`/
+      `decide`/`refute`/`split`/`require`/`capability_gap`/`abandon`/`revert`）：builtin 只定义 `BoardPort` 接口（**不 import control**），
+      boot 侧 `boardToolPort` 持 `atomic.Pointer[control.Controller]` **按调用惰性解析**（沿用扩展 UI hub 的缝）；
+      **常驻注册**（工具清单属 cache-stable 前缀），加进 `HostControlToolNames()`；内核 typed 拒绝以"该改什么"的文本回给模型。
+      用例：builtin 24 项 + `internal/boot/agentbus_board_tool_test.go` 2 条（工具真进 provider 请求；未就绪/未入列/入列后真写板读回）。
+- [x] T11-5 **面板人工操作**：`AgentBusControls.tsx` 是**同一套 op 词汇**的表单（动作 + 最少必要字段），
+      经 `desktop/agentbus_apply.go` 的 `AgentBusApply` **调用同一个 `agent_bus` 工具**（人类与模型不可能对动词理解不一致），
+      返回值就是看板自己的回答（记录了什么 / 为什么拒收 + 该怎么改）；`AgentBusControl` 因此新增 `AgentBusView` 与 `ApplyAgentBusOp`。
+      用例：`desktop/agentbus_apply_test.go` 3 条（真写板 + 拒收转文本 + payload 映射）、`src/__tests__/agentbus-controls.test.tsx` 12 条。
+- [ ] T11-6 **缓存影响如实登记（做完了但要写进提交/PR 字段）**：golden 已重新生成（`REASONIX_UPDATE_GOLDEN=1`），实测
+      `SystemHash` **不变**、`ToolsHash`/`PrefixHash` 变、`ToolSchemaTokens` **5150 → 5975（+825）** ⇒ 提交信息需带
+      `Cache-impact`/`Cache-guard`/`Documentation-impact`（T10-1 的前置事实已备好）。
+
+**已知边界（本轮如实记，未做）**
+- `assert` 建的节点**没有 Title**（op 只有 `{ID}`，标题只由 `require`/`split` 的 `NodeSpec` 带）⇒ 人在面板上"新建根节点"后，
+  人读面只显示 id。要让人看到标题，得给 `assert` 的 op 增一个可选 `Title`（**内核 op schema 变更**，须同步 `AGENT_BUS.md` §11.1），
+  属独立一刀，未在本轮动手。
+- 面板的人工操作**不做** `view`（读面走 `AgentBusBriefing`/`AgentBusNodeDetail`），也不做 `heartbeat`/`capability_gap`
+  （前者由会话侧工具续租，后者是模型自述缺能力）；动词表未做前端校验，非法组合由内核带原因拒收并在表单里如实显示。
+
 ## T10 S8 PR 元数据门 + 打包
 
-- [ ] T10-1 `Cache-impact` / `Cache-guard` / `System-prompt-review` / `Documentation-impact` 齐全
+- [ ] T10-1 `Cache-impact` / `Cache-guard` / `System-prompt-review` / `Documentation-impact` 齐全（T11-6 已备好实测数字）
 - [ ] T10-2 按本机 SOP 打包并 `verify-windows-portable.sh` exit 0
 
 ## 已知边界（第二轮评审认定；挂在对应阶段，不在 S1 修）

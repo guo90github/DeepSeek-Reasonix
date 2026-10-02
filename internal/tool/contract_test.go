@@ -73,6 +73,7 @@ var acceptsDefaultSnip = map[string]bool{
 	"view_image":    true, // short metadata only; image bytes travel outside text snipping
 	"wait":          true,
 	"write_file":    true,
+	"agent_bus":     true, // one op's receipt, or the bounded view it was rendered from
 }
 
 func TestEveryBuiltinDeclaresSnipStance(t *testing.T) {

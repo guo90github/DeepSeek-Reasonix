@@ -352,6 +352,20 @@
       ]
     }
   },
+  "AgentBusApply": {
+    "domain": "desktop/agentbus_apply.go",
+    "owner": "App.AgentBusApply",
+    "sources": [
+      "desktop/agentbus_apply.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.AgentBusApply",
+      "inputs": [
+        "args"
+      ]
+    }
+  },
   "AgentBusBriefing": {
     "domain": "desktop/agentbus_briefing.go",
     "owner": "App.AgentBusBriefing",
@@ -361,6 +375,30 @@
     "scope": {
       "kind": "owner-state",
       "resolver": "App.AgentBusBriefing",
+      "inputs": []
+    }
+  },
+  "AgentBusJoin": {
+    "domain": "desktop/agentbus_enrol.go",
+    "owner": "App.AgentBusJoin",
+    "sources": [
+      "desktop/agentbus_enrol.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.AgentBusJoin",
+      "inputs": []
+    }
+  },
+  "AgentBusLeave": {
+    "domain": "desktop/agentbus_enrol.go",
+    "owner": "App.AgentBusLeave",
+    "sources": [
+      "desktop/agentbus_enrol.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.AgentBusLeave",
       "inputs": []
     }
   },
@@ -376,6 +414,18 @@
       "inputs": [
         "node"
       ]
+    }
+  },
+  "AgentBusStatus": {
+    "domain": "desktop/agentbus_enrol.go",
+    "owner": "App.AgentBusStatus",
+    "sources": [
+      "desktop/agentbus_enrol.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.AgentBusStatus",
+      "inputs": []
     }
   },
   "AnswerMCPInteractionForTab": {

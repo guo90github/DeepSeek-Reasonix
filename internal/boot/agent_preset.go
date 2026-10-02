@@ -80,6 +80,7 @@ func HostControlToolNames() []string {
 		"update_goal",
 		"todo_write",
 		"complete_step",
+		"agent_bus",
 	}
 }
 

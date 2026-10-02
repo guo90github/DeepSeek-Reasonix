@@ -27,12 +27,23 @@ const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body>
 (globalThis as unknown as { window: Window }).window = dom.window as unknown as Window;
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+// The section renders a board only for a session that joined one, so the enrolment
+// is stated here rather than implied: what an unenrolled session sees is its own
+// state, asserted further down.
+const enrolledStatus = {
+  enrolled: true,
+  participant: "alice",
+  board: "default",
+  boardDir: "state/agentbus/default",
+  defaultDir: "state/agentbus/default",
+};
+
 async function renderSection(node: HTMLElement) {
   const root = createRoot(node);
   await act(async () => {
     root.render(
       <LocaleProvider>
-        <WorkspaceAgentBusSection />
+        <WorkspaceAgentBusSection loadStatus={async () => enrolledStatus} />
       </LocaleProvider>,
     );
   });
@@ -59,6 +70,7 @@ await act(async () => {
   second.render(
     <LocaleProvider>
       <WorkspaceAgentBusSection
+        loadStatus={async () => enrolledStatus}
         load={async () => {
           throw new Error("host unreachable");
         }}
@@ -105,7 +117,7 @@ const third = createRoot(briefed);
 await act(async () => {
   third.render(
     <LocaleProvider>
-      <WorkspaceAgentBusSection load={async () => withSignal} loadDetail={async (node) => stepDetail(node)} />
+      <WorkspaceAgentBusSection loadStatus={async () => enrolledStatus} load={async () => withSignal} loadDetail={async (node) => stepDetail(node)} />
     </LocaleProvider>,
   );
 });
@@ -129,6 +141,7 @@ await act(async () => {
   fourth.render(
     <LocaleProvider>
       <WorkspaceAgentBusSection
+        loadStatus={async () => enrolledStatus}
         load={async () => withSignal}
         loadDetail={async () => {
           throw new Error("host unreachable");
@@ -147,6 +160,70 @@ ok(
 );
 await act(async () => {
   fourth.unmount();
+});
+
+// Enrolment is the entry the user was missing: a session that joined nothing has to
+// show that, name where joining would put it, and actually enrol when asked.
+const offBoard = dom.window.document.createElement("div");
+const fifth = createRoot(offBoard);
+await act(async () => {
+  fifth.render(
+    <LocaleProvider>
+      <WorkspaceAgentBusSection
+        loadStatus={async () => ({ enrolled: false, participant: "", board: "", boardDir: "", defaultDir: "state/agentbus/default" })}
+        join={async () => enrolledStatus}
+        load={async () => withSignal}
+      />
+    </LocaleProvider>,
+  );
+});
+ok(
+  offBoard.textContent?.includes("not on a board") === true || offBoard.textContent?.includes("未入列") === true,
+  "a session that joined nothing says so",
+);
+ok(
+  offBoard.textContent?.includes("state/agentbus/default") === true,
+  "the entry names the board joining would put the session on",
+);
+const joinButton = Array.from(offBoard.querySelectorAll("button")).find(
+  (button) => button.textContent === "Join a board" || button.textContent === "加入看板",
+);
+ok(joinButton !== undefined, "the section offers a control that enrols the session");
+await act(async () => {
+  joinButton?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+});
+ok(
+  offBoard.textContent?.includes("publish") === true,
+  "joining shows the board right away instead of leaving the entry as it was",
+);
+ok(
+  offBoard.textContent?.includes("Leave the board") === true || offBoard.textContent?.includes("离开看板") === true,
+  "an enrolled session can leave the board again",
+);
+await act(async () => {
+  fifth.unmount();
+});
+
+// Enrolled but without an identity yet (a session with no path): saying so is the
+// difference between "joining did nothing" and "it takes effect".
+const pending = dom.window.document.createElement("div");
+const sixth = createRoot(pending);
+await act(async () => {
+  sixth.render(
+    <LocaleProvider>
+      <WorkspaceAgentBusSection
+        loadStatus={async () => ({ enrolled: true, participant: "", board: "", boardDir: "", defaultDir: "state/agentbus/default" })}
+        load={async () => withSignal}
+      />
+    </LocaleProvider>,
+  );
+});
+ok(
+  pending.textContent?.includes("no identity") === true || pending.textContent?.includes("没有身份") === true,
+  "a board without an identity yet is explained rather than drawn as an empty board",
+);
+await act(async () => {
+  sixth.unmount();
 });
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);

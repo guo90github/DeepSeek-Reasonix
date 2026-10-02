@@ -10,6 +10,7 @@
 
 | 工具 | Read-only | 说明 |
 | --- | --- | --- |
+| `agent_bus` | false | 多智能体共用的黑板：记录「什么必须成立」、开工前先认领步骤、**只有别人能复跑的证据**才能判定完成。看板是全体参与者共用的，所以**节点状态（而不是这段对话）才是真相**。`action=view` 列出发给你的节点，认领前先读它；`claim` 必须带 deadline 与 bounds（steps），`assert`/`abandon` 必须带证据，`refute`/`capability_gap` 必须带理由。被拒时返回的是**原因**（非法迁移 / 缺证据 / 未知节点）——读它并改操作，不要原样重试。 |
 | `bash` | false | 执行 shell 命令并返回 stdout/stderr。构建、测试、git、包管理器等使用它；读写查找文件优先使用专用工具。 |
 | `bash_output` | true | 读取后台 `bash` 或 `task` job 自上次读取后的新增输出和状态。 |
 | `code_index` | true | 轻量内置代码符号索引；优先使用 `lsp_*` 或代码图 MCP，缺失时用它兜底。 |

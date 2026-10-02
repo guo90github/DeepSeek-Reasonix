@@ -58,6 +58,16 @@ func (c *Controller) SetAgentBus(dir, participant string) {
 	c.agentBus = &agentBusState{dir: dir, participant: participant}
 }
 
+// AgentBusEnrolled reports whether a board was set for this session. A session can be
+// enrolled before it has an identity on that board — its path may not exist yet — so
+// this answers "was a board set", not "can it be read": the read methods, which need
+// the identity, stay empty until it resolves.
+func (c *Controller) AgentBusEnrolled() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.agentBus != nil
+}
+
 // AgentBusView peeks at this participant's view without advancing the cursor.
 // Frontends and diagnostics read it; the turn path consumes deltas instead.
 func (c *Controller) AgentBusView(now time.Time) (agentbus.View, bool) {

@@ -6,6 +6,7 @@ import (
 
 	"reasonix/internal/agent"
 	"reasonix/internal/agentbus"
+	"reasonix/internal/agentbus/board"
 	"reasonix/internal/billing"
 	"reasonix/internal/checkpoint"
 	"reasonix/internal/command"
@@ -300,6 +301,13 @@ type AgentBusControl interface {
 	AgentBusParticipant() string
 	// AgentBusDir names the board itself, so a host can route a wake that belongs to it.
 	AgentBusDir() string
+	// SetAgentBus enrols this session on the board at dir, or opts it out when dir
+	// is empty: a host calls it when the user turns collaboration on or off.
+	SetAgentBus(dir, participant string)
+	// AgentBusEnrolled reports whether a board was set, which is not the same as
+	// having resolved an identity on it: a session may be enrolled before it has a
+	// path, and until then it reads and writes nothing.
+	AgentBusEnrolled() bool
 	// SetAgentBusWaker installs the host's routing for ready-work wakes.
 	SetAgentBusWaker(func(context.Context, agentbus.WakeTarget) error)
 	// WakeAgentBus wakes whoever has work waiting and reports how many were woken.
@@ -308,6 +316,12 @@ type AgentBusControl interface {
 	AgentBusBriefing(now time.Time) (agentbus.Briefing, bool)
 	// AgentBusNodeDetail reads one board node, including who authorized it (§13.8).
 	AgentBusNodeDetail(node string) (agentbus.NodeDetail, bool)
+	// AgentBusView renders the delta this participant is allowed to see, for a host
+	// that shows the board as its participants see it.
+	AgentBusView(now time.Time) (agentbus.View, bool)
+	// ApplyAgentBusOp writes one op, so a host that displays the board may also act
+	// on it. The board validates and refuses with a reason; nothing writes around it.
+	ApplyAgentBusOp(ctx context.Context, op board.Op) (board.Receipt, error)
 }
 
 var _ AgentBusControl = (*Controller)(nil)
