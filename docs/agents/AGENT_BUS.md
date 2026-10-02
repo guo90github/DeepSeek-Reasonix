@@ -791,3 +791,13 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
   需确认它喂的是同一条预算对象）；③ 于是 `exceeded` 会以 `axis == "tokens"` 返回，暂停与映射**自动**走通。
 - **测试模板**：`internal/agent/task_budget_gate_test.go` 已经断言 `info.Kind == "task_budget" && info.Key == "cost"`
   ⇒ token 那条照它写（`Key == "tokens"`），再补 control 侧的映射分派（`budget_spend` / `budget_tokens`）。
+
+**落点读到位（2026-10-02，最后一步收窄）**：token 轴的实现位置与模板都已确定，只剩一跳未读清 ✗：
+
+- **轴的定义处**：`internal/agent/run_budget.go` 的 `func (a *Agent) taskBudgetLimit(ctx context.Context) TaskBudget`（:131）；
+  调用点三处：`run_loop.go`（回合前）、`incomplete_read_runtime.go`、`sampling_recovery.go`——都走同一个 `exceeded`。
+- **轴名已见**：`task_budget_gate_test.go` 里 `"cost"`（费用）与 `"time"`（墙钟），且有一条"未配置时什么轴都不该拦"的用例
+  （`unconfigured budget crossed … nothing should stop by default`）⇒ **这正是"关配置时行为不变"那条验收的现成模板** ✓。
+- **尚未读清的一跳** ✗：`GoalTokenBudget` 目前只到 `control.Options`（`controller.go` 的 `goalTokenBudget`），
+  而 `taskBudgetLimit` 在 `internal/agent` ⇒ 需要确认 **Agent 是否已经能看到该值**（若不能，就得补一跳 control → agent 的装配），
+  以及 `TaskBudget` 是否已有 token 字段。**这两点必须先读清再改**，不要凭"应该能拿到"动手。
