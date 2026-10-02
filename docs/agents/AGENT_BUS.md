@@ -814,3 +814,12 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 ② `taskBudgetLimit` 把 `TaskBudget.Tokens` 填上（0/负 = 不设 ⇒ 关配置时行为不变 ✓）；③ 用例照
 `task_budget_gate_test.go` 的"cost/time/未配置"三态补 `tokens` 那一态，再补 control 侧按 axis 分派 `budget_spend` / `budget_tokens`。
 **仍待确认**（下一刀第一件事）：`exceeded` 是否已经处理 `Tokens` 分支（该函数体本轮未读到 ✗）——若是，则实现只剩上述 ① ②。
+
+**读全了（2026-10-02 收尾）：`exceeded` 早已处理 token 轴，缺的只是"注入时把上限填进去"** —— 并更正一处名字错误 ✗：
+
+- `run_budget.go` 的 `exceeded` 第一个分支就是 `if limit.Tokens > 0 { used := promptTokens + outputTokens; if used >= limit.Tokens { return "token", … } }`
+  ⇒ 轴的**名字是 `"token"`（单数）**，不是本文档前几段写的 `"tokens"` ✗——实现与用例都必须用 `"token"`；
+- `taskBudgetLimit` 的注释写明"**a host-injected budget wins over the configured one**"，实现读 `taskBudgetFromContext(ctx)`
+  ⇒ **装配跳已经存在**（上下文注入的形态）⇒ token 复活 = **在注入 `TaskBudget` 的地方把 `GoalTokenBudget` 也填上**（0 = 不设 ⇒ 行为不变）；
+- 于是三步收敛为：①（唯一的代码改动）在注入处填 `Tokens`；② 照 `task_budget_gate_test.go` 的 `"cost"` 那一态补 `"token"`（含未配置不拦）；
+  ③ control 侧 `goalPauseFromRunError` 目前把 `Kind == "task_budget"` 一律映射成 `budget_spend` ✗ ⇒ **按暂停的 `Key` 分派**（`"token"` ⇒ `budget_tokens`）。
