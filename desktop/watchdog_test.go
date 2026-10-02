@@ -175,6 +175,9 @@ type watchdogRunnerCalls struct {
 	created bool
 	deleted bool
 	fail    bool
+	// commands records every scheduler command in order, so a test can assert what the
+	// machine was actually told rather than only the last thing it was asked.
+	commands []string
 }
 
 func (c *watchdogRunnerCalls) run(name string, args ...string) ([]byte, error) {
@@ -182,13 +185,24 @@ func (c *watchdogRunnerCalls) run(name string, args ...string) ([]byte, error) {
 		return []byte("access denied"), errors.New("exit status 1")
 	}
 	joined := strings.Join(append([]string{name}, args...), " ")
-	if strings.Contains(joined, "/Create") {
+	c.commands = append(c.commands, joined)
+	if strings.Contains(joined, "/Create") || strings.Contains(joined, "Register-ScheduledTask") {
 		c.created = true
 	}
-	if strings.Contains(joined, "/Delete") {
+	if strings.Contains(joined, "/Delete") || strings.Contains(joined, "Unregister-ScheduledTask") {
 		c.deleted = true
 	}
 	return nil, nil
+}
+
+// registrationCommand is the command that creates the OS entry, or "" if none did.
+func (c *watchdogRunnerCalls) registrationCommand() string {
+	for _, command := range c.commands {
+		if strings.Contains(command, "Register-ScheduledTask") || strings.Contains(command, "/Create") {
+			return command
+		}
+	}
+	return ""
 }
 
 // watchdogTestHarness points every OS-facing seam at temp paths, so a test can
@@ -352,5 +366,39 @@ func TestWatchdogRefusalIsReportedNotSwallowed(t *testing.T) {
 	calls.fail = true
 	if err := syncWatchdogWithUnattended(true); err == nil {
 		t.Fatal("a refused registration must be reported to the caller")
+	}
+}
+
+// The registration has to produce a task that actually runs. Windows' defaults (no
+// start on battery power, no catch-up for a missed run) left the entry registered and
+// never run on a real machine, so the command is asserted rather than trusted.
+func TestWatchdogRegistrationSetsTheConditionsThatMakeItRun(t *testing.T) {
+	if !watchdogSupportedPlatform() {
+		t.Skip("this platform has no OS entry to register")
+	}
+	calls, _ := watchdogTestHarness(t)
+	if err := syncWatchdogWithUnattended(true); err != nil {
+		t.Fatalf("register the watchdog: %v", err)
+	}
+	registration := calls.registrationCommand()
+	if registration == "" {
+		t.Fatal("nothing registered the OS entry")
+	}
+	for _, want := range []string{
+		"New-ScheduledTaskAction",
+		"Register-ScheduledTask",
+		"-AllowStartIfOnBatteries",
+		"-DontStopIfGoingOnBatteries",
+		"-StartWhenAvailable",
+		"-RepetitionInterval",
+		watchdogTaskName,
+		"watchdog.cmd",
+	} {
+		if !strings.Contains(registration, want) {
+			t.Fatalf("the registration command is missing %q:\n%s", want, registration)
+		}
+	}
+	if strings.Contains(registration, "schtasks") {
+		t.Fatalf("the registration must not go back to schtasks and its default conditions:\n%s", registration)
 	}
 }

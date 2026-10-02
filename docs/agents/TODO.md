@@ -440,3 +440,14 @@
 - 跨机协作（v1 单机；协议保留可换目标）
 - 自由对话承载真相（对话是一等能力，但结论只在黑板上）
 - 新守护进程 / 第四个前端（唤醒与常驻复用既有机制）
+
+### T9-4 追加：第二条真机缺陷 —— 看门狗脚本的落点 `Desktop\$` 在 Windows 上不可用（2026-10-02 夜 读清，未修）
+
+`watchdogDir()` = `filepath.Join(home, "Desktop", "$")`（`desktop/watchdog_control.go` 的 `defaultWatchdogDir`），
+注册出来的任务动作就是 `...\Desktop\$\watchdog.cmd`。真机上实测：
+- PowerShell `Test-Path -LiteralPath "C:\Users\guosj\Desktop\$"` ⇒ **True，但列出来的是 Desktop 本身的内容**
+  （Windows 把尾部 `\$` 归一化掉了），`ls`/`find` 亦然；
+- `find /c/Users/guosj/Desktop -maxdepth 2 -name 'watchdog*'` ⇒ **空**：这个 `watchdog.cmd` 在 Desktop 下不存在。
+⇒ **任务即使被触发也没有脚本可跑**（与"触发器不响"是两条独立缺陷）。修法方向：把看门狗单文件换到一个 Windows 上无歧义的落点
+（例如 `<state home>\watchdog\watchdog.cmd` 或 `%LOCALAPPDATA%\reasonix\watchdog\`），并同步 `WatchdogStatus` 的 `directory` 输出；
+`AGENT_BUS`/`UNATTENDED` 之外还应在 `docs/UNATTENDED.md` 里写明"单文件的真实落点"。**未在本轮动手**（本轮只修了注册方式）。

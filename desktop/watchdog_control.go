@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,6 +126,28 @@ func watchdogSupportedPlatform() bool {
 	return runtime.GOOS == "windows" || runtime.GOOS == "darwin"
 }
 
+// watchdogIntervalMinutes is how often the scheduler runs the watchdog, and therefore
+// the upper bound on how long an unattended host can stay down.
+const watchdogIntervalMinutes = 5
+
+// watchdogRegisterCommand is the Windows registration as one PowerShell command. The
+// settings are the point of it: with Windows' defaults the task inherits "do not start
+// on battery power" and "do not catch up a missed run", so it is accepted, reported as
+// registered, and never runs. The trigger repeats indefinitely, so the entry survives
+// a missed tick.
+func watchdogRegisterCommand(task, script string) string {
+	return strings.Join([]string{
+		"$a = New-ScheduledTaskAction -Execute '" + psQuote(script) + "'",
+		"$t = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes " +
+			strconv.Itoa(watchdogIntervalMinutes) + ")",
+		"$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -MultipleInstances IgnoreNew",
+		"Register-ScheduledTask -TaskName '" + psQuote(task) + "' -Action $a -Trigger $t -Settings $s -Force | Out-Null",
+	}, "; ")
+}
+
+// psQuote escapes a value for a single-quoted PowerShell string.
+func psQuote(value string) string { return strings.ReplaceAll(value, "'", "''") }
+
 // applyWatchdogRegistration registers or removes the OS entry and reports what
 // the machine now says. It is idempotent: every start calls it.
 func applyWatchdogRegistration(enabled bool) (bool, error) {
@@ -140,10 +163,15 @@ func applyWatchdogRegistration(enabled bool) (bool, error) {
 			}
 			// The task points at the script, never at a version: the script runs the
 			// stable launcher, which resolves the active version on every run.
-			out, err := watchdogPlatformRunner("schtasks", "/Create", "/TN", watchdogTaskName,
-				"/SC", "MINUTE", "/MO", "5", "/TR", `"`+script+`"`, "/F")
+			//
+			// Registration goes through PowerShell rather than `schtasks /Create`:
+			// schtasks' trigger plus Windows' default conditions left the task
+			// registered and never run on a real machine (2026-10-02), which the
+			// status view cannot distinguish from a working watchdog.
+			out, err := watchdogPlatformRunner("powershell", "-NoProfile", "-NonInteractive",
+				"-Command", watchdogRegisterCommand(watchdogTaskName, script))
 			if err != nil {
-				return false, fmt.Errorf("schtasks create: %w: %s", err, strings.TrimSpace(string(out)))
+				return false, fmt.Errorf("register the watchdog task: %w: %s", err, strings.TrimSpace(string(out)))
 			}
 			return true, nil
 		}
