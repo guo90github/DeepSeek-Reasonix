@@ -301,8 +301,20 @@
 
 ## T10 S8 PR 元数据门 + 打包
 
-- [ ] T10-1 `Cache-impact` / `Cache-guard` / `System-prompt-review` / `Documentation-impact` 齐全（T11-6 已备好实测数字）
-- [ ] T10-2 按本机 SOP 打包并 `verify-windows-portable.sh` exit 0
+- [x] T10-1 `Cache-impact` / `Cache-guard` / `System-prompt-review` / `Documentation-impact` 齐全
+      → **已备齐（2026-10-02，提交 `e0afbc2f4` 的正文）**，并把两条门脚本**在本地跑通**（不是"以为"）：
+      `CACHE_IMPACT_PR_BODY_FILE=<提交正文> bash scripts/check-cache-impact.sh <提交改动文件>` ⇒ `Cache impact check passed.`
+      （cache-sensitive 命中 `internal/boot/*`、`internal/tool/*` ⇒ 同时要求 `System-prompt-review`，已写"本会话自查 + golden SystemHash 未变的依据"）；
+      `DOCS_IMPACT_PR_BODY_FILE=<提交正文> bash scripts/check-docs-impact.sh <提交改动文件>` ⇒ `Documentation impact check passed: updated - …`。
+      **推 PR 时把提交正文原样带入**（脚本读的是 PR body）。
+- [x] T10-2 按本机 SOP 打包并 `verify-windows-portable.sh` exit 0
+      → **已打包安装（2026-10-02）**：tag `v0.0.0-dev.101`；`dist/Reasonix-windows-amd64.zip`
+      239,290,918 字节 @19:00:08；安装目录 `C:\Users\guosj\Reasonix-portable\versions\v0.0.0-dev.101`
+      （并列新增，dev.95–dev.100 原样保留）；包内 `build.json` = 版本 `v0.0.0-dev.101` / channel `stable` /
+      commit `e0afbc2f4e80`（= HEAD，构建前后源码工作区干净）；`verify-windows-portable.sh` **exit 0**；
+      包内证据：`reasonix-desktop.exe` 含 `agent_bus`，`bridge-*.js` / `app.asar` 含 `AgentBusApply`，
+      `index-*.js` 含 `agentbus-controls`，`zh-*.js`/`zh-TW-*.js` 含新文案。
+      本次带 `DESKTOP_BUILD_SKIP_INSTALLER=1` ⇒ **installer 与 SignPath payload 未重新生成**（`dist/` 里仍是 9/24 的旧 installer）。
 
 ## 已知边界（第二轮评审认定；挂在对应阶段，不在 S1 修）
 
