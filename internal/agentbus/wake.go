@@ -3,7 +3,9 @@ package agentbus
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"slices"
 	"sort"
+	"time"
 
 	"reasonix/internal/agentbus/board"
 )
@@ -22,6 +24,20 @@ type WakeTarget struct {
 	Waiting []string
 	// Asks are questions addressed to this participant that nobody has answered.
 	Asks []string
+	// Owes are deliberations this participant was required to answer and has not,
+	// although the round's window has passed.
+	Owes []string
+}
+
+// WakeInput is everything a wake decision reads: the op log for provenance, the
+// talk surface for open questions, and the deliberation surface for who still
+// owes an answer.
+type WakeInput struct {
+	Ops      []board.Op
+	Talk     *TalkState
+	Hearings *HearingState
+	Limits   HearingLimits
+	Now      time.Time
 }
 
 // WakeTargets lists who should be woken now.
@@ -33,7 +49,7 @@ type WakeTarget struct {
 // It reads the op log rather than the folded board on purpose: who *asked* for an
 // unowned node is not in the fold, only in the op that asked. Teaching nodes to
 // carry their requester would move this back into the fold.
-func WakeTargets(ops []board.Op, talk *TalkState) []WakeTarget {
+func WakeTargets(in WakeInput) []WakeTarget {
 	targets := map[string]*WakeTarget{}
 	target := func(participant string) *WakeTarget {
 		if t := targets[participant]; t != nil {
@@ -44,8 +60,8 @@ func WakeTargets(ops []board.Op, talk *TalkState) []WakeTarget {
 		return t
 	}
 
-	st := board.Fold(ops)
-	for _, op := range ops {
+	st := board.Fold(in.Ops)
+	for _, op := range in.Ops {
 		if op.Verb != board.VerbRequire || op.Dep == nil || op.Actor == "" {
 			continue
 		}
@@ -63,20 +79,28 @@ func WakeTargets(ops []board.Op, talk *TalkState) []WakeTarget {
 		}
 	}
 
-	if talk != nil {
-		for _, id := range sortedChainIDs(talk) {
-			chain := talk.Chains[id]
+	if in.Talk != nil {
+		for _, id := range sortedChainIDs(in.Talk) {
+			chain := in.Talk.Chains[id]
 			// One hop means the question was asked and never answered: an answer
 			// would have spent a second hop.
 			if chain.Hops != 1 {
 				continue
 			}
-			addressee := askTarget(talk, id)
+			addressee := askTarget(in.Talk, id)
 			if addressee == "" {
 				continue
 			}
 			t := target(addressee)
 			t.Asks = appendUnique(t.Asks, id)
+		}
+	}
+
+	if in.Hearings != nil {
+		for _, node := range sortedHearingNodes(in.Hearings) {
+			for _, participant := range HearingSilent(in.Hearings.Hearings[node], in.Now, in.Limits) {
+				target(participant).Owes = appendUnique(target(participant).Owes, node)
+			}
 		}
 	}
 
@@ -110,7 +134,7 @@ func askTarget(talk *TalkState, correlation string) string {
 func wakeKey(t *WakeTarget) string {
 	sum := sha256.New()
 	sum.Write([]byte(t.Participant))
-	for _, group := range [][]string{t.Ready, t.Waiting, t.Asks} {
+	for _, group := range [][]string{t.Ready, t.Waiting, t.Asks, t.Owes} {
 		items := append([]string(nil), group...)
 		sort.Strings(items)
 		for _, item := range items {
@@ -123,12 +147,19 @@ func wakeKey(t *WakeTarget) string {
 }
 
 func appendUnique(items []string, item string) []string {
-	for _, existing := range items {
-		if existing == item {
-			return items
-		}
+	if slices.Contains(items, item) {
+		return items
 	}
 	return append(items, item)
+}
+
+func sortedHearingNodes(st *HearingState) []string {
+	out := make([]string, 0, len(st.Hearings))
+	for node := range st.Hearings {
+		out = append(out, node)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func sortedChainIDs(talk *TalkState) []string {

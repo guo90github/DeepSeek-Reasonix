@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"reasonix/internal/agentbus"
 	"reasonix/internal/agentbus/board"
@@ -26,7 +27,7 @@ func (c *Controller) SetAgentBusWaker(fn func(context.Context, agentbus.WakeTarg
 // unchanged board wakes nobody however often a host ticks; a new work set wakes
 // exactly once. A failed wake releases its key so the next tick retries it.
 func (c *Controller) WakeAgentBus(ctx context.Context) int {
-	bus, ops, talkState, err := c.agentBusWakeSnapshot(ctx)
+	bus, input, err := c.agentBusWakeSnapshot(ctx)
 	if err != nil {
 		return 0
 	}
@@ -36,7 +37,7 @@ func (c *Controller) WakeAgentBus(ctx context.Context) int {
 	}
 	me := bus.participantID(c)
 	woken := 0
-	for _, target := range agentbus.WakeTargets(ops, talkState) {
+	for _, target := range agentbus.WakeTargets(input) {
 		// Waking ourselves is pointless: this session's next turn already carries
 		// its own work.
 		if target.Participant == "" || target.Participant == me {
@@ -55,28 +56,42 @@ func (c *Controller) WakeAgentBus(ctx context.Context) int {
 	return woken
 }
 
-func (c *Controller) agentBusWakeSnapshot(ctx context.Context) (*agentBusState, []board.Op, *agentbus.TalkState, error) {
+func (c *Controller) agentBusWakeSnapshot(ctx context.Context) (*agentBusState, agentbus.WakeInput, error) {
 	bus, err := c.agentBusForTalk()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, agentbus.WakeInput{}, err
 	}
 	brd, err := board.Open(bus.dir)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, agentbus.WakeInput{}, err
 	}
 	ops, err := brd.Ops(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, agentbus.WakeInput{}, err
 	}
-	log, err := agentbus.OpenTalkLog(bus.dir)
+	talkLog, err := agentbus.OpenTalkLog(bus.dir)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, agentbus.WakeInput{}, err
 	}
-	talkState, _, err := log.Read()
+	talk, _, err := talkLog.Read()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, agentbus.WakeInput{}, err
 	}
-	return bus, ops, talkState, nil
+	hearingLog, err := agentbus.OpenHearingLog(bus.dir)
+	if err != nil {
+		return nil, agentbus.WakeInput{}, err
+	}
+	hearings, _, err := hearingLog.Read()
+	if err != nil {
+		return nil, agentbus.WakeInput{}, err
+	}
+	return bus, agentbus.WakeInput{
+		Ops:      ops,
+		Talk:     talk,
+		Hearings: hearings,
+		Limits:   bus.limitsForHearing(),
+		Now:      time.Now().UTC(),
+	}, nil
 }
 
 func (b *agentBusState) currentWaker() func(context.Context, agentbus.WakeTarget) error {

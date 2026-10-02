@@ -1,7 +1,9 @@
 package agentbus
 
 import (
+	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -132,7 +134,8 @@ func (e *HearingReject) Error() string {
 
 // IsHearingReject reports whether err is a hearing refusal and returns its reason.
 func IsHearingReject(err error) (string, bool) {
-	if rej, ok := err.(*HearingReject); ok {
+	var rej *HearingReject
+	if errors.As(err, &rej) {
 		return rej.Reason, true
 	}
 	return "", false
@@ -374,10 +377,5 @@ func dedupSorted(items []string) []string {
 }
 
 func containsString(items []string, item string) bool {
-	for _, existing := range items {
-		if existing == item {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(items, item)
 }

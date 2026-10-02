@@ -22,6 +22,8 @@ type agentBusState struct {
 	participant string
 	cursors     agentBusCursors
 	limits      agentbus.TalkLimits
+	// hearingLimits bound this session's deliberations; zero leaves them off.
+	hearingLimits agentbus.HearingLimits
 	// waker is the host's routing for ready-work wakes; nil means wake nobody.
 	waker func(context.Context, agentbus.WakeTarget) error
 	// woken remembers the last work set each participant was woken for, so a host

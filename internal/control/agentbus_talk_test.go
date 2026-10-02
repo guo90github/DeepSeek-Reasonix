@@ -2,6 +2,7 @@ package control
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -99,7 +100,8 @@ func TestTalkRateLimitIsReportedAsRateLimited(t *testing.T) {
 
 func TestTalkFromAnUnenrolledOrNamelessSessionIsRefused(t *testing.T) {
 	unenrolled := New(Options{SessionDir: t.TempDir(), Sink: event.Discard})
-	if _, err := unenrolled.AgentBusSay(context.Background(), "t", "hello", nil); err != errAgentBusUnwired {
+	_, err := unenrolled.AgentBusSay(context.Background(), "t", "hello", nil)
+	if !errors.Is(err, errAgentBusUnwired) {
 		t.Fatalf("unenrolled say = %v, want the unwired refusal", err)
 	}
 	if block := unenrolled.agentBusTalkBlock(); block != "" {
@@ -108,7 +110,8 @@ func TestTalkFromAnUnenrolledOrNamelessSessionIsRefused(t *testing.T) {
 
 	nameless := New(Options{SessionDir: t.TempDir(), Sink: event.Discard})
 	nameless.SetAgentBus(t.TempDir(), "")
-	if _, err := nameless.AgentBusSay(context.Background(), "t", "hello", nil); err != errAgentBusUnwired {
+	_, err = nameless.AgentBusSay(context.Background(), "t", "hello", nil)
+	if !errors.Is(err, errAgentBusUnwired) {
 		t.Fatalf("nameless say = %v, want the unwired refusal", err)
 	}
 	if block := nameless.agentBusTalkBlock(); block != "" {
@@ -121,7 +124,7 @@ func TestTalkBlockBoundsHowMuchOneTurnCarries(t *testing.T) {
 	alice := newAgentBusTalkController(t, dir, "alice")
 	bob := newAgentBusTalkController(t, dir, "bob")
 	ctx := context.Background()
-	for i := 0; i < agentBusTalkMaxLines+5; i++ {
+	for i := range agentBusTalkMaxLines + 5 {
 		if _, err := alice.AgentBusSay(ctx, "t", "line", []string{"bob"}); err != nil {
 			t.Fatalf("say %d: %v", i, err)
 		}
