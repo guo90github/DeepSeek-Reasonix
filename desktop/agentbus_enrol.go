@@ -44,8 +44,27 @@ func (a *App) AgentBusJoin() (AgentBusStatusView, error) {
 		return AgentBusStatusView{}, fmt.Errorf("desktop: no state home to keep a board in")
 	}
 	bus.SetAgentBus(dir, "")
+	// Remember the join: a host that restarts must not silently drop off the board, or
+	// the board stops advancing the moment it was restored.
+	if err := rememberAgentBusEnrolment(ctrl.SessionPath(), dir, bus.AgentBusParticipant()); err != nil {
+		return AgentBusStatusView{}, fmt.Errorf("desktop: remember the board: %w", err)
+	}
 	a.enrollAgentBus(ctrl)
 	return agentBusStatusOf(bus, dir), nil
+}
+
+// restoreAgentBusEnrolment puts a session back on the board it joined before this host
+// started, so a restored host keeps advancing the work it was part of.
+func (a *App) restoreAgentBusEnrolment(ctrl control.SessionAPI) {
+	bus, ok := ctrl.(control.AgentBusControl)
+	if !ok || bus.AgentBusEnrolled() {
+		return
+	}
+	record, ok := rememberedAgentBusEnrolment(ctrl.SessionPath())
+	if !ok {
+		return
+	}
+	bus.SetAgentBus(record.Dir, record.Participant)
 }
 
 // AgentBusLeave opts the session out. The board and its log stay on disk untouched:
@@ -55,8 +74,20 @@ func (a *App) AgentBusLeave() (AgentBusStatusView, error) {
 	if err != nil {
 		return AgentBusStatusView{}, err
 	}
+	if err := forgetAgentBusEnrolment(ctrlSessionPath(bus)); err != nil {
+		return AgentBusStatusView{}, fmt.Errorf("desktop: forget the board: %w", err)
+	}
 	bus.SetAgentBus("", "")
 	return agentBusStatusOf(bus, agentBusDefaultBoardDir()), nil
+}
+
+// ctrlSessionPath reads the session path from the controller a host holds.
+func ctrlSessionPath(bus control.AgentBusControl) string {
+	session, ok := bus.(interface{ SessionPath() string })
+	if !ok {
+		return ""
+	}
+	return session.SessionPath()
 }
 
 func (a *App) agentBusControl() (control.AgentBusControl, error) {

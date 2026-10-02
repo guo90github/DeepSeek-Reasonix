@@ -459,3 +459,17 @@
 （`LastRunTime=2026-10-02 23:54:54`、`Result=0`、`NextRunTime=23:59:59`）。
 `docs/UNATTENDED.md` / `.zh-CN.md` 里的落点描述同步改为 `<state home>\watchdog\watchdog.cmd`，并写明旧路径为何不可用。
 **仍待**：装 dev.105 后在真机走"杀 → 不手动重启 → 等窗口→ 看门狗拉起"的完整 T9-4 验收。
+
+**T9-4 的"黑板继续被推进"那一半：真机实测通过"拉起"，但**卡在入列不持久**（2026-10-03 凌晨，读清并已修）**
+- 看门狗拉起**已通过**（有据）：巡检日志 `15:59:46Z launched restoring an unattended host that is gone …v0.0.0-dev.105\reasonix-desktop.exe`；
+  杀于 23:59:02 → 23:59:46 由看门狗自己拉起（停摆 49s），任务那一刻 `LastRunTime=23:59:59 / Result=0`。
+- **但黑板没有推进**：拉起后板上**没有任何新 op**（最后一条仍是 23:24 的 seq 6），而本会话在拉起后调 `agent_bus` 得到
+  `this session is not on a board` —— 因为**入列只活在控制器内存里**（`SetAgentBus`），进程一死就丢；
+  于是"拉起后没人再入列 ⇒ 黑板停在被杀那一刻"。
+- **已修（本刀）**：入列按**会话路径**记进 `<state home>/agentbus-enrolments.json`（`rememberAgentBusEnrolment`），
+  宿主重建控制器时（`buildTabControllerBoot` → `restoreAgentBusEnrolment`）先把该会话放回它原来的板，再装唤醒路由并扫一次；
+  `AgentBusLeave` 会清掉这条记录（离开是决定，不该被重新施加上）。用例
+  `desktop/agentbus_enrolment_test.go` 2 条（重启后自动回到板上、离开后不再回来、无路径会话不记账）。
+- **仍待**：装 dev.106 后在真机复验"杀 → 看门狗拉起 → **黑板出现新 op / 被唤醒的会话真的起回合**"。
+- 一条岔路的更正：我曾把"拉起后不推进"归到本机**定时任务**（`heartbeat-tasks.json` 里 4 个任务都是 `enabled:false`）——
+  那是另一个功能域，与 T9-4 的黑板推进无关；该方向已放弃、改动已回退（工作区干净）。
