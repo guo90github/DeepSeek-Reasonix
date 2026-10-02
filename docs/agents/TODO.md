@@ -2,7 +2,7 @@
 
 > 用途：**落地阶段的唯一执行清单**。每完成一项就在本文件里把 `[ ]` 改成 `[x]`，并在同一行末尾补证据
 > （文件路径 / 命令 / 提交号）。条目**只给指针，不复制出口条件**——出口条件一律以
-> `docs/agents/AGENT_BUS.md` §11（S1 的实现规格见 §11.1）为准，避免两份真相漂移。
+> `docs/agents/AGENT_BUS.md` §11（S1 的实现规格见 §11.1，实现期修正见 §11.3）为准，避免两份真相漂移。
 > 规则：本目录（`docs/agents/`）是这批文档的落点；新增文档一律落在这里；推进中发现缺失的节点**追加到本文件**。
 
 ## T0 文档收敛（落地前）
@@ -12,39 +12,41 @@
 - [x] T0-3 提交文档基线 → `c414f6e55`（中文信息 + `Documentation-impact: updated - …`；纯文档）
 - [ ] T0-4 确认是否需要 `*.zh-CN.md` 英文对照（`docs/COLLAB-SURFACE.md` 是中文单份先例，倾向不需要）
 
-## T1 对抗评审（已跑一轮；结论已并入契约）
+## T1 对抗评审
 
 - [x] T1-1 一轮对抗评审（独立只读子智能体，任务是「挑错」而非补全）→ 结论：**不能直接开工**，须先补 S1 规格 + 消解范围冲突
 - [x] T1-2 结论逐条并入契约（改判留痕）→ `docs/agents/AGENT_BUS.md` §11.1（S1 规格）、§11.2（评审留痕）、§10（3 处处置补正）、§跨工作区与 §9.3（3 处锚点修正）、§集群规模（单机边界）
-- [ ] T1-3 第二轮对抗评审（**在 S1 实现完成、§11.1 有代码后**再跑一次，对着代码挑错而不是对着文字）
+- [x] T1-3 第二轮对抗评审（**对着 S1 代码挑错**）→ 17 条，处置见 `docs/agents/AGENT_BUS.md` **§11.4**：已修 10 条（可推进集合、revert-from-stale、Sweep 显式、no_progress 仅系统、幂等键不含时间、split 重复子 id、require 闭依赖、读锁预算、跨窗口修复、意图冲突拒收）+ 3 条记为边界（挂 T4-8/T5-6/T7-5）
 
-## T2 补规格（**必须在对应阶段开工前完成**；本轮评审未消解的三条）
+## T2 补规格（**必须在对应阶段开工前完成**）
 
-- [ ] T2-1 视图/摘要规格：谁生成、多大、多久刷新、字段集 + **如何廉价物化「我的子树」**（O(N²) 闸的实际落点；评审指出 S2 成本模型无法验证）
+- [ ] T2-1 视图/摘要规格：谁生成、多大、多久刷新、字段集 + **如何廉价物化「我的子树」**（O(N²) 闸的实际落点）
 - [ ] T2-2 「就绪」事件的发起者：完成者 / 宿主 / 编排者扫描——定死一个，否则退回轮询（S3/S5 接缝）
 - [ ] T2-3 预算与既有旋钮对齐：`GoalTokenBudget`（`internal/config/config.go:1301`）/ spend budget / `REASONIX_SKIP_BUDGET` 谁统谁，超限后 Goal 变 `blocked` 还是 `complete`
-- [ ] T2-4 **并发槽的持久队列落点**（评审新增）：槽满「排队而非失败」需要一个持久队列，而既有 inbox 是**会话级**且嵌套 fail-fast —— 定死排队落点后再做 S5
-- [ ] T2-5 **能力的授权链**（本轮自查新增）：缺能力派生「获取能力」子节点时，谁批装依赖/改仓库（`CapabilityGrant` 交集 vs 新授权）
+- [ ] T2-4 **并发槽的持久队列落点**：槽满「排队而非失败」需要一个持久队列，而既有 inbox 是**会话级**且嵌套 fail-fast —— 定死后再做 S5
+- [ ] T2-5 **能力的授权链**：缺能力派生「获取能力」子节点时，谁批装依赖/改仓库（`CapabilityGrant` 交集 vs 新授权）
 
-## T3 S1 黑板内核（可独立开工；不接线）
+## T3 S1 黑板内核 — **已完成**（`internal/agentbus/board`：6 源文件 + 7 测试文件；提交 = 本轮那条 `feat(agentbus)`，用 `git log -1 -- internal/agentbus` 可查）
 
-产物：`internal/agentbus/board`（op 日志 + 确定性 fold + 节点状态机 + 逐节点租约 + 心跳/回收）。
-规格：`docs/agents/AGENT_BUS.md` **§11.1**（实现以它为准）；出口条件：§11 的 S1 行。逐条勾：
+规格：`docs/agents/AGENT_BUS.md` §11.1 + §11.3（实现期修正）。`go test ./internal/agentbus/board/` → `ok`。
 
-- [ ] T3-1 非法迁移拒收（带原因；不在 §11.1 迁移表内的组合）
-- [ ] T3-2 op 重放幂等（同 `op.id` 重复提交不追加第二条）
-- [ ] T3-3 并发 op 折叠结果与串行一致
-- [ ] T3-4 杀掉推 op 的进程后，剩余 op 仍能折出完整状态
-- [ ] T3-5 两个不同进程并发写同一作用域不丢 op（board 级 `internal/filelock`）
-- [ ] T3-6 认领者被杀后节点在 deadline 内被回收并记 `no_progress`（同 `(node, deadline)` 幂等）
-- [ ] T3-7 `revert` 后传递下游（谁依赖它）中的 `done` 正确标 `stale`
-- [ ] T3-8 无证据的 `abandon` 请求被拒；无证据的 `decide(done)` 被拒
-- [ ] T3-9 阶段闸门：`gofmt -w .` / `go vet ./...` / `make lint`（含 repolint，**不许放宽 baseline**）/ `go test ./internal/tool/builtin/ ./internal/boot/`
-- [ ] T3-10 结构体按生命周期分组（`struct-state` 上限 12 个标量字段，`tools/repolint/structstate.go:13`）
-- [ ] T3-11 `seq` 跨进程单调不重号，且 `<board>/#seq` 可作稳定地址
-- [ ] T3-12 截断尾行（无结尾 `\n`）不计入 op；中段坏行跳过且**计数可见**
-- [ ] T3-13 成环的 `split` / `require` 被拒
-- [ ] T3-14 `agentbus` 的分层自证：不 import `internal/agent` / `internal/control`（`go list -deps` 或分层测试）
+- [x] T3-1 非法迁移拒收（带原因）→ `transition_test.go` `TestIllegalTransitionsAreRejectedWithReason`（26 用例逐条断 reason）+ `TestRejectedOpsLeaveNoTrace`
+- [x] T3-2 重放幂等 / 重复 id 不追加 → `TestDuplicateOpIDDoesNotAppendTwice`、`TestFoldCountsDuplicateIDs`
+- [x] T3-3 并发折叠 = 串行 → `TestConcurrentApplyFoldsLikeSerial`（8 goroutine × 5 op，seq 1..40 无重号无缺号）
+- [x] T3-4 杀掉写者后仍可折出完整状态 → `proc_test.go` `TestKilledWriterLeavesAFoldableLog`（子进程写完即 exit 9；父进程折出 5 条并继续可写）
+- [x] T3-5 两个不同进程并发写不丢 op → `TestConcurrentProcessesDoNotLoseOps`（3 子进程 × 6 op）
+- [x] T3-6 租约到期回收 + 记 `no_progress`（幂等） → `TestSweepReclaimsExpiredClaimAndRecordsNoProgress`、`TestSweepIsIdempotent`、`TestSweepReclaimsSeveralExpiredClaimsInOnePass`、`TestSweepLeavesLiveClaimsAlone`、`TestHeartbeatExtendsTheLeaseAndSweepSparesIt`
+- [x] T3-7 `revert` 后传递下游 `done` ⇒ `stale`（且 stale 可回 open） → `TestRevertMarksDoneDependentStaleAndStaleReturnsToOpen`
+- [x] T3-8 无证据 `abandon` / 无证据或自证的 `decide(done)` 被拒 → 同 T3-1 表 + `TestAbandonRequestThenDecideAbandoned`、`TestCapabilityGapClearsTheClaim`
+- [x] T3-9 阶段闸门 → `gofmt -l internal/agentbus/` 空；`go vet ./internal/agentbus/...` 空；`go test ./internal/tool/builtin/` ok(21s)；`go test ./internal/boot/` ok(152s)；`make lint` 本包 **新增 0 条**（余 18 条既有红在 `internal/recap`/`internal/serve`/`internal/control`/`internal/boot`/`tools/collabgate`/`internal/agent`，工作区未改动这些文件）；`go run ./tools/repolint` 余 **2 条既有红**（`desktop/frontend/src/components/SettingsPanel.tsx`、`desktop/frontend/src/lib/useController.ts` 超预算，同样未改动）——**未放宽任何 baseline**
+- [x] T3-10 结构体按生命周期分组 → 本包**不持有 mutex/atomic**（互斥由 `internal/filelock` 承担）⇒ `struct-state` 不适用，未新增受计结构
+- [x] T3-11 `seq` 跨进程单调不重号 → `TestSeqIsAssignedFromTheLog`、`TestConcurrentProcessesDoNotLoseOps`
+- [x] T3-12 截断尾行不计入 op；坏行跳过并计数 → `TestTruncatedTailIsNotAnOp`、`TestNextWriterRepairsTheTornTail`、`TestCorruptMidFileLineIsSkippedAndCounted`、`TestRepairRejectsAnUnreachableTornTail`、`proc_test.go` `TestTornTailFromAKilledWriterIsRepaired`
+- [x] T3-13 成环的 `split`/`require` 被拒 → `TestSplitAndRequireRejectCycles`
+- [x] T3-14 分层自证 → `layering_test.go`（不 import `control`/`agent`/`serve`/`boot`）
+- [x] T3-15 实现期修正回写契约 → `docs/agents/AGENT_BUS.md` §11.3（5 条）
+
+**备注**：`internal/boot` 测试串较长（>2 分钟），以 `go test -timeout 20m ./internal/boot/` 在后台跑；结果记在下一次推进里。
 
 ## T4 S2 写侧接线 + 读侧投影（含跨工作区与子树分片）
 
@@ -54,7 +56,7 @@
 - [ ] T4-4 守卫三：一轮 provider 请求里只含自己的视图（`internal/boot/effect_test.go` 模式）
 - [ ] T4-5 读侧复用 `internal/taskcatalog` / `internal/taskmonitor` / 桌面任务树
 - [ ] T4-6 `make frontend-check` 过
-- [ ] T4-7 视图的增量读（cursor/seq）与「头部稳定、尾部追加」实测命中前缀缓存（评审指出该论证需落地才有意义）
+- [ ] T4-7 视图的增量读（cursor/seq）与「头部稳定、尾部追加」实测命中前缀缓存
 
 ## T5 S3 交流三档
 
@@ -70,7 +72,7 @@
 - [ ] T6-2 一次 `refute` 改变结论（可回放：同一 op log 折叠出不同结局）
 - [ ] T6-3 等重升级给人；超升级配额自动降级 `undecided-by-rule` 并记账
 - [ ] T6-4 弃答以 `no_answer` 可见
-- [ ] T6-5 无可核对证据时 `done` 被拒
+- [ ] T6-5 无可核对证据时 `done` 被拒（S1 已实现 `decide(done)` 的证据 + 非产出者复跑门槛，S4 复用）
 - [ ] T6-6 票数不改变权重（consensus ≠ evidence）
 
 ## T7 S5 集群调度与预算
@@ -100,9 +102,15 @@
 - [ ] T10-1 `Cache-impact` / `Cache-guard` / `System-prompt-review` / `Documentation-impact` 齐全
 - [ ] T10-2 按本机 SOP 打包并 `verify-windows-portable.sh` exit 0
 
+## 已知边界（第二轮评审认定；挂在对应阶段，不在 S1 修）
+
+- [ ] **T4-8**（S2）写路径每次全量读 + 全量 fold（O(n)/写，总 O(n²)）：改成增量 fold/游标 + 内存态缓存，并带实测预算（评审指出现状与 §5「百级下必须增量读」的精神背离）
+- [ ] **T5-6**（S3/S4）`evidence` 目前只有「`Ref` 非空」一条约束：形状、唯一性、去重与去重窗口要在证据权重设计里定死（S1 的 `hasEvidence` 是占位）
+- [ ] **T7-5**（S5）`Sweep` 单次上限 256（按 node id 排序，故无永久饥饿）：把上限与语义写进文档，并在调度侧决定 tick 频率
+
 ## 输入材料（本目录内，非清单项）
 
-- `docs/agents/AGENT_BUS.md` — 契约（真相源，含 §11.1 S1 规格、§11.2 评审留痕）
+- `docs/agents/AGENT_BUS.md` — 契约（真相源，含 §11.1 S1 规格、§11.2 评审留痕、§11.3 实现期修正）
 - `docs/agents/multi-agent-collaboration-design.md` / `...-development-plan.md` — 被取代但保留继承项的旧稿
 - `docs/agents/agent-evaluation-whitepaper-01-overview.md` — Agent 评测体系（外部方法论蒸馏），供「可核验」纪律对齐语言
 

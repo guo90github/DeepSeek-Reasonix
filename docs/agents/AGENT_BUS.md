@@ -487,6 +487,31 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 
 **过期扫描者**：**任何**参与者在自己的写事务开头顺手 `Sweep(now)`（**无新守护进程**）；`no_progress` 幂等。
 
+### 11.3 实现期修正（2026-10-02，S1 落地时发现；**覆盖 §11.1 的对应行**）
+
+实现 S1 时发现五处规格要收紧，本节是这些点的权威版本：
+
+1. **`Fold` 不读时钟**（覆盖「时钟」段）：重放必须是日志的函数。`Fold(ops, now)` 被否——签名是 `Fold(ops []Op) *State`；时限的"未来性"是**写时守卫**（`validateFreshness`，只在 `Apply` 里跑，不进日志、不进 fold）。否则同一份日志在不同时刻折出不同状态——实现时被 `Sweep` 测试抓到：claim 写时合法、读时被判非法，整棵树回退。
+2. **`claim` 的接管判据在日志内比较**（覆盖迁移表 `claim` 行）：允许 `open`，或 `claimed` 且**该 op 自己的 `At` 晚于当前租约的 `Deadline`**（两个时间都取自日志）⇒ 可重放；"对方租约此刻是否过期"只在写时判定。
+3. **形状校验先于状态校验**：动词必填项（证据 / 理由 / deadline / bounds / children / dep / outcome）由 `validateOpShape` 在任何节点查找之前判——理由才可行动（"缺 bounds" 比 "unknown_node" 有用），且与节点状态无关。
+4. **截断尾行要在下一次写事务里修掉**（覆盖「日志与损坏行」段）：只跳过不够——新纪录会追加在那半行之后、被埋在坏行里。`appendOp` 先 `repairTornTail`（截到最后一条完整行）再写；修不动（尾行超过 64 KiB 窗口）**报错，不静默丢**。
+5. **派生谓词的边界**：`ready` 允许 `open` **或** `blocked`——`blocked` 兼有"等依赖"与"被裁决阻塞"两义，用 `Outcome != blocked` 区分；split 出的容器在子节点全部完成后重新 ready（组装它们本身就是它的工作）。`revert` 把下游 `done` 变 `stale` 时**同时清掉 Outcome**（stale 不是结论）。
+
+### 11.4 第二轮评审（对着 S1 代码）的处置（2026-10-02）
+
+第二轮改看**代码**（不是文字），抓到 17 条：已修 10 条、明记为边界 3 条、其余同类归并。对本稿的**规格修正**：
+
+6. **可推进的集合放宽到"能开工"**（覆盖迁移表 `assert` / `claim` 行 + §11.3 第 5 条）：`claim` 接受 `open`、`capability_gap`，以及**依赖全部 `done` 的 `blocked`**（与"被裁决阻塞"用 `Outcome != blocked` 区分）；`assert` 只拒绝 `done` / `abandoned` / `stale`。原表把 `blocked` 与 `capability_gap` 写成不可推进 ⇒ 容器与被依赖节点在依赖满足后**没有入口**，`capability_gap` 成了死胡同。
+7. **`revert` 也接受 `stale`**（覆盖迁移表 `revert` 行）：`revert` 可把 `done` **或** `stale` 打回 `open`（否则 `stale` 没有出口）；下游中的 `done` 仍标 `stale`。
+8. **`Sweep` 是显式调用，不藏在 `Apply` 里**（覆盖「过期扫描者」段）：原写"任何参与者在写事务开头顺手 Sweep"——实现为**显式 `Sweep(now)`**，由宿主/调度器每 tick 调一次。理由：若 `Apply` 隐式代跑，一次写会追加多条 op，回执里的 `seq` 就不再诚实。
+9. **`no_progress` 只能由 `Sweep` 写入**：`Apply` 直接拒它（`system_only`）——否则任何调用方都能伪造系统回收记录。
+10. **幂等键不含时间**：`DeriveID` 的载荷排除 `At`（重试几小时后仍是同一意图）；同 id 但**意图不同**的写入不再静默回 `Duplicate`，而是拒收（`idempotency_conflict`）。
+11. **`split` 同一 op 内重复 child id 拒收**（`duplicate_dependency`）；**`require` 拒绝指向 `abandoned` 的依赖**（`dependency_closed`）——否则会造出永远不可能 ready 的节点。
+12. **读锁也有预算**：`Snapshot` 的共享锁与写锁同样受 `defaultLockWait` 约束（原实现读方可能无限阻塞）。
+13. **尾部修复要能跨窗口**：`repairTornTail` 在 64 KiB 窗口里找不到 `\n` 时继续向前扫，直到文件头（整个文件是半行 ⇒ 截到 0）；不再把"窗外的半行"当成不可修错误。
+
+**明记为边界（不在 S1 修，已在 TODO 挂节点）**：① 写路径每次全量读 + 全量 fold（O(n)/写，总 O(n²)）⇒ S2 用增量 fold/游标替换并带实测预算（TODO T4-8）；② `evidence` 只有"`Ref` 非空"这一条约束，形状与唯一性留给 S3/S4 的证据权重设计（TODO T5-6）；③ `Sweep` 单次上限 256，节点按 id 排序故无永久饥饿，但需在文档写明（TODO T7-5）。
+
 ### 11.2 对抗评审留痕（2026-10-02，独立子智能体，只读）
 
 结论：**不能直接开工**——须先补 S1 规格（已补为 §11.1）并消解范围冲突。已并入本稿的：
