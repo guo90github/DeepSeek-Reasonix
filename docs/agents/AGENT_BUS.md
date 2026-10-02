@@ -856,3 +856,13 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
   在"没核实的对外可见改动"与"先写明现状、留好待办"之间，选后者 ✓（这也是本稿一贯的纪律：不确定就不冒充已解决）。
 - **待办**：若要给墙钟自有原因，最小改动 = 停止原因闭集加 `budget_time` + `goalPauseFromPause` 按 `Key == "time"` 分派
   + 核实 `acp/status.go` 与前端对未知停止原因的处理（**先核实再改**）。
+
+**读代码后的缩小（2026-10-02）：宿主其实只有一处**。原写"桌面 `App` / serve 各一处" —— 实测**不是**：
+
+- 生产里构造 controller 的地方**只有一处**：`internal/boot/boot.go` 的 `ctrl := control.New(ctrlOpts)`；
+  桌面经 `buildTabControllerBoot` 走 `boot.Build`，cli / serve / bot 同样走 `boot.Build` ⇒ **所有前端共用同一处装配**。
+- 因此"宿主持有并下发 `Ledger`"落成**一行注入**：`boot.Options` 加一个 `AgentBusLedger`（或构建后照 `SetAgentBusWaker` 形态
+  装上去），由**各自的宿主二进制**在进程内创建**一份**并传入——**不需要在每个前端各写一套**。
+  具体走 `Options` 还是"构建后再装"，取决于哪条更贴合 boot 现有装配顺序（`AgentBusDir`/`AgentBusID` 已经走 `Options` ⇒ 同路最省）。
+- 两个检查点本轮之前已读过：`internal/agent/run_loop.go` 的每回合预算闸门；`control.ApplyAgentBusOp` 的 `decide(done)` 之后。
+- ⇒ §13.9 的实现只剩：**一处 Options 注入 + 一处 boot 装配翻译 + 两个检查点各一行 + 用例**。
