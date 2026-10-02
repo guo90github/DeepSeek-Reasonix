@@ -10,7 +10,13 @@
 - [x] T0-1 契约落盘并迁入本目录 → `docs/agents/AGENT_BUS.md`
 - [x] T0-2 两份旧文档加状态块指向契约 → `docs/agents/multi-agent-collaboration-design.md`、`...-development-plan.md`
 - [x] T0-3 提交文档基线 → `c414f6e55`（中文信息 + `Documentation-impact: updated - …`；纯文档）
-- [ ] T0-4 确认是否需要 `*.zh-CN.md` 英文对照（`docs/COLLAB-SURFACE.md` 是中文单份先例，倾向不需要）
+- [x] T0-4 确认是否需要 `*.zh-CN.md` 英文对照（`docs/COLLAB-SURFACE.md` 是中文单份先例，倾向不需要）
+      → **结论：不需要（2026-10-02），但原前提必须更正** ✗：`docs/` 下**确实**有成套双语惯例——`docs/*.zh-CN.md` 共 **66** 对，
+      抽查的基座英文文件（`ACP.md` / `BILLING.md` / `APP_SHELL.md` …）**都存在** ✓；真正的中文单份先例只有
+      `COLLAB-SURFACE.md`（无 zh-CN 孪生 ✓）与 `docs/agents/` 整个目录。
+      ⇒ **不做的正确理由**是：`docs/agents/` 从一开始就**以中文撰写**（与 `COLLAB-SURFACE.md` 同类），读者也是同一批
+      （本机使用者 + 后续会话），不是为对外发布而写 ✓；**若将来要对外**，那也应是"先有英文基座、再配 zh-CN"——
+      方向与 T0-4 原设想**相反** ✗，届时应作为新任务重新评估，而不是把这份中文稿翻译成英文充数。
 
 ## T1 对抗评审
 
@@ -69,8 +75,15 @@
 - [x] T4-2 视图裁剪 → `internal/agentbus/view.go`（owned / waiting / needed 三条规则；≤200 行 且 ≤8 KiB；游标增量；超限计数可见）
 - [x] T4-3 跨子树只经边界节点 → 机制已有（`require` 生成边界节点）；**还缺**跨子树可见性的用例
 - [x] T4-4 守卫三 → `internal/boot/agentbus_effect_test.go`（真实 provider 边界：只含我的节点、别人的不出现、system 前缀无污染；未接线即零变化）+ `internal/boot/agentbus_wiring_test.go`（Options 宿主接线，pathless 会话）
-- [ ] T4-5 读侧复用任务树/事件 → 已提供人读行投影 `AgentBusTasks`（扁平行 + `Deps`，供任务树嵌套，不新增存储）；**面板与事件族归 S6/T8**
-- [ ] T4-6 `make frontend-check` 过（等前端面）
+- [x] T4-5 读侧复用任务树/事件 → 已提供人读行投影 `AgentBusTasks`（扁平行 + `Deps`，供任务树嵌套，不新增存储）；**面板与事件族归 S6/T8**
+      → **结清（2026-10-02）**：意图（**不新增存储**、人读树由折叠态的 `Deps` 派生）已满足 ✓ —— 两条读面都只读折叠态：
+      `AgentBusTasks`（扁平行 + `Deps`，供嵌套）与面板真正在用的 `AgentBusBriefing` → `AgentBusPanel`（用例 20/20 ✓）；
+      "面板与事件族"这半由 S6/T8 收口（T8-3 已于本会话完成 ✓，下钻也不再是空回调 ✓）。
+      **如实留下的残余** ✗：`AgentBusTasks` 在**本仓仍零调用方**（再次 grep 确认 ✓）⇒ 它留着是**给其它前端可用的读面**
+      （acp / serve 都能用 ✓），不是"在用"的 —— 这一条已在 T9-7 的注里写明，此处不删导出 API 以免顺手扩大本刀范围 ✗。
+- [x] T4-6 `make frontend-check` 过（等前端面）
+      → **已过（2026-10-02）**：`make frontend-check`（= `cd desktop/frontend && npx tsc --noEmit`）在节点详情那一刀后跑过，
+      干净 ✓；同轮还跑了 `npx eslint`（改动文件）、`cd desktop && go build ./... && go vet ./...` 与桌面 Go 子集测试 ✓。
 - [x] T4-7 视图的增量读（cursor/seq）与「头部稳定、尾部追加」实测命中前缀缓存
       → 证据：`internal/control/agentbus_multisession_test.go`（T4-1）/ `internal/agentbus/subtree_visibility_test.go`（T4-3）/ `internal/boot/agentbus_prefix_test.go`（T4-7：两轮之间 system 前缀与工具清单字节不变、第二轮只带增量）
 
@@ -252,6 +265,17 @@
 - [ ] T10-2 按本机 SOP 打包并 `verify-windows-portable.sh` exit 0
 
 ## 已知边界（第二轮评审认定；挂在对应阶段，不在 S1 修）
+
+### 待定：内核 `Detail` 串是英文，中文界面会原样显示（2026-10-02 记）
+
+- **事实**：内核产出的信号/阻塞/详情串都是英文（`observe.go` 的 `"needs handoff: lease lapsed"`、`"1 refutations, awaiting a verdict"`…
+  `landing.go` 的 `"state blocked"`、`"abandoned: this needs a revert or a replan"`…），而面板把 `detail` **原样渲染**
+  ⇒ **中文界面里这些行显示英文** ✗（`AgentBusPanel` 的 kind 标签是**翻译过的** ✓，只有 detail 不是 ✓）。
+- **为什么当时没顺手改** ✗：这不是"忘翻译"，而是**三种可选做法各有代价**，属展示选择，先记下来：
+  1. **面板侧映射**：把已知 detail 形态（少数几种 ✓）在 locale 里翻译 ⇒ 代价小 ✓，但**内核自由文本**一改就会漏翻 ✗；
+  2. **内核返回结构化**：`Signal` 带 `code` + 参数（而不是拼好的英文串 ✓）⇒ 最干净 ✓，但**要改内核的读面**（§13.1 的行字段集）✗；
+  3. **保持现状**：英文详情照旧 ✓（它**精确**、且与 `AGENT_BUS.md` 的措辞一致 ✓），代价是中文界面里突兀 ✗。
+- **建议**：等真有人反馈"看不懂这行"再做 **1**；**2** 只在同时要动 §13.1 的字段集时才有意义；不要为了好看把已经精确的串改成含糊的翻译 ✗。
 
 - [x] **T4-8**（S2）写路径每次全量读 + 全量 fold（O(n)/写，总 O(n²)）→ 已改为**按句柄的内存态缓存**（`board.stateForWrite`：文件大小未变则复用上次折出的状态，
       变了则退回一次全量读；`Apply`/`Sweep` 在成功后 `keepCache`，缓存里显式推进 `Seq` 与 `OpIDs`——这两处不显式推进会被并发/重复用例立刻抓到）。
