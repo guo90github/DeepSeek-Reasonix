@@ -557,3 +557,18 @@
 - 用例：`TestPersistedTabGoalKeepsAStoppedContract`、`TestUnattendedGoalContractFallsBackToThePersistedTabFile`
   （后者用 `REASONIX_HOME` 隔离——`desktopConfigDir()` 走 home 解析器，不是 state home）。
 - 待办：装 dev.111 后复验"杀 → 看门狗拉起 → 「继续」到达"，这次状态为 `stopped` 也必须成立。
+
+### 恢复回合的"内容"问题（dev.112，2026-10-03，用户提出）
+
+用户指出：**用裸「继续」当推进条件不合适**——没有上下文，等于让模型乱指挥。采纳并改为一封**带上下文的接续简报**
+（`desktop/unattended_resume.go:unattendedResumeText`），排入的回合文本由宿主拼装：
+
+- 首句声明这是**接续**（上一次宿主运行被中断），不是新指令；
+- `任务契约（Goal）`：来自持久化契约（`unattendedGoalContract`，dev.111 起不再被擦）；
+- `中断前在处理的指令`：取会话历史里**最后一条真人输入**——用 `provider.MessageOriginHost` 把宿主自己生成的
+  user-role 消息（上一次恢复、看板唤醒）排除掉，避免自我循环；
+- `队列里待处理的工作`：收件箱快照里除本类条目外最多 2 条 `Preview`；
+- 末尾明确要求：先核对已完成步骤（待办/看板/工作区现状）再从中断点继续，**不要重做已完成的工作、不要偏离契约另起炉灶**，契约已完成就直接给结论。
+
+用例：`TestUnattendedResumeTextNamesTheContextAndForbidsImprovising`、
+`TestResumeUnattendedSessionQueuesTheContextualBrief`（断言入列条目的 `Preview` 里确实带着契约与"被中断"）。

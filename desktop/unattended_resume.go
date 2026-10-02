@@ -1,18 +1,97 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"strings"
 	"sync"
 
 	"reasonix/internal/control"
+	"reasonix/internal/provider"
 )
 
-// unattendedResumePrompt is what an interrupted unattended session is asked to carry on
-// with: the user's own recipe — type 继续, press enter — applied by the host, because
-// nothing else asks a restored session to keep working. The Goal, the board and the parked
-// work all sit still until a turn arrives (found on a real machine, 2026-10-03).
-const unattendedResumePrompt = "继续"
+// unattendedResumeSource marks the host's own resume turn, so the inbox listing and the
+// context builder can tell it apart from the work a person queued.
+const unattendedResumeSource = "unattended-resume"
+
+// An interrupted unattended session is asked to carry on, because nothing else does: the
+// Goal, the board and the parked work all sit still until a turn arrives (2026-10-03). What
+// that turn says matters — a bare 继续 tells the model nothing about what it was doing and
+// invites it to improvise, so the host names the contract, the instruction it was on and the
+// work the crash left queued instead.
+
+// unattendedResumeContext is what the host knows about where a session stopped.
+type unattendedResumeContext struct {
+	Contract string
+	LastUser string
+	Pending  []string
+}
+
+func unattendedResumeText(ctx unattendedResumeContext) string {
+	var b strings.Builder
+	b.WriteString("【无人值守恢复】上一次宿主运行被中断（非正常结束）。这是接续那一轮，不是新指令。\n")
+	if contract := strings.TrimSpace(ctx.Contract); contract != "" {
+		fmt.Fprintf(&b, "- 任务契约（Goal）：%s\n", clipRunes(contract, 240))
+	}
+	if last := strings.TrimSpace(ctx.LastUser); last != "" {
+		fmt.Fprintf(&b, "- 中断前在处理的指令：%s\n", clipRunes(last, 240))
+	}
+	if len(ctx.Pending) > 0 {
+		fmt.Fprintf(&b, "- 队列里待处理的工作：%s\n", strings.Join(ctx.Pending, "；"))
+	}
+	b.WriteString("请先核对已完成的步骤（待办、看板、工作区现状），从中断点继续；" +
+		"不要重做已完成的工作，也不要偏离上面的契约另起炉灶。契约已完成就直接给出结论。")
+	return b.String()
+}
+
+// unattendedResumeContextFor gathers that context off the controller: the last real user
+// instruction (host-generated user-role messages — a previous resume, a board wake — are not
+// what the session was told to do) and the work the recovered queue still holds.
+func unattendedResumeContextFor(ctrl control.SessionAPI, contract string) unattendedResumeContext {
+	ctx := unattendedResumeContext{Contract: contract, LastUser: lastRealUserInstruction(ctrl)}
+	guards, ok := ctrl.(heartbeatSessionGuards)
+	if !ok {
+		return ctx
+	}
+	for _, item := range guards.InboxSnapshot().Items {
+		if item.Source == unattendedResumeSource {
+			continue
+		}
+		if text := strings.TrimSpace(item.Preview); text != "" {
+			ctx.Pending = append(ctx.Pending, clipRunes(text, 160))
+		}
+		if len(ctx.Pending) == 2 {
+			break
+		}
+	}
+	return ctx
+}
+
+func lastRealUserInstruction(ctrl control.SessionAPI) string {
+	history := ctrl.History()
+	for i := len(history) - 1; i >= 0; i-- {
+		msg := history[i]
+		if msg.Role != provider.RoleUser || msg.Origin == provider.MessageOriginHost {
+			continue
+		}
+		text := strings.TrimSpace(msg.Content)
+		if text == "" {
+			text = strings.TrimSpace(msg.RawContent)
+		}
+		if text != "" {
+			return text
+		}
+	}
+	return ""
+}
+
+func clipRunes(s string, limit int) string {
+	runes := []rune(s)
+	if len(runes) <= limit {
+		return s
+	}
+	return string(runes[:limit]) + "…"
+}
 
 var (
 	previousHostRunExitMu sync.Mutex
@@ -92,17 +171,19 @@ func (a *App) resumeUnattendedSessionAfterAnInterruptedRun(tab *WorkspaceTab, ct
 	unattendedResumeMu.Lock()
 	unattendedResumeQueued[key] = true
 	unattendedResumeMu.Unlock()
+	text := unattendedResumeText(unattendedResumeContextFor(ctrl, contract))
 	if _, err := ctrl.TryEnqueueFollowup(control.InboxRequest{
-		Submit:      unattendedResumePrompt,
-		Raw:         unattendedResumePrompt,
-		Source:      "unattended-resume",
+		Submit:      text,
+		Raw:         text,
+		Source:      unattendedResumeSource,
 		Idempotency: key,
 	}); err != nil {
 		slog.Warn("desktop: queue the unattended resume turn", "err", err, "session", sessionPath)
 		return false
 	}
 	resumeUnattendedGates(ctrl, sessionPath)
-	slog.Info("desktop: unattended session resumed after an interrupted host run", "session", sessionPath)
+	slog.Info("desktop: unattended session resumed after an interrupted host run",
+		"session", sessionPath, "chars", len(text))
 	return true
 }
 

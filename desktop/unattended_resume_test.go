@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -126,4 +127,46 @@ func TestUnattendedGoalContractFallsBackToThePersistedTabFile(t *testing.T) {
 	if got := unattendedGoalContract(&WorkspaceTab{}, session+"-other"); got != "" {
 		t.Fatalf("contract = %q, want nothing for a session the file does not name", got)
 	}
+}
+
+// A bare 继续 tells the model nothing about what it was doing: the turn has to name the
+// contract it was under, the instruction it was on, what the crash left queued, and that it
+// must not improvise (2026-10-03).
+func TestUnattendedResumeTextNamesTheContextAndForbidsImprovising(t *testing.T) {
+	text := unattendedResumeText(unattendedResumeContext{
+		Contract: "把 docs 做完",
+		LastUser: "继续验证 T9-4",
+		Pending:  []string{"等待确认的收件箱条目"},
+	})
+	for _, want := range []string{"上一次宿主运行被中断", "把 docs 做完", "继续验证 T9-4", "等待确认的收件箱条目", "不要重做已完成的工作"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("resume text misses %q: %s", want, text)
+		}
+	}
+	if strings.TrimSpace(text) == "继续" {
+		t.Fatal("the resume turn must not be a bare 继续")
+	}
+}
+
+// What the hook queues is that brief, marked as the host's own so a person can tell it apart.
+func TestResumeUnattendedSessionQueuesTheContextualBrief(t *testing.T) {
+	app, ctrl, _ := agentBusEnrolApp(t)
+	t.Cleanup(func() { notePreviousHostRunExit(desktopExitVerdict{}) })
+	notePreviousHostRunExit(desktopExitVerdict{Kind: exitKindKilled})
+	app.heartbeat = &HeartbeatEngine{unattended: true}
+
+	if !app.resumeUnattendedSessionAfterAnInterruptedRun(&WorkspaceTab{goal: "把 docs 做完"}, ctrl) {
+		t.Fatal("the resume turn must be queued")
+	}
+	snapshot := ctrl.InboxSnapshot()
+	for _, item := range snapshot.Items {
+		if item.Source != unattendedResumeSource {
+			continue
+		}
+		if !strings.Contains(item.Preview, "把 docs 做完") || !strings.Contains(item.Preview, "被中断") {
+			t.Fatalf("queued resume preview = %q, want the contextual brief", item.Preview)
+		}
+		return
+	}
+	t.Fatalf("no %s item in %+v", unattendedResumeSource, snapshot.Items)
 }
