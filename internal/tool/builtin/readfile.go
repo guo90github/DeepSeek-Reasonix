@@ -135,7 +135,7 @@ func readIntentFor(explicit string, windowGiven bool) (tool.ReadIntent, error) {
 func (readFile) Name() string { return "read_file" }
 
 func (readFile) Description() string {
-	return "Read a text file with optional line offset/limit. Output prefixes each line with its 1-based number (e.g. `   42→...`) so subsequent edit_file calls can target exact lines. Use `offset` and `limit` to page through large files; the tool reports total length and pagination hints in a trailer. Set `intent` to state why you are reading: inspect (default, a bounded preview), range (an explicit window), or full (scan the whole file). Independent reads with no data dependency should be issued in the same round."
+	return "Read a text file with optional line offset/limit. Output prefixes each line with its 1-based number (e.g. `   42→...`) so subsequent edit_file calls can target exact lines. Use `offset` and `limit` to page through large files; the tool reports total length and pagination hints in a trailer. Set `intent` to state why you are reading: inspect (default, a bounded preview), range (an explicit window), or full (scan the whole file). Independent reads with no data dependency should be issued in the same round — but edits are authorized only by reads from a previous round, never by reads issued beside them."
 }
 
 func (readFile) Schema() json.RawMessage {

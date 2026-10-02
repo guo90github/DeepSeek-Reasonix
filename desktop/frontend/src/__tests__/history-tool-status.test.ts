@@ -158,6 +158,33 @@ eq(archivedError[0]?.kind === "tool" && archivedError[0].status, "error", "archi
 eq(archivedError[0]?.kind === "tool" && archivedError[0].dataArchived, true, "archived failed result is still loadable on demand");
 eq(archivedError[0]?.kind === "tool" && archivedError[0].error, "error: permission denied", "archived failed result keeps bounded error preview");
 
+const failedEdit = toolItems([
+  {
+    role: "assistant",
+    content: "",
+    toolCalls: [{
+      id: "failed-edit",
+      name: "edit_file",
+      arguments: JSON.stringify({ path: "a.ts", old_string: "a\nb", new_string: "a\nc\nd" }),
+      subject: "a.ts",
+      summary: "+2 -2",
+    }],
+  },
+  {
+    role: "tool",
+    content: "error: old_string not found in a.ts",
+    toolCallId: "failed-edit",
+    toolName: "edit_file",
+    toolResultError: "error: old_string not found in a.ts",
+  },
+] as HistoryMessage[]);
+eq(failedEdit[0]?.kind === "tool" && failedEdit[0].status, "error", "failed edit restores as error");
+eq(
+  failedEdit[0]?.kind === "tool" && failedEdit[0].summary,
+  undefined,
+  "failed edit drops the dispatch-time proposed-diff summary so the head can show why it failed",
+);
+
 const localOnlyDupes = toolItems([
   { role: "user", content: "first" },
   { role: "tool", toolCallId: "__reasonix_local_only__", toolName: "__reasonix_local_only__", content: "partial one" },

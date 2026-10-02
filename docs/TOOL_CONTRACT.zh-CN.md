@@ -18,7 +18,7 @@
 | `compress` | true | 压缩当前模型可见对话中选定的范围，不删除可见历史。仅在用户明确要求压缩上下文时使用；锚点必须是某条真实用户消息中唯一、精确的原文片段。 |
 | `delete_range` | false | 用精确 start/end 文本锚点删除文件中的连续范围。 |
 | `delete_symbol` | false | 用 Go AST 删除 Go 源文件中的命名符号。 |
-| `edit_file` | false | 将文件中的唯一精确字符串替换为另一个字符串。 |
+| `edit_file` | false | 将文件中的唯一精确字符串替换为另一个字符串。写入需有依据：old_string 覆盖的行必须是上一轮 read_file 已展示过的内容，与它同轮下发的读取不能授权写入；同一文件多处改动优先用一次 multi_edit。 |
 | `glob` | true | 查找匹配 glob pattern 的文件。无依赖的 glob 应同轮下发。 |
 | `grep` | true | 在文件或目录下按正则搜索文本。无依赖的搜索应同轮下发。 |
 | `kill_shell` | false | 终止后台 `bash` 或 `task` job。 |
@@ -26,7 +26,7 @@
 | `move_file` | false | 移动或重命名文件。 |
 | `multi_edit` | false | 对单个文件原子应用多个编辑。 |
 | `notebook_edit` | false | 编辑 Jupyter notebook 的单个 cell。 |
-| `read_file` | true | 按可分页的行号格式读取文本文件。`intent` 声明意图：`inspect`（无范围时的默认，有界预览）、`range`（有 offset/limit 时的默认，指定窗口）、`full`（扫描全文并分页到结尾）。续页时把结果里的 `cursor` 原样传回，由宿主定位到确切的下一位，无需自行计算 offset。无依赖的读取应同轮下发。 |
+| `read_file` | true | 按可分页的行号格式读取文本文件。`intent` 声明意图：`inspect`（无范围时的默认，有界预览）、`range`（有 offset/limit 时的默认，指定窗口）、`full`（扫描全文并分页到结尾）。续页时把结果里的 `cursor` 原样传回，由宿主定位到确切的下一位，无需自行计算 offset。无依赖的读取应同轮下发 - 但读取只能授权后续轮次的编辑，不能授权与它同轮下发的编辑。 |
 | `todo_write` | true | 记录并替换当前工作的结构化任务列表。 |
 | `view_image` | true | 按路径读取本地 PNG、JPEG、GIF 或 WebP，通过结构化图片通道交给视觉模型。最大 3 MiB、4000 万像素，沿用读取权限。 |
 | `wait` | true | 等待后台 job 完成并返回最终输出。 |

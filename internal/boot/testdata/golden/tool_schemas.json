@@ -380,7 +380,7 @@
   },
   {
     "Name": "edit_file",
-    "Description": "Replace an exact string in a file with another. old_string must occur exactly once; add surrounding context to disambiguate. Use for targeted edits instead of rewriting the whole file.",
+    "Description": "Replace an exact string in a file with another. old_string must occur exactly once; add surrounding context to disambiguate. Use for targeted edits instead of rewriting the whole file. Every write needs evidence: the lines old_string covers must come from a read_file you saw in a previous provider round, and a read issued in the same round does not authorize it. For several changes in one file, prefer a single multi_edit call.",
     "ReadOnly": false,
     "Schema": {
       "properties": {
@@ -428,7 +428,7 @@
   },
   {
     "Name": "read_file",
-    "Description": "Read a text file with optional line offset/limit. Output prefixes each line with its 1-based number (e.g. `   42→...`) so subsequent edit_file calls can target exact lines. Use `offset` and `limit` to page through large files; the tool reports total length and pagination hints in a trailer. Set `intent` to state why you are reading: inspect (default, a bounded preview), range (an explicit window), or full (scan the whole file). Independent reads with no data dependency should be issued in the same round.",
+    "Description": "Read a text file with optional line offset/limit. Output prefixes each line with its 1-based number (e.g. `   42→...`) so subsequent edit_file calls can target exact lines. Use `offset` and `limit` to page through large files; the tool reports total length and pagination hints in a trailer. Set `intent` to state why you are reading: inspect (default, a bounded preview), range (an explicit window), or full (scan the whole file). Independent reads with no data dependency should be issued in the same round — but edits are authorized only by reads from a previous round, never by reads issued beside them.",
     "ReadOnly": true,
     "Schema": {
       "properties": {

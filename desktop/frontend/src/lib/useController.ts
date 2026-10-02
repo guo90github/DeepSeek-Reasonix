@@ -968,7 +968,9 @@ export function historyMessagesToItems(messages: HistoryMessage[], idPrefix: str
           error,
           dataArchived: archived || undefined,
           subject: tc.subject,
-          summary: summarizeFileDiff(fileDiff) || tc.summary,
+          // A failed call drops the dispatch-time summary: the head has one
+          // summary slot, and the reason it failed beats the proposed "+2 -2".
+          summary: error ? undefined : summarizeFileDiff(fileDiff) || tc.summary,
           fileDiff,
           isShell: tc.name === "bash" || (tc.id || "").startsWith("shell-"),
           execution: result?.execution,

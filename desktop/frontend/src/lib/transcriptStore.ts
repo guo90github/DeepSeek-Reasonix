@@ -309,7 +309,7 @@ function convertRecord(
         error,
         dataArchived: archived || undefined,
         subject: tc.subject,
-        summary: summarizeFileDiff(fileDiff) || tc.summary,
+        summary: error ? undefined : summarizeFileDiff(fileDiff) || tc.summary,
         fileDiff,
         isShell: tc.name === "bash" || (tc.id || "").startsWith("shell-"),
         execution: result?.execution,

@@ -27,7 +27,7 @@ type editFile struct {
 func (editFile) Name() string { return "edit_file" }
 
 func (editFile) Description() string {
-	return "Replace an exact string in a file with another. old_string must occur exactly once; add surrounding context to disambiguate. Use for targeted edits instead of rewriting the whole file."
+	return "Replace an exact string in a file with another. old_string must occur exactly once; add surrounding context to disambiguate. Use for targeted edits instead of rewriting the whole file. Every write needs evidence: the lines old_string covers must come from a read_file you saw in a previous provider round, and a read issued in the same round does not authorize it. For several changes in one file, prefer a single multi_edit call."
 }
 
 func (editFile) Schema() json.RawMessage {
