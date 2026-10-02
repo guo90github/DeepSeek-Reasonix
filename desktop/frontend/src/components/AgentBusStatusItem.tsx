@@ -32,7 +32,7 @@ export function AgentBusStatusItem({ loadBriefing, loadStatus, join, leave }: {
   const readAttention = useCallback(async () => {
     try {
       const briefing = await (loadBriefing ? loadBriefing() : app.AgentBusBriefing());
-      setAttention(briefing.signals.length);
+      setAttention((briefing.signals ?? []).length);
     } catch {
       setAttention(null);
     }

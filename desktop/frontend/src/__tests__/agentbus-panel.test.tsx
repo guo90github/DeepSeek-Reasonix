@@ -99,6 +99,21 @@ ok(quiet.indexOf("data-worst") === -1, "a quiet board draws no card");
 const truncated = render({ ...attention, hidden: 3, hiddenCards: 2 });
 ok(truncated.indexOf("2 more subtrees") !== -1 && truncated.indexOf("3 more signals") !== -1, "what did not fit is counted, not hidden");
 
+// The host marshals a Go nil slice as null, so an empty board arrives as
+// cards/signals: null. That shipped as a crash in v0.0.0-dev.101 ("cards is not
+// iterable"), so a null list must now read as an empty board.
+const nullLists = render({ ...attention, cards: null, signals: null });
+ok(nullLists.indexOf("data-worst") === -1, "a null card list draws no card instead of crashing");
+const nullStep = renderStep({
+  node: "publish", title: "publish", state: "open", owner: "", ready: true,
+  deps: null, noProgress: 0, refutations: null, authorizations: null,
+  deliberating: false, verdict: "",
+});
+ok(
+  nullStep.indexOf('data-node="publish"') !== -1,
+  "a step whose lists arrive as null still renders instead of crashing",
+);
+
 const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>");
 (globalThis as unknown as { document: Document }).document = dom.window.document;
 (globalThis as unknown as { window: Window }).window = dom.window as unknown as Window;

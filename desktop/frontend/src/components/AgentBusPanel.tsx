@@ -27,8 +27,10 @@ export type AgentBusSignalView = {
 
 export type AgentBusBriefingView = {
   participant: string;
-  cards: AgentBusCardView[];
-  signals: AgentBusSignalView[];
+  // Null is possible on the wire: Go marshals a nil slice as null. The panel treats
+  // that as an empty board rather than crashing on it.
+  cards: AgentBusCardView[] | null;
+  signals: AgentBusSignalView[] | null;
   hidden: number;
   hiddenCards: number;
   healthySubtrees: number;
@@ -51,10 +53,11 @@ export type AgentBusNodeDetailView = {
   state: string;
   owner: string;
   ready: boolean;
-  deps: string[];
+  // Null on the wire for the same reason as the briefing's lists.
+  deps: string[] | null;
   noProgress: number;
-  refutations: AgentBusRefutationView[];
-  authorizations: AgentBusAuthorizationView[];
+  refutations: AgentBusRefutationView[] | null;
+  authorizations: AgentBusAuthorizationView[] | null;
   deliberating: boolean;
   verdict: string;
 };
@@ -95,18 +98,18 @@ function AgentBusNodeDetail({ detail, onClose }: {
           </button>
         ) : null}
       </div>
-      {detail.deps.length > 0 ? (
-        <p className="agentbus-panel__node-deps">{t("agentbus.detail.deps", { deps: detail.deps.join(", ") })}</p>
+      {(detail.deps ?? []).length > 0 ? (
+        <p className="agentbus-panel__node-deps">{t("agentbus.detail.deps", { deps: (detail.deps ?? []).join(", ") })}</p>
       ) : null}
       {detail.deliberating ? <p className="agentbus-panel__node-deliberating">{t("agentbus.detail.deliberating")}</p> : null}
       {detail.verdict ? <p className="agentbus-panel__node-verdict">{t("agentbus.detail.verdict", { verdict: detail.verdict })}</p> : null}
       <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {detail.refutations.map((refutation) => (
+        {(detail.refutations ?? []).map((refutation) => (
           <li key={`refute:${refutation.actor}`} className="agentbus-panel__refutation">
             {t("agentbus.detail.disputed", { actor: refutation.actor, reason: refutation.reason })}
           </li>
         ))}
-        {detail.authorizations.map((authorization) => (
+        {(detail.authorizations ?? []).map((authorization) => (
           <li key={`grant:${authorization.actor}`} className="agentbus-panel__authorization">
             {t("agentbus.detail.authorized", { actor: authorization.actor, reason: authorization.reason })}
           </li>
@@ -146,7 +149,9 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
 }) {
   const t = useT();
   const who = (view?.participant ?? "") || t("agentbus.unwired");
-  const cards = view ? [...view.cards].sort((left, right) => {
+  // A host that sends null instead of [] must not take the app down: the board simply
+  // reads as empty (that regression already shipped once, in v0.0.0-dev.101).
+  const cards = view ? [...(view.cards ?? [])].sort((left, right) => {
     const bySeverity = severityOf(left.worst) - severityOf(right.worst);
     if (bySeverity !== 0) return bySeverity;
     if (left.signals !== right.signals) return right.signals - left.signals;
@@ -171,7 +176,7 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
       ) : null}
       <ul className="agentbus-panel__cards" style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {cards.map((card) => {
-          const signals = view.signals.filter((signal) => signal.subtree === card.subtree);
+          const signals = (view.signals ?? []).filter((signal) => signal.subtree === card.subtree);
           return (
             <li key={card.subtree} className="agentbus-panel__card" data-worst={card.worst}>
               <div className="agentbus-panel__title" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>

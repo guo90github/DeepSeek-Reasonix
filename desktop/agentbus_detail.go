@@ -55,8 +55,13 @@ func (a *App) AgentBusNodeDetail(node string) (AgentBusNodeDetailView, error) {
 	}
 	view := AgentBusNodeDetailView{
 		Node: detail.Node, Title: detail.Title, State: string(detail.State), Owner: detail.Owner,
-		Ready: detail.Ready, Deps: detail.Deps, NoProgress: detail.NoProgress,
+		Ready: detail.Ready, NoProgress: detail.NoProgress,
 		Deliberating: detail.Deliberating, Verdict: detail.Verdict,
+		// Empty, not nil: these three are iterated by the panel, and a nil slice
+		// marshals to null, which the frontend cannot iterate.
+		Deps:           append([]string{}, detail.Deps...),
+		Refutations:    make([]AgentBusRefutationView, 0, len(detail.Refutations)),
+		Authorizations: make([]AgentBusAuthorizationView, 0, len(detail.Authorizations)),
 	}
 	for _, refutation := range detail.Refutations {
 		view.Refutations = append(view.Refutations, AgentBusRefutationView{

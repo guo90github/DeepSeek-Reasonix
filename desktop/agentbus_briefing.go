@@ -59,7 +59,11 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 		return AgentBusBriefingView{}, fmt.Errorf("desktop: this session does not join a board")
 	}
 	view := AgentBusBriefingView{
-		Participant:     bus.AgentBusParticipant(),
+		Participant: bus.AgentBusParticipant(),
+		// Empty, not nil: a Go nil slice marshals to null, and the panel iterates
+		// these lists, so a board nobody has written to must still send arrays.
+		Cards:           make([]AgentBusCardView, 0, len(briefing.Cards)),
+		Signals:         make([]AgentBusSignalView, 0, len(briefing.Signals)),
 		Hidden:          briefing.Hidden,
 		HiddenCards:     briefing.HiddenCards,
 		HealthySubtrees: briefing.HealthySubtrees,
