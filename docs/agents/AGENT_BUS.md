@@ -866,3 +866,15 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
   具体走 `Options` 还是"构建后再装"，取决于哪条更贴合 boot 现有装配顺序（`AgentBusDir`/`AgentBusID` 已经走 `Options` ⇒ 同路最省）。
 - 两个检查点本轮之前已读过：`internal/agent/run_loop.go` 的每回合预算闸门；`control.ApplyAgentBusOp` 的 `decide(done)` 之后。
 - ⇒ §13.9 的实现只剩：**一处 Options 注入 + 一处 boot 装配翻译 + 两个检查点各一行 + 用例**。
+
+**最后一跳读清（2026-10-02）：`Charge` 也留在 control，`internal/agent` 一行都不用改** ✓✓。
+
+- 问题：账本/额度怎么到达"每回合闸门"？读下来**不需要新通路**：
+  `internal/agent` **并不引用** `agentbus`（实读为零命中）⇒ 不该把账本推进 agent；
+  而 **control 自己就有每回合的绑定点**：`internal/control/turn_orchestrator.go` 的
+  `ctx = c.withTurnContext(c.bindTurnScope(ctx, continuation), !turn.synthetic)`，
+  它注入的正是 agent 层的 `TaskBudget`（`run_ceiling.go` 的 `bindTurnScope` → `agent.WithTaskBudget`）。
+- ⇒ **`Charge` 就挂在这个绑定点上**（control 内，回合开始处），**`Settle` 挂在 `ApplyAgentBusOp` 的 `decide(done)` 之后**
+  ——两个记账点、一处注入、一处翻译，**全部落在 `control` + `boot`**，`internal/agent` 与 `internal/agentbus` 都不动 ✓。
+- 于是 §13.9 的实现收敛为**一个 control/boot 切片**（我这一场最熟的那类）：Options 注入 → boot 翻译 `BudgetLimits`
+  → 绑定点 `Charge` → 验收点 `Settle` → 用例（装配值到达账本上限；`Settle` 只认验收节点；超限 Goal 为 `blocked`）。
