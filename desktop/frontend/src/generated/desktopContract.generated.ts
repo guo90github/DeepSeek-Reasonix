@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:e4ef9d282a53699d412f1abfe5d8130aa016814aabee8eef762db6f79be93f6f";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:4cccd6cbc7487c800c2015d6a248c90c1f954625309dff61b808fb841094bab8";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -30,6 +30,7 @@ export const DESKTOP_COMMANDS = [
   "AddRemoteHost",
   "AddRemoteProject",
   "AddSkillPath",
+  "AgentBusBriefing",
   "AnswerMCPInteractionForTab",
   "AnswerMCPInteractionForTurn",
   "AnswerPromptForTab",
@@ -1520,6 +1521,35 @@ export interface ActiveWorkView {
   pendingPrompt: boolean;
   cancellable: boolean;
   jobs: JobView[];
+}
+
+export interface AgentBusBriefingView {
+  participant: string;
+  cards: AgentBusCardView[];
+  signals: AgentBusSignalView[];
+  hidden: number;
+  hiddenCards: number;
+  healthySubtrees: number;
+}
+
+export interface AgentBusCardView {
+  subtree: string;
+  nodes: number;
+  atWork: number;
+  parked: number;
+  done: number;
+  worst: string;
+  signals: number;
+  orphans: number;
+  stalled: number;
+  disputed: number;
+}
+
+export interface AgentBusSignalView {
+  kind: string;
+  subtree: string;
+  node: string;
+  detail: string;
 }
 
 export interface AgentView {
@@ -4579,6 +4609,7 @@ export interface GeneratedDesktopCommands {
   AddRemoteHost(arg0: RemoteHostInput): Promise<RemoteHostView>;
   AddRemoteProject(arg0: string, arg1: string): Promise<RemoteProjectView>;
   AddSkillPath(arg0: string): Promise<void>;
+  AgentBusBriefing(): Promise<AgentBusBriefingView>;
   AnswerMCPInteractionForTab(arg0: string, arg1: string, arg2: string, arg3: Record<string, unknown>): Promise<void>;
   AnswerMCPInteractionForTurn(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: Record<string, unknown>): Promise<void>;
   AnswerPromptForTab(arg0: string, arg1: string, arg2: string, arg3: QuestionAnswer[]): Promise<void>;

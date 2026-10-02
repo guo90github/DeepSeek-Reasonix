@@ -664,6 +664,26 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/agentbus_briefing.go",
+      "name": "AgentBusBriefing",
+      "owner": "App.AgentBusBriefing",
+      "params": [],
+      "result": {
+        "kind": "object",
+        "ref": "main.AgentBusBriefingView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [],
+        "kind": "owner-state",
+        "resolver": "App.AgentBusBriefing"
+      },
+      "sources": [
+        "desktop/agentbus_briefing.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/mcp_interaction_app.go",
       "name": "AnswerMCPInteractionForTab",
       "owner": "App.AnswerMCPInteractionForTab",
@@ -21023,6 +21043,146 @@
               "ref": "main.JobView"
             },
             "kind": "array"
+          }
+        }
+      ]
+    },
+    "main.AgentBusBriefingView": {
+      "fields": [
+        {
+          "name": "participant",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "cards",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.AgentBusCardView"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "signals",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.AgentBusSignalView"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "hidden",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "hiddenCards",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "healthySubtrees",
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
+    "main.AgentBusCardView": {
+      "fields": [
+        {
+          "name": "subtree",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "nodes",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "atWork",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "parked",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "done",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "worst",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "signals",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "orphans",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "stalled",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "disputed",
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
+    "main.AgentBusSignalView": {
+      "fields": [
+        {
+          "name": "kind",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "subtree",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "node",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "detail",
+          "type": {
+            "kind": "string"
           }
         }
       ]

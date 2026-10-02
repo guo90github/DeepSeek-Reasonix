@@ -352,6 +352,18 @@
       ]
     }
   },
+  "AgentBusBriefing": {
+    "domain": "desktop/agentbus_briefing.go",
+    "owner": "App.AgentBusBriefing",
+    "sources": [
+      "desktop/agentbus_briefing.go"
+    ],
+    "scope": {
+      "kind": "owner-state",
+      "resolver": "App.AgentBusBriefing",
+      "inputs": []
+    }
+  },
   "AnswerMCPInteractionForTab": {
     "domain": "desktop/mcp_interaction_app.go",
     "owner": "App.AnswerMCPInteractionForTab",
