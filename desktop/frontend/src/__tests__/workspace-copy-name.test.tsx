@@ -5,8 +5,8 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { WorkspacePanel } from "../components/WorkspacePanel";
-import type { AppBindings } from "../lib/bridge";
 import { LocaleProvider } from "../lib/i18n";
+import { installDesktopHostStub } from "./desktopHostStub";
 import { resetWorkspaceTreeMemoryForTests } from "../lib/workspaceTreeMemory";
 
 let passed = 0;
@@ -116,25 +116,32 @@ Object.defineProperty(dom.window.navigator, "clipboard", {
     },
   },
 });
-window.go = {
-  main: {
-    App: {
-      ListDirForTab: async (_tabId, dir) => dir === ""
-        ? [
-            { name: "docs", isDir: true },
-            { name: "notes.txt", isDir: false },
-          ]
-        : dir === "docs/"
-          ? [{ name: "guide.txt", isDir: false }]
-          : [],
-      SearchFileRefsForTab: async () => [],
-      WorkspaceGitHistory: async () => [],
-      WorkspaceChanges: async () => ({ files: [], gitAvailable: true }),
-      WorkspaceChangeDetail: async () => ({}),
-      ReadFileForTab: async (_tabId, path) => ({ path, body: "", size: 0, truncated: false, binary: false }),
-    } as Partial<AppBindings> as AppBindings,
-  },
-};
+// The window.go (Wails) seam is retired: install the Electron preload host and
+// route the same method table through it, so the panel takes the real
+// desktopHost() path. Clipboard writes land in the native recorder either way.
+installDesktopHostStub({
+  ListDirForTab: async (_tabId: string, dir: string) => dir === ""
+    ? [
+        { name: "docs", isDir: true },
+        { name: "notes.txt", isDir: false },
+      ]
+    : dir === "docs/"
+      ? [{ name: "guide.txt", isDir: false }]
+      : [],
+  SearchFileRefsForTab: async () => [],
+  WorkspaceGitHistory: async () => [],
+  WorkspaceChanges: async () => ({ files: [], gitAvailable: true }),
+  WorkspaceChangeDetail: async () => ({}),
+  GetPinnedFilesForTab: async () => [],
+  PinFileForTab: async () => [],
+  UnpinFileForTab: async () => [],
+  OpenWorkspacePathForTab: async () => {},
+  RevealWorkspacePathForTab: async () => {},
+  ResolveWorkspacePathForTab: async () => "",
+  PreviewWorkspaceFileRevertForTab: async () => ({}),
+  CommitWorkspaceFileRevertForTab: async () => ({}),
+  ReadFileForTab: async (_tabId: string, path: string) => ({ path, body: "", size: 0, truncated: false, binary: false }),
+}, { clipboardWrites });
 
 const rootElement = document.getElementById("root");
 if (!rootElement) throw new Error("missing root");
