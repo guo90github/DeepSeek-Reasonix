@@ -322,6 +322,12 @@ func orphanReason(state *board.State, n *board.Node) string {
 // stallReason reports work that is stopped and will not restart on its own: a lapsed
 // lease, or a node the sweeper has already recorded no progress for.
 func stallReason(n *board.Node, now time.Time) string {
+	// A settled node is not a live symptom, whatever its history: the no-progress
+	// counter it collected while it was stuck stays in the record, but a finished
+	// node must never be shown as stalled (T8-2, found by the takeover e2e).
+	if n.State == board.StateDone || n.State == board.StateAbandoned {
+		return ""
+	}
 	if n.State == board.StateClaimed && !n.Deadline.IsZero() && now.After(n.Deadline) {
 		return "needs handoff: lease lapsed"
 	}
