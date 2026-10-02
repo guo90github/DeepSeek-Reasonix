@@ -1,7 +1,8 @@
 // Run: tsx src/__tests__/task-tree.test.ts
 // Pure-function tests for src/lib/taskTree.ts (docs/TASK_TREE_DESIGN.md §8 step 1).
 
-import type { TaskCatalogItem, TaskNode, TaskSnapshot } from "../lib/taskCatalogTypes";
+import type { TaskCatalogItem, TaskNode } from "../lib/taskCatalogTypes";
+import type { TaskSnapshot } from "../lib/types";
 import {
   aggregateState,
   buildTaskTree,

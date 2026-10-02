@@ -6,7 +6,8 @@
 // process channel in the other column, so filing it as process material makes
 // the mention vanish from the conversation side.
 
-import { buildTurnModels, NO_LIVE, type Item } from "../lib/transcriptRows";
+import { buildTurnModels, NO_LIVE } from "../lib/transcriptRows";
+import type { Item } from "../lib/useController";
 import { conversationPaneTurns } from "../lib/transcriptPanes";
 
 let passed = 0;

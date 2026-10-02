@@ -10,10 +10,10 @@
 // start its own assistant bubble so both rounds keep their content and render
 // in chronological order.
 
-import { initialState, reducer } from "../lib/useController";
+import { initialState, reducer, type State } from "../lib/useController";
 import type { WireEvent } from "../lib/types";
 import { buildTurnModels } from "../lib/transcriptRows";
-import { buildConversationPaneTurns, buildProcessPaneTurns } from "../lib/transcriptPanes";
+import { conversationPaneTurns, processPaneTurns } from "../lib/transcriptPanes";
 
 let passed = 0;
 let failed = 0;
@@ -28,7 +28,7 @@ function ev(s: typeof initialState, e: WireEvent) {
 console.log("\nProtocol-repair second round under the same turn id");
 
 {
-  let s = { ...initialState, activeTurnId: "turn_abc" };
+  let s: State = { ...initialState, activeTurnId: "turn_abc" };
   s = ev(s, { kind: "turn_started", turnId: "turn_abc" } as WireEvent);
   s = ev(s, { kind: "reasoning", text: "The user said hello" } as WireEvent);
   s = ev(s, { kind: "tool_dispatch", tool: { id: "t1", name: "read_file", args: "{}", readOnly: true } } as WireEvent);
@@ -51,8 +51,8 @@ console.log("\nProtocol-repair second round under the same turn id");
   // Pane derivation: conversation keeps the answer; process interleaves the two
   // rounds chronologically (turn1 thinking, read_file, turn2 thinking, finish).
   const turns = buildTurnModels(s.items);
-  const conv = buildConversationPaneTurns(turns);
-  const proc = buildProcessPaneTurns(turns);
+  const conv = conversationPaneTurns(turns);
+  const proc = processPaneTurns(turns);
   ok(conv.length === 1 && conv[0].answers.length === 1, "conversation pane keeps the answer");
   const flat: string[] = [];
   for (const turn of proc) {

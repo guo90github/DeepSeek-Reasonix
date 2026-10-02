@@ -32,17 +32,25 @@ function rect(x: number, y: number, w: number, h: number) {
 }
 
 const backing = new Map<string, string>();
-(globalThis as typeof globalThis & { window: unknown }).window = {
-  localStorage: {
-    getItem: (key: string) => backing.get(key) ?? null,
-    setItem: (key: string, value: string) => {
-      backing.set(key, value);
-    },
-    removeItem: (key: string) => {
-      backing.delete(key);
-    },
+const storage: Storage = {
+  getItem: (key: string) => backing.get(key) ?? null,
+  setItem: (key: string, value: string) => {
+    backing.set(key, value);
+  },
+  removeItem: (key: string) => {
+    backing.delete(key);
+  },
+  clear: () => {
+    backing.clear();
+  },
+  key: (index: number) => [...backing.keys()][index] ?? null,
+  get length() {
+    return backing.size;
   },
 };
+// Only localStorage is needed here; casting through unknown keeps the stub from
+// having to be a whole Window.
+(globalThis as unknown as { window: { localStorage: Storage } }).window = { localStorage: storage };
 
 const viewport = { width: 1000, height: 700 };
 

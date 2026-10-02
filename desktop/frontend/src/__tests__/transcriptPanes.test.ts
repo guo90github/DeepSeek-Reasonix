@@ -1,6 +1,7 @@
 // Run: tsx src/__tests__/transcriptPanes.test.ts
 
-import { buildTurnModels, NO_LIVE, type Item, type TranscriptLiveFlags } from "../lib/transcriptRows";
+import { buildTurnModels, NO_LIVE, type TranscriptLiveFlags } from "../lib/transcriptRows";
+import type { Item } from "../lib/useController";
 import { conversationPaneTurnIsBlank, conversationPaneTurns, paneTurnDefaultOpen, paneTurnShowsHeader, processPaneTurnHasBody, processPaneTurnIsBlank, processPaneTurnShowsHeader, processPaneTurns, turnHasShownContent } from "../lib/transcriptPanes";
 
 let passed = 0;

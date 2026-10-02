@@ -5,6 +5,7 @@
 // last block pins the fix: the host issues the identity, so an edit keeps it.
 
 import { mergeTodoBoardQueue, shouldShowTodoPanel, todoBatchIdentity, todoBatchKey } from "../lib/todoVisibility";
+import type { Todo } from "../lib/tools";
 
 let passed = 0;
 let failed = 0;
@@ -18,8 +19,6 @@ function eq<T>(actual: T, expected: T, label: string) {
     failed += 1;
   }
 }
-
-type Todo = { content: string; status?: string; level?: number; step_id?: string };
 
 const finished: Todo[] = [
   { content: "定义数据模型", status: "completed", level: 0 },

@@ -5,7 +5,8 @@
 // unwritten intent; this pins it, so widening the prefix list or losing the
 // guard fails here instead of quietly painting a policy line as the user.
 
-import { partitionTurnItems, type Item } from "../lib/transcriptRows";
+import { partitionTurnItems } from "../lib/transcriptRows";
+import type { Item } from "../lib/useController";
 import { isHostRecoveryGuidance } from "../lib/hostRecoverySteer";
 
 let passed = 0;
