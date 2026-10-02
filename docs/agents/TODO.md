@@ -188,6 +188,13 @@
       **设计上的诚实前提**：读缓存不能把内部状态交出去（调用方会持有它）⇒ 命中时仍要**返回副本**（O(n) 拷贝）⇒
       可省的是"读文件 + 重新 fold"，不是全部成本。要真正去掉 O(n)，得做增量 fold 或写时复制状态——那是更大的设计，
       下一刀必须先说清"能省掉哪一段"，不许承诺"读变成 O(1)"
+      **第一次实现尝试：失败并已回滚（2026-10-02，如实留痕）**。做法是"让 `Snapshot` 走同一个按句柄大小校验的缓存 + 返回 `Clone()`"。
+      结果**打红 5 个既有用例**：`TestNextWriterRepairsTheTornTail`（applied = 1, want 2）、`TestCorruptMidFileLineIsSkippedAndCounted`（计数）、
+      `TestRepairScansPastTheWindow`（applied = 0, want 1）、`TestKilledWriterLeavesAFoldableLog`（applied = 5, want 6）、
+      `TestAssertOnUnknownNodeCreatesItOpen`。已 `git checkout` 回滚，未提交。
+      **结论（部分诊断，不装作已定位）**：那些用例会**绕过板子直接改文件**（写半行、插坏行），而"文件大小"显然不是对它们足够的新鲜度判据；
+      另外命中缓存时 `Truncated/Skipped` 与 `OpIDs` 的诚实性也需一并想清。⇒ **读缓存不是即插即用**，下一刀要么为这些路径显式失效，
+      要么改做"增量 fold / 写时复制"，并**先写这几个用例的对照**再改。
 - [ ] **T5-6**（S3/S4）`evidence` 目前只有「`Ref` 非空」一条约束：形状、唯一性、去重与去重窗口要在证据权重设计里定死（S1 的 `hasEvidence` 是占位）
 - [ ] **T7-5**（S5）`Sweep` 单次上限 256（按 node id 排序，故无永久饥饿）：把上限与语义写进文档，并在调度侧决定 tick 频率
 
