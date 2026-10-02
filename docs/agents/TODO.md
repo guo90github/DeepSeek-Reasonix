@@ -31,9 +31,18 @@
 
 规格：`docs/agents/AGENT_BUS.md` §11.1 + §11.3（实现期修正）+ §11.4（第二轮评审处置）。`go test ./internal/agentbus/board/` → `ok`。
 
-- [ ] T3-17 去重：`internal/agentbus/jsonl`（新，日志底座：append/sync、torn tail 修复、损坏行计数）与 `internal/agentbus/board/log.go`
+- [x] T3-17 去重：`internal/agentbus/jsonl`（新，日志底座：append/sync、torn tail 修复、损坏行计数）与 `internal/agentbus/board/log.go`
       的同类机械目前并存（board 尚未改为委托）。**为什么没顺手改**：board 的 S1 面已绿且有独立测试，改它属于与本次目标无关的重构；
       等下一刀碰 board 日志时一次性委托过去（`go test ./internal/agentbus/...` 是这次改动的守门测试）。
+      → **已委托（2026-10-02）**：读了两份实现，确认**逐字等价**（连 `repairWindow`/文件权限都一样）⇒ `board/log.go`
+      从 **152 行收缩到 41 行**：只留板自己的常量（`board.jsonl` / `.lock`）与 `logRead` 结构，`readLog`/`appendOp`/
+      `repairTornTail`/`ensureDir` 全部转调 `jsonl`（`ReadAll[Op]`/`Append`/`RepairTornTail`/`EnsureDir`），
+      `filePerm`/`repairWindow` 改为 `jsonl` 常量的别名（测试仍照旧使用 ✓）。**没有测试断言 `board:` 前缀的错误串**（先 grep 过 ✓），
+      所以错误文案的归属变化无影响 ✓。顺带把 `jsonl` 的包注释兑现了——它一直写着"黑板 op 日志与 talk 日志都建在它上面"，
+      而在这刀之前**并不成立** ✗。
+      **验证**：`go test -count=1 ./internal/agentbus/...` 三包 ok（含子进程 / 截断尾 / 坏行计数那几条 ✓）；
+      **`go test -race -count=1 ./internal/agentbus/...` 亦干净** ✓；`go vet ./internal/agentbus/...` 干净；
+      `go test ./internal/control/` ok；`repolint` 仅两条既有前端漂移（未放宽 baseline）。
 - [x] T3-1 非法迁移拒收（带原因）→ `transition_test.go` `TestIllegalTransitionsAreRejectedWithReason`（26 用例逐条断 reason）+ `TestRejectedOpsLeaveNoTrace`
 - [x] T3-2 重放幂等 / 重复 id 不追加 → `TestDuplicateOpIDDoesNotAppendTwice`、`TestFoldCountsDuplicateIDs`
 - [x] T3-3 并发折叠 = 串行 → `TestConcurrentApplyFoldsLikeSerial`（8 goroutine × 5 op，seq 1..40 无重号无缺号）
