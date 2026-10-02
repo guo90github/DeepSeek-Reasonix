@@ -3994,6 +3994,7 @@ export const en = {
   "agentbus.kind.escalated": "escalated to a human",
   "agentbus.kind.disputed": "under deliberation",
   "agentbus.kind.undecided": "closed by rule",
+  "agentbus.unavailable": "Collaboration data is unavailable for this session",
 };
 
 export type DictKey = keyof typeof en;

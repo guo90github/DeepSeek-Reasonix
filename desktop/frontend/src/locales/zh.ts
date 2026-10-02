@@ -3997,4 +3997,5 @@ export const zh: Record<DictKey, string> = {
   "agentbus.kind.escalated": "已升级给人",
   "agentbus.kind.disputed": "正在审议",
   "agentbus.kind.undecided": "按规则收口",
+  "agentbus.unavailable": "这个会话取不到协作数据",
 };

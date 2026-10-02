@@ -3992,4 +3992,5 @@ export const zhTW: Record<DictKey, string> = {
   "agentbus.kind.escalated": "已升級給人",
   "agentbus.kind.disputed": "正在審議",
   "agentbus.kind.undecided": "按規則收口",
+  "agentbus.unavailable": "這個會話取不到協作資料",
 };
