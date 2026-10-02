@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -80,5 +83,47 @@ func TestResumeUnattendedSessionClearsTheGatesACrashLeft(t *testing.T) {
 	}
 	if ctrl.InboxSnapshot().Paused {
 		t.Fatal("the unattended resume must leave no paused inbox behind")
+	}
+}
+
+// A stop is not an erasure: the goal text is the contract a restart resumes, and the crash
+// itself is what stops the goal. Filtering on "running" therefore deleted exactly the goal
+// an unattended host had to pick up, and the resume could never fire again (2026-10-03).
+func TestPersistedTabGoalKeepsAStoppedContract(t *testing.T) {
+	tab := &WorkspaceTab{goal: "把 docs 做完"}
+	if tab.Ctrl != nil {
+		t.Fatal("this test is about a tab whose controller is gone")
+	}
+	if got := persistedTabGoal(tab); got != "把 docs 做完" {
+		t.Fatalf("persistedTabGoal = %q, want the contract kept", got)
+	}
+}
+
+// A crashed host restores into a tab whose own goal is empty (its status is stopped), so the
+// contract has to come from the persisted tab file.
+func TestUnattendedGoalContractFallsBackToThePersistedTabFile(t *testing.T) {
+	_, ctrl, home := agentBusEnrolApp(t)
+	// The tab file lives under the Reasonix home, which is a different resolver from the
+	// state home the harness isolates: point both at the same temp directory.
+	t.Setenv("REASONIX_HOME", home)
+	session := ctrl.SessionPath()
+	body, err := json.Marshal(desktopTabsFile{Tabs: []desktopTabEntry{
+		{ID: "tab_x", SessionPath: session, Goal: "把 docs 做完"},
+	}})
+	if err != nil {
+		t.Fatalf("marshal tabs: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(home, tabsFileName), body, 0o644); err != nil {
+		t.Fatalf("write tabs: %v", err)
+	}
+
+	if got := unattendedGoalContract(&WorkspaceTab{}, session); got != "把 docs 做完" {
+		t.Fatalf("contract = %q, want the persisted goal", got)
+	}
+	if got := unattendedGoalContract(&WorkspaceTab{goal: "当前这份"}, session); got != "当前这份" {
+		t.Fatalf("contract = %q, want the tab's own goal first", got)
+	}
+	if got := unattendedGoalContract(&WorkspaceTab{}, session+"-other"); got != "" {
+		t.Fatalf("contract = %q, want nothing for a session the file does not name", got)
 	}
 }

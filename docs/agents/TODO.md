@@ -535,3 +535,25 @@
 - 结论：**在"启动写 true"与"下一次巡检读 false"之间，有某条路径改写了印记**，写入者未定位；
   下一步最小动作＝在每次巡检读印记时把 `unattended` 值一并打进巡检日志（把下次复现钉死在一次 tick 内），
   再按证据改。影响面：该窗口内看门狗会"该拉而不拉"，与本次已验证的自动恢复链相互独立。
+
+### T9-4 之后"时好时坏、最终彻底不推进"的根因与修复（dev.111，2026-10-03）
+
+**根因链（每一环都有物证）**
+1. 宿主**被杀**会让该会话 Goal 状态不再是 `running`：`internal/control/cancel.go:50 stopGoal(GoalStatusStopped)`；
+   本会话 `….goal-state.json` 实测 `{"status":"stopped",…}`，mtime 正是那次启动（01:17:45）。
+2. 下一次保存把**契约擦掉**：`desktop/tabs.go:persistedTabGoal` 只要状态非 `running` 就返回空串，
+   写回 `desktop-tabs.json` 即 `goal=""`。物证：本会话该条目的 `goal` 由 11 字符变为不存在。
+3. 重启后无契约可用：`runningTabSessionGoal(path, "")` 在 fallback 为空时直接返回 ""（`desktop/tabs.go:7702`）
+   ⇒ `tab.goal==""` ⇒ 恢复钩子第三条件不成立 ⇒ 不排「继续」。
+4. 于是表现是"时好时坏、最后彻底不推进"：`00:49:00`、`01:08:33` 两次成立是因为那一刻状态恰为 `running`；
+   契约被擦掉后（`01:17:38` 那次启动，日志里本会话控制器确实建起来了但钩子一行未打）**永不再成立**。
+
+**修复（本刀）**
+- `persistedTabGoal`：持久化 **Goal 文本本身**，停止状态**不再擦契约**；"不要这个 goal"仍由 `clearTabGoal`（清会话）负责。
+  依据用户既定语义：总开关是唯一闸门，人干预不改变无人状态。
+- 恢复钩子：契约来源改为 `tab.goal` 优先、否则读 `desktop-tabs.json` 该会话条目的 `goal`
+  （`unattendedGoalContract`）⇒ `stopped` 状态**不能**否决恢复；并在**拒绝时打印判定输入**
+  （`unattended resume declined` + interrupted/contractLen），补上此前"拒绝无日志"的缺口。
+- 用例：`TestPersistedTabGoalKeepsAStoppedContract`、`TestUnattendedGoalContractFallsBackToThePersistedTabFile`
+  （后者用 `REASONIX_HOME` 隔离——`desktopConfigDir()` 走 home 解析器，不是 state home）。
+- 待办：装 dev.111 后复验"杀 → 看门狗拉起 → 「继续」到达"，这次状态为 `stopped` 也必须成立。

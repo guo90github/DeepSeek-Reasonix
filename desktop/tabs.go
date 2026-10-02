@@ -7686,12 +7686,13 @@ func applyTabSessionProfile(tab *WorkspaceTab, profile tabSessionProfile) {
 	tab.goal = strings.TrimSpace(profile.goal)
 }
 
+// persistedTabGoal is the contract a later host may resume, so it is the goal text itself.
+// A stopped goal is not an erased one: an interrupted run leaves every goal stopped, and
+// erasing the contract there left an unattended session with nothing to resume at all
+// (2026-10-03). Dropping a goal is clearTabGoal's job, not this filter's — the switch and
+// the interrupt decide whether it runs, never the status the crash left behind.
 func persistedTabGoal(tab *WorkspaceTab) string {
-	goal := strings.TrimSpace(currentTabGoal(tab))
-	if goal == "" || currentTabGoalStatus(tab) != control.GoalStatusRunning {
-		return ""
-	}
-	return goal
+	return strings.TrimSpace(currentTabGoal(tab))
 }
 
 type tabSessionGoalState struct {

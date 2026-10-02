@@ -43,6 +43,28 @@ func shouldResumeUnattendedSession(interrupted, unattended bool, goal string, al
 	return interrupted && unattended && strings.TrimSpace(goal) != "" && !alreadyQueued
 }
 
+// unattendedGoalContract is the Goal the user gave this session, taken from the tab or,
+// when the tab's own copy is empty, from the persisted tab file. A crashed host leaves the
+// goal's status stopped, and the running-goal accessor reports a stopped goal as no goal —
+// which is how an unattended session ended up with nothing to resume (2026-10-03).
+func unattendedGoalContract(tab *WorkspaceTab, sessionPath string) string {
+	if tab != nil {
+		if goal := strings.TrimSpace(tab.goal); goal != "" {
+			return goal
+		}
+	}
+	key := sessionRuntimeKey(sessionPath)
+	if key == "" {
+		return ""
+	}
+	for _, entry := range loadTabsFile().Tabs {
+		if sessionRuntimeKey(strings.TrimSpace(entry.SessionPath)) == key {
+			return strings.TrimSpace(entry.Goal)
+		}
+	}
+	return ""
+}
+
 // resumeUnattendedSessionAfterAnInterruptedRun queues that turn once per host run per
 // session and reports whether it did. The inbox keeps it durable, so a session that is
 // still starting receives it as soon as it can take a turn.
@@ -55,8 +77,16 @@ func (a *App) resumeUnattendedSessionAfterAnInterruptedRun(tab *WorkspaceTab, ct
 	unattendedResumeMu.Lock()
 	alreadyQueued := unattendedResumeQueued[key]
 	unattendedResumeMu.Unlock()
+	interrupted := previousHostRunWasInterrupted()
 	unattended := a.heartbeat != nil && a.heartbeat.unattendedEnabled()
-	if !shouldResumeUnattendedSession(previousHostRunWasInterrupted(), unattended, tab.goal, alreadyQueued) {
+	contract := unattendedGoalContract(tab, sessionPath)
+	if !shouldResumeUnattendedSession(interrupted, unattended, contract, alreadyQueued) {
+		// Say why: a session that never resumes otherwise looks exactly like one with
+		// nothing to do, and this decision is the whole feature (2026-10-03).
+		if unattended && !alreadyQueued {
+			slog.Info("desktop: unattended resume declined", "session", sessionPath,
+				"interrupted", interrupted, "contractLen", len(contract))
+		}
 		return false
 	}
 	unattendedResumeMu.Lock()
