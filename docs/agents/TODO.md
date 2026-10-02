@@ -519,3 +519,19 @@
 即：**某些退出路径会把印记的 unattended 写成 false**，这会让看门狗在该场景下"该拉而不拉"。
 怀疑写入者＝退出观测器/电子壳的 hostState 写回（`desktop/electron/src/main/hostState.ts`、`spawnDesktopExitObserver`），
 本刀未取证，不做结论。
+
+**印记 unattended 变 false 的排查进展（2026-10-03，未定性但有界）**
+- 现象：00:58:35 杀 dev.108 后，巡检 16:58:42Z / 17:03:42Z 连续 `skip the marker does not ask for unattended`；
+  该文案来自 `desktop/watchdog.go:40` ⇒ 印记**读到了**但 `Unattended=false`（不是"没有印记"，
+  那条是 `!Seen` 的 "no marker: the last run exited cleanly or never started"）。
+- 已排除（都有证据）：
+  1. 电子壳不写也不删印记 —— `desktop/electron/src/main/hostState.ts` 只有 `readHostState`/`unattendedDesired`（只读），
+     electron 侧无任何写 `HOST_STATE_FILE` 的语句；
+  2. 决策者是独立进程（`desktop/main.go:67 maybeRunDesktopWatchdog`），它只写巡检日志，不写印记；
+  3. Go 侧印记只有一个写入点 —— `desktop/host_state_marker.go:214` 的 `note("running", unattended)`（启动时一次），
+     `writeHostState` 无其他调用者；
+  4. 无人值守开关在那段时间**是开的** —— 日志 `23:26:10 followed the unattended switch unattended=true`，
+     之后（含 00:53:40 那次 dev.108 启动）无翻转记录 ⇒ 启动时写下的应是 true。
+- 结论：**在"启动写 true"与"下一次巡检读 false"之间，有某条路径改写了印记**，写入者未定位；
+  下一步最小动作＝在每次巡检读印记时把 `unattended` 值一并打进巡检日志（把下次复现钉死在一次 tick 内），
+  再按证据改。影响面：该窗口内看门狗会"该拉而不拉"，与本次已验证的自动恢复链相互独立。
