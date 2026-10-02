@@ -166,7 +166,7 @@
 - [x] T9-3 运行时依赖：节点/边数由参与者新增 → `e2e_test.go` 的 `TestParticipantsGrowTheTreeWhileItRuns`：
       planner 开板后，browser 在运行中 `require` 出一个新步骤、splitter 再 `split` 成两个子节点；新读者看到同一棵树、重放不丢节点
 - [ ] T9-4 无人值守贯通：杀掉桌面进程 → 既有看门狗拉起 → 黑板继续被推进（`docs/UNATTENDED.md` §11 自认此链未真机验收，**第一次必须端到端**）
-- [ ] T9-5 任务级落地：验收节点全 `done` + 无未决矛盾才宣告完成
+- [x] T9-5 任务级落地：验收节点全 `done` + 无未决矛盾才宣告完成
       **前置缺口（2026-10-02 读清，先定再写）**：**内核里没有"验收节点"这个概念** ✗ —— `board.NodeSpec` 只有
       `{ID, Title}`，op 与状态里都没有 kind/marker ⇒ "哪些节点算验收节点"**无法表达**，此时写判定就是替使用者发明 ✗。
       三个选项与后果见 `AGENT_BUS.md` **§13.10**。**与该决定无关的那半可以先行**：无未决矛盾（`contested` / 未决审议）；
@@ -177,8 +177,14 @@
       用例 `landing_test.go`（6 条，`go test -count=1 ./internal/agentbus/...` 三包 ok）：交付物未完成 ⇒ 不落地；
       **被 `refute` 后仍 `contested` ⇒ 不落地，且必须报"争议"而不是泛泛的未完成**；全 done 但审议未决（open / escalate /
       undecided-by-rule）⇒ 不落地，`stands` ⇒ 落地；缺失依赖与被放弃依赖各报其类；空板不落地；两次读结果一致。
-      **仍未做**：把该判定接到 Goal（"宣告落地"对齐 `complete`）——它与 §13.8 的"开工前查授权"、§13.9 的"宿主接纳"
-      **是同一道门的三侧**，宜一并接（见 §13.10 末段）。
+      **已接进 Goal（2026-10-02 收尾）**：`internal/control/agentbus_landing.go` 的 `withBoardLanding` 把看板判并进
+      **宿主的 readiness**（在 `turn_orchestrator.go` 算完 readiness 之后、判决输入之前注入）⇒ 它**不是**另起一道闸门，
+      而是变成一条普通缺失项（id `agentbus_landing`，**故意不在** `repeatedCompleteMayFinish` 可放行的集合里），
+      于是既有的"完整声明被拒 ⇒ 继续做工""重复完整声明也不放过"全部自动生效 ✓。入列会话读不到板 ⇒ **按拒绝处理** ✗；
+      **未入列会话原样不动** ✓（守护 T4-4 的"未接线即零变化"）。用例 `internal/control/agentbus_landing_test.go`：
+      空板不落地（有缺失项与可读原因）→ **一个已 done 且无争议的交付物 ⇒ 落地** → **被 `refute` ⇒ 不许 complete，原因点名"争议"，
+      且不能被"只剩收尾检查"放行** → 宿主已有缺失项被保留而非覆盖；未入列会话不受影响。
+      **T9-5 至此完成**；§13.8 的"事后可核"那一半见下一条（T9-7 的诚实缺口）。
 - [ ] T9-6 N≈100：任意杀掉 20% 后仍收敛；不超预算；无 429 风暴
 - [x] T9-7 存在一次真实的「缺能力 → 派生获取能力节点 → 完成」链路 → `internal/agentbus/capability_gap_e2e_test.go`
       `TestACapabilityGapIsClosedByAnObtainedStep`：认领 → 报缺口（**释放租约**、状态 `capability_gap`、`Ready` 为假）→ `require` 派生

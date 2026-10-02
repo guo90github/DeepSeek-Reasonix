@@ -584,6 +584,7 @@ func (o *turnOrchestrator) advanceGoalAfterTurn(ctx context.Context, expectedCon
 	} else if c.executor != nil {
 		readiness = c.executor.ReadinessResult()
 	}
+	readiness = c.withBoardLanding(ctx, readiness)
 	// The validated update_goal report for this turn, if any.
 	var report *goalTurnReport
 	if recorder != nil {

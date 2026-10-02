@@ -1028,3 +1028,10 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 
 ⇒ **下一刀的顺序**：先接 §13.10 到 Goal（小、可测 ✓），§13.8 只做"可读可核"那一半（不新增前置闸门 ✗），
 §13.9 维持"已就绪、待门" ✗。
+
+**已接到 Goal（2026-10-02，按上条的"下一刀的顺序"做完第一步）**：`internal/control/agentbus_landing.go` 的
+`withBoardLanding` 把 `AssessLanding` 的结果并进**宿主的 readiness**（注入点 = `turn_orchestrator.go` 里算完 readiness、
+判决输入之前）⇒ 它**不是**另起一道闸门，而是**多一条缺失项**（id `agentbus_landing`，**故意不在**
+`repeatedCompleteMayFinish` 可放行的集合里）⇒ "完整声明被拒 ⇒ 继续做工"与"重复声明也不放过"两条既有规则**自动适用** ✓。
+入列但读不到板 ⇒ 按拒绝处理 ✗；未入列会话 ⇒ 原样不动 ✓（守护 T4-4 的"未接线即零变化"）。用例 2 条（含"被 `refute` ⇒
+不许 complete 且原因点名争议"）。
