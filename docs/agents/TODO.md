@@ -79,7 +79,12 @@
       **接线缝隙已定位（省下一轮走错路）**：桌面侧的远程面是 `desktop/remote_*.go`（`remote_config_edit.go` / `remote_credential_watchdog.go` /
       `remote_app.go` …），**不是** `internal/agentd`——实测 `grep -n "agentd\." desktop/*.go` 为空，桌面并不用 agentd 的 `Record`/`TokenFile`。
       **下一刀**：从 `remote_*` 面取 base URL 与凭证（+ 会话路径寻址），把 `routeAgentBusWake` 的"本进程找不到即报错"改成"带令牌投递"，
-      再做**两进程**验收（唤醒真的穿过进程边界）
+      **状态 2026-10-02（本轮收尾）**：三段（地址簿 `participants.jsonl` / 带令牌投递原语 / 查表路由）均已落地，
+      并已用**真实 HTTP**验收：`httptest` 远端宿主 + 磁盘地址簿公告 + 真实令牌文件 ⇒ 断言 Bearer 用公告宿主的令牌、
+      寻址 header 是公告 session、body 带唤醒 key 与原因；无地址必须报错（`desktop/agentbus_waker_test.go`）。
+      **仍未做且如实标注**：真正的**两进程**验收（起第二个宿主进程 + 真实 serve 配置/令牌编排）——本轮验的是
+      **协议与路由链**（同一进程内的真实 HTTP 往返，非替身）。**决定：进程级验收随 T9-4 真机一起做**，
+      因为它同样需要真实宿主进程编排，单开一刀只会重复搭环境。
       **⚠️ 按原设想接不上（2026-10-02 核对后发现）**：`WakeTarget` 只有 `Participant`，**没有 host、也没有 session path**，
       而跨进程投递必须寻址（serve 不带 session header 就落前台并告警，带错则 `target_unreachable`）⇒
       **先补一层"参与者目录"**（板级 `participants.json`：participant → host base URL + session path + 令牌引用，由各宿主入列时写入），
