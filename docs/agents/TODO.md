@@ -130,8 +130,11 @@
       用例 `TestObserveAlwaysShowsOrphansAndStalls`（上限 1 时孤儿与两处停滞全在，多余争议被裁并计数）
 - [ ] T8-3 **面板接线**（三段，前两段已落）：① control 读面 `AgentBusBriefing`/`SetAgentBusObserveLimits`/`AgentBusParticipant`；
       ② 桌面**绑定** `App.AgentBusBriefing()` → 扁平 JSON 视图（`desktop/agentbus_briefing.go` + 用例，含"没有活动会话/未入列"两种诚实的报错）；
-      ③ **前端面板本身未做**：组件 + i18n + 单测 + 打包预算（445 个既有前端单测、`make frontend-check` 是 `tsc --noEmit`），
-      需要单独一刀，不能与内核改动混在一起
+      ③ 前端**组件**已落：`AgentBusPanel.tsx`（只画卡片与下钻行；孤儿/停滞的严重度排序与内核一致；
+      下钻是 `onOpenNode(node)` 回调，交由宿主决定怎么打开）+ 11 条文案 × 3 份 locale + 单测
+      `src/__tests__/agentbus-panel.test.tsx`（12 项断言，含用 jsdom+act 真的点一次下钻）；
+      **仍未做**：把面板挂进某个界面（需要生成契约 `desktopContract.generated.ts` 里的 `AgentBusBriefing`，
+      以及面板的视觉样式——本次刻意不新增 CSS 以免动打包尺寸预算）
 
 ## T9 S7 e2e + 无人值守贯通 + 百级压测
 

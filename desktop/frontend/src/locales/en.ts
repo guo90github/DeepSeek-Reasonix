@@ -3983,6 +3983,17 @@ export const en = {
   "settings.shellAsync.off": "Off",
   "settings.shellAsync.balanced": "Balanced",
   "settings.shellAsync.fast": "Fastest",
+  "agentbus.title": "Collaboration",
+  "agentbus.participant": "as {who}",
+  "agentbus.unwired": "not on a board",
+  "agentbus.counts": "{atWork} at work, {parked} parked, {done}/{n} done",
+  "agentbus.clear": "Nothing needs attention in {n} subtrees",
+  "agentbus.hidden": "{cards} more subtrees and {signals} more signals did not fit",
+  "agentbus.kind.orphan": "can never start",
+  "agentbus.kind.stalled": "needs handoff",
+  "agentbus.kind.escalated": "escalated to a human",
+  "agentbus.kind.disputed": "under deliberation",
+  "agentbus.kind.undecided": "closed by rule",
 };
 
 export type DictKey = keyof typeof en;
