@@ -82,12 +82,18 @@
 
 ## T6 S4 审议与裁决
 
-- [ ] T6-1 审议状态（参与者/轮次/必答/权重/冷却）
-- [ ] T6-2 一次 `refute` 改变结论（可回放：同一 op log 折叠出不同结局）
-- [ ] T6-3 等重升级给人；超升级配额自动降级 `undecided-by-rule` 并记账
-- [ ] T6-4 弃答以 `no_answer` 可见
-- [ ] T6-5 无可核对证据时 `done` 被拒（S1 已实现 `decide(done)` 的证据 + 非产出者复跑门槛，S4 复用）
-- [ ] T6-6 票数不改变权重（consensus ≠ evidence）
+- [x] T6-1 审议状态（参与者/轮次/必答/权重/冷却）→ `internal/agentbus/hearing.go`：`Required` = 节点 owner ∪ 全部 refuter；
+      `Round()` 与 `AnsweredThisRound()` **由记录派生**（每名必答者各答一次 = 一轮）；`Cooldown` 用记录自己的时间戳比较（可重放）；
+      限制全在 `HearingLimits`（零值 = 不设上限，内核不替使用者发明天花板）
+- [ ] T6-2 一次 `refute` 改变结论（可回放：同一 op log 折叠出不同结局）→ S1 的 `refute`/`revert` 与本次的 `rule` 判决记录都在日志里；
+      **缺**端到端用例：一次 refute + 一次审议判决改变节点结局，且同一日志重放出同一结局
+- [x] T6-3 等重升级给人；超升级配额自动降级 `undecided-by-rule` 并记账 → `WeighResponse`（等重 → `escalate`；配额用尽 → `undecided-by-rule`）+ `HearingState.Escalations` 台账；
+      用例 `TestWeighResponseClosesTheLogOnceTheQuotaIsSpent`（第一次升级、第二次按规则收口、台账 =1）
+- [x] T6-4 弃答以 `no_answer` 可见 → `HearingSilent(h, now, lim)`：静默者可见（不删、不静默忽略），用例 `TestHearingSilenceIsVisibleNotDeleted`
+- [x] T6-5 无可核对证据时 `done` 被拒 → S1 已落（`decide(done)` 的证据 + 非产出者复跑门槛，见 T3-1/T3-8）；S4 本刀未改这条门槛
+- [x] T6-6 票数不改变权重（consensus ≠ evidence）→ `VerifiableWeight` 只数**可核对**证据（`Ref` 非空）；
+      用例「五条无证据意见 < 一条 test」判 `refuted`
+- [ ] T6-7 **审议接线**（下一刀）：control 命令面（开审/答/称重收口）、把未答者纳入唤醒目标、判决经 `decide` 落到节点
 
 ## T7 S5 集群调度与预算
 
