@@ -17,7 +17,8 @@ try {
     turnModelActiveMs: 2_000, live: { id: "a", text: "x".repeat(16), reasoning: "", reasoningComplete: true } };
   now = 21_000;
   const completed = done(active);
-  assert.equal(completed.turnDoneAt - completed.turnStartAt, 20_000);
+  // turn_done resets turnStartAt; the completed snapshot keeps the pre-reset start.
+  assert.equal(completed.turnDoneAt - completed.lastTurnStartAt, 20_000);
   assert.equal(completed.lastTurnOutputTokens, 24);
   now = 90_000;
   const jobsEnded = idle(completed);

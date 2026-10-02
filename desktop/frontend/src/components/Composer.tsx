@@ -4661,7 +4661,7 @@ export function Composer({
                 {optimizingPrompt ? <span className="composer__btn--optimize__spinner" aria-hidden="true" /> : <Sparkles size={16} />}
               </button>
             </Tooltip>
-            {running && (
+            {running && !finishing && (
               <Tooltip label={t("composer.stop")}>
                 <button
                   className="composer__btn composer__btn--stop"

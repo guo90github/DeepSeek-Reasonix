@@ -21,7 +21,7 @@ assert.match(
 );
 assert.match(
   styles,
-  /:root\[data-theme-style\] \.sidebar--workbench \.project-tree__topic\s*\{[^}]*height:\s*34px;/s,
+  /:root\[data-theme-style\] \.sidebar--workbench \.project-tree__topic(?:,[^}]*)?\s*\{[^}]*height:\s*34px;/s,
   "workbench topic rows keep a fixed height",
 );
 assert.match(
