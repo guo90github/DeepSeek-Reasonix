@@ -552,20 +552,26 @@ func goalPauseFromRunError(err error) (cause, reason string, ok bool) {
 	if !ok {
 		return "", "", false
 	}
-	if info.Kind == "task_budget" && info.HostOwned {
-		reason := strings.TrimSpace(info.Reason)
-		if reason == "" {
-			reason = "the Goal reached its spend budget"
-		}
-		// The pause names the axis it crossed. Reporting every budget stop as spend
-		// would hide a token stop behind the wrong name, which is how the token axis
-		// came to look dead while it was actually firing.
-		if strings.TrimSpace(info.Key) == budgetAxisToken {
-			return stopCauseBudgetTokens, reason, true
-		}
-		return stopCauseBudgetSpend, reason, true
+	return goalPauseFromPause(info)
+}
+
+// goalPauseFromPause maps one run pause to the Goal stop cause it means. It takes the
+// exported pause info rather than the error so the mapping can be tested directly —
+// it is exactly where the axis used to be lost: every budget pause was reported as
+// spend, so a token stop read as a spend stop and `budget_tokens` was written by
+// nobody.
+func goalPauseFromPause(info agent.RunPauseInfo) (cause, reason string, ok bool) {
+	if !info.HostOwned || info.Kind != "task_budget" {
+		return "", "", false
 	}
-	return "", "", false
+	reason = strings.TrimSpace(info.Reason)
+	if reason == "" {
+		reason = "the Goal reached its spend budget"
+	}
+	if strings.TrimSpace(info.Key) == budgetAxisToken {
+		return stopCauseBudgetTokens, reason, true
+	}
+	return stopCauseBudgetSpend, reason, true
 }
 
 // advanceGoalAfterTurn gathers every input the FSM needs off the goal lock —
