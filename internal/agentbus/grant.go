@@ -42,43 +42,50 @@ func GrantsFor(ops []board.Op, node string) []Grant {
 }
 
 // Authorized reports whether a node holds an authorization it may act on. Three rules
-// keep the answer honest: the grantor must not be the node's own producer (nobody
-// authorizes themselves), the grant must carry evidence someone can check, and a node
-// that was abandoned or taken back holds nothing — its authorization went with it.
+// keep the answer honest: the grantor must not be one of the node's own producers
+// (nobody authorizes themselves), the grant must carry evidence someone can check, and a
+// node that was abandoned or taken back holds nothing — its authorization went with it.
 func Authorized(ops []board.Op, state *board.State, node string) bool {
-	producer := ""
-	if state != nil {
-		if n, ok := state.Nodes[node]; ok {
-			if n.State == board.StateAbandoned || n.State == board.StateStale {
-				return false
-			}
-			producer = n.Owner
-		}
-	}
-	for _, grant := range GrantsFor(ops, node) {
-		if grant.Actor == "" || grant.Actor == producer || len(grant.Evidence) == 0 {
+	return len(AuthorizedGrants(ops, state, node)) > 0
+}
+
+// producersOf reads who has been this node's producer: anybody who asserted it as work or
+// held its lease. The folded owner names only the *current* lease holder, and a capability
+// gap clears it — exactly when a fresh authorization is needed — so whose work this is has
+// to come from the log. Holding the lease counts on its own: the worker that reports a gap
+// may never have asserted anything.
+func producersOf(ops []board.Op, node string) map[string]bool {
+	out := map[string]bool{}
+	for _, op := range ops {
+		if op.Node != node || strings.TrimSpace(op.Actor) == "" {
 			continue
 		}
-		return true
+		switch op.Verb {
+		case board.VerbAssert:
+			if op.Source != GrantSource {
+				out[op.Actor] = true
+			}
+		case board.VerbClaim:
+			out[op.Actor] = true
+		}
 	}
-	return false
+	return out
 }
 
 // AuthorizedGrants returns the grants that actually authorize a node, so a caller can
 // show who approved what rather than only whether anybody did.
 func AuthorizedGrants(ops []board.Op, state *board.State, node string) []Grant {
-	producer := ""
 	if state != nil {
 		if n, ok := state.Nodes[node]; ok {
 			if n.State == board.StateAbandoned || n.State == board.StateStale {
 				return nil
 			}
-			producer = n.Owner
 		}
 	}
+	producers := producersOf(ops, node)
 	out := []Grant{}
 	for _, grant := range GrantsFor(ops, node) {
-		if grant.Actor == "" || grant.Actor == producer || len(grant.Evidence) == 0 {
+		if grant.Actor == "" || producers[grant.Actor] || len(grant.Evidence) == 0 {
 			continue
 		}
 		out = append(out, grant)

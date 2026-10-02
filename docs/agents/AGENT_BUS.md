@@ -824,6 +824,20 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 - 于是三步收敛为：①（唯一的代码改动）在注入处填 `Tokens`；② 照 `task_budget_gate_test.go` 的 `"cost"` 那一态补 `"token"`（含未配置不拦）；
   ③ control 侧 `goalPauseFromRunError` 目前把 `Kind == "task_budget"` 一律映射成 `budget_spend` ✗ ⇒ **按暂停的 `Key` 分派**（`"token"` ⇒ `budget_tokens`）。
 
+**T9-7 落地，并当场抓到一处守卫失效（2026-10-02）**：整条链路已有端到端用例
+（`internal/agentbus/capability_gap_e2e_test.go`），同时修正了"不能自己批自己"的判据 ✗：
+
+- **错在哪**：`Authorized` 用**折叠出的 `Owner`** 认"产出者"，而 `Owner` 会被 `capability_gap`（以及 `done`）**清空**
+  ⇒ 恰好在这一步**需要首次授权**的时刻，判据退化成"任何有证据的人都行" ⇒ **干活的人可以自己批自己** ✗。
+  用例先写、旧代码下红（`TestACapabilityGapDoesNotLetTheWorkerAuthorizeItself`），再修 → 绿；四个既有 grant 用例无回归。
+- **判据改从 op 日志派生**（与 `GrantsFor` 同一先例，也与 `applyDecide` 对"产出者"的定义一致）：
+  **非授权类 `assert` 的 actor ∪ `claim` 的 actor**。授权类 `assert`（`Source == "agentbus-grant"`）**不计入**产出者，
+  否则"谁批的"会把自己算成"干了活的人" ⇒ 谁也批不了 ✗。
+- **`Authorized` 与 `AuthorizedGrants` 不再各写一份**：前者委托后者 ✓（两份重复逻辑正是它们能悄悄漂移的原因 ✗）。
+- **仍缺（如实记）**：`Authorized` / `AuthorizedGrants` 在**生产代码里没有调用方** ⇒ 授权记录能写、能读、能核，
+  但**会话侧还没有"开工前查授权"这道门**（与 §13.9 的槽位/队列同一形状：机制就绪、入口未接）。
+  接线点 = 会话认领/开工之前那一处，与 S5 的"宿主接纳"是同一道门，**宜一并做** ✗。
+
 ### 13.9 账本宿主与记账时机（T4-8 之外的最后一处 S5 落地，2026-10-02 定规格）
 
 **问题**：`agentbus.Ledger`（四级预算 + 本机槽位）机制就绪，但**生产里没有任何地方创建它** ⇒ 定"谁持有、哪个 tick 记账"。

@@ -168,7 +168,17 @@
 - [ ] T9-4 无人值守贯通：杀掉桌面进程 → 既有看门狗拉起 → 黑板继续被推进（`docs/UNATTENDED.md` §11 自认此链未真机验收，**第一次必须端到端**）
 - [ ] T9-5 任务级落地：验收节点全 `done` + 无未决矛盾才宣告完成
 - [ ] T9-6 N≈100：任意杀掉 20% 后仍收敛；不超预算；无 429 风暴
-- [ ] T9-7 存在一次真实的「缺能力 → 派生获取能力节点 → 完成」链路
+- [x] T9-7 存在一次真实的「缺能力 → 派生获取能力节点 → 完成」链路 → `internal/agentbus/capability_gap_e2e_test.go`
+      `TestACapabilityGapIsClosedByAnObtainedStep`：认领 → 报缺口（**释放租约**、状态 `capability_gap`、`Ready` 为假）→ `require` 派生
+      「获取能力」节点并做完 → **"有了能力"仍不等于"被授权"** → 他人发新授权（带证据）→ 才继续做完；重放同一日志得同一结局，
+      `AuthorizedGrants` 仍能说出是谁批的。
+      **这一刀抓到真缺陷（先写用例再改，证伪探针留痕）**：`Authorized` 的"不能自己批自己"用**折叠出的 `Owner`** 判，
+      而 `Owner` 会被 `capability_gap` / `done` **清空** ⇒ 恰好在这一步**需要首次授权**的时刻，干活的人可以自己批自己 ✗。
+      旧代码下 `TestACapabilityGapDoesNotLetTheWorkerAuthorizeItself` **红**；修法 = 产出者改从 **op 日志**派生
+      （非授权类 `assert` 的 actor ∪ `claim` 的 actor，与 `applyDecide` 对"产出者"的定义一致），`Authorized` 改为委托
+      `AuthorizedGrants`（原先两份重复逻辑 ✗）；修后两用例绿、四个既有 grant 用例无回归。
+      **仍缺（如实记，同 S5 一类）**：`agentbus.Authorized`/`AuthorizedGrants` 在**生产代码里没有调用方**（实读 grep 零命中，
+      命中的都是无关的 `mcpServerAuthorized`）⇒ 内核侧链路完整，**会话侧还没人拿它把关**（缺"开工前查授权"那道门）
 
 ## T10 S8 PR 元数据门 + 打包
 
@@ -206,8 +216,12 @@
       **结论（部分诊断，不装作已定位）**：那些用例会**绕过板子直接改文件**（写半行、插坏行），而"文件大小"显然不是对它们足够的新鲜度判据；
       另外命中缓存时 `Truncated/Skipped` 与 `OpIDs` 的诚实性也需一并想清。⇒ **读缓存不是即插即用**，下一刀要么为这些路径显式失效，
       要么改做"增量 fold / 写时复制"，并**先写这几个用例的对照**再改。
-- [ ] **T5-6**（S3/S4）`evidence` 目前只有「`Ref` 非空」一条约束：形状、唯一性、去重与去重窗口要在证据权重设计里定死（S1 的 `hasEvidence` 是占位）
-- [ ] **T7-5**（S5）`Sweep` 单次上限 256（按 node id 排序，故无永久饥饿）：把上限与语义写进文档，并在调度侧决定 tick 频率
+- [x] **T5-6**（S3/S4）`evidence` 目前只有「`Ref` 非空」一条约束：形状、唯一性、去重与去重窗口要在证据权重设计里定死（S1 的 `hasEvidence` 是占位）
+      → **已定（2026-10-02，见 `AGENT_BUS.md` §11.3）**：权重按**引用去重**计（每个 `Ref` 只计一次，空白不算引用）；
+      形状与唯一性**不额外约束**（谁引用、引用什么由参与者负责，内核只回答"这条能不能去核对"）；用例 `internal/agentbus/evidence_weight_test.go`
+- [x] **T7-5**（S5）`Sweep` 单次上限 256（按 node id 排序，故无永久饥饿）：把上限与语义写进文档，并在调度侧决定 tick 频率
+      → **规则已写进契约**（`AGENT_BUS.md` §11.3：单次上限只约束"一次调用的写入量"，不约束"板能否恢复"——被跳过的过期认领由**下一次调用**按 id 序继续回收 ⇒ 无永久饥饿）；
+      实测 `internal/agentbus/board/sweep_cap_test.go`（一次 256 + 一次余量 + 一次 0，全部 owner 清空）
 
 ## 输入材料（本目录内，非清单项）
 
