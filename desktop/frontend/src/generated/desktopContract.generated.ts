@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:4cccd6cbc7487c800c2015d6a248c90c1f954625309dff61b808fb841094bab8";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:8b1684af7a0dd29d204d0396c4bbc916ac1b5cf5d85eb0764608084867c1a85b";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -31,6 +31,7 @@ export const DESKTOP_COMMANDS = [
   "AddRemoteProject",
   "AddSkillPath",
   "AgentBusBriefing",
+  "AgentBusNodeDetail",
   "AnswerMCPInteractionForTab",
   "AnswerMCPInteractionForTurn",
   "AnswerPromptForTab",
@@ -1523,6 +1524,12 @@ export interface ActiveWorkView {
   jobs: JobView[];
 }
 
+export interface AgentBusAuthorizationView {
+  actor: string;
+  reason: string;
+  seq: number;
+}
+
 export interface AgentBusBriefingView {
   participant: string;
   cards: AgentBusCardView[];
@@ -1543,6 +1550,25 @@ export interface AgentBusCardView {
   orphans: number;
   stalled: number;
   disputed: number;
+}
+
+export interface AgentBusNodeDetailView {
+  node: string;
+  title: string;
+  state: string;
+  owner: string;
+  ready: boolean;
+  deps: string[];
+  noProgress: number;
+  refutations: AgentBusRefutationView[];
+  authorizations: AgentBusAuthorizationView[];
+  deliberating: boolean;
+  verdict: string;
+}
+
+export interface AgentBusRefutationView {
+  actor: string;
+  reason: string;
 }
 
 export interface AgentBusSignalView {
@@ -4610,6 +4636,7 @@ export interface GeneratedDesktopCommands {
   AddRemoteProject(arg0: string, arg1: string): Promise<RemoteProjectView>;
   AddSkillPath(arg0: string): Promise<void>;
   AgentBusBriefing(): Promise<AgentBusBriefingView>;
+  AgentBusNodeDetail(arg0: string): Promise<AgentBusNodeDetailView>;
   AnswerMCPInteractionForTab(arg0: string, arg1: string, arg2: string, arg3: Record<string, unknown>): Promise<void>;
   AnswerMCPInteractionForTurn(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: Record<string, unknown>): Promise<void>;
   AnswerPromptForTab(arg0: string, arg1: string, arg2: string, arg3: QuestionAnswer[]): Promise<void>;

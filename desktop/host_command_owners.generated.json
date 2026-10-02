@@ -364,6 +364,20 @@
       "inputs": []
     }
   },
+  "AgentBusNodeDetail": {
+    "domain": "desktop/agentbus_detail.go",
+    "owner": "App.AgentBusNodeDetail",
+    "sources": [
+      "desktop/agentbus_detail.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.AgentBusNodeDetail",
+      "inputs": [
+        "node"
+      ]
+    }
+  },
   "AnswerMCPInteractionForTab": {
     "domain": "desktop/mcp_interaction_app.go",
     "owner": "App.AnswerMCPInteractionForTab",

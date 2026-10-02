@@ -684,6 +684,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/agentbus_detail.go",
+      "name": "AgentBusNodeDetail",
+      "owner": "App.AgentBusNodeDetail",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.AgentBusNodeDetailView"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "node"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.AgentBusNodeDetail"
+      },
+      "sources": [
+        "desktop/agentbus_detail.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/mcp_interaction_app.go",
       "name": "AnswerMCPInteractionForTab",
       "owner": "App.AnswerMCPInteractionForTab",
@@ -21047,6 +21073,28 @@
         }
       ]
     },
+    "main.AgentBusAuthorizationView": {
+      "fields": [
+        {
+          "name": "actor",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reason",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "seq",
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
     "main.AgentBusBriefingView": {
       "fields": [
         {
@@ -21155,6 +21203,103 @@
           "name": "disputed",
           "type": {
             "kind": "integer"
+          }
+        }
+      ]
+    },
+    "main.AgentBusNodeDetailView": {
+      "fields": [
+        {
+          "name": "node",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "title",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "state",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "owner",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "ready",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "deps",
+          "type": {
+            "elem": {
+              "kind": "string"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "noProgress",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "refutations",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.AgentBusRefutationView"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "authorizations",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.AgentBusAuthorizationView"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "deliberating",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "verdict",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.AgentBusRefutationView": {
+      "fields": [
+        {
+          "name": "actor",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "reason",
+          "type": {
+            "kind": "string"
           }
         }
       ]

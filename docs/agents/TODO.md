@@ -156,7 +156,14 @@
       给出**节点详情**（状态 / 依赖 / 是否可开工 / 争议与其理由 / **授权是谁批的、为什么** / 是否在审议与判决），
       授权**只从 op 日志取**（§13.8：哪条 `assert` 是授权属 provenance，折叠态带不了）。control 侧 `AgentBusNodeDetail(node)`
       照 `AgentBusBriefing` 的形状挂上（未入列会话 ⇒ `false` ✓）。用例：内核 4 条（含"自授权不算授权"与"未知节点报缺失"）、
-      control 2 条。**剩下的是界面**：桌面绑定 + 契约再生成 + `bridge.ts` 声明/mock + 面板里只读展开 + 文案 ×3 locale + 组件用例。
+      control 2 条。
+      **界面那一半也已完成（2026-10-02）**：`desktop/agentbus_detail.go`（扁平 DTO + `App.AgentBusNodeDetail`，无活跃会话 /
+      未入列 / 板内无此节点三种情形分别给出可读错误）→ 契约**重新生成**（命令名、DTO、`App` 接口与 `host_command_owners.generated.json`
+      全部自动带上 ✓）→ `lib/bridge.ts` 补声明与 mock → `AgentBusPanel.tsx` 新增只读的步骤块（状态 / 等待 / 争议与理由 /
+      **谁批的与原因** / 是否在审议与判决 / 可关闭），取数仍由 `WorkspaceAgentBusSection.tsx` 持有（面板保持纯组件 ✓，
+      `loadDetail` 可注入以便测试）；文案 11 条 × 3 份 locale。
+      用例：面板 20 条（含"步骤被命名、状态、等待、争议+理由、谁批的+为什么、审议中、可关闭、读不到就说读不到"）、
+      小节 6 条（点信号 ⇒ 真去取那条记录并显示授权人；取不到 ⇒ 如实说）。**`onOpenNode` 至此不再是空回调** ✓。
 
 ## T9 S7 e2e + 无人值守贯通 + 百级压测
 

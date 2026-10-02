@@ -75,5 +75,79 @@ await act(async () => {
   second.unmount();
 });
 
+// Opening a step reads that step's record and shows it here: the panel stays a pure
+// component, and the section owns this second fetch like it owns the first.
+const briefed = dom.window.document.createElement("div");
+const withSignal = {
+  participant: "alice",
+  cards: [
+    { subtree: "root", nodes: 2, atWork: 1, parked: 0, done: 1, worst: "disputed", signals: 1, orphans: 0, stalled: 0, disputed: 1 },
+  ],
+  signals: [{ kind: "disputed", subtree: "root", node: "publish", detail: "under deliberation" }],
+  hidden: 0,
+  hiddenCards: 0,
+  healthySubtrees: 0,
+};
+const stepDetail = (node: string) => ({
+  node,
+  title: "",
+  state: "contested",
+  owner: "",
+  ready: false,
+  deps: ["signing-key"],
+  noProgress: 0,
+  refutations: [],
+  authorizations: [{ actor: "operator", reason: "the key is installed", seq: 3 }],
+  deliberating: false,
+  verdict: "",
+});
+const third = createRoot(briefed);
+await act(async () => {
+  third.render(
+    <LocaleProvider>
+      <WorkspaceAgentBusSection load={async () => withSignal} loadDetail={async (node) => stepDetail(node)} />
+    </LocaleProvider>,
+  );
+});
+const signalButton = Array.from(briefed.querySelectorAll("button")).find((button) => button.textContent === "publish");
+ok(signalButton !== undefined, "a signal with a step behind it is clickable");
+await act(async () => {
+  signalButton?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+});
+ok(
+  briefed.textContent?.includes("operator") === true && briefed.textContent?.includes("the key is installed") === true,
+  "opening a signal reads that step's record and shows who authorized it",
+);
+await act(async () => {
+  third.unmount();
+});
+
+// A record that cannot be read says so, instead of looking like an empty step.
+const failing = dom.window.document.createElement("div");
+const fourth = createRoot(failing);
+await act(async () => {
+  fourth.render(
+    <LocaleProvider>
+      <WorkspaceAgentBusSection
+        load={async () => withSignal}
+        loadDetail={async () => {
+          throw new Error("host unreachable");
+        }}
+      />
+    </LocaleProvider>,
+  );
+});
+const failButton = Array.from(failing.querySelectorAll("button")).find((button) => button.textContent === "publish");
+await act(async () => {
+  failButton?.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+});
+ok(
+  failing.textContent?.includes("Could not read") === true || failing.textContent?.includes("读不到") === true,
+  "a step whose record cannot be read says so instead of drawing an empty one",
+);
+await act(async () => {
+  fourth.unmount();
+});
+
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

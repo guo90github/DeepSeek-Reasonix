@@ -33,6 +33,31 @@ export type AgentBusBriefingView = {
   healthySubtrees: number;
 };
 
+export type AgentBusAuthorizationView = {
+  actor: string;
+  reason: string;
+  seq?: number;
+};
+
+export type AgentBusRefutationView = {
+  actor: string;
+  reason: string;
+};
+
+export type AgentBusNodeDetailView = {
+  node: string;
+  title: string;
+  state: string;
+  owner: string;
+  ready: boolean;
+  deps: string[];
+  noProgress: number;
+  refutations: AgentBusRefutationView[];
+  authorizations: AgentBusAuthorizationView[];
+  deliberating: boolean;
+  verdict: string;
+};
+
 // Order mirrors the kernel's severity: what cannot ever run, then what nobody will
 // notice on its own, then the rest.
 const SEVERITY: Record<string, number> = { orphan: 0, stalled: 1, escalated: 2, disputed: 3, undecided: 4 };
@@ -49,10 +74,56 @@ function severityOf(kind: string): number {
   return SEVERITY[kind] ?? 9;
 }
 
-export function AgentBusPanel({ view, onOpenNode }: {
+// AgentBusNodeDetail is what the record says about one step: what it waits for, what was
+// disputed, and who authorized it. Read-only on purpose — the panel decides nothing here
+// (§13.8): the authorizations are the part only the op log can answer.
+function AgentBusNodeDetail({ detail, onClose }: {
+  detail: AgentBusNodeDetailView;
+  onClose?: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="agentbus-panel__node" data-node={detail.node} data-state={detail.state}>
+      <div className="agentbus-panel__node-head" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+        <strong>{t("agentbus.detail", { node: detail.node })}</strong>
+        <span>{t("agentbus.detail.state", { state: detail.state })}</span>
+        {detail.ready ? <span>{t("agentbus.detail.ready")}</span> : null}
+        {onClose ? (
+          <button type="button" onClick={onClose}>
+            {t("agentbus.detail.close")}
+          </button>
+        ) : null}
+      </div>
+      {detail.deps.length > 0 ? (
+        <p className="agentbus-panel__node-deps">{t("agentbus.detail.deps", { deps: detail.deps.join(", ") })}</p>
+      ) : null}
+      {detail.deliberating ? <p className="agentbus-panel__node-deliberating">{t("agentbus.detail.deliberating")}</p> : null}
+      {detail.verdict ? <p className="agentbus-panel__node-verdict">{t("agentbus.detail.verdict", { verdict: detail.verdict })}</p> : null}
+      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+        {detail.refutations.map((refutation) => (
+          <li key={`refute:${refutation.actor}`} className="agentbus-panel__refutation">
+            {t("agentbus.detail.disputed", { actor: refutation.actor, reason: refutation.reason })}
+          </li>
+        ))}
+        {detail.authorizations.map((authorization) => (
+          <li key={`grant:${authorization.actor}`} className="agentbus-panel__authorization">
+            {t("agentbus.detail.authorized", { actor: authorization.actor, reason: authorization.reason })}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseDetail }: {
   view: AgentBusBriefingView;
-  /** Opens a node; absent until the host can navigate to one. */
+  /** Opens a node; the host decides what opening means (fetch, navigate, both). */
   onOpenNode?: (node: string) => void;
+  /** The step that was opened, once its record has been read. */
+  detail?: AgentBusNodeDetailView | null;
+  /** Shown while that record is being read, or when it could not be read. */
+  detailNotice?: string;
+  onCloseDetail?: () => void;
 }) {
   const t = useT();
   const cards = [...view.cards].sort((left, right) => {
@@ -107,6 +178,11 @@ export function AgentBusPanel({ view, onOpenNode }: {
           );
         })}
       </ul>
+      {detail ? (
+        <AgentBusNodeDetail detail={detail} onClose={onCloseDetail} />
+      ) : detailNotice ? (
+        <p className="agentbus-panel__node-notice">{detailNotice}</p>
+      ) : null}
       {view.hidden > 0 || view.hiddenCards > 0 ? (
         <p className="agentbus-panel__hidden">
           {t("agentbus.hidden", { cards: view.hiddenCards, signals: view.hidden })}

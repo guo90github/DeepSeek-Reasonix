@@ -3995,6 +3995,17 @@ export const en = {
   "agentbus.kind.disputed": "under deliberation",
   "agentbus.kind.undecided": "closed by rule",
   "agentbus.unavailable": "Collaboration data is unavailable for this session",
+  "agentbus.detail": "Step {node}",
+  "agentbus.detail.close": "Close",
+  "agentbus.detail.loading": "Reading {node}…",
+  "agentbus.detail.unavailable": "Could not read {node}",
+  "agentbus.detail.state": "state: {state}",
+  "agentbus.detail.deps": "waits for: {deps}",
+  "agentbus.detail.ready": "can start now",
+  "agentbus.detail.disputed": "disputed by {actor}: {reason}",
+  "agentbus.detail.authorized": "authorized by {actor}: {reason}",
+  "agentbus.detail.deliberating": "under deliberation",
+  "agentbus.detail.verdict": "verdict: {verdict}",
 };
 
 export type DictKey = keyof typeof en;

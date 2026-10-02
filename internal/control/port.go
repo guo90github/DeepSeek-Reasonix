@@ -306,6 +306,8 @@ type AgentBusControl interface {
 	WakeAgentBus(ctx context.Context) int
 	// AgentBusBriefing folds the board, queue and deliberations for the first screen.
 	AgentBusBriefing(now time.Time) (agentbus.Briefing, bool)
+	// AgentBusNodeDetail reads one board node, including who authorized it (§13.8).
+	AgentBusNodeDetail(node string) (agentbus.NodeDetail, bool)
 }
 
 var _ AgentBusControl = (*Controller)(nil)

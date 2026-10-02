@@ -4,7 +4,7 @@ import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { AgentBusPanel, type AgentBusBriefingView } from "../components/AgentBusPanel";
+import { AgentBusPanel, type AgentBusBriefingView, type AgentBusNodeDetailView } from "../components/AgentBusPanel";
 import { LocaleProvider } from "../lib/i18n";
 
 let passed = 0;
@@ -27,6 +27,23 @@ function render(view: AgentBusBriefingView, onOpenNode?: (node: string) => void)
     </LocaleProvider>,
   );
 }
+
+function renderStep(detail: AgentBusNodeDetailView): string {
+  return renderToStaticMarkup(
+    <LocaleProvider>
+      <AgentBusPanel view={emptyBoard} detail={detail} onCloseDetail={() => {}} />
+    </LocaleProvider>,
+  );
+}
+
+const emptyBoard: AgentBusBriefingView = {
+  participant: "alice",
+  cards: [],
+  signals: [],
+  hidden: 0,
+  hiddenCards: 0,
+  healthySubtrees: 0,
+};
 
 const attention: AgentBusBriefingView = {
   participant: "alice",
@@ -107,6 +124,49 @@ ok(opened.length === 1 && opened[0] === "dep1", "clicking a signal opens the nod
 await act(async () => {
   root.unmount();
 });
+
+// The step's own record: what it is, what it waits for, what was disputed and who
+// authorized it. Authorizations come from the op log, so the panel shows them without
+// the board's state having to carry them (§13.8).
+const stepHtml = renderStep({
+  node: "publish",
+  title: "publish",
+  state: "contested",
+  owner: "",
+  ready: false,
+  deps: ["signing-key"],
+  noProgress: 0,
+  refutations: [{ actor: "skeptic", reason: "the test does not cover the migration" }],
+  authorizations: [{ actor: "operator", reason: "the key is installed and scoped", seq: 12 }],
+  deliberating: true,
+  verdict: "escalate",
+});
+ok(stepHtml.indexOf('data-node="publish"') !== -1, "the opened step is named");
+ok(stepHtml.indexOf('data-state="contested"') !== -1, "the step shows the state the record gives it");
+ok(stepHtml.indexOf("signing-key") !== -1, "the step shows what it waits for");
+ok(
+  stepHtml.indexOf("skeptic") !== -1 && stepHtml.indexOf("does not cover the migration") !== -1,
+  "a challenge and the reason it was made are both shown",
+);
+ok(
+  stepHtml.indexOf("operator") !== -1 && stepHtml.indexOf("installed and scoped") !== -1,
+  "who authorized the step is shown, with why",
+);
+ok(stepHtml.indexOf("escalate") !== -1, "a question that is still open is part of the step");
+ok(
+  stepHtml.includes("Close") || stepHtml.includes("关闭"),
+  "an opened step can be closed again",
+);
+
+const unreadable = renderToStaticMarkup(
+  <LocaleProvider>
+    <AgentBusPanel view={emptyBoard} detailNotice="Could not read gone" />
+  </LocaleProvider>,
+);
+ok(
+  unreadable.indexOf("Could not read gone") !== -1,
+  "a step that could not be read says so instead of drawing an empty one",
+);
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

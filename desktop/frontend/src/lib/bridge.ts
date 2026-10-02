@@ -224,6 +224,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   HeartbeatSaveConfig(update: unknown): Promise<unknown>;
   HeartbeatTriggerNow(id: string): Promise<void>;
   AgentBusBriefing(): Promise<import("../generated/desktopContract.generated").AgentBusBriefingView>;
+  AgentBusNodeDetail(node: string): Promise<import("../generated/desktopContract.generated").AgentBusNodeDetailView>;
   HeartbeatGenerateID(): Promise<string>;
   WatchdogStatus(): Promise<import("../generated/desktopContract.generated").WatchdogStatusView>;
   SetWatchdogEnabled(enabled: boolean): Promise<import("../generated/desktopContract.generated").WatchdogStatusView>;
@@ -5145,6 +5146,12 @@ function makeMockApp(): AppBindings {
     async SetWatchdogEnabled(enabled: boolean) { return { supported: true, policy: enabled, registered: enabled, platform: "win32", entryPoint: "" }; },
     async AgentBusBriefing() {
       return { participant: "", cards: [], signals: [], hidden: 0, hiddenCards: 0, healthySubtrees: 0 };
+    },
+    async AgentBusNodeDetail(node: string) {
+      return {
+        node, title: "", state: "open", owner: "", ready: true, deps: [], noProgress: 0,
+        refutations: [], authorizations: [], deliberating: false, verdict: "",
+      };
     },
     async HeartbeatGenerateID() { return "mock-" + Date.now().toString(36); },
     async ListTasks() { return []; },
