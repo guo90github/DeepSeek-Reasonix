@@ -53,18 +53,32 @@ func (a *App) AgentBusJoin() (AgentBusStatusView, error) {
 	return agentBusStatusOf(bus, dir), nil
 }
 
-// restoreAgentBusEnrolment puts a session back on the board it joined before this host
+// restoreAgentBusEnrolmentFor puts a session back on the board it joined before this host
 // started, so a restored host keeps advancing the work it was part of.
-func (a *App) restoreAgentBusEnrolment(ctrl control.SessionAPI) {
+//
+// The caller must pass the session it really is. A controller learns its path only when
+// the session is bound, so at build time SessionPath() is still empty: reading it there
+// restored nothing at all, which is how the first cut of this fix missed on a real
+// machine (2026-10-03).
+func (a *App) restoreAgentBusEnrolmentFor(sessionPath string, ctrl control.SessionAPI) {
 	bus, ok := ctrl.(control.AgentBusControl)
 	if !ok || bus.AgentBusEnrolled() {
 		return
 	}
-	record, ok := rememberedAgentBusEnrolment(ctrl.SessionPath())
+	record, ok := rememberedAgentBusEnrolment(sessionPath)
 	if !ok {
 		return
 	}
 	bus.SetAgentBus(record.Dir, record.Participant)
+	// The waker captured the board the controller had at build time, which was none:
+	// re-arm it with the board this session just rejoined, exactly as a fresh join does.
+	a.enrollAgentBus(ctrl)
+}
+
+// restoreAgentBusEnrolment is the build-time attempt: it only reaches a controller that
+// already carries its session path.
+func (a *App) restoreAgentBusEnrolment(ctrl control.SessionAPI) {
+	a.restoreAgentBusEnrolmentFor(ctrl.SessionPath(), ctrl)
 }
 
 // AgentBusLeave opts the session out. The board and its log stay on disk untouched:

@@ -473,3 +473,11 @@
 - **仍待**：装 dev.106 后在真机复验"杀 → 看门狗拉起 → **黑板出现新 op / 被唤醒的会话真的起回合**"。
 - 一条岔路的更正：我曾把"拉起后不推进"归到本机**定时任务**（`heartbeat-tasks.json` 里 4 个任务都是 `enabled:false`）——
   那是另一个功能域，与 T9-4 的黑板推进无关；该方向已放弃、改动已回退（工作区干净）。
+- **挂钩点更正（本刀，dev.107）**：dev.106 的恢复没生效，根因是**挂钩时机**——`desktop/tabs.go` 建控制器时
+  `boot.Options` 只传 `SessionDir`，控制器级 `ctrl.SessionPath()` 要等会话绑定才写入，所以在 build 时读到**空串**、
+  拿空键查记录必然落空（记录与键本身都对：与 `desktop-tabs.json` 里的路径逐字符一致）。
+  改为在**会话文件真正绑定的那一刻**恢复：`tabs.go` 的 `a.persistTabSessionPath(tab, path)` 之前调
+  `a.restoreAgentBusEnrolmentFor(path, ctrl)`；`buildTabControllerBoot` 里那次保留为兜底（路径为空时无害）。
+  另修一处必然的次生问题：`enrollAgentBus` 在**调用时**就把 `boardDir` 捕获进唤醒器，build 时入列为空 ⇒ 唤醒器拿着空板；
+  恢复路径在 `SetAgentBus` 之后**重挂唤醒器**（与点击 join 同路径）。
+  用例：`TestRestoreAgentBusEnrolmentUsesTheTabPathNotTheControllerPath`（无路径的控制器不得入列；给出标签路径后入列；重复恢复不扰动）。

@@ -3935,6 +3935,11 @@ func (a *App) buildTabControllerWithContextCore(tab *WorkspaceTab, loadedSession
 				a.emitReady(appCtx, tab.ID)
 				return
 			}
+			// This build just bound the session file, which is the first moment the
+			// controller is known to be the session it is: put it back on the board it
+			// joined before this host started (a crashed host, a watchdog restore, a
+			// version switch), or the board stops advancing where it was interrupted.
+			a.restoreAgentBusEnrolmentFor(path, ctrl)
 			a.persistTabSessionPath(tab, path)
 			a.mu.RLock()
 			indexScope := tab.Scope
