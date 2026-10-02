@@ -31065,6 +31065,13 @@
           }
         },
         {
+          "name": "todoBoard",
+          "optional": true,
+          "type": {
+            "kind": "any"
+          }
+        },
+        {
           "name": "checkpoints",
           "optional": true,
           "type": {

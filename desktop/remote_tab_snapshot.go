@@ -23,9 +23,12 @@ import (
 var errRemoteTabStatusSuperseded = errors.New("status was superseded by newer runtime state")
 
 type RemoteTabSnapshot struct {
-	History       json.RawMessage   `json:"history"`
-	Context       json.RawMessage   `json:"context,omitempty"`
-	Todos         json.RawMessage   `json:"todos,omitempty"`
+	History json.RawMessage `json:"history"`
+	Context json.RawMessage `json:"context,omitempty"`
+	Todos   json.RawMessage `json:"todos,omitempty"`
+	// TodoBoard carries the shelf's {queue,archive}: the work an earlier list
+	// left unfinished, which the canonical list alone cannot show.
+	TodoBoard     json.RawMessage   `json:"todoBoard,omitempty"`
 	Checkpoints   json.RawMessage   `json:"checkpoints,omitempty"`
 	Models        json.RawMessage   `json:"models,omitempty"`
 	Commands      json.RawMessage   `json:"commands,omitempty"`
@@ -95,6 +98,7 @@ func (a *App) RemoteTabSnapshot(tabID string) (RemoteTabSnapshot, error) {
 		"/history":     &snap.History,
 		"/context":     &snap.Context,
 		"/todos":       &snap.Todos,
+		"/todos/board": &snap.TodoBoard,
 		"/checkpoints": &snap.Checkpoints,
 		"/models":      &snap.Models,
 		"/commands":    &snap.Commands,

@@ -337,6 +337,7 @@ func newFakeServe(t *testing.T, token string, sessions []serveSessionEntry) *fak
 	snapshot("/history", `[{"role":"user","content":"hi"}]`)
 	snapshot("/context", `{"used":10}`)
 	snapshot("/todos", `[]`)
+	snapshot("/todos/board", `{"queue":[],"archive":[]}`)
 	snapshot("/checkpoints", `[{"turn":1}]`)
 	snapshot("/models", `{"current":"remote/chat","label":"chat","models":[{"ref":"remote/chat","provider":"remote","model":"chat","active":true}]}`)
 	snapshot("/commands", `[{"name":"remote-review","description":"Review remotely","kind":"custom","group":"skills"}]`)

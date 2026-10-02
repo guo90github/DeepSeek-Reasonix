@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:9d60ff68016abbf37b14c6ea189956195c2feb4001c5a92793730e729ee90572";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:588803888bb5c3c76328f471b955832b63ac762bcc5cd46fade13ef72c40d15c";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3390,6 +3390,7 @@ export interface RemoteTabSnapshot {
   history: unknown;
   context?: unknown;
   todos?: unknown;
+  todoBoard?: unknown;
   checkpoints?: unknown;
   models?: unknown;
   commands?: unknown;

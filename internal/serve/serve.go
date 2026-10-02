@@ -26,6 +26,7 @@ import (
 	"reasonix/internal/config"
 	"reasonix/internal/control"
 	"reasonix/internal/event"
+	"reasonix/internal/evidence"
 	"reasonix/internal/jobs"
 	"reasonix/internal/nilutil"
 	"reasonix/internal/plugin"
@@ -655,6 +656,7 @@ func (s *Server) handler() http.Handler {
 	mux.HandleFunc("GET /pending-prompts", s.pendingPrompts)
 	mux.HandleFunc("GET /skills", s.skills)
 	mux.HandleFunc("GET /todos", s.todos)
+	mux.HandleFunc("GET /todos/board", s.todosBoard)
 	mux.HandleFunc("POST /delete-session", s.deleteSession)
 	mux.HandleFunc("POST /shutdown", s.requestShutdown)
 	return logMiddleware(gzipMiddleware(s.auth.middleware(s.hostGuard(s.csrfGuard(mux)))))
@@ -1654,22 +1656,37 @@ func (s *Server) skills(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, out)
 }
 
+// todoWireItem is the projection every remote client reads: what a task panel
+// renders, plus the item's stable identity so a retitle cannot read as new work.
+type todoWireItem struct {
+	Content    string `json:"content"`
+	Status     string `json:"status"`
+	ActiveForm string `json:"activeForm,omitempty"`
+	Level      int    `json:"level,omitempty"`
+	StepID     string `json:"step_id,omitempty"`
+}
+
+func todoWireItems(raw []evidence.TodoItem) []todoWireItem {
+	out := make([]todoWireItem, len(raw))
+	for i, t := range raw {
+		out[i] = todoWireItem{Content: t.Content, Status: t.Status, ActiveForm: t.ActiveForm, Level: t.Level, StepID: t.StepID}
+	}
+	return out
+}
+
 // todos returns the canonical task list (latest todo_write state merged with
 // complete_step advances) so the frontend can render a live task panel.
 func (s *Server) todos(w http.ResponseWriter, _ *http.Request) {
-	type todoItem struct {
-		Content    string `json:"content"`
-		Status     string `json:"status"`
-		ActiveForm string `json:"activeForm,omitempty"`
-		Level      int    `json:"level,omitempty"`
-		// StepID is the item's stable identity: a remote client that keys on it
-		// matches what the local panel does, so a retitle cannot read as new work.
-		StepID string `json:"step_id,omitempty"`
-	}
-	raw := s.ctl().Todos()
-	out := make([]todoItem, len(raw))
-	for i, t := range raw {
-		out[i] = todoItem{Content: t.Content, Status: t.Status, ActiveForm: t.ActiveForm, Level: t.Level, StepID: t.StepID}
-	}
-	writeJSON(w, out)
+	writeJSON(w, todoWireItems(s.ctl().Todos()))
+}
+
+// todosBoard returns the shelf's queue and archive: unfinished work across every
+// list this session carried, plus what finished, so a remote tab's panel matches
+// the local one instead of showing only the current list.
+func (s *Server) todosBoard(w http.ResponseWriter, _ *http.Request) {
+	board := s.ctl().TodoBoard()
+	writeJSON(w, struct {
+		Queue   []todoWireItem `json:"queue"`
+		Archive []todoWireItem `json:"archive"`
+	}{Queue: todoWireItems(board.Queue), Archive: todoWireItems(board.Archive)})
 }

@@ -141,6 +141,7 @@ func TestRemoteTabSnapshotMergesServeMembers(t *testing.T) {
 	}
 	for name, raw := range map[string]json.RawMessage{
 		"history": snap.History, "context": snap.Context, "todos": snap.Todos,
+		"todoBoard":   snap.TodoBoard,
 		"checkpoints": snap.Checkpoints, "models": snap.Models, "status": snap.Status,
 	} {
 		if len(raw) == 0 {
