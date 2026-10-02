@@ -10,7 +10,7 @@ import (
 func TestWakeTargetsNameWhoAskedForStartableWork(t *testing.T) {
 	ops := []board.Op{assertOp("design", "alice"), requireOp("design", "schema")}
 
-	targets := WakeTargets(WakeInput{Ops: ops})
+	targets := WakeTargets(WakeInput{State: board.Fold(ops)})
 	if len(targets) != 1 || targets[0].Participant != "alice" {
 		t.Fatalf("targets = %+v, want alice, who asked for the step", targets)
 	}
@@ -21,12 +21,12 @@ func TestWakeTargetsNameWhoAskedForStartableWork(t *testing.T) {
 		t.Fatalf("waiting = %v, want the node stalled on it", targets[0].Waiting)
 	}
 
-	if again := WakeTargets(WakeInput{Ops: ops}); again[0].Key != targets[0].Key {
+	if again := WakeTargets(WakeInput{State: board.Fold(ops)}); again[0].Key != targets[0].Key {
 		t.Fatal("the key must derive from the work, not from the call")
 	}
 	more := append(append([]board.Op(nil), ops...),
 		board.Op{Verb: board.VerbRequire, Node: "design", Actor: "alice", Dep: &board.NodeSpec{ID: "errors"}})
-	if WakeTargets(WakeInput{Ops: more})[0].Key == targets[0].Key {
+	if WakeTargets(WakeInput{State: board.Fold(more)})[0].Key == targets[0].Key {
 		t.Fatal("a different work set must produce a different key")
 	}
 }
@@ -34,7 +34,7 @@ func TestWakeTargetsNameWhoAskedForStartableWork(t *testing.T) {
 func TestWakeTargetsStopOnceTheStepIsTaken(t *testing.T) {
 	ops := []board.Op{assertOp("design", "alice"), requireOp("design", "schema")}
 	claimed := append(append([]board.Op(nil), ops...), claimOp("schema", "bob"))
-	if targets := WakeTargets(WakeInput{Ops: claimed}); len(targets) != 0 {
+	if targets := WakeTargets(WakeInput{State: board.Fold(claimed)}); len(targets) != 0 {
 		t.Fatalf("a claimed step is nobody's wake: %+v", targets)
 	}
 }
@@ -68,7 +68,7 @@ func TestWakeTargetsDropWhatIsAlreadyDone(t *testing.T) {
 		requireOp("design", "schema"),
 		doneOp("design", "alice", "bob"),
 	}
-	if targets := WakeTargets(WakeInput{Ops: ops}); len(targets) != 0 {
+	if targets := WakeTargets(WakeInput{State: board.Fold(ops)}); len(targets) != 0 {
 		t.Fatalf("work that is finished owes nobody a wake: %+v", targets)
 	}
 }

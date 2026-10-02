@@ -29,26 +29,44 @@ type WakeTarget struct {
 	Owes []string
 }
 
-// WakeInput is everything a wake decision reads: the op log for provenance, the
-// talk surface for open questions, and the deliberation surface for who still
-// owes an answer.
+// WakeInput is everything a wake decision reads: the folded board for who asked for what,
+// the talk surface for open questions, and the deliberation surface for who still owes an
+// answer.
 type WakeInput struct {
-	Ops      []board.Op
+	State    *board.State
 	Talk     *TalkState
 	Hearings *HearingState
 	Limits   HearingLimits
 	Now      time.Time
 }
 
+// waitersByDep maps each dependency to the nodes still waiting on it. A finished node is not
+// waiting for anything, so it is not listed.
+func waitersByDep(st *board.State) map[string][]string {
+	out := map[string][]string{}
+	if st == nil {
+		return out
+	}
+	for _, id := range sortedNodeIDs(st) {
+		n := st.Nodes[id]
+		if n.State == board.StateDone {
+			continue
+		}
+		for _, dep := range n.Deps {
+			out[dep] = append(out[dep], id)
+		}
+	}
+	return out
+}
+
 // WakeTargets lists who should be woken now.
 //
-//   - whoever required a node that is startable and still unowned hears that the
-//     step can run;
+//   - whoever asked for a node that can start, is still unowned and still has somebody
+//     waiting on it hears that the step can run;
 //   - whoever a question was addressed to hears that an answer is owed.
 //
-// It reads the op log rather than the folded board on purpose: who *asked* for an
-// unowned node is not in the fold, only in the op that asked. Teaching nodes to
-// carry their requester would move this back into the fold.
+// It reads the folded board: who asked for a node is on the node itself (T5-6), so the op
+// trail is no longer needed to answer that.
 func WakeTargets(in WakeInput) []WakeTarget {
 	targets := map[string]*WakeTarget{}
 	target := func(participant string) *WakeTarget {
@@ -60,22 +78,25 @@ func WakeTargets(in WakeInput) []WakeTarget {
 		return t
 	}
 
-	st := board.Fold(in.Ops)
-	for _, op := range in.Ops {
-		if op.Verb != board.VerbRequire || op.Dep == nil || op.Actor == "" {
-			continue
-		}
-		dep, ok := st.Nodes[op.Dep.ID]
-		if !ok || !dep.Ready(st) {
-			continue
-		}
-		if requester, ok := st.Nodes[op.Node]; ok && requester.State == board.StateDone {
-			continue
-		}
-		t := target(op.Actor)
-		t.Ready = appendUnique(t.Ready, op.Dep.ID)
-		if op.Node != "" {
-			t.Waiting = appendUnique(t.Waiting, op.Node)
+	waiting := waitersByDep(in.State)
+	if in.State != nil {
+		for _, depID := range sortedNodeIDs(in.State) {
+			dep := in.State.Nodes[depID]
+			// An unowned step that can run now, with somebody still waiting on it: that is
+			// the whole reason to wake anyone. Work nobody waits on wakes nobody.
+			if !dep.Ready(in.State) || len(waiting[depID]) == 0 {
+				continue
+			}
+			for _, requester := range dep.Requesters {
+				if requester == "" {
+					continue
+				}
+				t := target(requester)
+				t.Ready = appendUnique(t.Ready, depID)
+				for _, blocked := range waiting[depID] {
+					t.Waiting = appendUnique(t.Waiting, blocked)
+				}
+			}
 		}
 	}
 

@@ -229,7 +229,7 @@ func TestAHundredNodesConvergeAfterLosingAFifthOfTheParticipants(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ops: %v", err)
 	}
-	if targets := WakeTargets(WakeInput{Ops: ops, Now: now}); len(targets) != 0 {
+	if targets := WakeTargets(WakeInput{State: final, Now: now}); len(targets) != 0 {
 		t.Fatalf("wake targets after landing = %+v, want none", targets)
 	}
 

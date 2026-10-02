@@ -22,12 +22,8 @@ func TestTheFoldAnswersWhoAskedForANode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("snapshot: %v", err)
 	}
-	ops, err := brd.Ops(ctx)
-	if err != nil {
-		t.Fatalf("ops: %v", err)
-	}
 
-	wakes := WakeTargets(WakeInput{Ops: ops, Now: time.Now().UTC()})
+	wakes := WakeTargets(WakeInput{State: state, Now: time.Now().UTC()})
 	if len(wakes) == 0 {
 		t.Fatal("the trail says somebody has to be woken")
 	}

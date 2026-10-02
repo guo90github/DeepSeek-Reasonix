@@ -65,7 +65,7 @@ func (c *Controller) agentBusWakeSnapshot(ctx context.Context) (*agentBusState, 
 	if err != nil {
 		return nil, agentbus.WakeInput{}, err
 	}
-	ops, err := brd.Ops(ctx)
+	state, err := brd.Snapshot(ctx, time.Now().UTC())
 	if err != nil {
 		return nil, agentbus.WakeInput{}, err
 	}
@@ -86,7 +86,7 @@ func (c *Controller) agentBusWakeSnapshot(ctx context.Context) (*agentBusState, 
 		return nil, agentbus.WakeInput{}, err
 	}
 	return bus, agentbus.WakeInput{
-		Ops:      ops,
+		State:    state,
 		Talk:     talk,
 		Hearings: hearings,
 		Limits:   bus.limitsForHearing(),
