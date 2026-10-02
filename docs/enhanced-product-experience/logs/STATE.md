@@ -19,17 +19,18 @@
 
 ## 2. 当前单元（2026-10-03 · 本轮）
 
-**第八 BA2 对齐 U-4 并验收 ⇒ 第八（代码侧）已验收。** BA2 的前置块本身在 `530f80d43` 已落地（`internal/control/turn_progress.go` + `input.go:218` 接线），
-本轮做的是**纠正与固定**：删掉与 U-4「不设字符上限」相抵的 `turnProgressBudget=400` / `turnProgressLineCap=160`，改用 `turnProgressVerdict`
-把判词归一化到枚举（未定义→`unknown`）——不是靠截断、而是靠"能进这个块的东西只有枚举词与小计数"来保证不跑量；
-并补测试：窗口＝最新 3 轮（`TestRecentTurnOutcomesKeepsTheNewestThreeRounds`）、无上限、未定义判词不泄漏文本。
-验证：`internal/boot` 的 `TestEffectTurnProgressRidesTheBodyNotThePrefix` PASS（前缀与工具面逐字节不变）；`internal/control` 三条 PASS。
+**阶段收口：全量门禁复跑（2026-10-03 实测）。** ✓ `go build ./...`(0) ✓ `go vet ./...`(0) ✓ `make frontend-check`(0)；
+`make lint` 30 条既有（intrange 21 / modernize 8 / staticcheck 1）与 `repolint` 7 条（`desktop/tabs.go`、`desktop/unattended_*.go`、`internal/boot/boot.go`、`internal/serve/serve.go`）**逐条落在别的会话文件，本任务改动面 0 条**；
+`go test ./internal/...` 124 包 ok / 7 失败（symlink 权限 5 + `acp`/`agentbus` 各 1，均别的改动面）；`desktop` 模块 8 包 ok / 1 失败（browser upload ×2、packaging ×2、ModelSettings 既有红②、ResumeUnattended ×1）。结果逐条写进 `docs/99-总结报告.md`。
 
 ## 3. 下一步（下一轮直接照做）
 
-**阶段收口：全量门禁 + 总结报告**（立项书验收 5）。按仓库自己的门禁跑：
-`go build ./...`、`go vet ./...`、`go test ./internal/... ./desktop/...`、`make lint`、`make frontend-check`、`go run ./tools/repolint`；
-把结果与既有红逐条登记，然后更新 `docs/99-总结报告.md`（第八/第七 已验收、第十二 未达标 + D-2、其余待真机）。
+**自主队列已空 —— 等答复（见 §4）。** 剩下两项都不是"没人也能做"：
+- 真机验收（B-1）：第八前置块观感、第九档位、第十 #2#5、第十四观感、第十六面板、第十七三条 —— 需人眼判定，且需先有含本任务改动的新构建；
+- 第十二是否放宽证据门槛（D-2）：复跑已到 42，判据 ≤20 只能靠放宽门禁或真实复跑新轨迹。
+
+唯一剩下的自主候选是第十「后台标签完整面板」（把 `ChatPaneRegion` 的 region props 按 tabId 参数化），
+但它是结构性前端改动、且**没有真机就无法验证** ⇒ 建议等 B-1 反馈后再动（在台账里留着，不算丢）。
 
 不要一轮做两件。
 
@@ -47,13 +48,11 @@
 
 ## 5. 未验证 / 暂缓
 
-- 立项书验收 5（全量门禁）**本轮未复跑**：`go build ./...`、`go vet ./...`、`make frontend-check` 上次绿；
-  `make lint` 18 条既有、`go test ./internal/... ./desktop/...` 失败全属既有类别（symlink 权限 / E2E / vision / packaging）。
-- 真机未做：第九、第十 #2/#5、第十四、第十六、第十七三条。
-- 第八 BA2 **已完成**（前置块去上限 + 枚举归一化，见 §2；`internal/boot` effect test 与 `internal/control` 三条 PASS）；真机观感并入 B-1。
-- 第十后台标签完整面板未做（A-30 收窄后属未做的原始需求 #5 部分）。
+- 立项书验收 5（全量门禁）**已复跑**，逐条结果见 §2 与 `docs/99` §一标准 5；**五项里三项绿**（build/vet/frontend-check），lint 与测试的红全部落在别的会话文件。
+- 真机未做：第八前置块观感、第九、第十 #2/#5、第十四、第十六、第十七三条。
+- 第十后台标签完整面板未做（A-30 收窄后属未做的原始需求 #5 部分；需真机才能验证，建议 B-1 之后再做）。
 - 第七 达标已复测（`docs/50` §10.6，0.381 ≤ 1/2）；**召回质量抽查未做**——索引变短后模型选事实的准确度属真机观察项，并入 B-1。
 - 第十二 复跑**未建模**外部改动（格式化/别的会话改动）与模型自身轨迹变化，两者都只会让残余 ≥42；真实复合降幅要一次真跑才看得到。
 
-END-UNIT: 第八 BA2 按 U-4 纠正（去块预算/行上限，改判词枚举归一化）并补窗口测试，第八翻「已验收（代码侧）」；
-下一步＝阶段收口（全量门禁 + `docs/99-总结报告.md`）。
+BLOCKED: 第八/第九/第十/第十四/第十六/第十七 的「已验收」需真机人眼判定（B-1：是否由我按 `REASONIX.local.md` 打包并拉起桌面端供你复测）；
+第十二 的 ≤20 需你在 D-2 里选路（放宽证据门槛 / 真实复跑 / 接受现状 42）。自主队列已空，等答复。
