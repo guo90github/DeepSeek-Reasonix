@@ -179,12 +179,17 @@ reasonix-desktop.exe --watchdog-disable  # 关：写策略 + 立刻注销 + 删�
 - **策略**：`<home>/desktop-autostart.json`（`enabled` + `watchdog`，默认跟随 enabled），
   它是总开关的**镜像**，同时管登录项（Electron 的 login item，只在登录时拉起）——
   **开总开关会连登录项一起打开**，关掉则一起注销。
-- **唯一那一个管理文件**：`C:\Users\guosj\Desktop\$\watchdog.cmd`——看门狗的可见副本：
+- **唯一那一个管理文件**：`<state home>\watchdog\watchdog.cmd`（Windows 上即
+  `%APPDATA%\reasonix\watchdog\watchdog.cmd`）——看门狗的可见副本：
   双击=巡检一次、打开=看清它干什么、删掉=停用。它**不做版本判断**，只启动**稳定 launcher**
   并把模式用 `REASONIX_WATCHDOG=1` 传下去；launcher 每次运行自己解析 `current.json`，所以
   **打完包/切版本后拉起的必然是新版本**，不需要重写这个文件。应用每次启动与开关仍会重写它
-  （路径可能变），关掉看门狗会删掉它；桌面目录里**只有这一个文件**，巡检记录写
+  （路径可能变），关掉看门狗会删掉它；该目录里**只有这一个文件**，巡检记录写
   `<home>/desktop-watchdog.log`（每次一行：时间/动作/原因）。
+  它原先放在 `…\Desktop\$`；真机实测 Windows 会把该路径折回桌面本身，导致注册的任务指向一个
+  **不存在的脚本**、每次运行都失败（2026-10-02）。注册条件也已改成显式要求
+  `-AllowStartIfOnBatteries` / `-DontStopIfGoingOnBatteries` / `-StartWhenAvailable`：缺了它们，
+  Windows 会接受任务、状态显示"已注册"，却**从不运行**。
 
 ## 11. 边界与未做
 

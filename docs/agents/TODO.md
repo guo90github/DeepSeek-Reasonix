@@ -451,3 +451,11 @@
 ⇒ **任务即使被触发也没有脚本可跑**（与"触发器不响"是两条独立缺陷）。修法方向：把看门狗单文件换到一个 Windows 上无歧义的落点
 （例如 `<state home>\watchdog\watchdog.cmd` 或 `%LOCALAPPDATA%\reasonix\watchdog\`），并同步 `WatchdogStatus` 的 `directory` 输出；
 `AGENT_BUS`/`UNATTENDED` 之外还应在 `docs/UNATTENDED.md` 里写明"单文件的真实落点"。**未在本轮动手**（本轮只修了注册方式）。
+
+**第二条缺陷已修（同日深夜，提交见下）**：`defaultWatchdogDir()` 从 `<home>\Desktop\$` 改为
+**`<state home>\watchdog`**（本机即 `C:\Users\guosj\AppData\Roaming\reasonix\watchdog\watchdog.cmd`）——
+真机实测旧路径被 Windows 折回桌面、脚本实际不存在。机器上的迁移已做：旧 `C:\Users\guosj\Desktop\$` 残留
+**已删除**，任务动作改指新地址；并在真机上验证"**任务触发 + 脚本运行 Result=0**"
+（`LastRunTime=2026-10-02 23:54:54`、`Result=0`、`NextRunTime=23:59:59`）。
+`docs/UNATTENDED.md` / `.zh-CN.md` 里的落点描述同步改为 `<state home>\watchdog\watchdog.cmd`，并写明旧路径为何不可用。
+**仍待**：装 dev.105 后在真机走"杀 → 不手动重启 → 等窗口→ 看门狗拉起"的完整 T9-4 验收。

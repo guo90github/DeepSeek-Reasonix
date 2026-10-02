@@ -402,3 +402,42 @@ func TestWatchdogRegistrationSetsTheConditionsThatMakeItRun(t *testing.T) {
 		t.Fatalf("the registration must not go back to schtasks and its default conditions:\n%s", registration)
 	}
 }
+
+// The default location has to be a path the OS can actually create. `…\Desktop\$` is
+// not: Windows folds it onto the Desktop, so the registered task names a script that
+// does not exist and every run fails — while the status view still says "registered".
+func TestDefaultWatchdogDirIsAPathWindowsCanCreate(t *testing.T) {
+	dir := defaultWatchdogDir()
+	if dir == "" {
+		t.Skip("no user state directory on this platform")
+	}
+	if strings.Contains(dir, "$") {
+		t.Fatalf("the watchdog file must not live at a $-named path Windows folds away: %q", dir)
+	}
+	if strings.EqualFold(filepath.Base(filepath.Dir(dir)), "Desktop") {
+		t.Fatalf("the watchdog file must not live on the Desktop: %q", dir)
+	}
+	if !strings.HasSuffix(strings.ReplaceAll(dir, `\`, "/"), "/watchdog") {
+		t.Fatalf("the watchdog file needs its own directory: %q", dir)
+	}
+}
+
+// What the scheduler is told to run must be the file the app publishes, or the entry is
+// registered against something nobody wrote.
+func TestWatchdogRegistrationRunsTheScriptItPublishes(t *testing.T) {
+	if !watchdogSupportedPlatform() {
+		t.Skip("this platform has no OS entry to register")
+	}
+	calls, _ := watchdogTestHarness(t)
+	if err := syncWatchdogWithUnattended(true); err != nil {
+		t.Fatalf("register the watchdog: %v", err)
+	}
+	script := watchdogScriptPath()
+	if script == "" {
+		t.Fatal("the harness must publish a script path")
+	}
+	registration := calls.registrationCommand()
+	if !strings.Contains(registration, script) {
+		t.Fatalf("the registration does not run the published script %q:\n%s", script, registration)
+	}
+}

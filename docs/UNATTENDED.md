@@ -220,6 +220,11 @@ reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desk
   and removes it when the watchdog is disabled. That directory holds only this file;
   the inspection trail goes to `<home>/desktop-watchdog.log` (one line
   per run: time, action, reason).
+  It used to live at `…\Desktop\$`; a real machine showed Windows folds that path onto
+  the Desktop, so the registered task named a script that did not exist and every run
+  failed (2026-10-02). The registration now also asks for `-AllowStartIfOnBatteries`,
+  `-DontStopIfGoingOnBatteries` and `-StartWhenAvailable`: without them Windows accepted
+  the task, reported it registered, and never ran it.
 
 ## 11. Limits and open items
 

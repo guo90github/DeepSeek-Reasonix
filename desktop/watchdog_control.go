@@ -393,11 +393,15 @@ var watchdogDirFunc = defaultWatchdogDir
 func watchdogDir() string { return watchdogDirFunc() }
 
 func defaultWatchdogDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(home) == "" {
+	// The state home, not the Desktop: a Windows path ending in `\$` is not a real
+	// directory name — `…\Desktop\$` resolves to the Desktop itself, so the script the
+	// OS task pointed at did not exist and every run failed (found on a real machine,
+	// 2026-10-02). One unambiguous directory holds the one file.
+	root := config.MemoryUserDir()
+	if strings.TrimSpace(root) == "" {
 		return ""
 	}
-	return filepath.Join(home, "Desktop", "$")
+	return filepath.Join(root, "watchdog")
 }
 
 func watchdogScriptPath() string {
