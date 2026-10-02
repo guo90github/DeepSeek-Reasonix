@@ -3,6 +3,7 @@ package agentbus
 import (
 	"context"
 	"testing"
+	"time"
 
 	"reasonix/internal/agentbus/board"
 )
@@ -92,5 +93,41 @@ func TestParkingNeverTouchesTheBoard(t *testing.T) {
 	}
 	if state.Nodes["n1"].State != board.StateOpen {
 		t.Fatalf("node = %+v, want it exactly as it was left", state.Nodes["n1"])
+	}
+}
+
+func TestTakeRankedChoosesByAdviceWithoutMovingTheQueue(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	log, err := OpenQueueLog(dir)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	st := chainState(t)
+	// root arrived last: picking it proves the advice chose, not the queue.
+	for _, entry := range []QueueEntry{
+		{Node: "leaf", Subtree: "root", EnqueuedAt: talkBase.Add(3 * time.Second)},
+		{Node: "mid", Subtree: "root", EnqueuedAt: talkBase.Add(2 * time.Second)},
+		{Node: "root", Subtree: "root", EnqueuedAt: talkBase.Add(time.Second)},
+	} {
+		if _, _, err := log.Enqueue(ctx, entry, QueueLimits{}); err != nil {
+			t.Fatalf("enqueue %s: %v", entry.Node, err)
+		}
+	}
+
+	ledger := NewLedger(BudgetLimits{Slots: 1})
+	taken, err := TakeRanked(ctx, log, ledger, st, "alice", 1, nil, QueueLimits{})
+	if err != nil || len(taken) != 1 || taken[0].Entry.Node != "root" {
+		t.Fatalf("take = (%+v, %v), want the most unblocking entry", taken, err)
+	}
+
+	queue, _, err := log.Read()
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	// Visible order is untouched: the advice picked, it did not reorder the queue.
+	next := queue.Next(0)
+	if len(next) != 2 || next[0].Node != "mid" || next[1].Node != "leaf" {
+		t.Fatalf("queue order = %+v, want arrival order with root removed", next)
 	}
 }

@@ -110,7 +110,11 @@
 - [x] T7-2 四级预算（board → 子树 → 节点 → 回合）+ 触顶即暂停、现场保留 → `internal/agentbus/budget.go`：`Charge` 走 node+turn、
       `Settle` 走 board+subtree；拒绝**命名到具体层级**（`budget_board`/`budget_subtree`/`budget_node`/`budget_turn`）且不改账；
       `Remaining` 取最紧一级；拒绝语义 = "现在不行"（停手保留现场，不做放弃路径）
-- [ ] T7-3 调度四则：关键路径优先 / 批量领取 / 同子树亲和 / 最难优先 → 留（排序建议，不改变 FIFO 可见性）
+- [x] T7-3 调度四则：关键路径优先 / 批量领取 / 同子树亲和 / 最难优先 → `internal/agentbus/rank.go`：比较链「同子树亲和 → 关键路径（传递依赖数）
+      → 最难（声明步数）→ 到达顺序」，末级用稳定排序回落到达序 ⇒ **建议只重排，集合不增不减**；`TakeRanked` 用建议选批次而
+      `Next`/队列文件的可见顺序仍是到达序。用例：`TestRankPrefersTheMostUnblockingWork`、`TestRankPrefersAffinityOverCriticality`、
+      `TestRankPrefersTheHardestWhenNothingElseSeparates`、`TestRankNeverLosesOrInventsWork`、
+      `TestRankFallsBackToArrivalWithoutABoard`、`TestTakeRankedChoosesByAdviceWithoutMovingTheQueue`（最后到达的 root 被先取，队列剩下的仍是到达序）
 - [x] T7-4 预算只被验收节点消耗（做工不消耗总预算）→ `TestWorkDoesNotSpendTheBoardAllowance`（20 次做工后板级 spend = 0）；
       `Settle` 只认 `Outcome == done`（否则 `not_accepted`），且同一节点重复结算**不重复计费**（`Charge.Duplicate`）；
       `SubtreeRoot` 由依赖向上走派生子树归属（`TestSubtreeRootWalksDependenciesUp`）
