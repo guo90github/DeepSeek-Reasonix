@@ -332,16 +332,20 @@ func HearingRequired(st *board.State, node string) []string {
 	return dedupSorted(out)
 }
 
-// VerifiableWeight counts evidence someone can go and check. A bare claim weighs
-// nothing here, which is what keeps five opinions from outvoting one test (T6-6).
+// VerifiableWeight counts evidence someone can go and check, counting each reference
+// once: a bare claim weighs nothing, and citing the same test twice is still one test.
+// Both halves matter — without the first, opinions outvote a test; without the second,
+// repetition does (T6-6, T5-6).
 func VerifiableWeight(evidence []board.Evidence) int {
-	weight := 0
+	seen := map[string]bool{}
 	for _, item := range evidence {
-		if strings.TrimSpace(item.Ref) != "" {
-			weight++
+		ref := strings.TrimSpace(item.Ref)
+		if ref == "" || seen[ref] {
+			continue
 		}
+		seen[ref] = true
 	}
-	return weight
+	return len(seen)
 }
 
 // WeighResponse decides a contested node by evidence weight, never by how many
