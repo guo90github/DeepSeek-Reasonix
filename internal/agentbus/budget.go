@@ -14,6 +14,9 @@ type BudgetLimits struct {
 	Subtree int64
 	Node    int64
 	Turn    int64
+	// Slots is this host's ceiling on participants working at once. It is the
+	// machine's ceiling, not one board's, so the ledger lives per host.
+	Slots int
 }
 
 // Refusals name the ceiling that refused, so an operator knows which one to raise.
@@ -26,6 +29,7 @@ const (
 	RefuseBudgetTurn    = "budget_turn"
 	RefuseBudgetNoNode  = "budget_unknown_node"
 	RefuseNotAccepted   = "not_accepted"
+	RefuseSlots         = "slots_exhausted"
 )
 
 // ChargeRequest identifies what is being paid for. Work is charged at the node and
@@ -73,11 +77,44 @@ type Ledger struct {
 	limits  BudgetLimits
 	spend   map[string]int64
 	settled map[string]bool
+	slots   map[string]bool
 }
 
 // NewLedger opens an empty account under these limits.
 func NewLedger(limits BudgetLimits) *Ledger {
-	return &Ledger{limits: limits, spend: map[string]int64{}, settled: map[string]bool{}}
+	return &Ledger{
+		limits:  limits,
+		spend:   map[string]int64{},
+		settled: map[string]bool{},
+		slots:   map[string]bool{},
+	}
+}
+
+// AcquireSlot reserves this holder's one concurrent slot on the host. It is
+// idempotent for a holder that already has one, so a scheduler may call it before
+// every piece of work; a refused acquire means "wait", never "fail".
+func (l *Ledger) AcquireSlot(holder string) error {
+	if l.limits.Slots <= 0 {
+		return nil
+	}
+	if l.slots[holder] {
+		return nil
+	}
+	if len(l.slots) >= l.limits.Slots {
+		return &BudgetReject{Level: "slots", Key: holder, Reason: RefuseSlots}
+	}
+	l.slots[holder] = true
+	return nil
+}
+
+// ReleaseSlot frees a holder's slot. Releasing one nobody holds is a no-op.
+func (l *Ledger) ReleaseSlot(holder string) {
+	delete(l.slots, holder)
+}
+
+// SlotsInUse reports how many of this host's slots are taken.
+func (l *Ledger) SlotsInUse() int {
+	return len(l.slots)
 }
 
 // Limits reports the ceilings this account was opened with.

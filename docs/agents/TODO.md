@@ -102,8 +102,11 @@
 
 ## T7 S5 集群调度与预算
 
-- [ ] T7-1 **本机 host 级**并发槽 + 排队（槽满排队而非失败；跨机不在 v1）→ **规格已定**（§13.4：队列 = `<board>/queue.jsonl`，
-      槽位 = 本机 host 级）；**实现留 S5 第二刀**（入队/领取/槽位计数）
+- [x] T7-1 **本机 host 级**并发槽 + 排队（槽满排队而非失败；跨机不在 v1）→ `internal/agentbus/queue.go`（记录/折出/FIFO `Next`/深度背压）
+      + `queuelog.go`（`queue.jsonl`，复用 jsonl + filelock；`Enqueue` 幂等、`Claim`、`Drop`）+ `schedule.go` 的 `Take`
+      + `Ledger.AcquireSlot`（本机 host 级、每参与者一格、`slots_exhausted`）；用例 `TestTakeStopsAtTheHostCeilingAndLeavesTheRestParked`
+      （槽满时第二人**一件都拿不到**且工作**仍在队列里**）、`TestParkingNeverTouchesTheBoard`（入队/领取**不动黑板现场**）、
+      `TestQueueServesArrivalOrderNotPriority`（按到达顺序，不按优先级）、`TestQueueAppliesBackpressureAtItsDepth`（深度触顶 = `queue_full`）
 - [x] T7-2 四级预算（board → 子树 → 节点 → 回合）+ 触顶即暂停、现场保留 → `internal/agentbus/budget.go`：`Charge` 走 node+turn、
       `Settle` 走 board+subtree；拒绝**命名到具体层级**（`budget_board`/`budget_subtree`/`budget_node`/`budget_turn`）且不改账；
       `Remaining` 取最紧一级；拒绝语义 = "现在不行"（停手保留现场，不做放弃路径）
