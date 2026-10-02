@@ -25,6 +25,7 @@ var turnTailSites = map[string]event.DeliveryClass{
 	`text = b.String() + text`:                                                     event.DeliverySessionState,
 	`text = progress + "\n\n" + text`:                                              event.DeliverySessionState,
 	`text = "<background-jobs>\n" + note + "\n</background-jobs>\n\n" + text`:      event.DeliverySessionState,
+	`text = "<agentbus-view>\n" + block + "</agentbus-view>\n\n" + text`:           event.DeliverySessionState,
 	`text = block + "\n\n" + text`:                                                 event.DeliveryExternalGuidance,
 	`text = strings.TrimRight(text, "\n") + "\n\n" + block`:                        event.DeliverySessionState,
 	`text = c.offerProjectOffers(text, source)`:                                    event.DeliverySessionState,

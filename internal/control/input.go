@@ -202,6 +202,11 @@ func (c *Controller) composeWithGoal(
 			text = "<background-jobs>\n" + note + "\n</background-jobs>\n\n" + text
 		}
 	}
+	// The blackboard delta for this participant rides the turn body for the same
+	// reason: the agent sees what changed without touching the cached prefix.
+	if block := c.agentBusTurnBlock(); block != "" {
+		text = "<agentbus-view>\n" + block + "</agentbus-view>\n\n" + text
+	}
 	if includeHookContext {
 		// The session's own progress: recent verdicts and open obligations. Like
 		// the blocks below it rides the turn body, never the stable prefix.

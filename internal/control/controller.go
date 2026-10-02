@@ -252,6 +252,10 @@ type Controller struct {
 	// entering the provider-visible registry (dual-model Planner).
 	proxyToolsFn func() map[string][]plugin.CachedTool
 	ablation     ablation.Set
+	// agentBus is this controller's opt-in participation in a coordination
+	// scope (nil = unwired, zero behaviour change). Its state lives in
+	// agentbus.go so this struct's scalar field count does not move.
+	agentBus *agentBusState
 
 	// goals owns the active goal's FSM (status, intercepts, idle/turn counters)
 	// and its persistence, behind its own mutex so a per-turn goal save never
