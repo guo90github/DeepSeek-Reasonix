@@ -1658,9 +1658,16 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
       const settled = endTurnModelActivity(s, now, true);
       const active = ensureAssistant(settled);
       const id = active.currentAssistant!;
+      // The settle target's own content is inherited only when the answer lands
+      // back on it. A new sampling segment — the usual shape once a tool round
+      // closed the previous one — carries just what it produced: restating the
+      // closed segment's reasoning renders the same thinking twice.
+      const landedOnTarget = existingAssistant?.id === id;
+      const answerText = landedOnTarget ? text : e.text ?? s.live?.text ?? "";
+      const answerReasoning = landedOnTarget ? reasoning : e.reasoning ?? s.live?.reasoning ?? "";
       const streamedChars = active.live?.id === id ? active.live.text.length + active.live.reasoning.length : 0;
-      const turnOutputChars = Math.max(0, settled.turnOutputChars - streamedChars + text.length + reasoning.length);
-      const completedLive = active.live?.id === id ? completeLiveReasoning({ ...active.live, text, reasoning }, now) : undefined;
+      const turnOutputChars = Math.max(0, settled.turnOutputChars - streamedChars + answerText.length + answerReasoning.length);
+      const completedLive = active.live?.id === id ? completeLiveReasoning({ ...active.live, text: answerText, reasoning: answerReasoning }, now) : undefined;
       const reasoningDurationMs = liveReasoningDurationMs(completedLive);
       const workDurationMs = currentTurnDurationMs(settled, now);
       const next = active.items.map((it) =>
@@ -1669,10 +1676,10 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
               const memoryCitations = asArray<MemoryCitation>(e.memoryCitations ?? it.memoryCitations);
               return {
                 ...it,
-                text,
-                reasoning,
+                text: answerText,
+                reasoning: answerReasoning,
                 streaming: false,
-                reasoningComplete: reasoning !== "" || it.reasoningComplete,
+                reasoningComplete: answerReasoning !== "" || it.reasoningComplete,
                 reasoningDurationMs: reasoningDurationMs ?? it.reasoningDurationMs,
                 workDurationMs: Math.max(it.workDurationMs ?? 0, workDurationMs ?? 0) || undefined,
                 memoryCitations: memoryCitations.length > 0 ? memoryCitations : undefined,

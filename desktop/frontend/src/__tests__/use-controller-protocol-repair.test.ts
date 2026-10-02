@@ -40,13 +40,19 @@ console.log("\nProtocol-repair second round under the same turn id");
   s = ev(s, { kind: "tool_result", tool: { id: "t2", name: "finish", output: "ok" } } as WireEvent);
   s = ev(s, { kind: "turn_done", turnId: "turn_abc" } as WireEvent);
 
-  const assistants = s.items.filter((it) => it.kind === "assistant");
-  ok(assistants.length === 2, `second round creates its own assistant bubble (got ${assistants.length})`);
-  const [a1, a2] = assistants as any[];
-  ok(a1.text === "你好！👋 answer", `first-round answer survives turn_done (got ${JSON.stringify(a1.text)})`);
-  ok(a1.reasoning.includes("The user said hello"), "first-round reasoning stays on A1");
-  ok(a2.reasoning.includes("finish the turn"), "second-round reasoning lands on A2");
-  ok(a2.text === "", "second-round empty answer does not clobber A1");
+  const assistants = s.items.filter((it) => it.kind === "assistant") as any[];
+  // One bubble per provider sampling round (assistantItems.ensureAssistant): the
+  // first round's thinking, the answer that round delivered in its own segment
+  // (the tool round closed the previous one), and the second round.
+  ok(assistants.length === 3, `each sampling round keeps its own bubble (got ${assistants.length})`);
+  const answerBubbles = assistants.filter((it) => it.text.includes("你好！👋 answer"));
+  ok(answerBubbles.length === 1, `the first round's answer survives turn_done once (got ${answerBubbles.length})`);
+  const thinkingBubbles = assistants.filter((it) => (it.reasoning ?? "").includes("The user said hello"));
+  ok(thinkingBubbles.length === 1, "the first round's reasoning is not restated by a later segment (that renders the same thinking twice)");
+  ok(answerBubbles[0] !== thinkingBubbles[0], "the answer does not land on the thinking-only bubble");
+  const roundTwo = assistants[assistants.length - 1];
+  ok(roundTwo.reasoning.includes("finish the turn"), "second-round reasoning lands on its own bubble");
+  ok(roundTwo.text === "", "second-round empty answer adds no text");
 
   // Pane derivation: conversation keeps the answer; process interleaves the two
   // rounds chronologically (turn1 thinking, read_file, turn2 thinking, finish).
