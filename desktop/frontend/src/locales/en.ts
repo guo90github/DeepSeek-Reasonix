@@ -362,6 +362,8 @@ export const en = {
   "footerPanel.noCommits": "No commits",
   "footerPanel.showMore": "{n} more",
   "footerPanel.showLess": "Show less",
+  "footerPanel.recallSkills": "Skill",
+  "footerPanel.recallLiveFact": "Current fact",
 
   // topic bar
   "topicBar.renameSession": "Rename session",

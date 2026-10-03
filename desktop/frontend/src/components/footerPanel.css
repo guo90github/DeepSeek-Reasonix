@@ -536,6 +536,60 @@
   outline-offset: -2px;
 }
 
+/* ── recall-record module ──────────────────────────────────────────────── */
+
+.footer-recall {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.footer-recall__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A row is ONE line: the turn anchors it, the name leads, and the id is the
+   traceable tail — it shrinks and ellipsises instead of widening the row. */
+.footer-recall__row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 2px 0;
+  min-width: 0;
+  font-size: var(--text-sm, 12px);
+}
+
+.footer-recall__turn,
+.footer-recall__state {
+  flex: 0 0 auto;
+  font-size: var(--text-2xs, 10px);
+  color: var(--fg-dim);
+}
+
+.footer-recall__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+.footer-recall__id {
+  flex: 0 1 auto;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: var(--text-2xs, 10px);
+  color: var(--fg-faint, var(--fg-dim));
+}
+
 /* A suggestion row keeps its own accept button, so only its text opens. */
 .footer-suggest__open {
   flex: 1 1 auto;

@@ -283,6 +283,8 @@ export const zhTW: Record<DictKey, string> = {
   "footerPanel.noCommits": "暫無提交",
   "footerPanel.showMore": "再顯示 {n} 條",
   "footerPanel.showLess": "收合",
+  "footerPanel.recallSkills": "技能",
+  "footerPanel.recallLiveFact": "現行記憶",
 
   // 話題欄
   "topicBar.renameSession": "重新命名會話",

@@ -363,6 +363,8 @@ export const zh: Record<DictKey, string> = {
   "footerPanel.noCommits": "暂无提交",
   "footerPanel.showMore": "再显示 {n} 条",
   "footerPanel.showLess": "收起",
+  "footerPanel.recallSkills": "技能",
+  "footerPanel.recallLiveFact": "现行记忆",
 
   // 话题栏
   "topicBar.renameSession": "重命名会话",

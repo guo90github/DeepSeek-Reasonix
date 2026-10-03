@@ -95,7 +95,9 @@ console.log("\nfooter memory module");
 {
   const { dom, root, asked } = await renderPanel(view);
   await act(async () => {
-    await waitFor("memory answer", () => asked.count === 1);
+    // The stub counts the whole card, not one module: the recall module asks for
+    // the same answer, so ≥1 is what "the host answered" means here.
+    await waitFor("memory answer", () => asked.count >= 1);
   });
   ok(document.querySelector(".footer-memory") !== null, "the memory section renders for an available store");
   ok(document.body.textContent?.includes("DeepSeek 费用计算机制") === true, "the section lists the recalled fact titles");
@@ -122,7 +124,7 @@ console.log("\nfooter memory module");
     available: false,
   });
   await act(async () => {
-    await waitFor("empty memory answer", () => asked.count === 1);
+    await waitFor("empty memory answer", () => asked.count >= 1);
   });
   ok(document.querySelector(".footer-memory") === null, "an unavailable, empty store renders nothing at all");
   await act(async () => {
