@@ -1,5 +1,13 @@
 # Reasoning Audit — Manual Verification Guide
 
+> **Status (2026-10-04)** — sections A, B, C, E2, G and the checklist still describe
+> the **pre-manual** design: an audit that runs automatically after every turn, a
+> red dot on the tab strip, cross-tab aggregation, and the `audit:attention` event.
+> None of that ships any more — auditing is user-triggered and one-shot, and a
+> verdict lives only in the modal that ran it (`docs/REASONING_AUDIT.md` is the
+> source of truth). The steps below are kept for their fault-tolerance and cost
+> checks until this guide is rewritten.
+
 This guide walks through a complete manual verification of the Reasoning Audit
 feature (independent evaluator + cross-tab aggregation + low-score attention).
 Run it against the packaged client that contains the feature.
@@ -149,5 +157,5 @@ A complete verification should at least observe:
 
 With correct config but no red dot, check in order:
 1. `audit_model` is non-empty and valid (most common cause).
-2. The turn actually produced a **reasoning chain** (`Message.Reasoning` non-empty) — a turn without thinking is not audited (`turnReasoning` empty returns early).
+2. The message actually has a **reasoning chain** — an empty one is refused with 该回复没有可审计的思考过程 (`App.AuditTurn` trims its argument and returns that error before any evaluator call).
 3. The score is truly below `audit_threshold` (a healthy turn rightly shows no red dot).

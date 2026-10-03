@@ -19,7 +19,7 @@
 | v1 缓存无法还原未知语义 | 使用独立 v2 文件，不读取、迁移或修改 v1 | v2 测试验证未知往返、版本拒绝、损坏处理、0600 权限及磁盘合并校验 |
 | 路由字段遗漏、发现请求乱序 | 补齐 NoProxy、ChatURL、RequestURL 指纹；提交前检查凭据和配置身份；按请求开始时间合并成功结果 | 通道控制的 Desktop 测试覆盖路由改变、凭据改变、乱序完成、失败不抹除成功缓存；race 通过 |
 | 前端编辑器关闭后旧结果可能回填 | 请求代次与编辑器身份共同校验；保存密钥后刷新使用新指纹 | 可控 Promise 验证旧编辑器结果不能进入新草稿 |
-| 保存后界面与 Controller 能力不一致 | Controller 持有冻结能力；当前会话保存重建；其他标签在下一回合前复用现有重建入口 | `TestImageInputSaveRebuildsActiveAndNextTurnRefreshesOtherTab` 验证控制器替换和 `MetaForTab` 的实际结果 |
+| 保存后界面与 Controller 能力不一致 | Controller 持有冻结能力；当前会话保存重建；其他标签在下一回合前复用现有重建入口 | `TestImageInputSaveDefersAllTabsUntilNextTurn`（`desktop/model_image_input_test.go:178`）验证保存后各 Tab 才在下一回合重建，`TestMetaForTabReportsImageInputCapability` 验证 `MetaForTab` 的实际结果 |
 | 图片能力切换可能意外改变文本请求前缀 | 不修改系统提示词或工具 Schema；只在重建边界切换能力 | 三种协议捕获真实 HTTP 请求，比较开启前后的无图片请求完整结构 |
 
 ## 核心路径
@@ -53,7 +53,7 @@ Desktop 独立 Go 模块：
 
 ```sh
 go test ./...
-go test -race . -run 'TestImageInputSaveRebuilds|TestIDOnlyRelay|TestDiscovery|TestSaveProvider|TestProviderModel|Test.*TabMeta'
+go test -race . -run 'TestImageInputSaveDefersAllTabsUntilNextTurn|TestIDOnlyRelay|TestDiscovery|TestSaveProvider|TestProviderModel|Test.*TabMeta'
 ```
 
 前端：

@@ -1,8 +1,9 @@
 # 推理稽查（Reasoning Audit，思考链质量分析）
 
 Reasonix 用**独立 evaluator 模型**分析一条回复的思考链质量——该模型与会话模型完全隔离。
-审计是**用户手动触发**的，绝不在后台自动运行。用户在 assistant 回复上点击"审计"按钮，
-审计用独立模型运行，结果以 content-free 结果卡（评分、四类问题计数、成本）就地显示在该消息下方。
+审计是**用户手动触发**的，绝不在后台自动运行：用户点击 assistant 回复思考链下方的审计按钮
+（`components/AuditInlineCard.tsx`）打开 `components/AuditModal.tsx`，结果（评分、各类问题计数、成本）
+在弹窗里就地展示——**一次性、看完即弃**，不落盘、不聚合到 Tab。
 
 ```toml
 [agent]
@@ -12,28 +13,31 @@ audit_effort = "low"              # 审计模型自身的思考深度 (off|low|m
 audit_max_chars = 10000           # 送审思考链的字符上限（按字符计；0 = 默认 10000）
 
 [notifications]
-audit_below = true                # 低于阈值时的可选系统通知
+audit_below = true                # 目前只有 schema：没有代码读它（低分在审计弹窗里体现）
 ```
 
 ## 工作原理
 
-- **手动触发**：用户在 assistant 消息操作行点击"审计"。调用 `Controller.AuditTurn`，
-  审计活动 Tab 的最新 assistant 推理并返回 content-free 结果。
+- **手动触发**：用户点击该条回复思考链下方的审计按钮；绑定方法 `App.AuditTurn` 收到**该条消息的思考链**
+  作为实参，经 `Controller.AuditStream` 跑一次，弹窗依次展示精确请求、evaluator 的实时输出与判定。
 - **独立模型**：`audit_model` 由 `internal/boot` 的 `AuditProviderResolver` 解析
   （克隆自 `PromptOptimizeProviderResolver`），生成独立 provider 实例，绝不在会话模型上运行。
 - **思考深度**：`audit_effort` 控制审计模型打分时自身的思考深度——`off`/`low`/`medium`/`high`。
   空或 `off` 保持审计确定性强（`EffortOverride: "disabled"`）；显式档位透传给 provider adapter。
-- **结果**：返回 content-free 的 `ReasoningAuditTotals`（评分 + 四类计数 + `EvalTokens`/`EvalCost`）
-  并就地显示。成本经审计模型的 `RateCardForModel` + `billing.BuildQuote` 计算。
+- **结果**：返回 content-free 的 `ReasoningAuditTotals`（评分 + 各类计数 + `Issues` +
+  `EvalTokens`/`EvalCost`/`ElapsedMs`）并在弹窗中展示；低于 `audit_threshold` 时判定标"需关注"。
+  成本经审计模型的 `RateCardForModel` + `billing.BuildQuote` 计算。
 
 evaluator 返回紧凑的 JSON 判定：
 
 ```json
-{"score":0.4,"contradiction":1,"hallucination":2,"redundancy":3,"instruction_drift":0}
+{"score":0.4,"contradiction":1,"factual_error":2,"invalid_inference":0,"redundancy":3,"instruction_drift":0,"omission":1}
 ```
 
-四类质量问题被计数：**contradiction**（逻辑矛盾）、**hallucination**（幻觉）、
-**redundancy**（冗余）、**instruction_drift**（偏离指令）。`score` 是 0..1 的综合质量分。
+六类质量问题被计数：**contradiction**（逻辑矛盾）、**factual_error**（事实错误）、
+**invalid_inference**（无效推理）、**redundancy**（冗余）、**instruction_drift**（偏离指令）、
+**omission**（漏说）。（记录类型仍保留 `hallucination`，以便旧的四类输出照样能解码。）
+`score` 是 0..1 的综合质量分。
 
 ## 架构
 
@@ -42,14 +46,15 @@ evaluator 返回紧凑的 JSON 判定：
   sink 装饰器都透传。
 - **`internal/control/analyze_reasoning.go`** — `Controller.AnalyzeReasoning`
   （独立 evaluator 调用，克隆自 `OptimizePrompt` 侧车模式）与
-  `Controller.LatestAssistantReasoning`（手动动作取最新 assistant 推理）。
+  `Controller.AuditStream`（桌面走的流式形态：推理文本是调用的实参，宿主无需猜是哪条链）。
   `Controller.auditConfig` 把 model/resolver/rate-card/enabled/threshold/effort 收敛为
   一个生命周期。
-- **`desktop/reasoning_audit.go`** — `App.AuditTurn`（绑定，用户触发）、`audit:result`
-  Wails 事件、`notifyAuditAttention`。
+- **`desktop/reasoning_audit.go`** — `App.AuditTurn`（绑定，用户触发）与
+  `audit:request` / `audit:chunk` / `audit:done` 三个流式事件。
 - **`desktop/audit_settings_app.go`** — 设置 UI 的 config getter/setter。
-- **前端** — `lib/auditAttention.ts` store、`components/AuditResultCard`（按钮 + 结果卡）、
-  `components/ReasoningAuditSettings`（设置 → 模型）。
+- **前端** — `lib/auditStream.ts`（事件订阅）、`components/AuditInlineCard.tsx`（按钮；
+  懒加载，使审计代码不进首包）、`components/AuditModal.tsx`（请求 → 实时输出 → 判决），
+  以及 `components/SettingsPanel.tsx` 的 `auditModel` 字段（设置 → 模型）。
 
 ## 模型隔离与思考深度
 

@@ -70,7 +70,8 @@ system.
 
 Snapshot format: an accessibility-style tree (`role "name" [state] ref=e12`)
 produced in an isolated world of the main frame and each reachable frame.
-References are bound to `{tabID, frameID, documentVersion}`; a navigation,
+References are bound to `{tabId, documentToken}` — the token comes from the
+snapshot the refs were read in; a navigation,
 page replacement or take-over invalidates every earlier reference, and an
 action with a stale reference returns `not_executed: stale reference` rather
 than guessing. Inputs and clicks are dispatched as trusted input events

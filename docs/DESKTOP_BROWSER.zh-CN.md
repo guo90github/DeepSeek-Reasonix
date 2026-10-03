@@ -58,7 +58,7 @@ Agent 工具调用 ─▶ Go BrowserExecutor ─▶ ledger.reserve ─▶ host/b
 | `browser_close` | 写 | 关闭标签 |
 
 快照格式：在主框架及每个可达框架的隔离世界中生成的无障碍风格树
-（`role "name" [state] ref=e12`）。引用绑定 `{tabID, frameID, documentVersion}`；导航、
+（`role "name" [state] ref=e12`）。引用绑定 `{tabId, documentToken}`（token 取自读出这些 ref 的那次快照）；导航、
 页面替换或接管使所有早先引用失效，带过期引用的动作返回 `not_executed: stale reference`
 而不是猜测。输入与点击由壳以可信输入事件派发，从不给元素赋值，因此 React 受控输入、
 自定义控件与动态页面的行为与真实用户一致。

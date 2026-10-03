@@ -15,14 +15,18 @@ audit_effort = "low"              # audit model's own thinking depth (off|low|me
 audit_max_chars = 10000           # audited reasoning excerpt cap, in characters (0 = default 10000)
 
 [notifications]
-audit_below = true                # optional system notification when below threshold
+audit_below = true                # schema-only today: nothing reads it (a low score surfaces in the audit card)
 ```
 
 ## How it works
 
-- **Manual trigger**: the user clicks "Audit" in the assistant message's action
-  row. This calls `Controller.AuditTurn`, which audits the active tab's latest
-  assistant reasoning and returns a content-free result.
+- **Manual trigger**: the user clicks the audit button under an assistant
+  message's reasoning (`components/AuditInlineCard.tsx`), which opens
+  `components/AuditModal.tsx`. The bound `App.AuditTurn` receives that message's
+  reasoning chain as its argument, runs it through `Controller.AuditStream`, and
+  the modal shows the exact request, the evaluator's live output and the
+  verdict. The run is one-shot and view-once: closing the modal discards it and
+  nothing is persisted.
 - **Independent model**: `audit_model` is resolved by `AuditProviderResolver` in
   `internal/boot` (a clone of `PromptOptimizeProviderResolver`), producing a
   separate provider instance. It never runs on the session model.
@@ -30,18 +34,22 @@ audit_below = true                # optional system notification when below thre
   thinks while scoring — `off`/`low`/`medium`/`high`. Empty/`off` keeps the
   audit deterministic (`EffortOverride: "disabled"`); explicit levels pass
   through to the provider adapter.
-- **Result**: a content-free `ReasoningAuditTotals` (score + four issue counts +
-  `EvalTokens`/`EvalCost`) is returned and shown inline. Cost is derived via the
-  audit model's `RateCardForModel` + `billing.BuildQuote`.
+- **Result**: a content-free `ReasoningAuditTotals` (score + per-kind issue
+  counts + `Issues` + `EvalTokens`/`EvalCost`/`ElapsedMs`) is returned and shown
+  in the modal; scoring below `audit_threshold` marks the verdict "needs
+  attention". Cost is derived via the audit model's `RateCardForModel` +
+  `billing.BuildQuote`.
 
 The evaluator's verdict is a compact JSON object:
 
 ```json
-{"score":0.4,"contradiction":1,"hallucination":2,"redundancy":3,"instruction_drift":0}
+{"score":0.4,"contradiction":1,"factual_error":2,"invalid_inference":0,"redundancy":3,"instruction_drift":0,"omission":1}
 ```
 
-Four failure classes are counted: **contradiction**, **hallucination**,
-**redundancy**, and **instruction_drift**. `score` is a 0..1 aggregate quality.
+Six failure classes are counted: **contradiction**, **factual_error**,
+**invalid_inference**, **redundancy**, **instruction_drift** and **omission**
+(`hallucination` stays in the record type so earlier four-class outputs still
+decode). `score` is a 0..1 aggregate quality.
 
 ## Architecture
 
@@ -50,15 +58,22 @@ Four failure classes are counted: **contradiction**, **hallucination**,
   compile-asserts that every sink decorator forwards it.
 - **`internal/control/analyze_reasoning.go`** — `Controller.AnalyzeReasoning`
   (the independent evaluator call, cloned from the `OptimizePrompt` sidecar
-  pattern) and `Controller.LatestAssistantReasoning` (last assistant reasoning
-  for the manual action). `Controller.auditConfig` groups the
+  pattern) and `Controller.AuditStream` (the streaming form the desktop uses:
+  the reasoning text is the call's argument, so the host never has to guess
+  which chain was meant). `Controller.auditConfig` groups the
   model/resolver/rate-card/enabled/threshold/effort into one lifetime.
-- **`desktop/reasoning_audit.go`** — `App.AuditTurn` (bound, user-triggered),
-  the `audit:result` Wails event, and `notifyAuditAttention`.
+- **`desktop/reasoning_audit.go`** — `App.AuditTurn` (bound, user-triggered) and
+  the streaming events `audit:request` / `audit:chunk` / `audit:done`.
 - **`desktop/audit_settings_app.go`** — config getters/setters for the
   settings UI.
-- **Frontend** — `lib/auditAttention.ts` store, `components/AuditResultCard`
-  (the button + result card), `components/ReasoningAuditSettings` (设置 → 模型).
+- **Frontend** — `lib/auditStream.ts` (the event subscriptions),
+  `components/AuditInlineCard.tsx` (the button; imported lazily so the audit
+  code stays out of the initial bundle), `components/AuditModal.tsx` (request →
+  live output → verdict) and the `auditModel` field in
+  `components/SettingsPanel.tsx` (设置 → 模型).
+
+There is **no tab badge and no cross-tab aggregation**: a verdict lives in the
+modal that produced it and is never persisted.
 
 ## Model isolation & thinking depth
 

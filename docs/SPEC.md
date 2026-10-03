@@ -530,8 +530,9 @@ func (p Policy) Decide(toolName string, readOnly bool, args json.RawMessage) Dec
   Neither posture answers `ask` questions or approves `exit_plan_mode` plans.
   Plan Mode is entered only through an explicit user choice and remains
   independent of the active tool-approval posture. After a user approves a
-  plan, the controller opens a short `approvedPlanAutoApproveTools` execution
-  window so the model can perform the approved writes without re-prompting; that
+  plan, the controller enters a short plan-approved execution window (Auto
+  semantics for that one turn — see `planApprovedMessage`) so the model can
+  perform the approved writes without re-prompting; that
   transient window still does not auto-approve future plans. In headless `ask`
   execution, any fallback answer is labelled as a model assumption, not as a
   user decision.
