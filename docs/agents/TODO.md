@@ -192,6 +192,15 @@
 - [x] T7-4 预算只被验收节点消耗（做工不消耗总预算）→ `TestWorkDoesNotSpendTheBoardAllowance`（20 次做工后板级 spend = 0）；
       `Settle` 只认 `Outcome == done`（否则 `not_accepted`），且同一节点重复结算**不重复计费**（`Charge.Duplicate`）；
       `SubtreeRoot` 由依赖向上走派生子树归属（`TestSubtreeRootWalksDependenciesUp`）
+- [ ] T7-5 **派活不能指名承办者**（2026-10-03 真机实测；**能力缺口，非缺陷**）→ 现状：入队按 requester 写 `QueueEntry.Participant`
+      且它只驱动唤醒（`wake.go` 的收件人 = 节点 requester），而 `Take`/`TakeRanked` 是 host 级 pool（跨参与者可领）——
+      这是有意语义（`takeover_test` 的接管自愈依赖它、`TestAgentBusDispatchAssignsStartableWorkToTheNamedParticipant` 固定了它、
+      `desktop/agentbus_waker.go:89-92` 明记「忙碌会话被跳过、下一拍再给」），所以「编排者把某步交给某个会话」目前表达不出来。
+      真机证据：`queue.jsonl` seq 165 park 给 B（B 在回合中、tab 被 tick 跳过）→ seq 166 同拍被空闲会话 X 取走，B 只收到「work no longer holds」。
+      两候选（择一）：① **指派语义**（推荐）：节点可声明承办者，`WakeTargets` 按承办者发 `Ready`，宿主 waker/dispatch 按它投递，
+      pool 仅作无承办者或承办者不可达时的回落；② **让位一拍**：`AgentBusDispatch` 跳过本次 park 给别人的条目（会反转 pool 语义、
+      需改 3 条既有用例，故不推荐）。判据：park 给 X 的步只能由 X 取，X 不可达/过期时回落 pool 以保住接管自愈；effect 测试落在
+      `AgentBusDispatch` 边界（板上 seq 165/166 现成的反例可复用）。
 
 ## T8 S6 观测聚合（人读）
 
