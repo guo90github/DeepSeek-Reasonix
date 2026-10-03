@@ -86,3 +86,52 @@ func TestWithoutASlotCeilingEachClaimantTakesAStep(t *testing.T) {
 		}
 	}
 }
+
+// A slot is not a scar. The board decides who is working, so a holder whose claim is gone —
+// given back by a person, swept after a crash, or settled — has to give its slot back;
+// without that the host fills up once and parks every later dispatch for good.
+func TestASlotComesBackOnceItsHolderHasNoWork(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	c := newAgentBusTalkController(t, dir, "host")
+	if _, err := c.ApplyAgentBusOp(ctx, busAssert("design", "alice")); err != nil {
+		t.Fatalf("assert design: %v", err)
+	}
+	for _, node := range []string{"step", "step-2"} {
+		if _, err := c.ApplyAgentBusOp(ctx, busRequire("design", "alice", node)); err != nil {
+			t.Fatalf("require %s: %v", node, err)
+		}
+	}
+	ledger := agentbus.NewLedger(agentbus.BudgetLimits{Slots: 1})
+	c.SetAgentBusLedger(ledger)
+	deliver := func(context.Context, agentbus.WakeTarget) error { return nil }
+
+	if n, err := c.AgentBusDispatch(ctx, "worker", deliver); err != nil || n != 1 {
+		t.Fatalf("first dispatch = %d (%v), want one step handed out", n, err)
+	}
+	claimed := "step"
+	if agentBusTickState(t, dir).Nodes[claimed].Owner == "" {
+		claimed = "step-2"
+	}
+	if _, err := c.ApplyAgentBusOp(ctx, board.Op{Verb: board.VerbRelease, Node: claimed, Actor: "worker"}); err != nil {
+		t.Fatalf("release %s: %v", claimed, err)
+	}
+
+	// The worker owns nothing now, so the host may take its slot for whoever is next.
+	if n, err := c.AgentBusDispatch(ctx, "other", deliver); err != nil || n != 1 {
+		t.Fatalf("dispatch once the holder's work went away = %d (%v), want the step handed out", n, err)
+	}
+	if inUse := ledger.SlotsInUse(); inUse != 1 {
+		t.Fatalf("slots in use = %d, want the idle holder's slot back and the next one taken", inUse)
+	}
+	after := agentBusTickState(t, dir)
+	owned := 0
+	for _, node := range []string{"step", "step-2"} {
+		if after.Nodes[node].Owner == "other" {
+			owned++
+		}
+	}
+	if owned != 1 {
+		t.Fatalf("steps owned by the next claimant = %d, want the one it was queued for", owned)
+	}
+}

@@ -47,6 +47,7 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 	if ledger == nil {
 		ledger = agentbus.NewLedger(agentbus.BudgetLimits{})
 	}
+	releaseIdleSlots(ledger, st)
 	taken, err := agentbus.TakeRanked(ctx, queueLog, ledger, st, claimant, 1,
 		agentBusHeldNodes(st, claimant), agentbus.QueueLimits{})
 	if err != nil {
@@ -90,6 +91,30 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 		dispatched++
 	}
 	return dispatched, nil
+}
+
+// releaseIdleSlots gives back the slot of a holder with no claim on the board. The board is
+// what says who is working: a holder whose work was released, settled or swept owns nothing,
+// so keeping its slot would fill the host once and park every later dispatch for good.
+func releaseIdleSlots(ledger *agentbus.Ledger, st *board.State) {
+	if ledger == nil || st == nil {
+		return
+	}
+	holders := ledger.SlotHolders()
+	if len(holders) == 0 {
+		return
+	}
+	working := map[string]bool{}
+	for _, node := range st.Nodes {
+		if node.Owner != "" && node.State == board.StateClaimed {
+			working[node.Owner] = true
+		}
+	}
+	for _, holder := range holders {
+		if !working[holder] {
+			ledger.ReleaseSlot(holder)
+		}
+	}
 }
 
 // parkStartableWork records startable work nobody has taken in the queue. An entry is not

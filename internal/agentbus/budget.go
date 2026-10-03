@@ -3,6 +3,8 @@ package agentbus
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"reasonix/internal/agentbus/board"
 )
@@ -115,6 +117,12 @@ func (l *Ledger) ReleaseSlot(holder string) {
 // SlotsInUse reports how many of this host's slots are taken.
 func (l *Ledger) SlotsInUse() int {
 	return len(l.slots)
+}
+
+// SlotHolders names who holds a slot, sorted. A host that has to give the slot of somebody
+// who stopped working back needs to know whose slots to look at.
+func (l *Ledger) SlotHolders() []string {
+	return slices.Sorted(maps.Keys(l.slots))
 }
 
 // Limits reports the ceilings this account was opened with.
