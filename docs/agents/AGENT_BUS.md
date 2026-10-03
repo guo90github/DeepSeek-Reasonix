@@ -1279,6 +1279,7 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 |---|---|
 | **租约到点没人交还** | 投影自己就报"needs handoff: lease lapsed"（`SignalStalled` + `Stalled` 计数 ⇒ 面板可见），且任何写者开头都会 sweep、过期租约可被合法接管 |
 | **会话保存不 durable**（快照没落地） | `in_flight_turn.go` 保留 in-flight 标记，下一次载入由 `resolveInterruptedTurnStart` 走恢复（`internal/control/in_flight_turn_dag_test.go`、`turn_orchestrator_test.go` 覆盖）⇒ 失败会被**修好**，不是停在那里 |
+| **宿主 tick 停了**（两半：回收+唤醒、派发） | **没有"上次 tick 是什么时候"的读数**，但这不是刹车：① 健康时**静默是设计**（只有失败才 `slog`）；② 失败模式不真实 —— ticker 就是个 goroutine 定时器（`internal/cli/agentbus_tick.go` 的 `time.NewTicker`），它"停"只会因为你把进程杀了（进程死是可见的）；③ 后果**可见** —— 有活而没人接时，面板里它就是 Ready 且无主；④ 两半都有用例（`TestAgentBusTickReclaimsAndWakesWithNothingBeingWritten`、`TestAgentBusTickOffTheBoardIsANoOp`），headless 侧还有 `agentbus_tick_test.go` 用 20ms 间隔证明**定时器真的会触发** |
 
 **至此这张清单没有未修项**：六类里**四处曾悬空、本会话补齐**（各带提交号），两处**一直齐**；另有两处"看着像刹车"
 经核实是**自愈**的（上表）——它们只在"失败那一刻"静默，而失败会被下一次写/下一次载入消解，且迹象本身可见。
