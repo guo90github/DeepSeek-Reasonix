@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:ffe2073441ee5e1f41266bb125a1564614521a89e588dd39bb9f51a4d2a5cab5";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:68b2c357fa757ea51aad0f5dda173b3e5013242824deed26a7607fe114dcfdfb";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -644,6 +644,7 @@ export const DESKTOP_EVENTS = [
   "project-tree:runtime-changed",
   "prompt-optimize:chunk",
   "prompt-optimize:done",
+  "prompt:remote-inserted-v1",
   "remote-tab:opened",
   "remote-tab:updated",
   "remote:forwards",

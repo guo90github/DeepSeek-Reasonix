@@ -12,6 +12,7 @@ import { recordHistoryOlderRefusal } from "./historyPagingProbe";
 import { app, onEvent, onReady, onRuntimeRebuilt, onTabMeta, onTopicActivation } from "./bridge";
 import { useRecapSkillActions } from "./recapSkillActions";
 import { startControllerEventRecovery } from "./controllerEventRecovery";
+import { bindRemotePromptInsertion } from "./remotePromptEvents";
 import { metaFromTab } from "./controllerTabMeta";
 import { tokensFromQuarters, unbilledOutputTokens } from "./turnMetrics";
 export { metaFromTab } from "./controllerTabMeta";
@@ -3842,6 +3843,12 @@ export function useController() {
       }),
     });
 
+    // 远端（手机）写进转录的那条提问：逻辑在 remotePromptEvents，这里只给三个口子。
+    const offRemotePrompt = bindRemotePromptInsertion({
+      read: id => statesRef.current.get(id), dispatch: (id, a) => dispatchTo(id, a),
+      reload: loadSessionDataForTab,
+    });
+
     void syncActiveTabFromBackend(false, true);
     // The event subscription is live now, so ask the backend to re-emit any
     // approval/ask prompt that was already blocking a tab before this load —
@@ -3869,6 +3876,7 @@ export function useController() {
       offTopicActivation();
       offTabMeta();
       offRecovery();
+      offRemotePrompt();
     };
   }, [dispatchRuntimeStatusForTab, dispatchTo, handleTopicActivationEvent, loadSessionDataForTab, refreshBalanceForTab, refreshCheckpoints, refreshMetaForTab, syncActiveTabFromBackend, turnEventProjector]);
 

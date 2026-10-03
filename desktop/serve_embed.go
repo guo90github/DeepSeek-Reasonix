@@ -195,15 +195,23 @@ func (a *App) submitRemoteInputFor(sessionPath, input string) error {
 	return a.submitRemoteInputToTab(tab.ID, input)
 }
 
-// submitRemoteInputToTab submits, then asks the renderer to re-read the controller
-// state: a remote prompt is written to the transcript by the host alone, and the
-// renderer already re-reads on "desktop:resync" — no new event surface needed.
+// submitRemoteInputToTab submits, then tells the renderer a prompt it did not
+// submit itself landed in this tab: a remote prompt exists only in the
+// transcript, so without this the window showed the reply with no prompt above.
 func (a *App) submitRemoteInputToTab(tabID, input string) error {
 	if err := a.submitDisplayToTab(tabID, input, input, ""); err != nil {
 		return err
 	}
-	a.emitRuntimeEvent("desktop:resync")
+	a.emitRuntimeEvent("prompt:remote-inserted-v1", RemotePromptInsertedV1{TabID: tabID, Text: input})
 	return nil
+}
+
+// RemotePromptInsertedV1 is the wire form of "this tab's transcript gained a
+// prompt the window did not send": the renderer inserts it at once and re-reads
+// the session so the row matches the transcript.
+type RemotePromptInsertedV1 struct {
+	TabID string `json:"tabId"`
+	Text  string `json:"text"`
 }
 
 // tabBySessionPath resolves an open tab by canonical session path. It is shared

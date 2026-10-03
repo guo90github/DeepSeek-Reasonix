@@ -20,6 +20,7 @@ var hostEventNames = []string{
 	"project-tree:runtime-changed",
 	"prompt-optimize:chunk",
 	"prompt-optimize:done",
+	"prompt:remote-inserted-v1",
 	"remote-tab:opened",
 	"remote-tab:updated",
 	"remote:forwards",
