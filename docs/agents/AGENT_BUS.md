@@ -804,7 +804,14 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
   control 侧由 `TestGoalTokenBudgetPausesAndResumes`（`internal/control/goal_spend_budget_test.go:37`）与 `goal_runtime_test.go`
   的 token 用例钉住 ⇒ **本项两端都有用例**。
   **一句设计说明（免得被当成缺口）**：**任务级**配置只有 `task_cost_budget` / `task_time_budget_minutes`，**没有** `task_token_budget` ——
-  token 上限是 **Goal 的**旋钮（`goal_token_budget`），走上面那条链注入；**不是漏配**。；② 超限后 Goal 状态为 **`blocked`**
+  token 上限是 **Goal 的**旋钮（`goal_token_budget`），走上面那条链注入；**不是漏配**。
+  **为什么 boot 侧那条 effect 用例只跑 `time`（2026-10-04 补查后确认：不是缺口）**：token 轴的注入点在
+  `Controller.bindTurnScope`（`internal/control/run_ceiling.go:14-23`）——**只有 Goal 作用域的回合**才会
+  `agent.WithTaskBudget(ctx, c.goalTaskBudget())`，普通会话那一支 `return ctx` 原样不动 ⇒ 走 `boot.Build` + `ctrl.Run` 的
+  effect 用例**原理上就跨不过 token 轴**（这正是"token 上限归 Goal"的设计本身）。
+  所以 token 轴的端到端由 control 侧的 Goal 用例承担（`TestGoalTokenBudgetPausesAndResumes`），agent 侧那两条只钉"轴本身正确"，
+  **两端合起来覆盖同一根链，没有漏掉**；`配置 → Options` 那一跳（`internal/boot/boot.go:1823` 一个字段赋值）未被单独用例覆盖，
+  属"类型检查得到的映射"，已记在交接区。；② 超限后 Goal 状态为 **`blocked`**
   且停止原因是 `budget_tokens`；③ 关掉该配置（默认值）时**行为与现在一致**（跑到跑完或叫停）——即复活不得改变未配置用户的语义。
 - **记账点先定再写**：与 §13.7 开头同一问题——谁持有账本/在哪个 tick 记账。若 `budget_spend` 已有明确记账点，
   token 就挂在**同一点**上，不另开一处。
