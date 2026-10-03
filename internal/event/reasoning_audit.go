@@ -9,10 +9,12 @@ type AuditFinding struct {
 	Quote string `json:"quote"` // quoted excerpt from the audited chain (or a short description for omission)
 }
 
-// ReasoningAuditTotals is a content-free summary of one reasoning-quality
-// audit for a turn. Per the audit-channel rule it carries counts and durations
-// only — never the reasoning text itself, which belongs on the UI plane (the
-// assistant Message's Reasoning field).
+// ReasoningAuditTotals summarizes one reasoning-quality audit for a turn. The
+// numbers are the summary; `Explanation` and `Findings` are the basis for the
+// verdict, written for the person who asked for the audit and read off the value
+// App.AuditTurn returns. They never reach a sink: RecordReasoningAudit strips
+// them on the way out, so the audit channel stays content-free like every other
+// one (see ContractShadowAuditSink's comment on the family rule).
 type ReasoningAuditTotals struct {
 	Audited          bool  `json:"audited"`       // analyser produced a verdict (vs. unavailable)
 	ElapsedMs        int64 `json:"elapsedMs"`     // evaluator call duration
@@ -29,8 +31,17 @@ type ReasoningAuditTotals struct {
 	Score         float64        `json:"score"`       // 0..1 aggregate quality
 	EvalTokens    int            `json:"evalTokens"`  // evaluator-model tokens
 	EvalCost      float64        `json:"evalCost"`    // evaluator-model spend (USD)
-	Explanation   string         `json:"explanation"` // human-readable basis for the score (audit evidence)
-	Findings      []AuditFinding `json:"findings"`    // per-issue excerpts (audit evidence, nullable)
+	Explanation   string         `json:"explanation"` // why the score is what it is (reader-facing)
+	Findings      []AuditFinding `json:"findings"`    // per-issue excerpts from the audited chain (reader-facing)
+}
+
+// CountsOnly drops the reader-facing basis for the verdict, leaving the numbers
+// the audit channel is allowed to carry. The receiver is a copy: the caller's
+// own totals keep their explanation and findings.
+func (t ReasoningAuditTotals) CountsOnly() ReasoningAuditTotals {
+	t.Explanation = ""
+	t.Findings = nil
+	return t
 }
 
 // ReasoningAuditSink is an optional sink capability for the reasoning-quality
@@ -42,11 +53,15 @@ type ReasoningAuditSink interface {
 
 // RecordReasoningAudit forwards a turn's reasoning-quality summary only to
 // sinks that opt in. Ordinary UI sinks receive nothing.
+//
+// This is the choke point where the channel's content-free rule is kept: what a
+// sink sees is CountsOnly, so an excerpt of the audited chain cannot end up in a
+// record that outlives the run (trajectory, stats, turn events).
 func RecordReasoningAudit(s Sink, t ReasoningAuditTotals) {
 	if nilutil.IsNil(s) {
 		return
 	}
 	if ra, ok := s.(ReasoningAuditSink); ok {
-		ra.RecordReasoningAudit(t)
+		ra.RecordReasoningAudit(t.CountsOnly())
 	}
 }

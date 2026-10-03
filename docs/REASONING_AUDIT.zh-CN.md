@@ -3,7 +3,8 @@
 Reasonix 用**独立 evaluator 模型**分析一条回复的思考链质量——该模型与会话模型完全隔离。
 审计是**用户手动触发**的，绝不在后台自动运行：用户点击 assistant 回复思考链下方的审计按钮
 （`components/AuditInlineCard.tsx`）打开 `components/AuditModal.tsx`，结果（评分、各类问题计数、成本）
-在弹窗里就地展示——**一次性、看完即弃**，不落盘、不聚合到 Tab。
+在弹窗里就地展示——**一次性、看完即弃**，不落盘、不聚合到 Tab。展示的内容含**判定依据**（评分理由与逐条片段），
+但审计**通道**仍 content-free（见下）。
 
 ```toml
 [agent]
@@ -24,9 +25,10 @@ audit_below = true                # 目前只有 schema：没有代码读它（�
   （克隆自 `PromptOptimizeProviderResolver`），生成独立 provider 实例，绝不在会话模型上运行。
 - **思考深度**：`audit_effort` 控制审计模型打分时自身的思考深度——`off`/`low`/`medium`/`high`。
   空或 `off` 保持审计确定性强（`EffortOverride: "disabled"`）；显式档位透传给 provider adapter。
-- **结果**：返回 content-free 的 `ReasoningAuditTotals`（评分 + 各类计数 + `Issues` +
-  `EvalTokens`/`EvalCost`/`ElapsedMs`）并在弹窗中展示；低于 `audit_threshold` 时判定标"需关注"。
-  成本经审计模型的 `RateCardForModel` + `billing.BuildQuote` 计算。
+- **结果**：返回 `ReasoningAuditTotals`（评分 + 各类计数 + `Issues` +
+  `EvalTokens`/`EvalCost`/`ElapsedMs`，**外加读面用的 `Explanation`/`Findings` 判定依据**）并在弹窗中展示；
+  低于 `audit_threshold` 时判定标"需关注"。成本经审计模型的 `RateCardForModel` + `billing.BuildQuote` 计算。
+  审计**通道**仍 content-free：`RecordReasoningAudit` 在交给任何 sink 之前就把这两个读面字段剥掉。
 
 evaluator 返回紧凑的 JSON 判定：
 
@@ -41,8 +43,8 @@ evaluator 返回紧凑的 JSON 判定：
 
 ## 架构
 
-- **`internal/event/reasoning_audit.go`** — `ReasoningAuditTotals`（content-free）、
-  `ReasoningAuditSink`、`RecordReasoningAudit`。`OptionalSinkCapabilities` 编译期断言所有
+- **`internal/event/reasoning_audit.go`** — `ReasoningAuditTotals`（计数 + 读面依据）、
+  `ReasoningAuditSink`、`RecordReasoningAudit`（负责剥掉读面依据 ⇒ 通道保持 content-free）。`OptionalSinkCapabilities` 编译期断言所有
   sink 装饰器都透传。
 - **`internal/control/analyze_reasoning.go`** — `Controller.AnalyzeReasoning`
   （独立 evaluator 调用，克隆自 `OptimizePrompt` 侧车模式）与

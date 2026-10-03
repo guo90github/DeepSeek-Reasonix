@@ -4,8 +4,8 @@ Reasonix can audit a turn's reasoning chain with a **dedicated evaluator model**
 that is deliberately independent of the session model. Auditing is **user-
 triggered only** — it never runs automatically in the background. The user
 clicks an "Audit" button on an assistant reply; the audit runs the dedicated
-model, and a content-free result card (score, per-kind issue counts, cost) is
-shown inline under that message.
+model, and a result card (score, per-kind issue counts, cost, and the excerpts
+behind them) is shown inline under that message.
 
 ```toml
 [agent]
@@ -34,11 +34,13 @@ audit_below = true                # schema-only today: nothing reads it (a low s
   thinks while scoring — `off`/`low`/`medium`/`high`. Empty/`off` keeps the
   audit deterministic (`EffortOverride: "disabled"`); explicit levels pass
   through to the provider adapter.
-- **Result**: a content-free `ReasoningAuditTotals` (score + per-kind issue
-  counts + `Issues` + `EvalTokens`/`EvalCost`/`ElapsedMs`) is returned and shown
-  in the modal; scoring below `audit_threshold` marks the verdict "needs
-  attention". Cost is derived via the audit model's `RateCardForModel` +
-  `billing.BuildQuote`.
+- **Result**: a `ReasoningAuditTotals` (score + per-kind issue
+  counts + `Issues` + `EvalTokens`/`EvalCost`/`ElapsedMs`, plus the reader-facing
+  `Explanation`/`Findings` basis) is returned and shown in the modal; scoring
+  below `audit_threshold` marks the verdict "needs attention". Cost is derived via
+  the audit model's `RateCardForModel` + `billing.BuildQuote`. The audit
+  **channel** stays content-free: `RecordReasoningAudit` strips the two
+  reader-facing fields before any sink sees them.
 
 The evaluator's verdict is a compact JSON object:
 
@@ -53,8 +55,9 @@ decode). `score` is a 0..1 aggregate quality.
 
 ## Architecture
 
-- **`internal/event/reasoning_audit.go`** — `ReasoningAuditTotals` (content-free),
-  `ReasoningAuditSink`, `RecordReasoningAudit`. `OptionalSinkCapabilities`
+- **`internal/event/reasoning_audit.go`** — `ReasoningAuditTotals` (the counts plus
+  the reader-facing basis), `ReasoningAuditSink`, `RecordReasoningAudit` (which
+  strips that basis, so the channel stays content-free). `OptionalSinkCapabilities`
   compile-asserts that every sink decorator forwards it.
 - **`internal/control/analyze_reasoning.go`** — `Controller.AnalyzeReasoning`
   (the independent evaluator call, cloned from the `OptimizePrompt` sidecar
