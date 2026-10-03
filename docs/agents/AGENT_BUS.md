@@ -668,9 +668,9 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 **定案**：队列落在**黑板目录内**（`<board>/queue.jsonl`），与 `board.jsonl` / `messages.jsonl` / `hearings.jsonl` 同层，复用同一个 `internal/agentbus/jsonl` 底座 + `filelock`：
 
 - 槽位是**本机 host 级**（`Ledger` 的 slot 计数；跨机不在 v1），**队列是板级**——这样"排队"跨进程可领取，"槽位"仍是本机的。
-- 入队 = 追加一条 `{node, subtree, participant, enqueuedAt, key}`；领取 = 读队列 + 抢租约（复用 S1 的 claim 语义），**不新增并发原语**。
+- 入队 = 追加一条 `QueueEntry{Node, Subtree, Participant, Key, EnqueuedAt, Seq}`（字段与顺序见 `internal/agentbus/queue.go:51-58`；`Seq` 的铸号见下方实现细节）；领取 = 读队列 + 抢租约（复用 S1 的 claim 语义），**不新增并发原语**。
 - 幂等键与唤醒一致：由**工作集合**派生，不含时间。
-- 顺序按 `enqueuedAt` 升序（不按优先级），避免静默饿死；T7-3 的"关键路径优先"只影响**排序建议**，不改变 FIFO 可见性。
+- 顺序先按 `EnqueuedAt`、**同刻按 `Seq`** 升序（`internal/agentbus/queue.go:149-152`：先比时间，相等再比序号），避免静默饿死；T7-3 的"关键路径优先"只影响**排序建议**，不改变 FIFO 可见性。
 
 **排序建议（T7-3，2026-10-02 落地）**：`Rank` 的比较链是"**同子树亲和 → 关键路径（传递依赖数）→ 最难（声明步数）→ 到达顺序**"；最后一级用**稳定排序**回落到到达序，
 所以建议**只会重排**（集合不增不减，任何一项都不会因建议而不可见）。`TakeRanked` 用建议选批次，队列文件与 `Next` 的可见顺序仍是到达序。
