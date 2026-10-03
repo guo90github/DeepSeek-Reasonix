@@ -13,8 +13,8 @@ import (
 // Without a waker the kernel wakes nobody — which is why a headless participant could only
 // ever be pushed by a write: the desktop installed one and serve never did (§13.2).
 func (s *Server) installAgentBusWaker(ctrl *control.Controller) {
-	ctrl.SetAgentBusWaker(func(_ context.Context, target agentbus.WakeTarget) error {
-		return s.deliverAgentBusWake(target)
+	ctrl.SetAgentBusWaker(func(ctx context.Context, target agentbus.WakeTarget) error {
+		return s.deliverAgentBusWake(ctx, target)
 	})
 }
 
@@ -25,7 +25,7 @@ func (s *Server) installAgentBusWaker(ctrl *control.Controller) {
 // fallback a headless host's wakes died locally, so only a desktop could ever push one across
 // processes. Nothing anywhere is still a refusal, never a drop — a sender has to see that
 // nobody heard it.
-func (s *Server) deliverAgentBusWake(target agentbus.WakeTarget) error {
+func (s *Server) deliverAgentBusWake(ctx context.Context, target agentbus.WakeTarget) error {
 	ctrl, err := s.localControllerForParticipant(target.Participant)
 	if err != nil {
 		return err
@@ -33,7 +33,7 @@ func (s *Server) deliverAgentBusWake(target agentbus.WakeTarget) error {
 	if ctrl != nil {
 		return enqueueAgentBusWake(ctrl, target)
 	}
-	return s.deliverAgentBusWakeRemotely(target)
+	return s.deliverAgentBusWakeRemotely(ctx, target)
 }
 
 // enqueueAgentBusWake hands the wake to the session as a durable follow-up keyed by the wake
@@ -51,8 +51,9 @@ func enqueueAgentBusWake(ctrl *control.Controller, target agentbus.WakeTarget) e
 }
 
 // deliverAgentBusWakeRemotely asks the board's address book where this participant speaks from
-// and posts the wake there with the token that host announced.
-func (s *Server) deliverAgentBusWakeRemotely(target agentbus.WakeTarget) error {
+// and posts the wake there with the token that host announced. The caller's context travels
+// with it, so a host that is shutting down stops waiting instead of finishing the delivery.
+func (s *Server) deliverAgentBusWakeRemotely(ctx context.Context, target agentbus.WakeTarget) error {
 	boardDir := strings.TrimSpace(s.buildOptions.AgentBusDir)
 	if boardDir == "" {
 		return fmt.Errorf("serve: no session here speaks as agentbus participant %q, and this host has no board to look up an address in", target.Participant)
@@ -72,7 +73,7 @@ func (s *Server) deliverAgentBusWakeRemotely(target agentbus.WakeTarget) error {
 	if err != nil {
 		return err
 	}
-	return agentbus.DeliverWake(context.Background(), nil, agentbus.WakeDelivery{
+	return agentbus.DeliverWake(ctx, nil, agentbus.WakeDelivery{
 		BaseURL:       ref.Host,
 		Token:         token,
 		SessionHeader: agentbus.SessionPathHeader,

@@ -41,7 +41,7 @@ func TestHostedSessionReceivesAWakeForItsOwnParticipant(t *testing.T) {
 	s.installAgentBusWaker(bob)
 
 	target := agentbus.WakeTarget{Participant: "bob", Key: "agentbus-wake:bob:deadbeef", Ready: []string{"schema"}}
-	if err := s.deliverAgentBusWake(target); err != nil {
+	if err := s.deliverAgentBusWake(context.Background(), target); err != nil {
 		t.Fatalf("deliver wake: %v", err)
 	}
 	items := bob.InboxSnapshot().Items
@@ -57,7 +57,7 @@ func TestHostedSessionReceivesAWakeForItsOwnParticipant(t *testing.T) {
 // that nobody heard, and the host that really owns it delivers for its own participants.
 func TestWakeForAParticipantNoSessionSpeaksAsIsRefused(t *testing.T) {
 	s := &Server{tags: map[*control.Controller]*sessionTagSink{}}
-	err := s.deliverAgentBusWake(agentbus.WakeTarget{Participant: "ghost", Key: "k"})
+	err := s.deliverAgentBusWake(context.Background(), agentbus.WakeTarget{Participant: "ghost", Key: "k"})
 	if err == nil || !strings.Contains(err.Error(), "ghost") {
 		t.Fatalf("err = %v, want a refusal naming the participant", err)
 	}
@@ -129,7 +129,7 @@ func TestAWakeForAParticipantOnAnotherHostGoesToItsAnnouncedAddress(t *testing.T
 	s := &Server{tags: map[*control.Controller]*sessionTagSink{}}
 	s.SetControllerBuildOptions(boot.Options{AgentBusDir: boardDir})
 	target := agentbus.WakeTarget{Participant: "bob", Key: "agentbus-wake:bob:deadbeef", Ready: []string{"schema"}}
-	if err := s.deliverAgentBusWake(target); err != nil {
+	if err := s.deliverAgentBusWake(context.Background(), target); err != nil {
 		t.Fatalf("deliver wake: %v", err)
 	}
 
@@ -163,7 +163,7 @@ func TestAnAmbiguousLocalParticipantNeverFallsBackToAnotherHost(t *testing.T) {
 	s := &Server{tags: map[*control.Controller]*sessionTagSink{first: nil, second: nil}}
 	s.SetControllerBuildOptions(boot.Options{AgentBusDir: boardDir})
 
-	err := s.deliverAgentBusWake(agentbus.WakeTarget{Participant: "bob", Key: "k"})
+	err := s.deliverAgentBusWake(context.Background(), agentbus.WakeTarget{Participant: "bob", Key: "k"})
 	if err == nil || !strings.Contains(err.Error(), "two sessions") {
 		t.Fatalf("err = %v, want the ambiguity reported instead of a remote delivery", err)
 	}

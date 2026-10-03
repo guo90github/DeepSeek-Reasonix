@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 // InboxItemsPath is the endpoint a wake is delivered to on another host: the same one a
@@ -37,9 +38,15 @@ type WakeMessage struct {
 	Key     string
 }
 
+// wakeDeliveryTimeout bounds one delivery inside DeliverWake. A host wakes people once per
+// tick, so a peer that accepts the connection and then never answers would stall the very loop
+// that keeps the board moving; bounding it here covers every caller rather than each call site.
+var wakeDeliveryTimeout = 15 * time.Second
+
 // DeliverWake posts one wake to another host's inbox. The idempotency key is the wake's own
 // key, so a retried delivery collapses on the receiving side exactly as a local one does, and
 // a refusal comes back as an error: a wake nobody received has to be visible to its sender.
+// A delivery left unanswered past wakeDeliveryTimeout is given up rather than waited on.
 func DeliverWake(ctx context.Context, client *http.Client, delivery WakeDelivery, message WakeMessage) error {
 	base := strings.TrimSpace(delivery.BaseURL)
 	if base == "" {
@@ -48,6 +55,8 @@ func DeliverWake(ctx context.Context, client *http.Client, delivery WakeDelivery
 	if strings.TrimSpace(delivery.Token) == "" {
 		return fmt.Errorf("agentbus: refusing to deliver a wake for %q without a token", message.Key)
 	}
+	ctx, cancel := context.WithTimeout(ctx, wakeDeliveryTimeout)
+	defer cancel()
 	payload, err := json.Marshal(map[string]string{
 		"input":          message.Prompt,
 		"display":        message.Display,
