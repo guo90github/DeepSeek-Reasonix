@@ -26,22 +26,20 @@
   未知值回落 `off`、**读不到不渲染**）+ 同名 CSS（已登记 `check:css`），挂 `Composer.tsx` 底部 meta 行 `--shell-async` 位；**设置页原字段保留**。
 - **第十六 · 召回记录并入桌面「面板」**（`72c88bb2e`）：`FooterRecallModule.tsx` 注册进 `footerPanelModules.tsx`（`id: "recall-record"`，记忆族之后）；
   `RecapRecallStrip` 加受控入口 `record`（调用方已有记录就不再问宿主）；卡片规矩 ⇒ 无记录整块不出现（含表头）。
-- **第十六 · 召回记录要给人看懂**（`e50e02a13`，用户反馈"只有 id 看不懂、没有内容"）：**记录仍 content-free**，只在**显示时**解析名字——
+- **第十六 · 召回记录要给人看懂**（`e50e02a13` + `b51a824d1`，用户反馈"只有 id 看不懂、没有内容"）：**记录仍 content-free**，只在**显示时**解析名字——
   新 `lib/recallLabels.ts`（按 `id` 与 `name` 双键、名称取 `title||name`、hint=`description·type·scope·freshness`）；`RecapRecallStrip` 加可选 `facts`
-  （有名则**事实名领读、id 留旁边**可追溯；无名则退回 id，不瞎编）；接上「面板」卡片（读 `MemoryForTab(tabId)`）与记忆面板「召回记录」页（用它已加载的 `facts`，零额外请求）。
+  （有名则**事实名领读、id 留旁边**可追溯；无名则退回 id，不瞎编）；**三个面全部接上**：「面板」卡片（读 `MemoryForTab(tabId)`）、记忆面板「召回记录」页（用它已加载的 `facts`）、
+  回顾页会话详情（该页自己读一次 `app.Memory()`——`recallRecord` 那条链是 4 层转发，不值得为 facts 再走一遍；含 `recap-recall-wiring.test.ts` 4 条新断言）。
 - **打包：默认用本机缓存的 Electron zip**（`f537fecdc`，用户建议）：packager 的 `SHASUMS256.txt` 校验每次联网、绕过缓存 ⇒ 本机两次 `ECONNRESET` 打包失败（zip 早在盘上）。
   `lib.mjs` 新增 `defaultElectronCacheRoot`/`electronZipNames`/`findElectronZipDir`/`resolveElectronZipDir`（显式变量优先，否则本机缓存；找不到仍回落下载，`universal` 缺 zip 不误用半套），`package.mjs` 默认调用并打印所用目录。
-- **真机**：`v0.0.0-dev.118`（commit `e50e02a137e5`）与 `v0.0.0-dev.119`（commit `f537fecdca63`）均 rc 0 + 装机并列新增 + verifier **exit 0**；
-  `dist\Reasonix-windows-amd64.zip` 239,332,018 B（16:00，dev.119）。**dev.119 是"不带任何环境变量"构建的** ⇒ 日志出现
-  `==> using the Electron zip in …\electron\Cache\e71119b6… (nothing to download)`，即那条坑已由默认行为消除（不再需要手工设变量）。
+- **真机**：dev.118/119/120 均 rc 0 + 装机并列新增 + verifier **exit 0**；最新 `v0.0.0-dev.120`（commit `b51a824d1d9c` = HEAD），`dist\Reasonix-windows-amd64.zip` 239,332,132 B（16:06）。
+  dev.119 起为**不带任何环境变量**构建，日志出现 `==> using the Electron zip in …\electron\Cache\e71119b6… (nothing to download)` ⇒ 当日那条坑已由默认行为消除。
 - **UI 观感仍待你重启 App**：在跑的 service 是 `v0.0.0-dev.114`（托管本对话，SOP 禁忌不得杀）⇒ 会报 `build_mismatch (-32004)`。
 
-## 3. 下一步（① 先做；② 你重启 App 后照此看）
+## 3. 下一步（你重启 App 后照此看 · dev.120 含全部改动）
 
-① **回顾页会话详情的召回条仍是 id**：它要经 4 层转发（controller → adapter → app view → overlay → page，`recap-recall-wiring.test.ts` 钉着），
-   需为 facts 再走一遍那条链（或改由该页自己取一次），单独一轮做；
-② 重启后看（dev.118 才含全部改动）：输入框**底部**滑动开关（关/平衡/极速）；桌面「面板」召回段**应带事实名**（悬停看描述·类型·范围·新鲜度）；
-   设置页三段仍在；记忆面板 →「召回记录」页同样带名；会话回顾页热力图；待办归档折叠区；标签页撕下后浮层可拖拽/缩放/停靠且重启保持；回合尾 `<turn-progress>`。
+输入框**底部**滑动开关（关/平衡/极速，设置页三段仍在）；桌面「面板」召回段带事实名；记忆面板「召回记录」页同样带名；**回顾页卡片展开后的召回条也带名**（悬停看描述·类型·范围·新鲜度）；
+会话回顾页热力图；待办归档折叠区；标签页撕下后浮层可拖拽/缩放/停靠且重启保持；回合尾 `<turn-progress>`。**无待做单元**：新的体验问题按你点名开工。
 
 ## 4. 待拍板（收尾后剩 ≤2 条）
 
