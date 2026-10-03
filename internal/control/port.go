@@ -338,6 +338,10 @@ type AgentBusControl interface {
 	// correlation an answer travels back along; AgentBusAnswer closes one.
 	AgentBusAsk(ctx context.Context, topic, to, text string) (string, error)
 	AgentBusAnswer(ctx context.Context, correlation, topic, to, text string) (uint64, error)
+	// AgentBusWithdraw retires this session's address on the board. A host that is
+	// going away must call it: the board addresses participants by announcement, and
+	// one that is gone keeps accepting work it will never look at.
+	AgentBusWithdraw() error
 }
 
 var _ AgentBusControl = (*Controller)(nil)

@@ -99,6 +99,7 @@ func (a *App) shutdownBody() {
 				slog.Warn("desktop: shutdown snapshot failed", "tab", it.tab.ID, "err", err)
 			}
 		}
+		a.withdrawAgentBusOnShutdown(it.ctrl)
 		it.ctrl.Close()
 		if !a.returnTakeoverLeaseForShutdown(it.tab) {
 			it.tab.releaseSessionLease()
