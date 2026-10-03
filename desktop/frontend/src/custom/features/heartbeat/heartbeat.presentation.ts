@@ -4,7 +4,27 @@ import { heartbeatNextRunAt as calendarHeartbeatNextRunAt, parseCalendarSchedule
 
 // 无人值守开关的呈现：开着却没有预算刹车时，标签自己就要说出来——这是一个
 // 别处看不见的状态（宿主侧同时会写一条日志，见 desktop/heartbeat.go）。
-export function unattendedPresentation(state: { on: boolean; budgeted: boolean; driving?: boolean; hold?: string }): {
+export interface UnattendedWatchdogState {
+  supported?: boolean;
+  registered: boolean;
+  lastError?: string;
+  note?: string;
+  lastRunAt?: string;
+}
+
+// watchdogHold says why crash recovery is not in effect, or "" when it is. The OS entry is what
+// brings a dead host back; a switch that promises unattended progress while that entry is
+// missing is the same kind of claim as one that ignores crash degradation.
+// A registered entry that has never run (lastRunAt empty) is NOT a hold: that is what a fresh
+// registration looks like — the view keeps the distinction (desktop/watchdog_control.go).
+export function watchdogHold(state: UnattendedWatchdogState | null | undefined): string {
+  if (!state || state.supported === false) return "";
+  if (state.lastError) return state.lastError;
+  if (!state.registered) return state.note || "the OS entry is not registered";
+  return "";
+}
+
+export function unattendedPresentation(state: { on: boolean; budgeted: boolean; driving?: boolean; hold?: string; watchdog?: UnattendedWatchdogState | null }): {
   stateKey: HeartbeatTranslationKey;
   hintKey: HeartbeatTranslationKey;
   hintParams?: Record<string, string>;
@@ -14,8 +34,13 @@ export function unattendedPresentation(state: { on: boolean; budgeted: boolean; 
   }
   // 开着但本次启动没在驱动：崩溃降级时开关仍为开（故意的，见 desktop/host_state_marker.go），
   // 这里必须说出来——不然标签就是一句没人兑现的承诺。
+  const watchdogWhy = watchdogHold(state.watchdog);
   if (state.driving === false) {
     return { stateKey: "heartbeat.unattendedHeld", hintKey: "heartbeat.unattendedHeldHint", hintParams: { reason: state.hold || "" } };
+  }
+  // 崩了不会有人把宿主拉回来（OS 条目没生效）：这不比"没预算"次要，先说。
+  if (watchdogWhy) {
+    return { stateKey: "heartbeat.unattendedWatchdogHeld", hintKey: "heartbeat.unattendedWatchdogHeldHint", hintParams: { reason: watchdogWhy } };
   }
   if (!state.budgeted) {
     return { stateKey: "heartbeat.unattendedOnNoBudget", hintKey: "heartbeat.unattendedNoBudgetHint" };

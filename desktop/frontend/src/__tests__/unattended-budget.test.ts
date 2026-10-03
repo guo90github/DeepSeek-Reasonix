@@ -39,7 +39,7 @@ installDesktopHostStub({
 });
 
 const { heartbeatUnattended, heartbeatSetUnattended } = await import("../custom/features/heartbeat/heartbeat.bridge");
-const { unattendedPresentation } = await import("../custom/features/heartbeat/heartbeat.presentation");
+const { unattendedPresentation, watchdogHold } = await import("../custom/features/heartbeat/heartbeat.presentation");
 
 console.log("\nunattended switch: a run with no brake has to say so");
 
@@ -74,6 +74,21 @@ const heldSwitch = unattendedPresentation({ on: true, budgeted: true, driving: f
 ok(heldSwitch.stateKey === "heartbeat.unattendedHeld", "a switch that is on while nothing drives says so");
 ok(heldSwitch.hintParams?.reason === "the previous launches crashed", "and the hint carries the reason the host gave");
 ok(unattendedPresentation({ on: true, budgeted: true }).stateKey === "heartbeat.unattendedOn", "a healthy launch still reads as on");
+
+
+// 开关承诺"会持续推进"，可"崩了有人把宿主拉回来"这半依赖 OS 条目：条目没生效时
+// 面板必须说出来，否则就是第二处"对用户说反话"。
+ok(watchdogHold(null) === "", "no reading means no claim either way");
+ok(watchdogHold({ registered: true }) === "", "a registered entry is not a hold");
+ok(watchdogHold({ registered: true, lastRunAt: "" }) === "", "never having run yet is normal, not a hold");
+ok(watchdogHold({ registered: false }) !== "", "an unregistered entry is a hold");
+ok(watchdogHold({ registered: false, lastError: "schtasks create: access denied" }) === "schtasks create: access denied", "the machine's own reason wins when there is one");
+ok(watchdogHold({ supported: false, registered: false }) === "", "a platform without the entry makes no promise to break");
+const heldWatchdog = unattendedPresentation({ on: true, budgeted: true, watchdog: { registered: false, note: "not registered" } });
+ok(heldWatchdog.stateKey === "heartbeat.unattendedWatchdogHeld", "the switch says crash recovery is off");
+ok(heldWatchdog.hintParams?.reason === "not registered", "and why");
+const bothHeld = unattendedPresentation({ on: true, budgeted: true, driving: false, hold: "the previous launches crashed", watchdog: { registered: false } });
+ok(bothHeld.stateKey === "heartbeat.unattendedHeld", "not driving outranks a missing watchdog entry");
 
 dom.window.close();
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);

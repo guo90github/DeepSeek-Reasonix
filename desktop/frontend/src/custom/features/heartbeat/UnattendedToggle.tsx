@@ -6,14 +6,16 @@ import { Tooltip } from "../../../components/Tooltip";
 import {
   heartbeatSetUnattended,
   heartbeatUnattended,
+  heartbeatWatchdogStatus,
   type HeartbeatUnattendedState,
 } from "./heartbeat.bridge";
 import { useHeartbeatT } from "./heartbeat.i18n";
-import { unattendedPresentation } from "./heartbeat.presentation";
+import { unattendedPresentation, type UnattendedWatchdogState } from "./heartbeat.presentation";
 
 export function UnattendedToggle() {
   const t = useHeartbeatT();
   const [state, setState] = useState<HeartbeatUnattendedState | null>(null);
+  const [watchdog, setWatchdog] = useState<UnattendedWatchdogState | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
@@ -26,6 +28,9 @@ export function UnattendedToggle() {
         if (live) setState(null);
       },
     );
+    void heartbeatWatchdogStatus().then((value) => {
+      if (live) setWatchdog(value);
+    });
     return () => {
       live = false;
     };
@@ -40,7 +45,7 @@ export function UnattendedToggle() {
   }, [state, pending]);
 
   if (state === null) return null;
-  const presentation = unattendedPresentation(state);
+  const presentation = unattendedPresentation({ ...state, watchdog });
   const label = t(presentation.stateKey);
   const hint = t(presentation.hintKey, presentation.hintParams);
   return (

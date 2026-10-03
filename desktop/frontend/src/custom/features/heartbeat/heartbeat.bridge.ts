@@ -4,6 +4,7 @@
 
 import { app } from "../../../lib/bridge";
 import type { HeartbeatTask } from "./heartbeat.types";
+import type { UnattendedWatchdogState } from "./heartbeat.presentation";
 
 interface HeartbeatConfigView {
   revision: number;
@@ -119,4 +120,18 @@ export function heartbeatTriggerNow(id: string): Promise<void> {
 
 export function heartbeatGenerateID(): Promise<string> {
   return app.HeartbeatGenerateID();
+}
+
+/** The OS watchdog entry is what brings a dead host back: report it next to the switch. */
+export function heartbeatWatchdogStatus(): Promise<UnattendedWatchdogState | null> {
+	return app.WatchdogStatus().then(
+		(view) => ({
+			supported: view.supported,
+			registered: view.registered === true,
+			lastError: view.lastError || "",
+			note: view.note || "",
+			lastRunAt: view.lastRunAt || "",
+		}),
+		() => null,
+	);
 }
