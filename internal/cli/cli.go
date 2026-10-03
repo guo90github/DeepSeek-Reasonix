@@ -971,6 +971,10 @@ func runServeWithOptions(args []string, opts serveRunOptions) int {
 	srv := newCLIMultiSessionServer(ctrl, bc, sessionTag, serveCfg, leases, serveBuildOpts)
 	defer srv.Close()
 	mcpEnv.setTokenAuth(srv.AuthMode() == "token")
+	// A serve host has no turn loop: the tick is what reclaims lapsed leases and keeps this
+	// host's address fresh while nobody drives a session (AGENT_BUS §编排：会话是参与者).
+	stopAgentBusTick := startAgentBusTick(ctrl, serveBuildOpts, agentBusTickInterval)
+	defer stopAgentBusTick()
 	return runServeFrontend(ctrl, srv, serveCfg, serveFrontendOptions{
 		command: opts.command, address: *addr,
 		portFile: *portFile, tokenFile: *tokenFile, pidFile: *pidFile,
