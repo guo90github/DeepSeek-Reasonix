@@ -48,3 +48,32 @@ func TestAgentBusDispatchDeliversAnAssignedStepOnlyToItsAssignee(t *testing.T) {
 		t.Fatalf("step = %+v, want it claimed by the assignee", step)
 	}
 }
+
+// An assignment whose participant never came is not a dead end: clearing it hands the step
+// back to the pool, and the next tick hands it to whoever is there.
+func TestAgentBusDispatchTakesWorkAfterItsAssignmentIsCleared(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	c := newAgentBusTalkController(t, dir, "host")
+	if _, err := c.ApplyAgentBusOp(ctx, busAssert("design", "alice")); err != nil {
+		t.Fatalf("assert design: %v", err)
+	}
+	if _, err := c.ApplyAgentBusOp(ctx, busRequire("design", "alice", "step")); err != nil {
+		t.Fatalf("require step: %v", err)
+	}
+	if _, err := c.ApplyAgentBusOp(ctx, board.Op{Verb: board.VerbAssign, Node: "step", Actor: "alice", Assignee: "bob"}); err != nil {
+		t.Fatalf("assign step: %v", err)
+	}
+	if _, err := c.ApplyAgentBusOp(ctx, board.Op{Verb: board.VerbAssign, Node: "step", Actor: "alice"}); err != nil {
+		t.Fatalf("clear the assignment: %v", err)
+	}
+
+	deliver := func(context.Context, agentbus.WakeTarget) error { return nil }
+	if n, err := c.AgentBusDispatch(ctx, "alice", deliver); err != nil || n != 1 {
+		t.Fatalf("alice's dispatch = %d (%v), want the cleared step handed out", n, err)
+	}
+	step := agentBusTickState(t, dir).Nodes["step"]
+	if step.State != board.StateClaimed || step.Owner != "alice" {
+		t.Fatalf("step = %+v, want it claimed by the participant that was there", step)
+	}
+}

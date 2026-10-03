@@ -446,14 +446,11 @@ func applyRequire(st *State, op Op) error {
 	return nil
 }
 
-// applyAssign addresses a step to one participant. A live claim is refused rather than
-// re-addressed: that lease belongs to the participant holding it, and reassigning
+// applyAssign addresses a step to one participant, or hands it back to the board's pool
+// when the op names nobody (the field's own zero value). A live claim is refused rather
+// than re-addressed: that lease belongs to the participant holding it, and reassigning
 // underneath it would leave two owners for one step.
 func applyAssign(st *State, op Op) error {
-	assignee := strings.TrimSpace(op.Assignee)
-	if assignee == "" {
-		return reject(op.Verb, op.Node, ReasonMissingAssignee)
-	}
 	n := st.Nodes[op.Node]
 	if n == nil {
 		return reject(op.Verb, op.Node, ReasonUnknownNode)
@@ -462,8 +459,8 @@ func applyAssign(st *State, op Op) error {
 	case StateDone, StateAbandoned, StateStale, StateClaimed:
 		return reject(op.Verb, op.Node, ReasonIllegalTransition)
 	}
-	n.Assignee = assignee
-	noteRequester(n, assignee)
+	n.Assignee = strings.TrimSpace(op.Assignee)
+	noteRequester(n, n.Assignee)
 	n.LastSeq = op.Seq
 	return nil
 }

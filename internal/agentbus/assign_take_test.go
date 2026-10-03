@@ -25,6 +25,27 @@ func TestWakeTargetsAddressAnAssignedStepToItsAssignee(t *testing.T) {
 	}
 }
 
+func TestTakeTakesWorkWhoseAssignmentWasCleared(t *testing.T) {
+	ctx := context.Background()
+	log, err := OpenQueueLog(t.TempDir())
+	if err != nil {
+		t.Fatalf("open queue: %v", err)
+	}
+	st := board.Fold([]board.Op{
+		assertOp("design", "alice"),
+		requireOp("design", "step"),
+		{Verb: board.VerbAssign, Node: "step", Actor: "alice", Assignee: "bob"},
+		{Verb: board.VerbAssign, Node: "step", Actor: "alice"},
+	})
+	if _, _, err := log.Enqueue(ctx, QueueEntry{Node: "step", Participant: "bob"}, QueueLimits{}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	taken, err := TakeRanked(ctx, log, NewLedger(BudgetLimits{}), st, "alice", 1, nil, QueueLimits{})
+	if err != nil || len(taken) != 1 || taken[0].Entry.Node != "step" {
+		t.Fatalf("alice took %+v (%v), want the cleared step back in the pool", taken, err)
+	}
+}
+
 func TestTakeLeavesWorkAssignedToAnotherParticipantParked(t *testing.T) {
 	ctx := context.Background()
 	log, err := OpenQueueLog(t.TempDir())

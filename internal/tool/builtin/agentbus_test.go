@@ -157,6 +157,26 @@ func TestAgentBusToolMapsEveryActionToABoardOp(t *testing.T) {
 		},
 		{name: "refute", args: `{"action":"refute","node":"build","reason":"the test misses the migration"}`, verb: board.VerbRefute, node: "build"},
 		{
+			name: "assign",
+			args: `{"action":"assign","node":"build","assignee":"bob"}`,
+			verb: board.VerbAssign, node: "build",
+			check: func(t *testing.T, op board.Op) {
+				if op.Assignee != "bob" {
+					t.Fatalf("assignee = %q, want the call's participant", op.Assignee)
+				}
+			},
+		},
+		{
+			name: "unassign",
+			args: `{"action":"unassign","node":"build"}`,
+			verb: board.VerbAssign, node: "build",
+			check: func(t *testing.T, op board.Op) {
+				if op.Assignee != "" {
+					t.Fatalf("assignee = %q, want the node back in the pool", op.Assignee)
+				}
+			},
+		},
+		{
 			name: "split",
 			args: `{"action":"split","node":"root","children":[{"id":"a","title":"first"},{"id":"b"}]}`,
 			verb: board.VerbSplit, node: "root",
@@ -216,6 +236,7 @@ func TestAgentBusToolNamesWhatAnIncompleteCallIsMissing(t *testing.T) {
 		{"decide without outcome", `{"action":"decide","node":"build"}`, "outcome"},
 		{"split without children", `{"action":"split","node":"root"}`, "children"},
 		{"require without dep", `{"action":"require","node":"build"}`, "dep"},
+		{"assign without assignee", `{"action":"assign","node":"build"}`, "assign needs assignee"},
 		{"unknown action", `{"action":"approve","node":"build"}`, "unknown action"},
 		{"no action", `{}`, "action is required"},
 	}

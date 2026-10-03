@@ -151,7 +151,6 @@ const (
 	ReasonSelfReproduced         = "self_reproduced"
 	ReasonMissingAbandonRequest  = "missing_abandon_request"
 	ReasonMissingDependency      = "missing_dependency"
-	ReasonMissingAssignee        = "missing_assignee"
 	ReasonDuplicateDependency    = "duplicate_dependency"
 	ReasonDuplicateNode          = "duplicate_node"
 	ReasonCycle                  = "cycle"

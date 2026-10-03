@@ -19,7 +19,7 @@ func TestAssignAddressesANodeAndRecordsTheAssignee(t *testing.T) {
 	}
 }
 
-func TestAssignRefusesALiveClaimAndAnEmptyAssignee(t *testing.T) {
+func TestAssignRefusesToReaddressALiveClaim(t *testing.T) {
 	st := Fold([]Op{
 		{Verb: VerbAssert, Node: "step", Actor: "alice", Evidence: []Evidence{{Ref: "test:assert"}}},
 		{Verb: VerbClaim, Node: "step", Actor: "alice", Deadline: time.Now().UTC().Add(time.Hour), Bounds: &Bounds{Steps: 1}},
@@ -31,8 +31,15 @@ func TestAssignRefusesALiveClaimAndAnEmptyAssignee(t *testing.T) {
 	if got := st.Nodes["step"].Assignee; got != "" {
 		t.Fatalf("assignee = %q, want the refused op to change nothing", got)
 	}
-	err = applyOp(st, Op{Verb: VerbAssign, Node: "step", Actor: "alice"})
-	if reason, refused := IsReject(err); !refused || reason != ReasonMissingAssignee {
-		t.Fatalf("empty assignee = (%v, %q), want missing_assignee", refused, reason)
+}
+
+func TestAssignWithNobodyReturnsTheWorkToThePool(t *testing.T) {
+	st := Fold([]Op{
+		{Verb: VerbAssert, Node: "step", Actor: "alice", Evidence: []Evidence{{Ref: "test:assert"}}},
+		{Verb: VerbAssign, Node: "step", Actor: "alice", Assignee: "bob"},
+		{Verb: VerbAssign, Node: "step", Actor: "alice"},
+	})
+	if got := st.Nodes["step"].Assignee; got != "" {
+		t.Fatalf("assignee = %q, want the node handed back to the board pool", got)
 	}
 }
