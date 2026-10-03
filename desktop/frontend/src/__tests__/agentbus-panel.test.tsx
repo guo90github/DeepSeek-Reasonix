@@ -118,6 +118,26 @@ ok(
   "a step whose lists arrive as null still renders instead of crashing",
 );
 
+// The footer is for the signals that belong to no subtree (a budget refusal, a rate
+// limit). An empty or subtree-only list must not draw an empty footer.
+const hostOnly = render({ ...attention, signals: attention.signals.filter((signal) => !signal.subtree) });
+const subtreeOnly = render({ ...attention, signals: attention.signals.filter((signal) => signal.subtree) });
+ok(
+  hostOnly.indexOf("agentbus-panel__host-signals") !== -1 &&
+    subtreeOnly.indexOf("agentbus-panel__host-signals") === -1,
+  "the host footer carries the subtree-less signals and only those",
+);
+ok(quiet.indexOf("agentbus-panel__host-signals") === -1, "a quiet board draws no host footer");
+ok(
+  hostOnly.indexOf('data-kind="budget"') !== -1 && hostOnly.indexOf('data-kind="rate_limited"') !== -1,
+  "a budget refusal and a rate limit are addressed as themselves, not as a dispute",
+);
+const unknownKind = render({ ...attention, signals: [{ kind: "mystery", subtree: "", node: "", detail: "no idea" }] });
+ok(
+  unknownKind.indexOf('data-kind="mystery"') !== -1 && unknownKind.indexOf("no idea") !== -1,
+  "a kind the panel does not know still renders its row instead of dropping it",
+);
+
 const dom = new JSDOM("<!doctype html><html><body><div id=\"root\"></div></body></html>");
 (globalThis as unknown as { document: Document }).document = dom.window.document;
 (globalThis as unknown as { window: Window }).window = dom.window as unknown as Window;
