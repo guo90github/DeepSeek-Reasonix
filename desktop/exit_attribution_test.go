@@ -86,7 +86,7 @@ func TestHostStateMarkerCarriesTheLastExitVerdict(t *testing.T) {
 	hostStatePathForTest(t)
 
 	verdict := recordPreviousRunExit()
-	noteHostLaunch(false)
+	noteHostLaunch()
 
 	record, ok := readHostState()
 	if !ok {

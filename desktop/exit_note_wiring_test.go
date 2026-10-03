@@ -68,7 +68,7 @@ func TestHostLaunchAndExitNoteShareOneRunID(t *testing.T) {
 	hostStatePathForTest(t)
 
 	noteDesktopRunStarted()
-	noteHostLaunch(false)
+	noteHostLaunch()
 
 	note, ok := readDesktopExitNote(desktopRunID)
 	if !ok || note.RunID != desktopRunID {

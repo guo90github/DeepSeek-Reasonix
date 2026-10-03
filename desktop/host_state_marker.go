@@ -202,13 +202,20 @@ func hostCrashLoopDegraded() bool {
 	return out.Dead && out.UncleanStreak >= hostCrashStreakLimit
 }
 
-// noteHostLaunch records this launch: the marker the OS watchdog and the
-// restart policy both read, carrying the desired unattended state forward.
-func noteHostLaunch(unattended bool) {
+// noteHostLaunch records this launch: the marker the OS watchdog and the restart policy both
+// read. What it asks for has to be the operator's switch, never this launch's driving decision:
+// a crash-degraded run drives nothing, and recording that as "off" is exactly what stops the
+// watchdog from pulling the host back up — the run that would reset the streak. An unreadable
+// switch carries the previous answer forward, the way it leaves the OS entry alone.
+func noteHostLaunch() {
 	before := hostStateBeforeLaunch()
 	if before.Seen && before.Dead {
 		slog.Warn("desktop: previous host run did not shut down cleanly",
 			"pid", before.PID, "uncleanStreak", before.UncleanStreak)
+	}
+	unattended := before.Unattended
+	if on, known := unattendedSwitchOnDisk(); known {
+		unattended = on
 	}
 	seen := newHostStateSeen(desktopRunID, version, unattended, before.UncleanStreak)
 	if err := seen.note("running", unattended); err != nil {

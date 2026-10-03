@@ -516,7 +516,7 @@ func (a *App) startup(ctx context.Context) {
 	noteDesktopRunStarted()
 	// And the watcher is what can still say how it ended when the process cannot.
 	spawnDesktopExitObserver()
-	noteHostLaunch(a.heartbeat.unattendedEnabled())
+	noteHostLaunch()
 	// A switch this host made last run is healthy once this process is the
 	// version it asked for; until then the shell keeps the rollback target.
 	markPortableUpgradeHealthy()

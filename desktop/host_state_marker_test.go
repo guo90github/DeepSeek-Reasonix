@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -130,5 +131,51 @@ func TestHostStateMarkerIgnoresAFutureSchema(t *testing.T) {
 	}
 	if hostStateBeforeLaunch().Seen {
 		t.Fatal("a marker this binary cannot understand must read as no record")
+	}
+}
+
+// A crash-degraded launch drives nothing, and recording that as "unattended: off" is what used
+// to stop the OS watchdog from pulling this host back up — the very run that would reset the
+// streak. So the marker has to ask for the switch a person set, not for this launch's decision.
+func TestTheLaunchMarkerAsksForUnattendedFromTheSwitch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_STATE_HOME", home)
+	hostStateTestPath(t)
+	switchPath := filepath.Join(home, "heartbeat-tasks.json")
+	writeSwitch := func(on bool) {
+		t.Helper()
+		if err := os.WriteFile(switchPath, []byte(fmt.Sprintf(`{"unattended":%t}`, on)), 0o600); err != nil {
+			t.Fatalf("write switch: %v", err)
+		}
+	}
+	startedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	// A predecessor that kept dying inside the window: this launch is degraded.
+	if err := writeHostState(hostStateRecord{PID: 4242, Phase: "exited", StartedAt: startedAt, UncleanStreak: hostCrashStreakLimit}); err != nil {
+		t.Fatalf("seed the crash loop: %v", err)
+	}
+	if !hostCrashLoopDegraded() {
+		t.Fatal("premise: a dead predecessor inside the window must keep driving off")
+	}
+
+	writeSwitch(true)
+	noteHostLaunch()
+	if rec, ok := readHostState(); !ok || !rec.Unattended {
+		t.Fatalf("marker = %+v (%v), want it to ask for unattended care while the switch is on", rec, ok)
+	}
+	writeSwitch(false)
+	noteHostLaunch()
+	if rec, _ := readHostState(); rec.Unattended {
+		t.Fatal("marker asks for unattended care while the switch is off")
+	}
+	// An unreadable switch leaves the previous answer standing.
+	if err := os.Remove(switchPath); err != nil {
+		t.Fatalf("remove the switch: %v", err)
+	}
+	if err := writeHostState(hostStateRecord{PID: 4243, Phase: "exited", Unattended: true, StartedAt: startedAt}); err != nil {
+		t.Fatalf("seed the previous answer: %v", err)
+	}
+	noteHostLaunch()
+	if rec, _ := readHostState(); !rec.Unattended {
+		t.Fatal("an unreadable switch dropped the previous answer instead of carrying it forward")
 	}
 }
