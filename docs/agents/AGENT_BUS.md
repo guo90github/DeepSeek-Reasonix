@@ -1245,12 +1245,13 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 | **限流**（429 被扛过） | `RateLimitRetries*` | `rateLimitSignal` → 同上 | 一直齐（分道计数与"未点名"都有用例） |
 | **子树卡被裁掉** | `briefing.Hidden` / `HiddenCards` | 面板"还有 N 个子树 / M 条信号" | 一直齐（host 与前端各有用例） |
 
-**查实、但尚未修的两处（同族；形状已写明，留给下一刀）**
+**判为"自愈"、不是刹车的两处**（查实时一并核实，留在这里是因为它们长得像）
 
-- **心跳任务跑失败或被 hold**：~~引擎只 `log.Printf("[heartbeat] …")`~~ ⇒ **已修（2026-10-04，见交接区检查单第 23 笔）**：任务视图新增 `lastHold`/`lastHoldAt`（`desktop/heartbeat_task.go` 的 `noteHold` 一处记账，8 个"这次没跑"的 site 各带原因，成功提交时清空；`holdTick` 那条 Goal-hold 路径也记在任务上），面板在同一单元格里**原样转述**它 ⇒ 设计性 hold 与真故障可分辨。下面这段是修前的证据（引擎只 `log.Printf("[heartbeat] …")`，`desktop/heartbeat.go:292/398/417/450/659`，
-  任务视图**没有**错误字段（只有 `LastRunAt` / `LastAttemptAt`）⇒ 面板只能显示"**已到期、晚了多久**"，
-  说不出**为什么**（是 Goal hold 的设计，还是打不开话题的故障）。宿主机**其实已经**为每个任务算了 hold 原因
-  （`holdLog map[string]string`，注释写着 "so a steady state logs once"）⇒ 修法就是把这份原因放进任务视图并在面板显示。
-- **会话保存不 durable**：`internal/control/in_flight_turn.go:72-86` 在快照没落地时只 `slog.Warn`（保留 in-flight 标记）。
-  **判读**：这条**自愈**（标记 + 恢复：下次启动重试）⇒ 与"租约到点被回收"同类，**不是刹车**；
-  只差"告知用户这一轮可能没落盘"这一句（低优先）。
+| 现象 | 为什么不是刹车 |
+|---|---|
+| **租约到点没人交还** | 投影自己就报"needs handoff: lease lapsed"（`SignalStalled` + `Stalled` 计数 ⇒ 面板可见），且任何写者开头都会 sweep、过期租约可被合法接管 |
+| **会话保存不 durable**（快照没落地） | `in_flight_turn.go` 保留 in-flight 标记，下一次载入由 `resolveInterruptedTurnStart` 走恢复（`internal/control/in_flight_turn_dag_test.go`、`turn_orchestrator_test.go` 覆盖）⇒ 失败会被**修好**，不是停在那里 |
+
+**至此这张清单没有未修项**：六类里**四处曾悬空、本会话补齐**（各带提交号），两处**一直齐**；另有两处"看着像刹车"
+经核实是**自愈**的（上表）——它们只在"失败那一刻"静默，而失败会被下一次写/下一次载入消解，且迹象本身可见。
+**同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
