@@ -17,7 +17,7 @@ func parkEntry(node, subtree string, seq uint64) QueueEntry {
 func claimOpSteps(node string, steps int) board.Op {
 	return board.Op{
 		Verb: board.VerbClaim, Node: node, Actor: "alice",
-		Bounds: &board.Bounds{Steps: steps}, Deadline: talkBase.Add(time.Hour),
+		Bounds: &board.Bounds{Steps: steps}, Deadline: time.Now().UTC().Add(time.Hour),
 	}
 }
 
