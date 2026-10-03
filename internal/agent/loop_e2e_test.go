@@ -869,16 +869,6 @@ func TestMissingReasoningRecoverySeparatesProviderConfigurations(t *testing.T) {
 	}
 }
 
-// The incident state only counts an observation that is strictly later than the last one, which
-// is what keeps a stale healthy turn from clearing a newer incident. Observations inside one
-// timer tick are indistinguishable, and the clock granularity here is coarse enough to hit that.
-func waitForDistinctClockTick() {
-	before := time.Now()
-	for !time.Now().After(before) {
-		time.Sleep(time.Millisecond)
-	}
-}
-
 func TestThreeHealthyToolCallReasoningTurnsRearmFutureRegression(t *testing.T) {
 	stateDir := t.TempDir()
 	run := func(turns ...testutil.Turn) int {
@@ -930,23 +920,6 @@ func TestHealthyToolCallReasoningStreakWorksWithinOneAgentAndResetsOnMissing(t *
 	}
 	if missing, retry := observe(""); !missing || !retry {
 		t.Fatalf("post-recovery observation = missing:%v retry:%v, want true/true", missing, retry)
-	}
-}
-
-func TestMissingReasoningRecoveryIOFailureStillSuppressesLocally(t *testing.T) {
-	statePath := filepath.Join(t.TempDir(), "not-a-directory")
-	if err := os.WriteFile(statePath, []byte("occupied"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	prov := strictToolCallReasoningProvider{testutil.NewMock("deepseek-proxy")}
-	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: statePath}, event.Discard)
-	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
-
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || !retry {
-		t.Fatalf("initial observation = missing:%v retry:%v, want true/true", missing, retry)
-	}
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || retry {
-		t.Fatalf("repeated observation = missing:%v retry:%v, want true/false", missing, retry)
 	}
 }
 

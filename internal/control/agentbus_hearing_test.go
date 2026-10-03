@@ -178,9 +178,8 @@ func TestTheRefuteToVerdictChainRunsWithoutAnyoneClickingAnything(t *testing.T) 
 	if _, err := alice.OpenAgentBusHearing(ctx, "design", nil); err != nil {
 		t.Fatalf("open the hearing on her own refutation: %v", err)
 	}
-	// The round window is a nanosecond, but it only counts as lapsed once the clock has moved
-	// past the round start: a check in the same tick compares equal and stays quiet. So the
-	// write *after* the wait is the one that has to notice the silence — that is what the host
+	// The 1ns round window only counts as lapsed once the clock has moved past the round start,
+	// so the write *after* the wait is the one that has to notice the silence — what the host
 	// would otherwise need a tick for (G1).
 	time.Sleep(time.Millisecond)
 	if _, err := alice.ApplyAgentBusOp(ctx, board.Op{
