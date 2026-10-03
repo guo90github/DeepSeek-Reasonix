@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"time"
+	"strings"
 
 	"reasonix/internal/event"
 	"reasonix/internal/provider"
@@ -59,16 +59,36 @@ func retryReasonForFailure(f provider.RecoveryFailure) event.RetryReason {
 	return ""
 }
 
-// noteRetry records the one retry a host has to be able to count, and says it in the host's
-// own log while nothing else about it is legible. No policy is invented here: the only
-// decision taken is what to report (G6).
-func noteRetry(reason event.RetryReason, attempt, max int, delay time.Duration) {
+// noteRetry records the one retry a host has to be able to count, and says it in the host's own
+// log while nothing else about it is legible. A multi-session run needs the lane, not only the
+// process total: the log names the provider instance that throttled, and its trace id when the
+// response carried one. No policy is invented here — the only decision is what to report (G6).
+func noteRetry(reason event.RetryReason, info provider.RetryInfo) {
 	if reason != event.RetryReasonRateLimited {
 		return
 	}
-	slog.Warn("agent: provider rate limited this host, backing off",
-		"attempt", attempt, "max", max, "delay_ms", delay.Milliseconds(),
-		"rate_limited_total", provider.NoteRateLimitRetry())
+	attrs := []any{
+		"attempt", info.Attempt, "max", info.Max, "delay_ms", info.Delay.Milliseconds(),
+		"rate_limited_total", provider.NoteRateLimitRetry(),
+	}
+	if id, protocol, trace := retryAttribution(info.Err); id != "" {
+		attrs = append(attrs, "provider", id, "protocol", protocol)
+		if trace != "" {
+			attrs = append(attrs, "trace_id", trace)
+		}
+	}
+	slog.Warn("agent: provider rate limited this host, backing off", attrs...)
+}
+
+// retryAttribution names the lane that throttled, when the error says: which provider instance,
+// which protocol, and the provider's trace id for a support case. A field the error does not
+// carry stays absent — an unnamed lane beats a guessed one (G6).
+func retryAttribution(err error) (providerID, protocol, traceID string) {
+	var api *provider.APIError
+	if err == nil || !errors.As(err, &api) || api == nil {
+		return "", "", ""
+	}
+	return strings.TrimSpace(api.Provider), strings.TrimSpace(api.Protocol), strings.TrimSpace(api.TraceID)
 }
 
 // emitRetrying reports one header-phase retry, with its reason, to whoever is watching: the
@@ -76,5 +96,5 @@ func noteRetry(reason event.RetryReason, attempt, max int, delay time.Duration) 
 func emitRetrying(sink event.Sink, info provider.RetryInfo) {
 	reason := retryReason(info.Err)
 	sink.Emit(event.Event{Kind: event.Retrying, RetryAttempt: info.Attempt, RetryMax: info.Max, RetryScope: event.RetryScopeHeaders, RetryReason: reason})
-	noteRetry(reason, info.Attempt, info.Max, info.Delay)
+	noteRetry(reason, info)
 }

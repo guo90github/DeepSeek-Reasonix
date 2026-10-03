@@ -35,6 +35,9 @@ lives in `desktop/` (host, Electron shell, frontend); the kernel
   is answerable without a panel. The slot ceiling is the host's, not a cost brake: work it
   refuses stays **parked rather than failed** (its node keeps its state), and a holder whose
   work went away gives the slot back on the next dispatch instead of holding it forever.
+- A provider 429 is named the same way: the running total says **that** it is happening, and the
+  log line also says **where** — the provider instance, its protocol, and the provider's trace id
+  when the response carried one. A field the error does not carry stays absent; nothing is guessed.
 
 ## 2. Task model: the `goal` contract
 

@@ -240,7 +240,7 @@ func (a *Agent) waitSamplingRetry(ctx context.Context, s *samplingRecoveryState,
 		status.WaitBudgetMs = recoveryWaitBudget.Milliseconds()
 	}
 	a.svc.sink.Emit(event.Event{Kind: event.Retrying, RetryAttempt: attempt, RetryMax: maxStreamRecoveries, RetryScope: event.RetryScopeStream, Recovery: status, RetryReason: retryReasonForFailure(failure)})
-	noteRetry(retryReasonForFailure(failure), attempt, maxStreamRecoveries, delay)
+	noteRetry(retryReasonForFailure(failure), provider.RetryInfo{Attempt: attempt, Max: maxStreamRecoveries, Delay: delay, Err: result.err})
 	s.waited += delay
 	if !waiting && failure.RetryAfter <= base {
 		return streamRetrySleep(ctx, attempt)
