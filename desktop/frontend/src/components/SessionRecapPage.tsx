@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, RotateCw, Search } from "lucide-react";
 import type { RecapOpenItem, RecapSkillDraft, SessionMeta, SessionRecap, SessionRecapEntry, SessionRecapInsight } from "../lib/types";
+import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
 import { useManagementT } from "../lib/managementLocale";
 import { ManagementPageShell } from "./ManagementPageShell";
@@ -12,7 +13,7 @@ import { RecapHeatmap } from "./RecapHeatmap";
 import { RecapRecallStrip } from "./RecapRecallStrip";
 import { matchesHeatmapDay } from "../lib/recapHeatmap";
 import type { RecapPreviewView } from "../lib/types";
-import type { RecallRecordView } from "../generated/desktopContract.generated";
+import type { MemoryFact, RecallRecordView } from "../generated/desktopContract.generated";
 
 type RecapSort = "newest" | "oldest" | "session";
 
@@ -76,6 +77,24 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
   recallRecord?: (sessionPath: string) => Promise<RecallRecordView>;
 }) {
   const t = useT(); const m = useManagementT();
+  // The strip names the ids the record carries; facts are per project, so one
+  // read per page covers every open card. A host without the command (or a test
+  // stub) simply leaves the names off.
+  const [recallFacts, setRecallFacts] = useState<readonly MemoryFact[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void Promise.resolve()
+      .then(() => app.Memory())
+      .then((view) => {
+        if (!cancelled) setRecallFacts(view.facts);
+      })
+      .catch(() => {
+        if (!cancelled) setRecallFacts([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const [recaps, setRecaps] = useState<SessionRecap[]>([]);
   const [sessions, setSessions] = useState<SessionMeta[]>([]);
   const [openItems, setOpenItems] = useState<RecapOpenItem[]>([]);
@@ -765,7 +784,7 @@ export function SessionRecapPage({ active, onBack, list, listSessions, resume, a
             {/* One host read per open card: a folded card shows no strip, so a page of
                 cards no longer fires one read per row. */}
             {cardOpen(recap.path) && recallRecord !== undefined
-              && <RecapRecallStrip sessionPath={recap.path} recallRecord={recallRecord} />}
+              && <RecapRecallStrip sessionPath={recap.path} recallRecord={recallRecord} facts={recallFacts} />}
           </li>;
         })}
       </ul>

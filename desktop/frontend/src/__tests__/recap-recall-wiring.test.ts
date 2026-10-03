@@ -39,5 +39,20 @@ ok(view.includes("recallRecordForSession: runtime.sessionActions.recallRecordFor
 ok(builders.includes("recallRecord: sessionActions.recallRecordForSession"),
   "the recap overlay passes it to the page, which is what makes the strip reachable");
 
+// The record carries ids only, so the page also reads the project's fact list to
+// put names beside them — without it a reader sees fingerprints they cannot
+// interpret (the same complaint the footer panel's strip had). Same defensive
+// shape as elsewhere: no command, no names, no failure.
+const page = source("../components/SessionRecapPage.tsx");
+const strip = source("../components/RecapRecallStrip.tsx");
+ok(strip.includes("facts?: readonly MemoryFact[]"),
+  "the strip can name the ids when the caller supplies the fact list");
+ok(page.includes("app.Memory()"),
+  "the recap page reads the project's fact list for those names");
+ok(page.includes(".then(() => app.Memory())"),
+  "that read is deferred, so a host or stub without the command cannot throw");
+ok(page.includes("recallRecord={recallRecord} facts={recallFacts}"),
+  "the page hands the names to the strip beside the record");
+
 process.stdout.write(`\nrecap recall wiring: ${failed} failed\n`);
 if (failed > 0) process.exit(1);
