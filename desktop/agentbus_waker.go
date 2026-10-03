@@ -223,35 +223,10 @@ func (a *App) agentBusWakeRecipient(participant string) *WorkspaceTab {
 	return nil
 }
 
-// agentBusWakePrompt states why a session is being woken. The view and talk blocks
-// ride the same turn, so this only has to carry the reason.
-//
-// Everything below is a snapshot taken when the wake was sent, and a wake waits in the
-// queue until the turn ends: by the time this is read the work may already be claimed or
-// gone. It says so rather than pretending to be current — on a real machine a wake arrived
-// 4.5 minutes after its list had stopped being true (2026-10-03).
+// agentBusWakePrompt renders the block a woken session reads. The rendering itself lives in
+// control so the injection site can rebuild it from the same target
+// (control.AgentBusWakePrompt); this host-side name exists for the call sites and tests that
+// were written against it, and goes away with the injection-time rebuild.
 func agentBusWakePrompt(target agentbus.WakeTarget) string {
-	if agentbus.IsDispatchKey(target.Key) {
-		return fmt.Sprintf("<agentbus-wake>\nThe board assigned this work to you: %s\nIt is already claimed in your name: do it, then decide it.\nSent when the board assigned it: if that lease has lapsed since, re-read the board before acting.\n</agentbus-wake>\n",
-			strings.Join(target.Ready, ", "))
-	}
-	var b strings.Builder
-	b.WriteString("<agentbus-wake>\n")
-	b.WriteString("The board woke you: it has work only you can move right now.\n")
-	b.WriteString("Sent when the board last changed; read the board before acting on this list.\n")
-	writeWakeList := func(label string, items []string) {
-		if len(items) == 0 {
-			return
-		}
-		b.WriteString(label)
-		b.WriteString(": ")
-		b.WriteString(strings.Join(items, ", "))
-		b.WriteString("\n")
-	}
-	writeWakeList("startable now", target.Ready)
-	writeWakeList("waiting on you", target.Waiting)
-	writeWakeList("questions addressed to you", target.Asks)
-	writeWakeList("deliberations you owe an answer about", target.Owes)
-	b.WriteString("</agentbus-wake>\n")
-	return b.String()
+	return control.AgentBusWakePrompt(target)
 }
