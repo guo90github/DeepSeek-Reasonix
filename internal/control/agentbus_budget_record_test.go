@@ -49,6 +49,40 @@ func (h *captureHandler) find(message string) (slog.Record, map[string]string, b
 	return slog.Record{}, nil, false
 }
 
+// Refusals are counted, not replaced: the panel's row is a tally of how often the host had to say
+// "not now", so a second refusal at the same level has to add up — and Total has to follow it.
+func TestBudgetRefusalsAccumulatePerLevel(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	ctrl := newAgentBusTalkController(t, dir, "bob")
+	ctrl.SetAgentBusLedger(agentbus.NewLedger(agentbus.BudgetLimits{Node: 1}))
+
+	baseline := AgentBusBudgetRefusals()
+	// Two different nodes, so nothing can collapse the second attempt into the first: both are
+	// refused by the same level, and both have to be counted.
+	for _, node := range []string{"step", "step-2"} {
+		if _, err := ctrl.ApplyAgentBusOp(ctx, busAssert(node, "bob")); err != nil {
+			t.Fatalf("assert %s: %v", node, err)
+		}
+		_, err := ctrl.ApplyAgentBusOp(ctx, board.Op{
+			Verb: board.VerbClaim, Node: node, Actor: "bob",
+			Bounds:   &board.Bounds{Steps: 5},
+			Deadline: time.Now().UTC().Add(time.Hour),
+		})
+		if reason, refused := agentbus.IsBudgetReject(err); !refused || reason != agentbus.RefuseBudgetNode {
+			t.Fatalf("claim %s = %v, want a node-budget refusal", node, err)
+		}
+	}
+
+	got := AgentBusBudgetRefusals()
+	if delta := got.Node - baseline.Node; delta != 2 {
+		t.Fatalf("node refusals +%d, want both refusals counted rather than one replacing the other", delta)
+	}
+	if delta := got.Total() - baseline.Total(); delta != 2 {
+		t.Fatalf("total refusals +%d, want the tally to follow the level", delta)
+	}
+}
+
 // A budget refusal has to reach the host's own record, naming the ceiling that refused: the
 // tool result tells the model, and a brake nobody can see is not a brake (G3/T12-3).
 func TestABudgetRefusalIsRecordedWithItsCeiling(t *testing.T) {
