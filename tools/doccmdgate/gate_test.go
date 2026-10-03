@@ -12,10 +12,37 @@ import (
 	"testing"
 )
 
-// runPatternRe reads the spellings a doc uses — `-run '<pattern>'`, `-run=<pattern>`,
-// quoted or bare — stopping at the closing quote or inline-code backtick, so a line
-// citing many commands stays readable.
-var runPatternRe = regexp.MustCompile("-run(?:=|[ \t]+)'?([^'\\s`]+)'?")
+// quotedPatternRe reads a quoted value whole, whatever spaces it holds: a space inside a
+// pattern can never match a Go test name, so a reader that stopped at the blank would let
+// exactly the dead command this gate exists to catch look green.
+var quotedPatternRe = regexp.MustCompile(`-run(?:=|[ \t]+)['"]([^'"\n]*)['"]`)
+
+// barePatternRe reads the bare and unclosed-quote spellings, stopping at the closing quote
+// or inline-code backtick so a line citing many commands stays readable.
+var barePatternRe = regexp.MustCompile("-run(?:=|[ \t]+)'?([^'\\s`]+)'?")
+
+// documentedPatterns lists the -run patterns on one line. A quoted value wins over the bare
+// reading inside its span, so a quoted two-word pattern is judged whole and not as its first word.
+func documentedPatterns(line string) []string {
+	spans := quotedPatternRe.FindAllStringSubmatchIndex(line, -1)
+	var out []string
+	for _, span := range spans {
+		out = append(out, line[span[2]:span[3]])
+	}
+	for _, span := range barePatternRe.FindAllStringSubmatchIndex(line, -1) {
+		insideQuoted := false
+		for _, quoted := range spans {
+			if span[0] >= quoted[0] && span[0] < quoted[1] {
+				insideQuoted = true
+				break
+			}
+		}
+		if !insideQuoted {
+			out = append(out, line[span[2]:span[3]])
+		}
+	}
+	return out
+}
 
 var testFuncRe = regexp.MustCompile(`^func ((?:Test|Benchmark|Example|Fuzz)[A-Za-z0-9_]*)`)
 
@@ -63,8 +90,7 @@ func checkDocs(docs map[string]string, testNames []string) []violation {
 			if !strings.Contains(line, "go test") {
 				continue
 			}
-			for _, match := range runPatternRe.FindAllStringSubmatch(line, -1) {
-				pattern := match[1]
+			for _, pattern := range documentedPatterns(line) {
 				if pattern == noPattern {
 					continue
 				}
@@ -186,7 +212,7 @@ func TestEveryDocumentedRunPatternSelectsATest(t *testing.T) {
 	docs := docsIn(t, root)
 	var seen int
 	for _, text := range docs {
-		seen += len(runPatternRe.FindAllStringSubmatch(text, -1))
+		seen += len(documentedPatterns(text))
 	}
 	if seen < minPatternsSeen {
 		t.Fatalf("found only %d documented -run patterns (want at least %d): the scan is broken", seen, minPatternsSeen)
@@ -217,11 +243,12 @@ func TestTheGateRefusesADeadPatternAndALiteralPipe(t *testing.T) {
 			"go test -count=1 -run '^$' ./internal/build-only\n" +
 			"a prose line about per-run control and `reasonix run --dry-run`\n",
 		"dead.md": "go test -run 'Gone|AlsoGone' ./internal/live\ngo test -run 'Live\\|AlsoLive' .\n",
+		"spaced.md": "go test -run 'Live AlsoLive' .",
 	}
 	violations := checkDocs(docs, []string{"Live", "AlsoLive", "TestLive"})
 
-	if len(violations) != 2 {
-		t.Fatalf("violations = %d (%v), want the dead pattern and the literal pipe only", len(violations), violations)
+	if len(violations) != 3 {
+		t.Fatalf("violations = %d (%v), want the two dead patterns and the literal pipe only", len(violations), violations)
 	}
 	if violations[0].file != "dead.md" || violations[0].line != 1 || violations[0].pattern != "Gone|AlsoGone" {
 		t.Fatalf("first violation = %+v, want dead.md:1 'Gone|AlsoGone'", violations[0])
@@ -231,5 +258,8 @@ func TestTheGateRefusesADeadPatternAndALiteralPipe(t *testing.T) {
 	}
 	if violations[1].line != 2 || !strings.Contains(violations[1].why, "literal pipe") {
 		t.Fatalf("second violation = %+v, want dead.md:2 named as the literal pipe", violations[1])
+	}
+	if violations[2].file != "spaced.md" || violations[2].pattern != "Live AlsoLive" {
+		t.Fatalf("third violation = %+v, want spaced.md:1 'Live AlsoLive' read whole", violations[2])
 	}
 }

@@ -19,4 +19,6 @@
 // The check is deliberately static: resolving which *package* a pattern is run
 // in would mean building every package. A pattern that names a test living in
 // another module or package is out of reach of this reading.
+// A `-skip` pattern is not read at all: only what `-run` selects decides whether a
+// pasted command proves anything, and a skip matching nothing is the smaller lie.
 package doccmdgate
