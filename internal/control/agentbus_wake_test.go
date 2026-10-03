@@ -163,7 +163,7 @@ func TestAStalledStepIsWokenBackToWhoeverAskedForIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open board: %v", err)
 	}
-	for attempt := 0; attempt < agentBusDispatchTries; attempt++ {
+	for attempt := range agentBusDispatchTries {
 		// Each hand-out is named by its own deadline: the sweeper keys a reclaim by
 		// node + deadline, so two attempts sharing one would collapse into one record.
 		if _, err := brd.Apply(ctx, board.Op{

@@ -117,7 +117,7 @@ func TestWakeTargetsNameStalledWorkInsteadOfOfferingItAgain(t *testing.T) {
 	// Two hand-outs that both lapsed: the sweeper records no progress for each, which is
 	// what stops the third. Each attempt is named, which is what makes it a new op rather
 	// than a replay of the first (the dispatcher names its attempts the same way).
-	for attempt := 0; attempt < 2; attempt++ {
+	for attempt := range 2 {
 		// Each hand-out is named by its own deadline: the sweeper keys a reclaim by
 		// node + deadline, so two attempts sharing one would collapse into one record.
 		if _, err := brd.Apply(ctx, board.Op{
