@@ -50,7 +50,7 @@ func deliverAgentBusWake(ctx context.Context, client *http.Client, delivery Agen
 	text := agentBusWakePrompt(target)
 	payload, err := json.Marshal(map[string]string{
 		"input":          text,
-		"display":        text,
+		"display":        agentBusWakeLine(target),
 		"intent":         "followup",
 		"idempotencyKey": target.Key,
 	})
