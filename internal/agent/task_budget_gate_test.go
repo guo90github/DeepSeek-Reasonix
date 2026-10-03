@@ -143,3 +143,52 @@ func TestExplicitMaxStepsStillLandsWhenNoBudgetApplies(t *testing.T) {
 		t.Fatalf("err = %v, want an explicit max_steps to still stop an unbudgeted runaway", err)
 	}
 }
+
+// The token axis is the one a long unattended run actually spends its way past, so the gate has
+// to land on it with the same resumable pause shape as cost (AGENT_BUS §13.9). The double bills
+// 1100 tokens a round, so a 3000-token budget lands on the third — well inside the 500 available.
+func TestTaskBudgetGateLandsARunawayOnTokens(t *testing.T) {
+	sink := newBudgetSink()
+	reg := tool.NewRegistry()
+	reg.Add(readProbe{})
+	a := New(&spendingProvider{max: 500}, reg, NewSession("sys"),
+		Options{TaskBudget: TaskBudget{Tokens: 3000}}, sink)
+
+	err := a.Run(context.Background(), "read everything")
+	if err == nil {
+		t.Fatal("Run returned nil; want a resumable task-budget pause on the token axis")
+	}
+	info, ok := InspectRunPause(err)
+	if !ok || info.Kind != "task_budget" || info.Key != "token" {
+		t.Fatalf("pause = %+v (%v), want a host-owned task_budget pause on the single-word token axis", info, err)
+	}
+	if !info.HostOwned {
+		t.Fatal("a host-imposed budget must report HostOwned")
+	}
+	if !strings.Contains(info.Reason, "reaching the 3000 budget") {
+		t.Fatalf("reason = %q, want it to name the token budget it reached", info.Reason)
+	}
+	last := sink.samples[len(sink.samples)-1]
+	if last.Task.Rounds > 6 {
+		t.Fatalf("ran %d rounds before landing; the gate should fire on tokens, not drift", last.Task.Rounds)
+	}
+}
+
+// The axis crosses at the ceiling, not past it, and its name is the single-word "token" the
+// implementation and the docs settled on — a name nothing else would correct for us.
+func TestTaskBudgetGateNamesTheTokenAxisAtTheCeiling(t *testing.T) {
+	var atCeiling runBudget
+	atCeiling.observe(&provider.Usage{PromptTokens: 9, CompletionTokens: 1, RequestCount: 1}, nil)
+	axis, detail := atCeiling.exceeded(TaskBudget{Tokens: 10})
+	if axis != "token" {
+		t.Fatalf("axis = %q, want the single-word token axis at the ceiling", axis)
+	}
+	if !strings.Contains(detail, "10") {
+		t.Fatalf("detail = %q, want it to name the budget", detail)
+	}
+	var inside runBudget
+	inside.observe(&provider.Usage{PromptTokens: 5, CompletionTokens: 4, RequestCount: 1}, nil)
+	if axis, _ := inside.exceeded(TaskBudget{Tokens: 10}); axis != "" {
+		t.Fatalf("a task at 9 of 10 tokens crossed the %q axis", axis)
+	}
+}

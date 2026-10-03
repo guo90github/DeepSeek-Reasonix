@@ -795,8 +795,10 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
 - **不再留中间态**：`stopCauseBudgetTokens` 上"legacy; never written by current runtime"这句注释必须随实现一起改掉，
   否则下一个人会继续以为它无效（这正是本次发现的起因）。
 - **验收（下一刀）**：① 累计 token **真的到达**配置上限（走真实装配，配置→`Options`→运行时记账）
-  **抽查（2026-10-04）**：`grep` 没找到这条真装配用例（`internal/control` 里只有 `TestGoalLegacyBudgetTokensSidecarAutoResumes`
-  这类侧车用例）⇒ **这一条仍待做** —— 是真实缺口，不是措辞过时。；② 超限后 Goal 状态为 **`blocked`**
+  **已钉（2026-10-04）**：`TestTaskBudgetGateLandsARunawayOnTokens`（真装配：`New(&spendingProvider{max: 500}, …, Options{TaskBudget:{Tokens: 3000}})`，
+  该 double 每轮 1100 tokens ⇒ 第三轮落成 `task_budget` 暂停，轴名 `"token"`、`HostOwned`，理由点出所到上限）+
+  `TestTaskBudgetGateNamesTheTokenAxisAtTheCeiling`（9/10 不过线、10/10 过线；轴名是**单数** `"token"`）。
+  **边界（如实）**：两条走的都是 agent 级装配（`Options` 那一跳）；`配置 → Options` 那一跳由 boot 侧既有用例覆盖，本轮未重查。；② 超限后 Goal 状态为 **`blocked`**
   且停止原因是 `budget_tokens`；③ 关掉该配置（默认值）时**行为与现在一致**（跑到跑完或叫停）——即复活不得改变未配置用户的语义。
 - **记账点先定再写**：与 §13.7 开头同一问题——谁持有账本/在哪个 tick 记账。若 `budget_spend` 已有明确记账点，
   token 就挂在**同一点**上，不另开一处。
