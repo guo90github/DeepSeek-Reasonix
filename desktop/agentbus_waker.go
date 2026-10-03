@@ -163,6 +163,9 @@ func enqueueAgentBusWake(tab *WorkspaceTab, target agentbus.WakeTarget) error {
 // agentBusWakeLine says the same thing to a person: the block above is what the model reads,
 // and the queue that shows this to whoever is looking must not render XML at them.
 func agentBusWakeLine(target agentbus.WakeTarget) string {
+	if agentbus.IsDispatchKey(target.Key) {
+		return "已指派给你：" + strings.Join(target.Ready, ", ")
+	}
 	var b strings.Builder
 	b.WriteString("The board has work for you")
 	appendList := func(label string, items []string) {
@@ -219,6 +222,10 @@ func (a *App) agentBusWakeRecipient(participant string) *WorkspaceTab {
 // agentBusWakePrompt states why a session is being woken. The view and talk blocks
 // ride the same turn, so this only has to carry the reason.
 func agentBusWakePrompt(target agentbus.WakeTarget) string {
+	if agentbus.IsDispatchKey(target.Key) {
+		return fmt.Sprintf("<agentbus-wake>\nThe board assigned this work to you: %s\nIt is already claimed in your name: do it, then decide it.\n</agentbus-wake>\n",
+			strings.Join(target.Ready, ", "))
+	}
 	var b strings.Builder
 	b.WriteString("<agentbus-wake>\n")
 	b.WriteString("The board woke you: it has work only you can move right now.\n")

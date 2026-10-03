@@ -25,8 +25,10 @@ func TestAgentBusDispatchAssignsStartableWorkToTheNamedParticipant(t *testing.T)
 	}
 
 	var delivered []string
+	var assigned []string
 	deliver := func(_ context.Context, target agentbus.WakeTarget) error {
 		delivered = append(delivered, target.Participant+"->"+strings.Join(target.Ready, ","))
+		assigned = append(assigned, target.Key)
 		return nil
 	}
 	n, err := c.AgentBusDispatch(ctx, "worker", deliver)
@@ -38,6 +40,11 @@ func TestAgentBusDispatchAssignsStartableWorkToTheNamedParticipant(t *testing.T)
 	}
 	if len(delivered) != 1 || delivered[0] != "worker->step" {
 		t.Fatalf("delivered %v, want the step assigned to worker only", delivered)
+	}
+	// The wake carries the assignment key: that is what tells the recipient the node is
+	// already claimed in its name, so the message is not read as a plain wake.
+	if len(assigned) != 1 || !agentbus.IsDispatchKey(assigned[0]) || !strings.HasSuffix(assigned[0], "/step") {
+		t.Fatalf("keys = %v, want one assignment key naming step", assigned)
 	}
 	state := agentBusTickState(t, dir)
 	step := state.Nodes["step"]

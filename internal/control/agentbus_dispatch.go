@@ -79,7 +79,7 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 		}
 		target := agentbus.WakeTarget{
 			Participant: claimant,
-			Key:         "agentbus-dispatch:" + boardName + "/" + node,
+			Key:         agentbus.DispatchKey(boardName, node),
 			Ready:       []string{node},
 		}
 		if err := deliver(ctx, target); err != nil {

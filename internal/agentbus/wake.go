@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"reasonix/internal/agentbus/board"
@@ -27,6 +28,24 @@ type WakeTarget struct {
 	// Owes are deliberations this participant was required to answer and has not,
 	// although the round's window has passed.
 	Owes []string
+}
+
+// DispatchKeyPrefix marks the wake that hands one assignment to a participant rather
+// than asking it to start something: the host wrote the claim itself, so the message
+// says what the recipient owns, not what it may pick up.
+const DispatchKeyPrefix = "agentbus-dispatch:"
+
+// DispatchKey names the wake that carries one assignment. It derives from the board and
+// the node, never from the attempt: re-delivering the same assignment collapses on this
+// key, while the claim op that lands it is named per attempt by its deadline.
+func DispatchKey(board, node string) string {
+	return DispatchKeyPrefix + board + "/" + node
+}
+
+// IsDispatchKey reports whether a wake is an assignment the host already claimed in the
+// participant's name.
+func IsDispatchKey(key string) bool {
+	return strings.HasPrefix(key, DispatchKeyPrefix)
 }
 
 // WakeInput is everything a wake decision reads: the folded board for who asked for what,

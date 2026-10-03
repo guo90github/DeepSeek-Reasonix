@@ -69,6 +69,34 @@ func TestAgentBusWakePromptCarriesTheReason(t *testing.T) {
 	}
 }
 
+// A dispatched assignment is not a wake: the host already claimed the node in the
+// participant's name, so the message says what the recipient owns.
+func TestDispatchMessageNamesTheAssignmentInsteadOfAWake(t *testing.T) {
+	dispatch := agentbus.WakeTarget{
+		Participant: "bob",
+		Key:         agentbus.DispatchKey("default", "schema"),
+		Ready:       []string{"schema"},
+	}
+	prompt := agentBusWakePrompt(dispatch)
+	if !strings.Contains(prompt, "assigned this work to you: schema") {
+		t.Fatalf("the dispatch prompt must name the assignment:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "woke you") {
+		t.Fatalf("the dispatch prompt must not read as a plain wake:\n%s", prompt)
+	}
+	if line := agentBusWakeLine(dispatch); line != "已指派给你：schema" {
+		t.Fatalf("dispatch line = %q, want the assignment named to a person", line)
+	}
+
+	wake := agentbus.WakeTarget{Participant: "bob", Key: "agentbus-wake:default/bob", Ready: []string{"schema"}}
+	if !strings.HasPrefix(agentBusWakeLine(wake), "The board has work for you") {
+		t.Fatalf("a plain wake keeps its wording, got %q", agentBusWakeLine(wake))
+	}
+	if !strings.Contains(agentBusWakePrompt(wake), "woke you") {
+		t.Fatalf("a plain wake keeps its prompt:\n%s", agentBusWakePrompt(wake))
+	}
+}
+
 func TestWakeIsDeliveredToTheHostTheDirectoryNames(t *testing.T) {
 	boardDir := t.TempDir()
 	tokenFile := filepath.Join(t.TempDir(), "token")
