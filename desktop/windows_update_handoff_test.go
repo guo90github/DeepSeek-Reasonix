@@ -214,7 +214,8 @@ func TestDesktopBuildScriptCompilesAndPackagesWindowsUpdateHelper(t *testing.T) 
 		`./cmd/update-helper`,
 		`"$installer_dir/$UPDATE_HELPER"`,
 		`stamp_windows_executable "$installer_dir/$UPDATE_HELPER" "Reasonix Update Helper"`,
-		`for name in "$BINNAME.exe" "$GUARDNAME.exe" "$LAUNCHERNAME.exe" "$UPDATE_HELPER" "$WINDOWS_CLINAME.exe" "reasonix-uninstall.exe"; do`,
+		`payload_names=("$BINNAME.exe" "$LAUNCHERNAME.exe" "$UPDATE_HELPER" "$WINDOWS_CLINAME.exe")`,
+		`for name in "${payload_names[@]}"; do`,
 		`cp "$installer_dir/$name" "$payload_dir/$name"`,
 	} {
 		if !strings.Contains(script, want) {
