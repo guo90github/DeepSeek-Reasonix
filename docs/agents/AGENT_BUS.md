@@ -1319,6 +1319,10 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 （缺 `Deadline` ⇒ `missing_deadline`；`Deadline` 不在未来 ⇒ `deadline_not_future`；其它 verb 不管），此前只有代码与注释、没有用例。
 补 `TestAFreshnessLapseIsJudgedAtWriteAndNeverAtReplay`（`internal/agentbus/board/freshness_test.go`）：三种判定 + "assert 带旧 deadline 也放行" +
 **重放侧**：把一条"写在当时就过期"的 claim 直接 `Fold` 进日志 ⇒ 它照样应用、节点保留记录里的 owner 与 deadline（重放没有钟可再判）。
+**顶层一致性（同日补）**：新用例 `TestEveryWayOfReadingAFinishedLogAgrees`（`internal/agentbus/board/agreement_test.go`）——
+同一份写完的日志**三种读法必须一致**：写出它的板（`Snapshot`）、把它按行重放（`Fold(lines.Ops)`）、以及**重新打开同一目录**再读
+⇒ `Applied`/`Rejected`/`Seq`/节点数/`OpIDs` 数与每个节点的 State/Owner 逐项相等。上面几族用例分别钉"怎么写"（并发等价串行、撕裂/坏行），
+这一条钉"读的人只有一个"。
 **同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
 
 **另一处已核实（2026-10-04）：地址簿 TTL 与两种投递失败的可见性。**
