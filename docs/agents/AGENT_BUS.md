@@ -507,7 +507,8 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 
 1. **`require` 不随 `split` 传给子节点**：容器上的依赖只管容器自己的收口。拆出的子节点必须各自声明依赖，否则调度会认为它已经能开工——真机上 `ab-participant-ttl`（依赖 headless 重申）因此被立刻派给了一个无法开工的参与者，而它自己 `deps_open=0`。**推论**：`split` 之后要把"为什么这个子节点还不能动"重新记在子节点上，不然那条依赖在调度面上等于不存在。
 2. **`split` 后的父节点就是容器**：子节点未完成前它即 `blocked`、`deps_open` 等于未完成的子节点数；它自己不需要额外处置，子节点全部 `done` 即收口。落地时核对过一次（`ab-participant-freshness` 在两个孩子一 `done` 一 `blocked` 时正是这个形状）。
-3. **唤醒的清单是入队时刻的快照**：唤醒在**入队**时被渲染成固定文本（`InboxRequest` 的 `Submit`/`Raw`），而**注入要等当前回合结束**——真机两例延迟 3–5 分钟（内容构建于 ≤11:27:32Z、≥11:31:52Z 才被读到；另一例构建于 11:28:40–11:30:30Z）。模型照过期清单行动不会写错（`claim` 有依赖门），但会白费一轮并把注意力引向已经不能开工的节点。**修法**：注入前按 `wakeKey` 重算（`agentbus.WakeTargets` 已导出）——该 key 不再出现即说明理由已不成立，天然等价于"拒绝旧清单"；落点可直接复用 `sessioninbox.Store.UpdateItem`（steer 流程已在用）对待处理条目原地改写，因此**宿主在注入前刷新**就够了，渲染文本已归位 `control.AgentBusWakePrompt` 供两处共用。
+3. **唤醒的清单是入队时刻的快照**：唤醒在**入队**时被渲染成固定文本（`InboxRequest` 的 `Submit`/`Raw`），而**注入要等当前回合结束**——真机两例延迟 3–5 分钟（内容构建于 ≤11:27:32Z、≥11:31:52Z 才被读到；另一例构建于 11:28:40–11:30:30Z）。模型照过期清单行动不会写错（`claim` 有依赖门），但会白费一轮并把注意力引向已经不能开工的节点。**修法**：注入前按 `wakeKey` 重算（`agentbus.WakeTargets` 已导出）——该 key 不再出现即说明理由已不成立，天然等价于"拒绝旧清单"；落点可直接复用 `sessioninbox.Store.UpdateItem`（steer 流程已在用）对待处理条目原地改写，因此**宿主在注入前刷新**就够了，渲染文本已归位 `control.AgentBusWakePrompt` 供两处共用。**已落地**：`internal/control/agentbus_wake_inject.go`（注入时重建，旧清单改为显式拒绝）。
+4. **`heartbeat` 内核支持、工具面已暴露，但宿主从不调它**：`applyHeartbeat`（`board/node.go:344`）允许**所有者**续租（新 deadline 直接覆盖），模型工具面也列了 `heartbeat`（`leaseSeconds` 默认 900 秒）。缺口不在内核而在调用——`desktop/agentbus*.go` 零命中 ⇒ 宿主派活写下的长租约（编排期取 30 分钟）在会话不主动心跳时只能等过期回收：真机上两条派活租约被认领后 **27 分钟零 op**，这就是它的形状。**修法**：① 在被派活者的唤醒块里教它"做久了就 `heartbeat` 续租"（已做）；② 若要宿主代劳，需记住自己写过的 claim（或从板面按 `Owner == 本会话` 反查）——但**不能无条件续租**，那等于让闲置会话永久占位，比过期回收更糟。
 
 ### 11.4 第二轮评审（对着 S1 代码）的处置（2026-10-02）
 

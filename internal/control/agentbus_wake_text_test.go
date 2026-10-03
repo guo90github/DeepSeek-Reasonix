@@ -35,6 +35,11 @@ func TestAgentBusWakePromptSaysItsListsAreASnapshot(t *testing.T) {
 	if !strings.Contains(assigned, "re-read the board before acting") {
 		t.Fatalf("dispatch block = %q, want the same caveat on an assignment", assigned)
 	}
+	// The host writes a long lease and nothing renews it — desktop/agentbus*.go never calls
+	// heartbeat — so the block has to tell the worker how to keep the claim it was handed.
+	if !strings.Contains(assigned, "heartbeat") {
+		t.Fatalf("dispatch block = %q, want it to say how a long-running claim stays live", assigned)
+	}
 }
 
 // The block is the model's only account of why it was woken: a target with nothing to say must

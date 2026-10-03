@@ -18,7 +18,7 @@ import (
 // true, 2026-10-03).
 func AgentBusWakePrompt(target agentbus.WakeTarget) string {
 	if agentbus.IsDispatchKey(target.Key) {
-		return fmt.Sprintf("<agentbus-wake>\nThe board assigned this work to you: %s\nIt is already claimed in your name: do it, then decide it.\nSent when the board assigned it: if that lease has lapsed since, re-read the board before acting.\n</agentbus-wake>\n",
+		return fmt.Sprintf("<agentbus-wake>\nThe board assigned this work to you: %s\nIt is already claimed in your name: do it, then decide it.\nSent when the board assigned it: if that lease has lapsed since, re-read the board before acting.\nWorking on it for longer than the lease? Renew it with the agentbus heartbeat, or the board takes the claim back.\n</agentbus-wake>\n",
 			strings.Join(target.Ready, ", "))
 	}
 	var b strings.Builder
