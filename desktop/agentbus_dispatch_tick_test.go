@@ -89,6 +89,30 @@ func TestADispatchTickLeavesNoClaimWhenTheSessionCannotBeTold(t *testing.T) {
 	}
 }
 
+// One step per tick still has to answer *which* step: with two startable steps of equal advice
+// the rank's stable tie-break hands out the one required first (internal/agentbus/rank.go:56),
+// and the one it skipped stays startable for a later tick instead of being dropped.
+func TestADispatchTickHandsOutTheEarliestStepFirst(t *testing.T) {
+	app, _, brd := dispatchTickApp(t, true)
+
+	app.agentBusDispatchTick()
+	state, err := brd.Snapshot(context.Background(), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	first, second := ownerOf(state, "step"), ownerOf(state, "step-2")
+	if first != "alice" || second == "alice" {
+		t.Fatalf("after one tick owners are step=%q step-2=%q, want the earliest step handed out alone", first, second)
+	}
+}
+
+func ownerOf(state *board.State, node string) string {
+	if entry := state.Nodes[node]; entry != nil {
+		return entry.Owner
+	}
+	return ""
+}
+
 // A tab that never joined a board is not a dispatch target: the tick skips it rather than
 // guessing a participant or a board for it.
 func TestADispatchTickSkipsATabWithoutABoard(t *testing.T) {

@@ -1155,14 +1155,15 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 （`internal/control/session_context.go`；会话上下文属回合尾部，不是 cache-stable 前缀），golden 基准本身不含技能目录
 （`internal/boot/golden_baseline_test.go` 明记交由 session-context 测试覆盖）⇒ `TestGoldenBaseline` 实测未变。
 
-### 13.15 宿主派发回环的三条真实规则（2026-10-04，`5578284b8`）
+### 13.15 宿主派发回环的四条真实规则（2026-10-04，`5578284b8` + 顺序半边补钉）
 
 桌面宿主的派发回环 `agentBusDispatchTick`（`desktop/agentbus_waker.go`）此前没有用例；补用例时**实测问清了三条规则**
-（前两条我的初稿写错过，跑出来才知道）：
+（前两条我的初稿写错过，跑出来才知道）；**同日又补上"发哪一步"那一条**（第四行，内核 tie-break 的显式契约），共四条：
 
 | 规则 | 为什么 | 用例 |
 |---|---|---|
 | 每位参与者**每 tick 只发一步**，且**该参与者已有排队唤醒时按住**（`RuntimeStatus().PendingPrompt` 让它算"在做的事"） | 不把活堆在还没开工的会话上；派发本身留下的唤醒就是"它还没消化"的证据 | `TestADispatchTickHandsWorkToTheSessionOneStepPerTick`（`desktop/agentbus_dispatch_tick_test.go`） |
+| **同秩时发最早要求的那一步**（一 tick 只发它） | 排序的末位 tie-break 是**到达顺序**，就写在内核里（`internal/agentbus/rank.go:56` 的原话：*"that tie-break is what keeps the queue starvation-free"*）；不钉住它，改成"随便发一步"也没人会发现 | `TestADispatchTickHandsOutTheEarliestStepFirst`（2026-10-04 补，同文件） |
 | **投递不了就交回**：`deliver` 失败时把 claim 交回板上（"没人被告知的活不该留着"） | 否则活被一个**从没听说过它**的会话占着 | `TestADispatchTickLeavesNoClaimWhenTheSessionCannotBeTold` |
 | **没入列的标签不是派发目标**（跳过，不替它猜参与者/板子） | 猜出来的身份等于把活发错人 | `TestADispatchTickSkipsATabWithoutABoard` |
 
