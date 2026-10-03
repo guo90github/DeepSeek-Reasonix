@@ -1183,9 +1183,15 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 | 2 | 触发看门狗（调度器那条命令，或直接 `--watchdog`） | `reasonix-desktop.exe --watchdog-status` 报出 policy / 是否已注册 / **上次运行时间** / 入口 |
 | 3 | 等新进程起来并自己恢复 | 新的 `pid`、`uncleanStreak` 计数；`agent_bus action=view` 里**那块活仍在原参与者名下**或已被重派，且交付物根的 `Ready`/`Assigned` 组**继续外移** |
 
-**必须先知道的陷阱（真实，实测口径）**：`uncleanStreak` 统计 10 分钟内的连续非干净退出，**到 3 次即降级** ——
-启动时驱动器会被开关之外的这一项**关掉**（`Start()` 与之取与），避免崩溃风暴。⇒ 演练**不要连续杀三次**；每次之间
-让进程**干净退出一次**（清掉印记）再继续，否则第 4 次看到的是"驱动器本就不该起"，会被误读成"自愈坏了"。
+**必须先知道的陷阱（真实，且代码可定位）**：`uncleanStreak` 统计 10 分钟内的连续非干净退出，**到 3 次即降级** ——
+`desktop/host_state_marker.go:29` 就是 `hostCrashStreakLimit = 3`，而 `:200` 的 `hostCrashLoopDegraded()` 还要求**上一次确实死了**
+（`out.Dead && out.UncleanStreak >= hostCrashStreakLimit`）；降级落地在 `desktop/heartbeat.go:196`：
+`e.unattended = snapshot.cfg.Unattended && !hostCrashLoopDegraded()` —— 即"驱动器被开关之外的这一项关掉"，避免崩溃风暴。
+⇒ 演练**不要连续杀三次**；每次之间让进程**干净退出一次**（清掉印记）再继续，否则第 4 次看到的是"驱动器本就不该起"，会被误读成"自愈坏了"。
+
+**同一处的第二条微妙点**：印记里记的是**操作者的开关**，不是"这一跑打不打算驱动"（`host_state_marker.go:205-209` 的注释：
+*a crash-degraded run drives nothing, and recording that as "off" is exactly what stops the watchdog from pulling the host back up*）。
+⇒ 已经降级时印记的 `unattended` **仍是 `true`**；**不要**据它判"开关被关了"，要看驱动器是否在动。
 
 **哪些必须真机、哪些可近似（如实标注）**：第 0/1/3 步的**印记与板面断言**可在单机复跑（印记是文件、板是共享目录）；
 **必须真机**的是第 2 步里"调度器真的按时调用 `--watchdog`"（Windows 计划任务/`--watchdog-enable` 的注册结果只能真机看）。
