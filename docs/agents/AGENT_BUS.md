@@ -1070,7 +1070,7 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
 
 **A 已实现（2026-10-02）**：`internal/agentbus/landing.go` 的 `AssessLanding(state, hearings) *Landing` ——
 交付物 = **依赖图的根**（`rootsOf`，零 schema 改动 ✓）；逐条给出阻塞原因（节点 id + 状态/原因），同一节点只报
-**最可操作的那条**（在争 `contested` > 悬念 `deliberating` / `escalated` / `undecided` > `missing` > `abandoned` > `not_done`），
+**最可操作的那条**（在争 `contested` > 悬念 `deliberating` / `escalated` / `undecided` > `missing` > `abandoned` > `not_done`；**实现是四级优先级表**：`contested`/`deliberating` = 0、`escalated`/`undecided` = 1、`missing` = 2、`abandoned` = 3、其余 = 4 —— `blockerPriority`，`landing.go:119-132`，`remember` 取优先级最高者 ⇒ 同一节点只留一条），
 `Reason` 一行说清"没落地、因为什么"。用例 `landing_test.go` 六条：交付物未完成；**被 `refute` 后仍 `contested` ⇒
 必须报"争议"而不是泛泛的未完成**；全 done 但审议未决（open / escalate / undecided-by-rule）⇒ 不落地，`stands` ⇒ 落地；
 缺失依赖、被放弃依赖各报其类；空板不落地；两次读结果一致。
@@ -1341,7 +1341,14 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 预算/速率是主闸门，授权链负责**可审计与可质疑**（可 `refute`、可 `revert`）。§13.6 还**明说**不声称等价于"事前最小权限"，
 所以"`Authorized` 不拦任何动作"与文档一致，**不需要加闸门**（要收紧应先在派生处叠加显式授予，按新证据重新拍板）。
 
-**审议/听证面：沉默会发生什么（2026-10-04 核实 —— 这一面本来就没问题）**：`RoundTTL` 到点是**按规则收口**，不是丢弃、也不会永远挂着 ——
+**审议/听证面：沉默会发生什么（2026-10-04 核实 —— 这一面本来就没问题）**
+
+**§13.10 与 `landing.go` 逐条对完（2026-10-04）**：文档声称的**六条用例**逐一对上 ——
+`TestLandingNeedsEveryDeliverableDone`、`TestLandingStopsWhileADisputeIsUnresolved`、
+`TestLandingStopsWhileAVerdictIsStillOut`（现开 / 已升级 / 按规则未决三态都在同一用例里）、
+`TestLandingNamesWhatIsStillMissing`、`TestLandingOnAnEmptyBoard`、`TestLandingReadsTheSameTwice` ✓；
+"同一节点只报最可操作的那条"由 `blockerPriority`（`landing.go:119-132`）+ `remember` 实现，与文档口径一致（唯一细化：
+代码把 `contested` 与 `deliberating` 并列为最高、`escalated`/`undecided` 低一档，文档原句读起来像四级直链 ⇒ 已按代码事实补注）。：`RoundTTL` 到点是**按规则收口**，不是丢弃、也不会永远挂着 ——
 `internal/agentbus/hearing.go:58-63` 写着"silence counts as no_answer … they start closing as `undecided-by-rule`"，
 而 `VerdictUndecided = "undecided-by-rule"` 自己的注释就说明它是**真实结果、不是失败**（`hearing.go:27-34`）；
 **并且它可见**：投影把它映成 `SignalUndecided` 一行，详情写着"**closed by rule: nobody may call it settled**"（`observe.go:209-213`），
