@@ -1302,6 +1302,14 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 | **派发不重复**（同一 tick 不会把同一步给两个人） | **已有用例，无需新增**：`internal/control/agentbus_dispatch_test.go`（注释即规则："one step per claimant per tick, taken out of the queue"）与 `TestWithoutASlotCeilingEachClaimantTakesAStep`（`agentbus_dispatch_slots_test.go:72`）⇒ 这是**逐认领者**的规则、与人数无关，再写"20 个认领者"的版本只会重复它 |
 
 ⇒ 三问都有答案：两条新用例补上"规模形状"这一维，第三问早就钉在规则发生的那一层（派发回环）。
+
+**每 tick 的代价（2026-10-04 顺带核过一遍，不是缺口）**：把 `AgentBusTick` 那条链的每一步按"节点数增长时会怎样"看了一遍 ——
+① 折出状态走 `Board.foldedState()`（**热缓存**，只有写入才重折）再 `st.Clone()`；② `WakeTargets` 与它的调用者
+`parkStartableWork` 各做一次**全量派生**（O(nodes) + 一次 id 排序）；③ `Sweep` 是唯一**有显式上限**的地方
+（`maxSweepPerCall = 256`，`internal/agentbus/board/board.go:17`）——因为扫一次**会写**，不是因为折得慢；
+④ `TakeRanked` 只排**可领的那一小撮**（队列条目），`releaseIdleSlots` 只看持有者。
+⇒ 整条链是 O(nodes)，n=1000 时是微秒到毫秒级，**没有超线性或无限上的动作**，所以没有"该加什么上限"这件事；
+唯一的上限（sweep 256）是为**写入节流**而设，与规模无关。
 **同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
 
 **另一处已核实（2026-10-04）：地址簿 TTL 与两种投递失败的可见性。**
