@@ -49,42 +49,46 @@ func (a *App) agentBusWakeTick() {
 // each per tick, and delivers every assignment to that participant's own session — the
 // claimant is named, and the routing resolves it to a tab or an announced address, so a
 // participant is never given work on the strength of a guess.
+//
+// A session in the middle of a turn is left alone: the wake would wait in its guidance
+// queue while the lease ran, holding the step for half an hour with nobody looking at it,
+// and the next tick offers it again anyway (found on a real machine, 2026-10-03).
 func (a *App) agentBusDispatchTick() {
-	type enrolled struct {
-		ctrl        control.AgentBusControl
-		boardDir    string
-		participant string
-	}
 	a.mu.RLock()
-	all := make([]enrolled, 0, len(a.tabs))
+	tabs := make([]*WorkspaceTab, 0, len(a.tabs))
 	for _, tab := range a.tabs {
-		if tab == nil || tab.Ctrl == nil {
-			continue
+		if tab != nil && tab.Ctrl != nil {
+			tabs = append(tabs, tab)
 		}
-		bus, ok := tab.Ctrl.(control.AgentBusControl)
-		if !ok || strings.TrimSpace(bus.AgentBusDir()) == "" {
-			continue
-		}
-		all = append(all, enrolled{ctrl: bus, boardDir: bus.AgentBusDir(), participant: bus.AgentBusParticipant()})
 	}
 	a.mu.RUnlock()
 
 	done := map[string]bool{}
-	for _, host := range all {
-		if strings.TrimSpace(host.participant) == "" {
+	for _, tab := range tabs {
+		bus, ok := tab.Ctrl.(control.AgentBusControl)
+		if !ok {
 			continue
 		}
-		key := host.boardDir + "\x00" + host.participant
+		participant := bus.AgentBusParticipant()
+		boardDir := bus.AgentBusDir()
+		if strings.TrimSpace(participant) == "" || strings.TrimSpace(boardDir) == "" {
+			continue
+		}
+		key := boardDir + "\x00" + participant
 		if done[key] {
 			continue
 		}
 		done[key] = true
-		boardDir := host.boardDir
-		if _, err := host.ctrl.AgentBusDispatch(context.Background(), host.participant,
+		// Outside the lock on purpose: ActiveWorkForTab reads the tab table again, and a
+		// recursive read lock can deadlock behind a waiting writer.
+		if a.ActiveWorkForTab(tab.ID).active() {
+			continue
+		}
+		if _, err := bus.AgentBusDispatch(context.Background(), participant,
 			func(ctx context.Context, target agentbus.WakeTarget) error {
 				return a.routeAgentBusWakeOn(ctx, boardDir, target)
 			}); err != nil {
-			log.Printf("[agentbus] dispatch to %s: %v", host.participant, err)
+			log.Printf("[agentbus] dispatch to %s: %v", participant, err)
 		}
 	}
 }
