@@ -41,3 +41,35 @@ func AgentBusWakePrompt(target agentbus.WakeTarget) string {
 	b.WriteString("</agentbus-wake>\n")
 	return b.String()
 }
+
+// AgentBusWakeSource is the source a wake's inbox item carries. It names the producer, so a
+// host that shows what arrived can say who woke the session.
+const AgentBusWakeSource = "agentbus"
+
+// AgentBusWakeLine says the same thing to a person: the block above is what the model reads,
+// and the queue that shows this to whoever is looking must not render XML at them.
+//
+// It sits beside the prompt because both hosts need it: the desktop renders it for its own
+// delivery, and a headless host with no renderer of its own (serve) would otherwise have to
+// put the XML in front of a person.
+func AgentBusWakeLine(target agentbus.WakeTarget) string {
+	if agentbus.IsDispatchKey(target.Key) {
+		return "已指派给你：" + strings.Join(target.Ready, ", ")
+	}
+	var b strings.Builder
+	b.WriteString("The board has work for you")
+	appendList := func(label string, items []string) {
+		if len(items) == 0 {
+			return
+		}
+		b.WriteString("; ")
+		b.WriteString(label)
+		b.WriteString(": ")
+		b.WriteString(strings.Join(items, ", "))
+	}
+	appendList("startable now", target.Ready)
+	appendList("waiting on you", target.Waiting)
+	appendList("questions for you", target.Asks)
+	appendList("deliberations you owe", target.Owes)
+	return b.String()
+}

@@ -167,25 +167,7 @@ func enqueueAgentBusWake(tab *WorkspaceTab, target agentbus.WakeTarget) error {
 // agentBusWakeLine says the same thing to a person: the block above is what the model reads,
 // and the queue that shows this to whoever is looking must not render XML at them.
 func agentBusWakeLine(target agentbus.WakeTarget) string {
-	if agentbus.IsDispatchKey(target.Key) {
-		return "已指派给你：" + strings.Join(target.Ready, ", ")
-	}
-	var b strings.Builder
-	b.WriteString("The board has work for you")
-	appendList := func(label string, items []string) {
-		if len(items) == 0 {
-			return
-		}
-		b.WriteString("; ")
-		b.WriteString(label)
-		b.WriteString(": ")
-		b.WriteString(strings.Join(items, ", "))
-	}
-	appendList("startable now", target.Ready)
-	appendList("waiting on you", target.Waiting)
-	appendList("questions for you", target.Asks)
-	appendList("deliberations you owe", target.Owes)
-	return b.String()
+	return control.AgentBusWakeLine(target)
 }
 
 // readAgentBusToken reads the token file a host announced: the secret itself never

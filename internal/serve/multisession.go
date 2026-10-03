@@ -154,6 +154,9 @@ func (s *Server) RegisterSessionTag(ctrl *control.Controller, tag *sessionTagSin
 	}
 	s.tags[ctrl] = tag
 	s.tagsMu.Unlock()
+	// A session that is on a board needs the host's routing for wakes, and this process is
+	// the only host it has: the desktop installs its own at enrol time.
+	s.installAgentBusWaker(ctrl)
 }
 
 func (s *Server) tagFor(ctrl *control.Controller) *sessionTagSink {
