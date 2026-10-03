@@ -930,6 +930,10 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 - ⇒ §13.9 的落地只剩三步（§13.9 里其余部分不变）：① `boot.Options` 注入 `AgentBusLedger`；② `Charge` 挂
   `turn_orchestrator.go` 的绑定点、`Settle` 挂 `ApplyAgentBusOp` 的 `decide(done)` 之后；③ 用例（装配值到达账本上限、
   只认验收节点、超限 Goal `blocked`）——**外加一件新待办**：决定板级四级额度的来源（本稿不替使用者发明 ✗）。
+  - **落地结果（2026-10-04 核对）**：第 ① 步最终走的是本稿列的**备选形态**——方法注入 `SetAgentBusLedger`
+    （`internal/control/agentbus_budget.go:16`），由宿主在装配后调用（`desktop/agentbus_waker.go:160`：
+    `bus.SetAgentBusLedger(hostAgentBusBudget())`）。**`boot.Options` 里没有 `AgentBusLedger` 字段**（`internal/boot/boot.go` 零命中）
+    ⇒ 读本节时不要把 ① 当成"已存在的 boot 选项"。
 
 **板级额度来源：定案（2026-10-02 用户拍板）——先只启用 host 级槽位，四级额度保持"不设"**。
 
