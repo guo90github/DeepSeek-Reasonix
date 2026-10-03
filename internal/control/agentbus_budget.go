@@ -1,8 +1,10 @@
 package control
 
 import (
+	"errors"
 	"log/slog"
 	"path/filepath"
+	"sync/atomic"
 
 	"reasonix/internal/agentbus"
 	"reasonix/internal/agentbus/board"
@@ -44,9 +46,46 @@ func (b *agentBusState) chargeClaim(op board.Op) error {
 	if _, err := ledger.Charge(agentbus.ChargeRequest{
 		Board: boardName, Node: op.Node, Amount: amount,
 	}); err != nil {
+		recordBudgetRefusal(err, ledger, boardName, op.Node)
 		return err
 	}
 	return nil
+}
+
+// budgetRefusals counts the claims this host had to turn down, so one refusal and a pattern
+// look different in the log. G3's point is that a brake nobody can see is not a brake: which
+// ceiling refused belongs in the host's own record, not only in the tool result (T12-3).
+var budgetRefusals atomic.Int64
+
+func recordBudgetRefusal(err error, ledger *agentbus.Ledger, boardName, node string) {
+	var reject *agentbus.BudgetReject
+	if !errors.As(err, &reject) {
+		return
+	}
+	limit := int64(0)
+	if ledger != nil {
+		limits := ledger.Limits()
+		switch reject.Level {
+		case "board":
+			limit = limits.Board
+		case "subtree":
+			limit = limits.Subtree
+		case "node":
+			limit = limits.Node
+		case "turn":
+			limit = limits.Turn
+		}
+	}
+	attrs := []any{
+		"level", reject.Level, "reason", reject.Reason, "key", reject.Key, "limit", limit,
+		"board", boardName, "node", node, "refusals", budgetRefusals.Add(1),
+	}
+	if reject.Level == "node" && ledger != nil {
+		// The node level is the only one whose spend has a reader, so it is the only level
+		// that can report what is left as well as what the ceiling was.
+		attrs = append(attrs, "remaining", limit-ledger.NodeSpent(boardName, node))
+	}
+	slog.Warn("controller: agentbus claim refused by a budget ceiling", attrs...)
 }
 
 // settleBudget charges an accepted node against the board and subtree allowances. The
