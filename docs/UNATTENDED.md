@@ -29,6 +29,12 @@ lives in `desktop/` (host, Electron shell, frontend); the kernel
   `[agentbus]` budget levels set (see `reasonix.example.toml`), it labels itself
   "on (no budget)" and the host logs the same. No default ceiling is invented for the
   operator — a ceiling nobody chose would stop work that is already running.
+- When a ceiling does refuse, the host says **which one**: one record per refusal naming
+  `level` / `reason` / `limit` / `board` / `node` (plus `remaining` at the node level, since
+  a refusal spends nothing) and a per-process refusal count, so "which ceiling topped out"
+  is answerable without a panel. The slot ceiling is the host's, not a cost brake: work it
+  refuses stays **parked rather than failed** (its node keeps its state), and a holder whose
+  work went away gives the slot back on the next dispatch instead of holding it forever.
 
 ## 2. Task model: the `goal` contract
 

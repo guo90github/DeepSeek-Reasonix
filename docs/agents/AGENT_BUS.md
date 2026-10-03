@@ -3,7 +3,8 @@
 > **状态：部分已实现（2026-10-03 校）。** `internal/agentbus` 已落地：内核 `board/`（op 日志 + 确定性 fold +
 > 节点状态机 + 逐节点租约），以及队列/排班/预算/投影/唤醒/落地判定的实现与 `internal/control`、桌面宿主的接线
 > （`internal/cli` 的 `REASONIX_AGENTBUS_*` 是 headless 入列口）。**仍未接线**：talk 的写入口（`say/ask/answer`
-> 有定义无调用者）、队列取用与预算账本（`Take`/`TakeRanked`/`Ledger` 无生产调用者）、宿主侧唤醒 tick、唤醒去重的
+> 有定义无调用者）、`Take`（非排班版取用；`TakeRanked` 与预算账本已由桌面宿主接线 —— `desktop/agentbus_waker.go`
+> 用 `[agentbus]` 的四个额度加 `dispatch_slots` 建账本并装到每个 controller 上）、宿主侧唤醒 tick、唤醒去重的
 > 持久化；过期租约的回收只发生在写路径（`control.ApplyAgentBusOp` 写前 sweep）。下表标 *待建* 的行仍以 §11.1 为准。
 > 并列读：`docs/COLLAB-SURFACE.md`（**已实现**的跨仓封闭面，由 `tools/collabgate` 钉住）、
 > `docs/agents/multi-agent-collaboration-design.md`（本稿部分取代之，见 §10）。
@@ -440,7 +441,7 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 | S2 | 写侧接线 + 读侧投影（**含跨工作区与子树分片**）：多会话可写；**视图裁剪**（每轮只读我的子树+我的节点+订阅摘要）；读侧复用 `internal/taskcatalog` / `internal/taskmonitor` / 桌面任务树 | **两个不同工作区**的会话对同一黑板 `claim`/`assert`/`refute` 全部可见；**跨子树只经边界节点**；某 agent 的一轮请求里**不含别人的子树**（§8 第三条守卫）；视图**增量读**（cursor/seq）而非每轮全量；`make frontend-check` 过 |
 | S3 | **交流三档**（§3.2）：① 自由对话 `say` + 话题边界；② 有界点对点 `ask`/`answer` + 回执（§7 缺口）；③ `results/<correlation>.json` | 话题轮数/预算/静默窗口任一触顶即收口；**自由对话默认不灌上下文**（只投点名与摘要）；`correlation` 的预算/TTL/hop 生效；跨进程目标带令牌；超速被拒时返回 `rate_limited`；**就绪节点用事件唤醒（`interval` 只兜底）** |
 | S4 | **审议**与裁决：审议状态（参与者/轮次/必答/权重/冷却）+ `decide` 规则 + 人作为参与者 + **升级配额** | ① 一次 `refute` **改变**结论（可回放：同一 op log 折叠出不同结局）；② **等重升级给人**，不被规则拍死；③ 弃答以 `no_answer` 可见；④ 争议节点可由人在桌面下结论；⑤ **无可核对证据时 `done` 被拒**（只允许留 `assert`）；⑥ **连续 `refute` 触发冷却**，速率上限生效；⑦ 超升级配额时**自动降级为 `undecided-by-rule`** 并记账；⑧ **票数不改变权重**（consensus ≠ evidence） |
-| S5 | **集群调度与预算**：**本机 host 级**并发槽 + 排队 + 四级预算（board → 子树 → 节点 → 回合）+ 触顶即暂停（不杀会话）+ **调度四则**（关键路径优先 / 批量领取 / 同子树亲和 / 最难优先） | 并发槽满时新回合**排队而非失败**（依赖 T2-4 定死的持久队列落点）；槽与预算在**本机**被 host 级共享（多会话/多进程同算一池；**跨机不在 v1**）；触顶后**现场保留**、重启可续；`rate_limited` 与 provider 429 不再互相放大；**关键路径上的节点先跑**；**最难节点不被饿死**；**预算只被验收节点消耗**（做工不消耗总预算） |
+| S5 | **集群调度与预算**：**本机 host 级**并发槽 + 排队 + 四级预算（board → 子树 → 节点 → 回合）+ 触顶即暂停（不杀会话）+ **调度四则**（关键路径优先 / 批量领取 / 同子树亲和 / 最难优先） | 并发槽满时新回合**排队而非失败**（依赖 T2-4 定死的持久队列落点；**宿主级用例**见 `internal/control/agentbus_dispatch_slots_test.go`）；槽与预算在**本机**被 host 级共享（多会话/多进程同算一池；**跨机不在 v1**）；**槽位跟着活走**——持有者手上已无 `claim`（被 release/结算/sweep 掉）时，宿主在下次派发前收回其槽，否则宿主一满就永久停摆（`releaseIdleSlots`，2026-10-03）；触顶后**现场保留**、重启可续；`rate_limited` 与 provider 429 不再互相放大；**关键路径上的节点先跑**；**最难节点不被饿死**；**预算只被验收节点消耗**（做工不消耗总预算） |
 | S6 | **观测聚合**（人读）：按子树折叠、只显异常/争议/停滞/孤儿、可下钻到节点 | 100 节点规模下首屏不画 >N 张卡片（阈值可配）；孤儿节点与停滞节点**必现**；下钻到节点能看到参与者、证据与 `no_progress` 记录 |
 | S7 | e2e + **无人值守贯通** + 完成判定 + **N≈100 压测** | ① 杀掉编排者，未完成节点仍被其他参与者认领并推进；② 一次 `refute` 改变结果；③ 运行时依赖：节点/边数在运行后增加，且由参与者而非派发方新增；④ **无人值守贯通**：杀掉桌面进程 → 既有看门狗拉起 → 黑板继续被推进（`docs/UNATTENDED.md` §11 自认这条链还没真机验收，所以第一次必须端到端跑一次）；⑤ **任务级落地**：验收节点全 `done` + 无未决矛盾才宣告完成，否则停在 `blocked` 并保留现场；⑥ **百级压测**：N≈100 并发参与、任意杀掉 20% 后仍收敛；总支出不超预算；无 429 风暴；**存在一次"缺能力→派生获取能力节点→完成"的真实链路** |
 | S8 | PR 元数据门 + 打包 | `verify-windows-portable.sh` exit 0；`Cache-impact`/`Cache-guard`/`System-prompt-review`/`Documentation-impact` 齐全 |
