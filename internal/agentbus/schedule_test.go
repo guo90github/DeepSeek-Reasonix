@@ -22,7 +22,7 @@ func TestTakeStopsAtTheHostCeilingAndLeavesTheRestParked(t *testing.T) {
 	}
 	ledger := NewLedger(BudgetLimits{Slots: 1})
 
-	taken, err := Take(ctx, log, ledger, "alice", 1, QueueLimits{})
+	taken, err := Take(ctx, log, ledger, nil, "alice", 1, QueueLimits{})
 	if err != nil || len(taken) != 1 || taken[0].Node != "n1" {
 		t.Fatalf("take = (%+v, %v), want the oldest entry for the one free slot", taken, err)
 	}
@@ -32,7 +32,7 @@ func TestTakeStopsAtTheHostCeilingAndLeavesTheRestParked(t *testing.T) {
 
 	// The host is full: the second claimant takes nothing, and the work stays parked
 	// rather than failing.
-	_, err = Take(ctx, log, ledger, "bob", 1, QueueLimits{})
+	_, err = Take(ctx, log, ledger, nil, "bob", 1, QueueLimits{})
 	if reason, ok := IsBudgetReject(err); !ok || reason != RefuseSlots {
 		t.Fatalf("the full host = (%v, %q), want slots_exhausted", ok, reason)
 	}
@@ -45,7 +45,7 @@ func TestTakeStopsAtTheHostCeilingAndLeavesTheRestParked(t *testing.T) {
 	}
 
 	ledger.ReleaseSlot("alice")
-	taken, err = Take(ctx, log, ledger, "bob", 1, QueueLimits{})
+	taken, err = Take(ctx, log, ledger, nil, "bob", 1, QueueLimits{})
 	if err != nil || len(taken) != 1 || taken[0].Node != "n2" {
 		t.Fatalf("after the slot freed = (%+v, %v), want n2 taken", taken, err)
 	}
@@ -76,7 +76,7 @@ func TestParkingNeverTouchesTheBoard(t *testing.T) {
 		t.Fatalf("enqueue: %v", err)
 	}
 	ledger := NewLedger(BudgetLimits{Slots: 1})
-	if _, err := Take(ctx, log, ledger, "alice", 1, QueueLimits{}); err != nil {
+	if _, err := Take(ctx, log, ledger, nil, "alice", 1, QueueLimits{}); err != nil {
 		t.Fatalf("take: %v", err)
 	}
 

@@ -101,9 +101,22 @@ func WakeTargets(in WakeInput) []WakeTarget {
 	if in.State != nil {
 		for _, depID := range sortedNodeIDs(in.State) {
 			dep := in.State.Nodes[depID]
+			if !dep.Ready(in.State) {
+				continue
+			}
+			// An assigned step is addressed work: it wakes its assignee whether or not
+			// anyone is waiting on it, and it wakes nobody else (board.Node.Assignee).
+			if assignee := strings.TrimSpace(dep.Assignee); assignee != "" {
+				t := target(assignee)
+				t.Ready = appendUnique(t.Ready, depID)
+				for _, blocked := range waiting[depID] {
+					t.Waiting = appendUnique(t.Waiting, blocked)
+				}
+				continue
+			}
 			// An unowned step that can run now, with somebody still waiting on it: that is
 			// the whole reason to wake anyone. Work nobody waits on wakes nobody.
-			if !dep.Ready(in.State) || len(waiting[depID]) == 0 {
+			if len(waiting[depID]) == 0 {
 				continue
 			}
 			for _, requester := range dep.Requesters {

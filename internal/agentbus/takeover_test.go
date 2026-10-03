@@ -91,7 +91,7 @@ func TestWorkAdvancesWithoutTheOrchestrator(t *testing.T) {
 	// The parked step is still parked, and still nobody's but the board's: a host slot
 	// and the queue are enough to start it.
 	ledger := NewLedger(BudgetLimits{Slots: 1, Board: 100, Subtree: 100})
-	taken, err := Take(ctx, queue, ledger, "survivor", 1, QueueLimits{})
+	taken, err := Take(ctx, queue, ledger, nil, "survivor", 1, QueueLimits{})
 	if err != nil {
 		t.Fatalf("take: %v", err)
 	}

@@ -22,6 +22,7 @@ const (
 	VerbYield         Verb = "yield"
 	VerbSplit         Verb = "split"
 	VerbRequire       Verb = "require"
+	VerbAssign        Verb = "assign"
 	VerbDecide        Verb = "decide"
 	VerbAbandon       Verb = "abandon"
 	VerbRevert        Verb = "revert"
@@ -76,6 +77,7 @@ type Op struct {
 	Reason       string     `json:"reason,omitempty"`
 	Children     []NodeSpec `json:"children,omitempty"`
 	Dep          *NodeSpec  `json:"dep,omitempty"`
+	Assignee     string     `json:"assignee,omitempty"`
 	Bounds       *Bounds    `json:"bounds,omitempty"`
 	Source       string     `json:"source,omitempty"`
 }
@@ -95,11 +97,12 @@ func DeriveID(op Op) string {
 		Reason       string     `json:"reason"`
 		Children     []NodeSpec `json:"children"`
 		Dep          *NodeSpec  `json:"dep"`
+		Assignee     string     `json:"assignee"`
 		Bounds       *Bounds    `json:"bounds"`
 	}{
 		Verb: op.Verb, Node: op.Node, Actor: op.Actor, Outcome: op.Outcome,
 		Evidence: op.Evidence, ReproducedBy: op.ReproducedBy, Reason: op.Reason,
-		Children: op.Children, Dep: op.Dep, Bounds: op.Bounds,
+		Children: op.Children, Dep: op.Dep, Bounds: op.Bounds, Assignee: op.Assignee,
 	}
 	raw, err := json.Marshal(payload)
 	if err != nil {
@@ -148,6 +151,7 @@ const (
 	ReasonSelfReproduced         = "self_reproduced"
 	ReasonMissingAbandonRequest  = "missing_abandon_request"
 	ReasonMissingDependency      = "missing_dependency"
+	ReasonMissingAssignee        = "missing_assignee"
 	ReasonDuplicateDependency    = "duplicate_dependency"
 	ReasonDuplicateNode          = "duplicate_node"
 	ReasonCycle                  = "cycle"

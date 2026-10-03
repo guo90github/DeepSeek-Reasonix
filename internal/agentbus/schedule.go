@@ -10,7 +10,7 @@ import (
 // stops at the first refusal instead of failing. When the host is full the work
 // stays parked — that is what "queue rather than fail" means, and nothing about the
 // parked work's scene changes while it waits (AGENT_BUS §13.4).
-func Take(ctx context.Context, log *QueueLog, ledger *Ledger, claimant string, want int, lim QueueLimits) ([]QueueEntry, error) {
+func Take(ctx context.Context, log *QueueLog, ledger *Ledger, st *board.State, claimant string, want int, lim QueueLimits) ([]QueueEntry, error) {
 	if err := ledger.AcquireSlot(claimant); err != nil {
 		return nil, err
 	}
@@ -18,8 +18,12 @@ func Take(ctx context.Context, log *QueueLog, ledger *Ledger, claimant string, w
 	if err != nil {
 		return nil, err
 	}
-	taken := make([]QueueEntry, 0, want)
-	for _, entry := range state.Next(want) {
+	entries := takeableFor(st, state.Next(0), claimant)
+	if want > 0 && len(entries) > want {
+		entries = entries[:want]
+	}
+	taken := make([]QueueEntry, 0, len(entries))
+	for _, entry := range entries {
 		if _, err := log.Claim(ctx, entry.Node, claimant, lim); err != nil {
 			if _, refused := IsQueueReject(err); refused {
 				continue
@@ -29,6 +33,23 @@ func Take(ctx context.Context, log *QueueLog, ledger *Ledger, claimant string, w
 		taken = append(taken, entry)
 	}
 	return taken, nil
+}
+
+// takeableFor drops parked work the board addressed to somebody else: an assignment is a
+// promise to one participant, so taking it in another name is the mis-delivery the wake
+// routing exists to prevent. No board, or no assignee, leaves the entry in the pool.
+func takeableFor(st *board.State, entries []QueueEntry, claimant string) []QueueEntry {
+	if st == nil {
+		return entries
+	}
+	out := make([]QueueEntry, 0, len(entries))
+	for _, entry := range entries {
+		if n := st.Nodes[entry.Node]; n != nil && n.Assignee != "" && n.Assignee != claimant {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
 }
 
 // TakeRanked takes with advice: the same slot rule and the same queue, but the batch
@@ -42,7 +63,7 @@ func TakeRanked(ctx context.Context, log *QueueLog, ledger *Ledger, state *board
 	if err != nil {
 		return nil, err
 	}
-	ranked := Rank(state, queue.Next(0), held)
+	ranked := Rank(state, takeableFor(state, queue.Next(0), claimant), held)
 	if want > 0 && len(ranked) > want {
 		ranked = ranked[:want]
 	}

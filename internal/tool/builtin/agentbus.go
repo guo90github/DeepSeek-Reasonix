@@ -60,7 +60,7 @@ func (agentBusBoard) Name() string { return "agent_bus" }
 func (agentBusBoard) Description() string {
 	return "Shared blackboard for multi-agent work: record what must be true, claim a step before working on it, and let a step be done only with evidence someone else can re-run. One board is shared by every participant, so a node's state — not this conversation — is the source of truth. " +
 		"action=view lists the nodes addressed to you; use it before claiming. " +
-		"claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason. " +
+		"claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason. assign addresses a step to one participant, and only that participant may take it. " +
 		"A refusal comes back as a reason (illegal transition, missing evidence, unknown node): read it and fix the op instead of retrying it unchanged."
 }
 
@@ -68,7 +68,7 @@ func (agentBusBoard) Schema() json.RawMessage {
 	return json.RawMessage(`{
 "type":"object",
 "properties":{
-  "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","capability_gap","abandon","revert","ask","answer"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new; pass reason to state the claim in one line). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=)."},
+  "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","assign","capability_gap","abandon","revert","ask","answer"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new; pass reason to state the claim in one line). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. assign: address the node to one participant (set assignee=), who is then the only one that may take it. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=)."},
   "node":{"type":"string","description":"Node id. Required for every action except view and split."},
   "title":{"type":"string","description":"Human-readable title; used when the action creates the node (require/split children)."},
   "reason":{"type":"string","description":"Why: assert stores it as the assertion's summary; required by refute, capability_gap and abandon (for capability_gap: what you need, what you tried, why it did not work)."},
@@ -77,6 +77,7 @@ func (agentBusBoard) Schema() json.RawMessage {
   "reproducedBy":{"type":"string","description":"decide(done) only: who re-ran the evidence; must not be the participant that produced it."},
   "children":{"type":"array","description":"split only: the child nodes replacing this one.","items":{"type":"object","properties":{"id":{"type":"string"},"title":{"type":"string"}},"required":["id"]}},
   "dep":{"type":"object","description":"require only: the dependency the node waits for.","properties":{"id":{"type":"string"},"title":{"type":"string"}},"required":["id"]},
+  "assignee":{"type":"string","description":"assign only: the participant this node is addressed to; only they may take it."},
   "steps":{"type":"integer","description":"claim only: how many steps this work may take (bounds).","minimum":1},
   "tokens":{"type":"integer","description":"claim only: optional token ceiling for the work."},
   "output":{"type":"string","description":"claim only: optional description of what the step produces."},
@@ -110,6 +111,7 @@ type agentBusNodeArg struct {
 type agentBusArgs struct {
 	Action       string                `json:"action"`
 	Node         string                `json:"node"`
+	Assignee     string                `json:"assignee"`
 	Title        string                `json:"title"`
 	Reason       string                `json:"reason"`
 	Outcome      string                `json:"outcome"`
@@ -134,7 +136,7 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	}
 	action := strings.ToLower(strings.TrimSpace(in.Action))
 	if action == "" {
-		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, capability_gap, abandon, revert, ask, answer")
+		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, capability_gap, abandon, revert, ask, answer")
 	}
 	if action == "view" {
 		return t.readBoard()
@@ -259,6 +261,8 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 			return board.Op{}, fmt.Errorf("split needs children: at least one {id, title}")
 		}
 		op.Children = specsOf(in.Children)
+	case "assign":
+		op.Assignee = strings.TrimSpace(in.Assignee)
 	case "require":
 		if in.Dep == nil || strings.TrimSpace(in.Dep.ID) == "" {
 			return board.Op{}, fmt.Errorf("require needs dep: {id, title} the node waits for")
@@ -266,7 +270,7 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 		op.Dep = &board.NodeSpec{ID: strings.TrimSpace(in.Dep.ID), Title: strings.TrimSpace(in.Dep.Title)}
 	case "revert":
 	default:
-		return board.Op{}, fmt.Errorf("unknown action %q: one of view, assert, claim, heartbeat, release, decide, refute, split, require, capability_gap, abandon, revert, ask, answer", action)
+		return board.Op{}, fmt.Errorf("unknown action %q: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, capability_gap, abandon, revert, ask, answer", action)
 	}
 	return op, nil
 }

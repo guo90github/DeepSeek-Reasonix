@@ -55,6 +55,8 @@ type Node struct {
 	State NodeState `json:"state"`
 	Deps  []string  `json:"deps,omitempty"`
 	Owner string    `json:"owner,omitempty"`
+	// Assignee is the participant this work is addressed to; empty means the board pool.
+	Assignee string `json:"assignee,omitempty"`
 	// Requesters are the participants that asked for this node: whichever assert, split
 	// or require created it, plus every later require that named it as a dependency.
 	Requesters   []string        `json:"requesters,omitempty"`
@@ -238,7 +240,7 @@ func validateOpShape(op Op) error {
 		default:
 			return reject(op.Verb, op.Node, ReasonUnknownOutcome)
 		}
-	case VerbRelease, VerbYield, VerbRevert, VerbNoProgress:
+	case VerbRelease, VerbYield, VerbRevert, VerbNoProgress, VerbAssign:
 	default:
 		return reject(op.Verb, op.Node, ReasonUnknownVerb)
 	}
@@ -278,6 +280,8 @@ func applyOp(st *State, op Op) error {
 		return applyCapabilityGap(st, op)
 	case VerbAbandon:
 		return applyAbandon(st, op)
+	case VerbAssign:
+		return applyAssign(st, op)
 	case VerbDecide:
 		return applyDecide(st, op)
 	case VerbRevert:
@@ -438,6 +442,28 @@ func applyRequire(st *State, op Op) error {
 	noteRequester(st.Nodes[depID], op.Actor)
 	n.Deps = append(n.Deps, depID)
 	n.State = StateBlocked
+	n.LastSeq = op.Seq
+	return nil
+}
+
+// applyAssign addresses a step to one participant. A live claim is refused rather than
+// re-addressed: that lease belongs to the participant holding it, and reassigning
+// underneath it would leave two owners for one step.
+func applyAssign(st *State, op Op) error {
+	assignee := strings.TrimSpace(op.Assignee)
+	if assignee == "" {
+		return reject(op.Verb, op.Node, ReasonMissingAssignee)
+	}
+	n := st.Nodes[op.Node]
+	if n == nil {
+		return reject(op.Verb, op.Node, ReasonUnknownNode)
+	}
+	switch n.State {
+	case StateDone, StateAbandoned, StateStale, StateClaimed:
+		return reject(op.Verb, op.Node, ReasonIllegalTransition)
+	}
+	n.Assignee = assignee
+	noteRequester(n, assignee)
 	n.LastSeq = op.Seq
 	return nil
 }

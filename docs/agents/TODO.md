@@ -192,7 +192,7 @@
 - [x] T7-4 预算只被验收节点消耗（做工不消耗总预算）→ `TestWorkDoesNotSpendTheBoardAllowance`（20 次做工后板级 spend = 0）；
       `Settle` 只认 `Outcome == done`（否则 `not_accepted`），且同一节点重复结算**不重复计费**（`Charge.Duplicate`）；
       `SubtreeRoot` 由依赖向上走派生子树归属（`TestSubtreeRootWalksDependenciesUp`）
-- [ ] T7-5 **派活不能指名承办者**（2026-10-03 真机实测；**能力缺口，非缺陷**）→ 现状：入队按 requester 写 `QueueEntry.Participant`
+- [x] T7-5 **派活可以指名承办者**（2026-10-03 实测缺口 → 同日落地）→ `assign` 动词 + `Node.Assignee`：`wake.go` 只向承办者发 `Ready`，`Take`/`TakeRanked` 按指派过滤（无指派仍是板级 pool，接管自愈与既有断言不变），工具面 `agent_bus` 的 `action=assign`（`assignee=`）已通；用例 `TestWakeTargetsAddressAnAssignedStepToItsAssignee`、`TestTakeLeavesWorkAssignedToAnotherParticipantParked`、`TestAgentBusDispatchDeliversAnAssignedStepOnlyToItsAssignee`、`TestAssignRefusesALiveClaimAndAnEmptyAssignee`。缺口原委（留档）：入队按 requester 写 `QueueEntry.Participant`
       且它只驱动唤醒（`wake.go` 的收件人 = 节点 requester），而 `Take`/`TakeRanked` 是 host 级 pool（跨参与者可领）——
       这是有意语义（`takeover_test` 的接管自愈依赖它、`TestAgentBusDispatchAssignsStartableWorkToTheNamedParticipant` 固定了它、
       `desktop/agentbus_waker.go:89-92` 明记「忙碌会话被跳过、下一拍再给」），所以「编排者把某步交给某个会话」目前表达不出来。
