@@ -51,12 +51,18 @@ type ObserveLimits struct {
 	// MaxSignals is how many signals it carries. Mandatory signals are never
 	// dropped to satisfy it.
 	MaxSignals int
+	// AssignedWait is how long work addressed to one participant may sit untaken
+	// before it is worth attention: the assignee has not come, and nobody else may.
+	AssignedWait time.Duration
 }
 
 // Defaults for the first screen.
 const (
 	DefaultMaxCards   = 12
 	DefaultMaxSignals = 40
+	// Ten minutes is several missed ticks: a live assignee takes its work within one
+	// tick, and the busy-or-gone one is what this window exists to name.
+	DefaultAssignedWait = 10 * time.Minute
 )
 
 // Signal is one thing to look at, carrying the address needed to drill in.
@@ -100,11 +106,14 @@ func Observe(state *board.State, queue *QueueState, hearings *HearingState, now 
 	if lim.MaxSignals <= 0 {
 		lim.MaxSignals = DefaultMaxSignals
 	}
+	if lim.AssignedWait <= 0 {
+		lim.AssignedWait = DefaultAssignedWait
+	}
 
-	folder := &observeFolder{state: state, cards: map[string]*Card{}}
+	folder := &observeFolder{state: state, cards: map[string]*Card{}, assignedWait: lim.AssignedWait}
 	folder.board(now)
 	folder.deliberations(hearings)
-	folder.queue(queue)
+	folder.queue(queue, now)
 
 	briefing := &Briefing{HealthySubtrees: folder.healthySubtrees()}
 	attention := folder.attention()
@@ -120,9 +129,10 @@ func Observe(state *board.State, queue *QueueState, hearings *HearingState, now 
 // observeFolder collects cards and signals while the surfaces are folded, so the
 // fold reads as one purpose per method instead of one very long function.
 type observeFolder struct {
-	state   *board.State
-	cards   map[string]*Card
-	signals []Signal
+	state        *board.State
+	cards        map[string]*Card
+	signals      []Signal
+	assignedWait time.Duration
 }
 
 func (f *observeFolder) card(subtree string) *Card {
@@ -207,14 +217,42 @@ func (f *observeFolder) deliberations(hearings *HearingState) {
 	}
 }
 
-func (f *observeFolder) queue(queue *QueueState) {
+func (f *observeFolder) queue(queue *QueueState, now time.Time) {
 	if queue == nil {
 		return
 	}
 	for _, entry := range queue.Next(0) {
 		// Parked work waits for a slot, which is normal: it is a count, not a signal.
-		f.card(f.subtreeOf(entry.Node, entry.Subtree)).Parked++
+		subtree := f.subtreeOf(entry.Node, entry.Subtree)
+		f.card(subtree).Parked++
+		if detail := f.assignedWaitReason(entry, now); detail != "" {
+			c := f.card(subtree)
+			c.Stalled++
+			f.signals = append(f.signals, Signal{Kind: SignalStalled, Subtree: subtree, Node: entry.Node, Detail: detail})
+		}
 	}
+}
+
+// assignedWaitReason reports work addressed to one participant that nobody took: the
+// assignment is what keeps every other claimant out, so this silence is a stall rather
+// than the normal wait for a slot (AGENT_BUS §13.4/§13.5).
+func (f *observeFolder) assignedWaitReason(entry QueueEntry, now time.Time) string {
+	if f.state == nil || f.assignedWait <= 0 || entry.EnqueuedAt.IsZero() {
+		return ""
+	}
+	n := f.state.Nodes[entry.Node]
+	if n == nil || n.Assignee == "" {
+		return ""
+	}
+	switch n.State {
+	case board.StateDone, board.StateAbandoned, board.StateClaimed:
+		return ""
+	}
+	waiting := now.Sub(entry.EnqueuedAt)
+	if waiting < f.assignedWait {
+		return ""
+	}
+	return fmt.Sprintf("assigned to %s, waiting %s with nobody taking it", n.Assignee, waiting.Round(time.Minute))
 }
 
 // attribute resolves each card's worst signal and how many it carries.

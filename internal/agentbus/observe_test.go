@@ -1,6 +1,7 @@
 package agentbus
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +28,40 @@ func signalNodes(digest *Briefing, kind SignalKind) []string {
 		}
 	}
 	return out
+}
+
+// Work addressed to one participant is not waiting for a slot: if the assignee never
+// comes, nobody else may take it, so the first screen has to name who and how long.
+func TestObserveNamesWorkAddressedToSomeoneWhoNeverCame(t *testing.T) {
+	step := obsNode("step", board.StateOpen)
+	step.Assignee = "bob"
+
+	long := NewQueueState()
+	if _, err := ApplyQueue(long, QueueRecord{Kind: QueueEnqueue, Node: "step", Subtree: "step", Participant: "bob", At: talkBase.Add(-time.Hour)}, QueueLimits{}); err != nil {
+		t.Fatalf("park: %v", err)
+	}
+	digest := Observe(obsState(step), long, nil, talkBase, ObserveLimits{})
+	reported := false
+	for _, signal := range digest.Signals {
+		if signal.Kind != SignalStalled || signal.Node != "step" {
+			continue
+		}
+		reported = true
+		if !strings.Contains(signal.Detail, "bob") {
+			t.Fatalf("detail = %q, want the assignee named", signal.Detail)
+		}
+	}
+	if !reported {
+		t.Fatalf("signals = %+v, want the assigned step reported as stalled", digest.Signals)
+	}
+
+	fresh := NewQueueState()
+	if _, err := ApplyQueue(fresh, QueueRecord{Kind: QueueEnqueue, Node: "step", Subtree: "step", Participant: "bob", At: talkBase}, QueueLimits{}); err != nil {
+		t.Fatalf("park: %v", err)
+	}
+	if digest := Observe(obsState(step), fresh, nil, talkBase, ObserveLimits{}); len(digest.Signals) != 0 {
+		t.Fatalf("signals = %+v, want the assignee's window respected", digest.Signals)
+	}
 }
 
 func TestObserveShowsOnlySubtreesThatNeedAttention(t *testing.T) {
