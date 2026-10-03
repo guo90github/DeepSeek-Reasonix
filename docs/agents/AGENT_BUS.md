@@ -1220,3 +1220,37 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 **必须真机**的是第 2 步里"调度器真的按时调用 `--watchdog`"（Windows 计划任务/`--watchdog-enable` 的注册结果只能真机看）。
 **本会话未跑过这条链**（与 §5.1.1 同样是真机待验项），首次执行请把每步的印记文件原文、`--watchdog-status` 输出与
 `view` 的原文+时间戳留档，作为 T9-4 的验收证据。
+
+### 13.17 状态可见性：四段核对法（写→读→画→钉）与六类"看不见的刹车"的现状（2026-10-04）
+
+**为什么写这一节**：这套集群反复出现同一形状的缺陷 —— 宿主机自己**算出了**一个状态（拒绝、投递失败、没在驱动、
+看门狗没生效…），却没有一处界面说出来；而"没在动"与"没活了"看起来一模一样。§13.16 引的 G3 原则说得更直白：
+**a brake nobody can see is not a brake**。以下是可复用的核对法，以及逐条的当前答案。
+
+**四段核对法**（给任何"host 自己记了个数"的新东西照做）
+
+1. **写**：谁在哪一行记账/记错？除了 `slog`/`log.Printf`，还有别处吗？
+2. **读**：有没有**导出读数**？读到的与写的是不是**同一份**（而不是各算一套）？
+3. **画**：前端**真的渲染**那个字段吗？（**别只看类型声明** —— 类型在契约里 ≠ 有人在画；这个坑本轮踩到两次）
+4. **钉**：把这一半删掉，**用例会不会变红**？（没有用例 ⇒ 那不是结论，只是阅读印象）
+
+**现状（写在哪 → 读数 → 画在哪 → 用例 → 结论）**
+
+| 刹车 | 读数 | 画在哪 | 结论 |
+|---|---|---|---|
+| **槽位拒绝**（满槽把活停在队列） | `AgentBusBudgetRefusals()`（`internal/control/agentbus_budget.go`） | `AgentBusBriefing` 的拒绝行 → `AgentBusPanel` 的 host-signals | 曾有"计了没人画"：用例没断言 `slots`（`11768809a` 补） |
+| **唤醒投递失败** | `AgentBusWakeFailures()`（`internal/control/agentbus_wake.go`） | `wakeFailureSignal` → 同上（`Kind: "wake_undelivered"`） | 曾只 `slog.Warn`（`d2081d750` 补） |
+| **无人值守没在驱动**（崩溃降级） | `HeartbeatConfigView.unattendedDriving/unattendedHold`（`desktop/heartbeat.go`） | 开关标签与提示（`unattendedPresentation`） | 曾只有一行日志、界面仍说"会持续推进"（`af5ade4f9` 补） |
+| **OS 看门狗没生效** | `App.WatchdogStatus()`（`desktop/watchdog_control.go`：读数与用例一直都有） | 同上（`watchdogHold` + 三语文案） | 曾**没有任何组件读它**（`b9d2e038b` 补） |
+| **限流**（429 被扛过） | `RateLimitRetries*` | `rateLimitSignal` → 同上 | 一直齐（分道计数与"未点名"都有用例） |
+| **子树卡被裁掉** | `briefing.Hidden` / `HiddenCards` | 面板"还有 N 个子树 / M 条信号" | 一直齐（host 与前端各有用例） |
+
+**查实、但尚未修的两处（同族；形状已写明，留给下一刀）**
+
+- **心跳任务跑失败或被 hold**：引擎只 `log.Printf("[heartbeat] …")`（`desktop/heartbeat.go:292/398/417/450/659`），
+  任务视图**没有**错误字段（只有 `LastRunAt` / `LastAttemptAt`）⇒ 面板只能显示"**已到期、晚了多久**"，
+  说不出**为什么**（是 Goal hold 的设计，还是打不开话题的故障）。宿主机**其实已经**为每个任务算了 hold 原因
+  （`holdLog map[string]string`，注释写着 "so a steady state logs once"）⇒ 修法就是把这份原因放进任务视图并在面板显示。
+- **会话保存不 durable**：`internal/control/in_flight_turn.go:72-86` 在快照没落地时只 `slog.Warn`（保留 in-flight 标记）。
+  **判读**：这条**自愈**（标记 + 恢复：下次启动重试）⇒ 与"租约到点被回收"同类，**不是刹车**；
+  只差"告知用户这一轮可能没落盘"这一句（低优先）。
