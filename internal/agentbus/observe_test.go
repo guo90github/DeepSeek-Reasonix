@@ -1,6 +1,7 @@
 package agentbus
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -233,5 +234,36 @@ func TestObserveFoldsBySubtreeAndCountsWhatItHides(t *testing.T) {
 	}
 	if card.Stalled != 1 || card.Orphans != 1 || card.Signals != 2 || card.Worst != SignalOrphan {
 		t.Fatalf("card = %+v, want both wrongs reported with the orphan first", card)
+	}
+}
+
+// The first screen has to stay a first screen when the board is large: on a hundred attention
+// subtrees a five-card cap must draw five and count ninety-five, and that number must be the
+// remainder rather than a guess. The kernel scale run (scale_e2e_test.go) converges without ever
+// filling the screen, so the arithmetic of filling it is pinned here — the signal cap's own
+// arithmetic stays where it is pinned (the small case above, which is about mandatory rows).
+func TestObserveTrimsALargeBoardToTheCap(t *testing.T) {
+	const subtrees = 100
+	nodes := make([]*board.Node, 0, subtrees)
+	for i := range subtrees {
+		// No deps: each node is its own subtree root, and recorded no progress makes it attention.
+		n := obsNode(fmt.Sprintf("s%03d", i), board.StateOpen)
+		n.NoProgress = 1
+		nodes = append(nodes, n)
+	}
+	digest := Observe(obsState(nodes...), nil, nil, talkBase, ObserveLimits{MaxCards: 5})
+	if len(digest.Cards) != 5 {
+		t.Fatalf("cards = %d, want the cap of 5 on a %d-subtree board", len(digest.Cards), subtrees)
+	}
+	if want := subtrees - 5; digest.HiddenCards != want {
+		t.Fatalf("hidden cards = %d, want %d (the remainder, not a guess)", digest.HiddenCards, want)
+	}
+	for _, card := range digest.Cards {
+		if card.Subtree == "" || card.Stalled == 0 {
+			t.Fatalf("card = %+v, want every drawn card to be one of the attention subtrees", card)
+		}
+	}
+	if len(digest.Signals) == 0 {
+		t.Fatal("no signals on a board where every subtree recorded no progress")
 	}
 }
