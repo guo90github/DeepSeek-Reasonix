@@ -113,9 +113,17 @@ v1 的跨机只做**唤醒**，不做**调度**。分工因此必须写进图里
 | 5 | A 的会话 | （无需动作，读即可） | 交付物根的 `Ready`/`Assigned` 组**随之外移** ⇒ "被唤醒的会话确实推进了节点"成立 |
 
 **哪些步必须真机、哪些可单机近似（如实标注）**：
-- **必须真机**：第 3 步里"**A 把唤醒投到 B 的进程**"——跨机寻址与令牌（`participants.jsonl` 公告 + 令牌引用、TTL 过期即视为不存在）只能真机验；
-- **可单机双进程近似**：图与调度面（`assert`/`require`/`assign`/`view`/`claim`/`decide`）全部落在**共享板**上，与进程数无关 ⇒ 同机开两个宿主/两个会话即可把第 1–5 步的断言全部跑到；
-- **本会话未验**：以上配方一次都没真跑过（含单机近似）。首次执行时请把每一步的 `view` 原文与时间戳留档，作为 T9-4/G7 的验收证据。
+- **可单机近似：已跑（2026-10-04）** —— `internal/boot/agentbus_drill_offline_test.go` 的
+  `TestEffectASessionHandedAnAssignedBlockAdvancesTheDeliverable` 在一块共享板上跑完第 1–5 步的**板侧断言**：
+  编排者把 `block` **指派**给会话 `worker`（第 2 步）⇒ 断言 `WakeTargets` 把该块**按名**交给 worker（`Assigned`），
+  且在块 `done` 之前**不**把交付物交给请求者 ⇒ 真装配的会话用**它自己的工具调用** `view`/`claim`/`decide` 走完第 3–4 步
+  （判据：op 日志里 `claim` 与 `decide` 的 `actor == worker`、块 `done`）⇒ 第 5 步的"组随之外移"由**内核自己的派生**读出
+  （交付物开始被交给它的请求者，已 `done` 的块不再被交出）。**可复跑**：`go test -count=1 -run 'HandedAnAssignedBlock' ./internal/boot/`。
+- **必须真机（仍未验）**：第 3 步里"**A 把唤醒投到 B 的进程**"的**跨机**形态——两台机器 + 共享盘/同步目录，
+  跨机寻址与令牌（`participants.jsonl` 公告 + 令牌引用、TTL 过期即视为不存在）只能真机验。
+  **该跳的进程级形态本会话已单独验过**（同一台机器的两个真 `serve` 宿主：alice 的 tick → bob 的 `POST /inbox/items` 202
+  → 唤醒在 bob 自家会话里成 `role=user` 回合），读数见 `docs/agents/TODO.md` 的 T5-4 一节。
+- **首次执行时请把每一步的 `view` 原文与时间戳留档**，作为 T9-4/G7 的验收证据（单机近似已有上面那条用例可复跑）。
 
 ## 6. 反例清单（这样读就算错）
 
