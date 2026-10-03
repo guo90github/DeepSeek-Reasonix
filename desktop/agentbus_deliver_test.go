@@ -57,11 +57,17 @@ func TestDeliverAgentBusWakeSpeaksTheServeContract(t *testing.T) {
 	if request.body["intent"] != "followup" {
 		t.Fatalf("intent = %q, want a follow-up turn", request.body["intent"])
 	}
-	if request.body["input"] != request.body["display"] {
-		t.Fatalf("input/display differ: %q vs %q", request.body["input"], request.body["display"])
+	// The two fields are different by design: the model reads the block, a person reads the
+	// line. They matched before wakes started showing a human sentence, so this is about the
+	// contract rather than the two fields happening to agree.
+	if request.body["input"] == request.body["display"] {
+		t.Fatalf("input and display are the same text (%q); the model reads the block and a person reads the line", request.body["input"])
 	}
-	if request.body["input"] == "" || !strings.Contains(request.body["input"], "schema") {
-		t.Fatalf("input = %q, want why the session is being woken", request.body["input"])
+	if !strings.Contains(request.body["input"], "<agentbus-wake>") || !strings.Contains(request.body["input"], "schema") {
+		t.Fatalf("input = %q, want the block that says why the session is being woken", request.body["input"])
+	}
+	if strings.Contains(request.body["display"], "<agentbus-wake>") {
+		t.Fatalf("display = %q, want a line for a person rather than the XML block", request.body["display"])
 	}
 }
 
