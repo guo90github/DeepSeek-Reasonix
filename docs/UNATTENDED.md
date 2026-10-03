@@ -42,6 +42,14 @@ lives in `desktop/` (host, Electron shell, frontend); the kernel
   when the response carried one. A field the error does not carry stays absent; nothing is guessed.
   The absorbed 429s are also counted **per provider instance**, and the collaboration panel carries
   one row for them, so a multi-provider host can name the throttled lane without reading the log.
+- The switch also states **this launch's real condition**, next to the intent it stores: a
+  crash-degraded launch keeps driving off (the watchdog bullet above), so the label reads
+  "on (not driving)" with the reason, and an **OS entry that is not in effect** (`registered=false`
+  or a `lastError`) reads "on (crash recovery off)" with its reason — the panel never repeats the
+  switch back at the operator as if the switch were the state. A heartbeat task additionally says
+  **why the last tick left it alone** (`lastHold` / `lastHoldAt`: a design hold and a real failure
+  are told apart by their own reason). The four-question check behind all of this, and what silence
+  is *not* a defect, is in `docs/agents/AGENT_BUS.md` §13.17.
 
 ## 2. Task model: the `goal` contract
 

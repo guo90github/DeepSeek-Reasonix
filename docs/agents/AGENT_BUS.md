@@ -657,12 +657,13 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
   **唤醒面已随之前移（2026-10-02）**：`WakeTargets` 现在只读折叠态（`WakeInput.State`），规则 = "能开工、仍无主、仍有节点在等它"
   ⇒ 唤醒它自己的 `Requesters`，`Waiting` 由反向边扫描得出；一处**有意加宽**：`assert`/`split` 的创建者也会被唤醒（它们同样"要"它 ✓）。
   届时 §13.2 的"所属子树"规则可以按 `Requester` 直接派生。
-- **待补（第二个真缺口，2026-10-02 接 T5-4 时发现）**：**唤醒目标没有地址**。`WakeTarget` 只有 `Participant`，没有 host、也没有 session path；
+- **已补（第二个真缺口，2026-10-02 发现、此后落地）**：**唤醒目标没有地址**。`WakeTarget` 只有 `Participant`，没有 host、也没有 session path；
   而跨进程投递必须**寻址**——serve 的 `/inbox/items` 若不带 session header 就落进该宿主**前台**（它自己会为此告警），
-  带错地址则被 `target_unreachable` 拒。也就是说"带令牌投递给持有者"在当前数据结构下**不可能**：
+  带错地址则被 `target_unreachable` 拒。也就是说"带令牌投递给持有者"在当初的数据结构下**不可能**：
   桌面能在本进程按 `AgentBusParticipant()` 找到 tab，但**没有任何一张表回答"这个 participant 在哪个宿主、哪个 session"**。
-  **最小可行修法（下一刀）**：板级 `participants.json`（participant → host base URL + session path + 令牌文件引用），
-  由各宿主在自己入列时写入、可用板锁与 `jsonl` 同族机制维护；届时 `routeAgentBusWake` 的"找不到本进程即报错"改为查表后带令牌投递。
+  **落地形态**：板级 `participants.jsonl`（participant → host base URL + session path + 令牌文件引用），各宿主在自己入列时写入；
+  投递原语上提内核（`agentbus.DeliverWake`，含**15s 上限**与宿主 ctx）⇒ serve 侧"本地优先、否则查地址簿投递"，无地址仍是拒绝（`26c1a365f`、`6fac46ceb`）。
+  投递失败**可读**：按参与者计入 host 读数 `AgentBusWakeFailures`，协作面板有一行（`d2081d750`，判据见 §13.17）。
 
 ### 13.4 并发槽与队列落点（T2-4 定案，2026-10-02）
 
