@@ -225,14 +225,20 @@ func (a *App) agentBusWakeRecipient(participant string) *WorkspaceTab {
 
 // agentBusWakePrompt states why a session is being woken. The view and talk blocks
 // ride the same turn, so this only has to carry the reason.
+//
+// Everything below is a snapshot taken when the wake was sent, and a wake waits in the
+// queue until the turn ends: by the time this is read the work may already be claimed or
+// gone. It says so rather than pretending to be current — on a real machine a wake arrived
+// 4.5 minutes after its list had stopped being true (2026-10-03).
 func agentBusWakePrompt(target agentbus.WakeTarget) string {
 	if agentbus.IsDispatchKey(target.Key) {
-		return fmt.Sprintf("<agentbus-wake>\nThe board assigned this work to you: %s\nIt is already claimed in your name: do it, then decide it.\n</agentbus-wake>\n",
+		return fmt.Sprintf("<agentbus-wake>\nThe board assigned this work to you: %s\nIt is already claimed in your name: do it, then decide it.\nSent when the board assigned it: if that lease has lapsed since, re-read the board before acting.\n</agentbus-wake>\n",
 			strings.Join(target.Ready, ", "))
 	}
 	var b strings.Builder
 	b.WriteString("<agentbus-wake>\n")
 	b.WriteString("The board woke you: it has work only you can move right now.\n")
+	b.WriteString("Sent when the board last changed; read the board before acting on this list.\n")
 	writeWakeList := func(label string, items []string) {
 		if len(items) == 0 {
 			return
