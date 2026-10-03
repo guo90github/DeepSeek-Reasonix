@@ -1183,6 +1183,16 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 | 2 | 触发看门狗（调度器那条命令，或直接 `--watchdog`） | `reasonix-desktop.exe --watchdog-status` 报出 policy / 是否已注册 / **上次运行时间** / 入口 |
 | 3 | 等新进程起来并自己恢复 | 新的 `pid`、`uncleanStreak` 计数；`agent_bus action=view` 里**那块活仍在原参与者名下**或已被重派，且交付物根的 `Ready`/`Assigned` 组**继续外移** |
 
+**步 0 的只读检查（复制即用；三步都不写任何东西）**：
+
+1. **读印记**：`<state home>/desktop-host-state.json` —— 出处 `desktop/host_state_marker.go:60-65`：
+   `config.MemoryUserDir()`（= `REASONIX_STATE_HOME`，未设时回落到 home；Windows 通常即 `%APPDATA%\reasonix`）——
+   看 `pid` / `phase` / `unattended` / `uncleanStreak`。判读：**文件还在、而它的 `pid` 已经死了 ⇒ 上次是非干净退出**
+   （干净退出会删掉它）。确认 pid 死没死（Windows）：`tasklist /FI "PID eq <pid>"`（只读）。
+2. **看策略与注册**：`reasonix-desktop.exe --watchdog-status`，输出**原样留档**（policy / 是否已注册 / 上次运行时间 / 入口）。
+3. **先判降级、再判故障**：`uncleanStreak >= 3`（且上一次确实死了，见下）⇒ **本次启动的驱动器本来就是关的** ——
+   这时"没在推进"不是故障，别当成自愈坏了。
+
 **必须先知道的陷阱（真实，且代码可定位）**：`uncleanStreak` 统计 10 分钟内的连续非干净退出，**到 3 次即降级** ——
 `desktop/host_state_marker.go:29` 就是 `hostCrashStreakLimit = 3`，而 `:200` 的 `hostCrashLoopDegraded()` 还要求**上一次确实死了**
 （`out.Dead && out.UncleanStreak >= hostCrashStreakLimit`）；降级落地在 `desktop/heartbeat.go:196`：
