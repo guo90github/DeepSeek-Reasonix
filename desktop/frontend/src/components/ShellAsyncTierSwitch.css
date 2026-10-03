@@ -1,0 +1,61 @@
+/* 需求第九的档位滑动开关（挂在输入框底部）。轨随 data-tier 的三档滑动；
+   令牌沿用设置页 .set-seg 的那套（--border / --bg / --fg-dim / --accent*）。 */
+.shell-switch {
+  --shell-switch-stop: 0;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  padding: 2px;
+  --reasonix-draggable: no-drag;
+}
+
+.shell-switch--balanced {
+  --shell-switch-stop: 1;
+}
+
+.shell-switch--fast {
+  --shell-switch-stop: 2;
+}
+
+.shell-switch__rail {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 2px;
+  width: calc((100% - 4px) / 3);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  transform: translateX(calc(var(--shell-switch-stop) * 100%));
+  transition: transform 140ms ease;
+  pointer-events: none;
+}
+
+.shell-switch__stop {
+  position: relative;
+  border: none;
+  background: transparent;
+  color: var(--fg-dim);
+  font: inherit;
+  font-size: var(--font-control-small);
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.shell-switch__stop--on {
+  color: var(--accent);
+  font-weight: 650;
+}
+
+.shell-switch__stop:disabled {
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell-switch__rail {
+    transition: none;
+  }
+}

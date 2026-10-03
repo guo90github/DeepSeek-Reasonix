@@ -47,6 +47,7 @@ import { useToast } from "../lib/toast";
 import { readStatusLabel, turnPhaseStatusLabel } from "../lib/readStatus";
 import { type CollaborationMode, type CommandInfo, type ComposerInsertRequest, type ContextInfo, type DirEntry, type EffortInfo, type GoalRuntime, type HistoryMessage, type Mode, type PromptHistoryEntry, type QualityFloor, type SessionMeta, type SessionReference, type SlashArgItem, type SlashArgsResult, type ToolApprovalMode, type BalanceInfo, type WireReadStatus } from "../lib/types";
 import { ComposerPinnedFilesShelf } from "./ComposerPinnedFilesShelf";
+import { ShellAsyncTierSwitch } from "./ShellAsyncTierSwitch";
 import {
   formatWorkspaceReference,
   parseWorkspaceReference,
@@ -4786,6 +4787,14 @@ export function Composer({
                   onPick={chooseEffortLevel}
                   options={effortLevels.map(level => ({ value: level, label: effortLabel(level) }))} />
               </div>}
+            </div>
+            <div className="composer-meta__control composer-meta__control--shell-async">
+              {!heroMode && (
+                <ShellAsyncTierSwitch
+                  load={() => app.Settings().then((view) => view?.agent?.shellAsync)}
+                  save={(tier) => app.SetShellAsyncSpeedTier(tier)}
+                />
+              )}
             </div>
             <div className={`composer-toolbar-send${submitUnavailableHint ? " composer-toolbar-send--unavailable" : ""}`}>
               {running && !finishing && !runtimeState.unknown && (
