@@ -65,14 +65,16 @@ func TestBudgetRefusalSignalNamesTheCeilingThatRefused(t *testing.T) {
 	if _, refused := budgetRefusalSignal(control.BudgetRefusalCounts{}); refused {
 		t.Fatal("a host that refused nothing must add no row")
 	}
-	signal, refused := budgetRefusalSignal(control.BudgetRefusalCounts{Node: 2, Turn: 1})
+	signal, refused := budgetRefusalSignal(control.BudgetRefusalCounts{Node: 2, Turn: 1, Slots: 1})
 	if !refused {
 		t.Fatal("refusals must reach the panel")
 	}
 	if signal.Kind != "budget" {
 		t.Fatalf("kind = %q, want the panel's budget row", signal.Kind)
 	}
-	for _, want := range []string{"3", "node 2", "turn 1"} {
+	// Slots is in the list because a full host parks work without ever claiming it: that
+	// refusal is invisible everywhere else, so the row has to carry it.
+	for _, want := range []string{"4", "node 2", "turn 1", "slots 1"} {
 		if !strings.Contains(signal.Detail, want) {
 			t.Fatalf("detail = %q, want it to name %q", signal.Detail, want)
 		}
