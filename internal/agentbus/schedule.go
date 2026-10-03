@@ -10,15 +10,22 @@ import (
 // stops at the first refusal instead of failing. When the host is full the work
 // stays parked — that is what "queue rather than fail" means, and nothing about the
 // parked work's scene changes while it waits (AGENT_BUS §13.4).
+//
+// The queue is read before the slot is spent: a claimant with nothing it may take is
+// not refused and holds no slot, so the ceiling only ever answers for work that is
+// there to be held back.
 func Take(ctx context.Context, log *QueueLog, ledger *Ledger, st *board.State, claimant string, want int, lim QueueLimits) ([]QueueEntry, error) {
-	if err := ledger.AcquireSlot(claimant); err != nil {
-		return nil, err
-	}
 	state, _, err := log.Read()
 	if err != nil {
 		return nil, err
 	}
 	entries := takeableFor(st, state.Next(0), claimant)
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	if err := ledger.AcquireSlot(claimant); err != nil {
+		return nil, err
+	}
 	if want > 0 && len(entries) > want {
 		entries = entries[:want]
 	}
@@ -56,14 +63,18 @@ func takeableFor(st *board.State, entries []QueueEntry, claimant string) []Queue
 // is chosen by Rank instead of by arrival. The queue's visible order does not move —
 // only which parked entries this claimant picks up first.
 func TakeRanked(ctx context.Context, log *QueueLog, ledger *Ledger, state *board.State, claimant string, want int, held []string, lim QueueLimits) ([]RankedEntry, error) {
-	if err := ledger.AcquireSlot(claimant); err != nil {
-		return nil, err
-	}
 	queue, _, err := log.Read()
 	if err != nil {
 		return nil, err
 	}
-	ranked := Rank(state, takeableFor(state, queue.Next(0), claimant), held)
+	entries := takeableFor(state, queue.Next(0), claimant)
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	if err := ledger.AcquireSlot(claimant); err != nil {
+		return nil, err
+	}
+	ranked := Rank(state, entries, held)
 	if want > 0 && len(ranked) > want {
 		ranked = ranked[:want]
 	}

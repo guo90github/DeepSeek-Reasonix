@@ -51,6 +51,42 @@ func TestTakeStopsAtTheHostCeilingAndLeavesTheRestParked(t *testing.T) {
 	}
 }
 
+// A refusal has to mean work was held back: the ceiling is consulted only once there is
+// something this claimant may take. Without that, a host tick (every 30s in the desktop)
+// reports a refusal per tick while nothing is parked, and a claimant that takes nothing
+// ends up holding a slot for work it does not have.
+func TestAFullHostOnlyRefusesWhenThereIsWorkToTake(t *testing.T) {
+	ctx := context.Background()
+	log, err := OpenQueueLog(t.TempDir())
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	ledger := NewLedger(BudgetLimits{Slots: 1})
+	if err := ledger.AcquireSlot("holder"); err != nil {
+		t.Fatalf("take the host's only slot: %v", err)
+	}
+
+	if taken, err := Take(ctx, log, ledger, nil, "bob", 1, QueueLimits{}); err != nil || len(taken) != 0 {
+		t.Fatalf("take with nothing parked = (%+v, %v), want neither work nor a refusal", taken, err)
+	}
+	if taken, err := TakeRanked(ctx, log, ledger, nil, "bob", 1, nil, QueueLimits{}); err != nil || len(taken) != 0 {
+		t.Fatalf("ranked take with nothing parked = (%+v, %v), want neither work nor a refusal", taken, err)
+	}
+	if holders := ledger.SlotHolders(); len(holders) != 1 || holders[0] != "holder" {
+		t.Fatalf("slots = %v, want only the holder's: a claimant with no work takes none", holders)
+	}
+
+	// The contrast that gives the case above its power: the same full host refuses as soon as
+	// there is something for that claimant to take.
+	if _, _, err := log.Enqueue(ctx, QueueEntry{Node: "n1", Subtree: "root"}, QueueLimits{}); err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	_, err = Take(ctx, log, ledger, nil, "bob", 1, QueueLimits{})
+	if reason, refused := IsBudgetReject(err); !refused || reason != RefuseSlots {
+		t.Fatalf("take with work parked on a full host = (%q, %v), want slots_exhausted", reason, err)
+	}
+}
+
 func TestParkingNeverTouchesTheBoard(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

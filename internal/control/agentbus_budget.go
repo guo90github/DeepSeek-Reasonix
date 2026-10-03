@@ -124,6 +124,8 @@ func recordBudgetRefusal(err error, ledger *agentbus.Ledger, boardName, node str
 			limit = limits.Node
 		case "turn":
 			limit = limits.Turn
+		case "slots":
+			limit = int64(limits.Slots)
 		}
 	}
 	attrs := []any{

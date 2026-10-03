@@ -55,8 +55,10 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 		agentBusHeldNodes(st, claimant), agentbus.QueueLimits{})
 	if err != nil {
 		// The host is full: the step stays parked until a slot frees, which is what
-		// "queue rather than fail" means.
+		// "queue rather than fail" means. It is also the one brake a reader cannot see
+		// anywhere else — no claim was made — so the refusal goes into the host's tally.
 		if reason, refused := agentbus.IsBudgetReject(err); refused && reason == agentbus.RefuseSlots {
+			recordBudgetRefusal(err, ledger, boardName, "")
 			return 0, nil
 		}
 		return 0, err

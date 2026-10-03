@@ -2,7 +2,10 @@ package control
 
 import (
 	"context"
+	"log/slog"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"reasonix/internal/agentbus"
 	"reasonix/internal/agentbus/board"
@@ -136,16 +139,11 @@ func TestASlotComesBackOnceItsHolderHasNoWork(t *testing.T) {
 	}
 }
 
-// A slot refusal is the one brake that leaves no trace: AgentBusDispatch answers "not now"
-// with a zero and no error, and the host's own refusal tally — the row the collaboration
-// panel draws from (G3/T12-3) — does not move, because the tally's only writer is the claim
-// path (chargeClaim, agentbus_budget.go) and the slot is taken before any claim exists. So a
-// full host shows nothing at all on screen.
-//
-// This pins today's behaviour, not an intent: wiring the counting in flips this assertion.
-// Recorded as an open item in the agents handoff entry on the budget refusal tally
-// ("已核实的局限", 2026-10-04).
-func TestASlotRefusalOnTheDispatchPathIsNotCountedYet(t *testing.T) {
+// A slot refusal is the one brake a reader cannot see anywhere else: AgentBusDispatch answers
+// "not now" with a zero and no error, and no claim was ever made, so the host's per-level tally
+// — the row the collaboration panel draws from (G3/T12-3) — is the only place it can show up.
+// It is therefore counted where it refuses, which is here and not at the claim.
+func TestASlotRefusalIsCountedAgainstItsOwnCeiling(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	c := newAgentBusTalkController(t, dir, "host")
@@ -164,44 +162,82 @@ func TestASlotRefusalOnTheDispatchPathIsNotCountedYet(t *testing.T) {
 		t.Fatalf("first dispatch = %d (%v), want one step handed out", n, err)
 	}
 
+	previous := slog.Default()
+	records := &captureHandler{}
+	slog.SetDefault(slog.New(records))
+	t.Cleanup(func() { slog.SetDefault(previous) })
 	before := AgentBusBudgetRefusals()
 	if n, err := c.AgentBusDispatch(ctx, "other", deliver); err != nil || n != 0 {
-		t.Fatalf("dispatch on a full host = %d (%v), want it turned down quietly", n, err)
+		t.Fatalf("dispatch on a full host = %d (%v), want the step held back", n, err)
 	}
-	if after := AgentBusBudgetRefusals(); after != before {
-		t.Fatalf("refusal counts moved from %+v to %+v: the slot ceiling is being counted after all", before, after)
+	after := AgentBusBudgetRefusals()
+	if after.Slots != before.Slots+1 || after.Total() != before.Total()+1 {
+		t.Fatalf("refusal counts = %+v, want the slots row up by one from %+v", after, before)
+	}
+	// The panel reads these fields by name, so the ceiling that refused is the only row
+	// that may move.
+	if after.Node != before.Node || after.Turn != before.Turn ||
+		after.Board != before.Board || after.Subtree != before.Subtree {
+		t.Fatalf("counts = %+v, want only the slots row to move from %+v", after, before)
+	}
+	_, attrs, ok := records.find("budget ceiling")
+	if !ok {
+		t.Fatalf("no host record of the slot refusal: %+v", records.records)
+	}
+	for key, want := range map[string]string{
+		"level":  "slots",
+		"reason": agentbus.RefuseSlots,
+		"board":  filepath.Base(dir),
+		"key":    "other",
+		"limit":  "1",
+	} {
+		if attrs[key] != want {
+			t.Fatalf("record %s = %q, want %q (record: %+v)", key, attrs[key], want, attrs)
+		}
 	}
 
 	// The instrument: free the slot and the same dispatch hands the parked step out, so the
-	// zero above was the ceiling's doing and not an empty queue.
+	// held-back step above was the ceiling's doing and not an empty queue.
 	ledger.ReleaseSlot("worker")
 	if n, err := c.AgentBusDispatch(ctx, "other", deliver); err != nil || n != 1 {
 		t.Fatalf("dispatch once a slot freed = %d (%v), want the parked step handed out", n, err)
 	}
 }
 
-// The reason the counting cannot simply be copied onto the dispatch path: the take rule
-// spends a slot *before* it reads the queue, so a host with every slot taken refuses even
-// when nothing is parked for anybody. Counted as-is, the panel's row would report claims
-// that were never made. Any wiring has to filter on "was there work to hold back".
-func TestASlotRefusalDoesNotNeedParkedWorkToHappen(t *testing.T) {
+// The ceiling only answers for work that is there. A host with every slot taken but nothing to
+// hand out is not a refusal at all — the take rule reads the queue before it spends a slot — so
+// a periodic host tick cannot fill the panel's row with claims nobody made.
+func TestAFullHostWithNothingToHandOutCountsNoRefusal(t *testing.T) {
 	ctx := context.Background()
+	dir := t.TempDir()
+	c := newAgentBusTalkController(t, dir, "host")
+	if _, err := c.ApplyAgentBusOp(ctx, busAssert("held", "holder")); err != nil {
+		t.Fatalf("assert held: %v", err)
+	}
+	// The holder owns the board's only node, so it keeps its slot (a holder with work in
+	// progress is spared) and nothing is parked for anybody else.
+	if _, err := c.ApplyAgentBusOp(ctx, board.Op{
+		Verb: board.VerbClaim, Node: "held", Actor: "holder",
+		Bounds:   &board.Bounds{Steps: 1},
+		Deadline: time.Now().UTC().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("claim held: %v", err)
+	}
 	ledger := agentbus.NewLedger(agentbus.BudgetLimits{Slots: 1})
 	if err := ledger.AcquireSlot("holder"); err != nil {
 		t.Fatalf("take the host's only slot: %v", err)
 	}
-	empty, err := agentbus.OpenQueueLog(t.TempDir())
-	if err != nil {
-		t.Fatalf("open queue: %v", err)
-	}
-	if parked, _, err := empty.Read(); err != nil {
-		t.Fatalf("read queue: %v", err)
-	} else if parked.Depth() != 0 {
-		t.Fatalf("queue depth = %d, want nothing parked for the take to find", parked.Depth())
-	}
+	c.SetAgentBusLedger(ledger)
+	deliver := func(context.Context, agentbus.WakeTarget) error { return nil }
 
-	_, err = agentbus.TakeRanked(ctx, empty, ledger, nil, "whoever", 1, nil, agentbus.QueueLimits{})
-	if reason, refused := agentbus.IsBudgetReject(err); !refused || reason != agentbus.RefuseSlots {
-		t.Fatalf("a full host with an empty queue = (%q, %v), want slots_exhausted", reason, err)
+	before := AgentBusBudgetRefusals()
+	if n, err := c.AgentBusDispatch(ctx, "other", deliver); err != nil || n != 0 {
+		t.Fatalf("dispatch on a full host with nothing parked = %d (%v), want neither work nor a refusal", n, err)
+	}
+	if after := AgentBusBudgetRefusals(); after != before {
+		t.Fatalf("refusal counts moved from %+v to %+v, want a full host with nothing to hand out to refuse nothing", before, after)
+	}
+	if inUse := ledger.SlotsInUse(); inUse != 1 {
+		t.Fatalf("slots in use = %d, want only the holder's: a claimant with no work takes none", inUse)
 	}
 }
