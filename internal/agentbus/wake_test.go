@@ -3,6 +3,7 @@ package agentbus
 import (
 	"context"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -223,5 +224,60 @@ func TestWakeTargetsStayQuietAboutAStalledStepThatFinished(t *testing.T) {
 	}
 	if targets := WakeTargets(WakeInput{State: state, Now: time.Now().UTC(), StallAfter: 1}); len(targets) != 0 {
 		t.Fatalf("targets = %+v, want nobody: a settled step is not a live symptom", targets)
+	}
+}
+
+// Twenty participants each waiting on their own step: the wake surface must name every one of
+// them, exactly once, and a re-derivation of an unmoved board must reproduce every key — a host
+// re-derives on every tick, so a key that drifted with the call would hammer the same people
+// (AGENT_BUS §13.3). Excluding the waking session itself is the caller's rule and is pinned in
+// internal/control; the scale run (scale_e2e_test.go) only looks at the board after it lands.
+func TestWakeTargetsNameEveryWaitingParticipantOnceOnALargeBoard(t *testing.T) {
+	const participants = 20
+	ops := make([]board.Op, 0, participants*3)
+	for i := range participants {
+		worker := "worker-" + strconv.Itoa(i)
+		step := "step-" + strconv.Itoa(i)
+		deliverable := "deliverable-" + strconv.Itoa(i)
+		ops = append(ops,
+			assertOp(step, "planner"),
+			assertOp(deliverable, "planner"),
+			board.Op{Verb: board.VerbRequire, Node: deliverable, Actor: worker, Dep: &board.NodeSpec{ID: step}},
+		)
+	}
+
+	targets := WakeTargets(WakeInput{State: board.Fold(ops)})
+	// One target per worker — plus whoever asserted the steps, because an assertion is a kind of
+	// asking (§13.3's deliberate widening), so the planner is a requester of every step too.
+	// Pinning the planner's bundle here keeps that widening honest at scale.
+	if len(targets) != participants+1 {
+		t.Fatalf("targets = %d, want one per waiting worker plus the planner (%d): %+v", len(targets), participants+1, targets)
+	}
+	for _, target := range targets {
+		switch {
+		case strings.HasPrefix(target.Participant, "worker-"):
+			want := "step-" + strings.TrimPrefix(target.Participant, "worker-")
+			if len(target.Ready) != 1 || target.Ready[0] != want {
+				t.Fatalf("%s: ready = %v, want exactly the step it asked for (%s)", target.Participant, target.Ready, want)
+			}
+		case target.Participant == "planner":
+			if len(target.Ready) != participants {
+				t.Fatalf("planner: ready = %d, want every step it asserted (%d)", len(target.Ready), participants)
+			}
+		default:
+			t.Fatalf("targets = %+v, want only the workers and the planner", targets)
+		}
+		if target.Key == "" {
+			t.Fatalf("%s: no key, so a host could not collapse a repeated wake", target.Participant)
+		}
+	}
+	first := map[string]string{}
+	for _, target := range targets {
+		first[target.Participant] = target.Key
+	}
+	for _, target := range WakeTargets(WakeInput{State: board.Fold(ops)}) {
+		if first[target.Participant] != target.Key {
+			t.Fatalf("%s: key moved on a re-derivation (%q -> %q)", target.Participant, first[target.Participant], target.Key)
+		}
 	}
 }
