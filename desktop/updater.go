@@ -339,9 +339,9 @@ func validateManifestAsset(selected, version, filename string, asset update.Asse
 	return base, nil
 }
 
-// validateAssetInstallLayout accepts the pre-v1.20 empty layout (flat install)
-// and the v1.20+ versioned-v1 layout. Unknown values must fail closed so a new
-// client never partially installs an unrecognized package shape.
+// validateAssetInstallLayout accepts the empty pre-v1.20 flat layout, the v1.20+
+// versioned-v1 layout, and electron-v1 (docs/DESKTOP_SHELL_MIGRATION.md). Unknown
+// values fail closed: a new client never installs an unrecognized package shape.
 func validateAssetInstallLayout(layout string) error {
 	switch strings.TrimSpace(layout) {
 	case "", installlayout.InstallLayoutVersionedV1, update.ElectronInstallLayout:
