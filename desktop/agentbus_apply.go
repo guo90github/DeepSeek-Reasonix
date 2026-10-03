@@ -126,3 +126,17 @@ func (p agentBusPanelPort) AskBoard(ctx context.Context, topic, to, text string)
 func (p agentBusPanelPort) AnswerBoard(ctx context.Context, correlation, topic, to, text string) (uint64, error) {
 	return p.bus.AgentBusAnswer(ctx, correlation, topic, to, text)
 }
+
+// The panel drives deliberations through the same three calls the model's tool uses, so a
+// person and a model cannot disagree about what settling a refutation means (T11-5).
+func (p agentBusPanelPort) OpenHearing(ctx context.Context, node string, required []string) (agentbus.HearingRecord, error) {
+	return p.bus.OpenAgentBusHearing(ctx, node, required)
+}
+
+func (p agentBusPanelPort) AnswerHearing(ctx context.Context, node, text string, evidence []board.Evidence) (agentbus.HearingRecord, error) {
+	return p.bus.AnswerAgentBusHearing(ctx, node, text, evidence)
+}
+
+func (p agentBusPanelPort) SettleHearing(ctx context.Context, node string) (agentbus.HearingRecord, error) {
+	return p.bus.SettleAgentBusHearing(ctx, node)
+}

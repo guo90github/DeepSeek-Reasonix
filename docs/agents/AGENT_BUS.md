@@ -1104,3 +1104,32 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 `TestADeliberationWithNoRoundWindowNeverCountsSilence`（同一条审议：无窗口 ⇒ 空；`RoundTTL = 1h` ⇒ 两名必答者都在）、
 `internal/config/agentbus_test.go`（9 个键都落到字段；缺 section = 全 0）、`internal/control` 的
 `TestOperatorKnobsBecomeTheKernelsDeliberationBounds`（分钟不被读成秒）。
+
+**同刀补上的契约缺口**：审议三件（open/answer/settle）此前**不在** `AgentBusControl` 契约里，于是**面板那条路**（`desktop/agentbus_apply.go` 的 `agentBusPanelPort`，人的操作走"同一个工具"）在编译期就没有实现可用 —— 一刀补进 `internal/control/port.go` 的 `AgentBusControl`，面板端口随之转调同一批方法。
+
+### 13.13 重试耗尽的步：从"只留人读信号"到"自动唤醒请求者"（2026-10-03，G5）
+
+**问题**：`agentBusDispatchTries = 2` 之外派活器**不再把这一步发出去**（`agentbus_dispatch.go` 的 `dispatchable`），
+而**那之后没有任何东西会再提到它**：节点无主、可开工、状态不再变化 ⇒ 唤醒的 key 不变 ⇒ **连唤醒都不会再来一次**。
+"没人看的信号 = 没有信号"。
+
+**做法（复用既有面，不新增 op 词表）**：唤醒多一个分组 `WakeTarget.Stalled`，来源是**同一个判据** ——
+`WakeInput.StallAfter`（由宿主注入，等于派活器自己的 `agentBusDispatchTries`；0 = 这个宿主没有这条预算，内核不自造），
+命中者满足：`NoProgress >= StallAfter` **且无主**（有主的过期租约归 `Sweep` 管）**且未收口**（`done`/`abandoned` 不报，T8-2 的规则）。
+被唤醒的是**它的 `Requesters`**（T5-6：谁要这个节点）——也就是"编排者"那个角色；文案带原因与出路
+（"handed out N times with no progress: take one, replan it, or say why it cannot move"）。
+**触发者是宿主 tick**（`AgentBusTick` → `WakeAgentBus`，桌面 30s / headless 30s），无需人点按。
+**一个节点一次只报一种事实**：命中停滞后不再进 `Ready`/`Assigned` 那两组，否则同一节点会同时被说成"可开工"和"停住了"。
+
+**证据**：`internal/agentbus/wake_test.go` 的 `TestWakeTargetsNameStalledWorkInsteadOfOfferingItAgain`（真折叠：认领 → 过期 → `Sweep`
+两次 ⇒ `NoProgress = 2` ⇒ 请求者收到 `Stalled`；`StallAfter = 0` 或低于阈值 ⇒ 照旧是 `Ready`；两种事实的 key 必须不同）、
+`TestWakeTargetsStayQuietAboutAStalledStepThatFinished`（收口后不再报）；`internal/control` 的
+`TestAStalledStepIsWokenBackToWhoeverAskedForIt`（端到端：宿主 tick 把这一步报给请求者，文案含 `stopped moving` 与 `replan`，
+第二次 tick 不重复）。
+**测试踩到的内核坑（写下来免得下次再踩）**：`Sweep` 的回收 op 用 `SweepID(node, deadline)` 做幂等键 ⇒ **两次派活必须各有各的 deadline**，
+否则第二次回收被判重放、`NoProgress` 只加一次（本刀 1/8 概率复现过）。
+
+**仍未做（G5 的另一半）**：**指派超时更早回落 pool** —— 指派给某人却没人来取时，`ObserveLimits.AssignedWait`（默认 10 分钟）
+只在人读面报 `stalled`；要"更早交回 pool"应当在超时后写一条 `unassign`（既有 op，回到板级 pool）。本刀没做，因为它需要新的宿主循环
+（哪个 tick 写这条 op、写几次、与租约过期如何错开），而**它的下游已被本刀覆盖**：指派迟迟没人取 ⇒ 租约过期 ⇒ 计入重试 ⇒ 耗尽后由
+`Stalled` 报给请求者。

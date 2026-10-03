@@ -31,6 +31,10 @@ type WakeTarget struct {
 	// Owes are deliberations this participant was required to answer and has not,
 	// although the round's window has passed.
 	Owes []string
+	// Stalled are nodes this participant asked for that have spent the host's retry
+	// budget: the dispatcher will not hand them out again, so being told is the only way
+	// they move (§13.13).
+	Stalled []string
 }
 
 // DispatchKeyPrefix marks the wake that hands one assignment to a participant rather
@@ -60,6 +64,10 @@ type WakeInput struct {
 	Hearings *HearingState
 	Limits   HearingLimits
 	Now      time.Time
+	// StallAfter is the host's retry budget for one step: a node whose NoProgress has
+	// reached it is not handed out again, and the wake says so. Zero means this host keeps
+	// no such budget, so nothing is ever reported as stalled — the kernel invents no limit.
+	StallAfter int
 }
 
 // waitersByDep maps each dependency to the nodes still waiting on it. A finished node is not
@@ -104,7 +112,7 @@ func WakeTargets(in WakeInput) []WakeTarget {
 	if in.State != nil {
 		for _, depID := range sortedNodeIDs(in.State) {
 			dep := in.State.Nodes[depID]
-			if !dep.Ready(in.State) {
+			if !dep.Ready(in.State) || stalledNode(dep, in.StallAfter) {
 				continue
 			}
 			// An assigned step is addressed work: it wakes its assignee whether or not
@@ -160,6 +168,28 @@ func WakeTargets(in WakeInput) []WakeTarget {
 		}
 	}
 
+	// Work that has spent the host's budget stops being handed out, and nothing else on the
+	// board changes for it: whoever asked for it hears that, or it sits until a person finds
+	// it. Only work nobody holds is reported — a live claim is the reclaim's business.
+	if in.StallAfter > 0 && in.State != nil {
+		for _, id := range sortedNodeIDs(in.State) {
+			n := in.State.Nodes[id]
+			if !stalledNode(n, in.StallAfter) || n.Owner != "" {
+				continue
+			}
+			for _, requester := range n.Requesters {
+				if requester == "" {
+					continue
+				}
+				t := target(requester)
+				t.Stalled = appendUnique(t.Stalled, id)
+				for _, blocked := range waiting[id] {
+					t.Waiting = appendUnique(t.Waiting, blocked)
+				}
+			}
+		}
+	}
+
 	out := make([]WakeTarget, 0, len(targets))
 	for _, t := range targets {
 		t.Key = wakeKey(t)
@@ -167,6 +197,16 @@ func WakeTargets(in WakeInput) []WakeTarget {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Participant < out[j].Participant })
 	return out
+}
+
+// stalledNode reports work the host will not hand out again: it has spent the retry budget
+// that stops a step from being offered forever. A host with no budget (0) stalls nothing.
+func stalledNode(n *board.Node, stallAfter int) bool {
+	if n == nil || stallAfter <= 0 || n.NoProgress < stallAfter {
+		return false
+	}
+	// A settled node is not a live symptom, whatever its history (T8-2's rule).
+	return n.State != board.StateDone && n.State != board.StateAbandoned
 }
 
 // askTarget returns who a chain's question was addressed to.
@@ -190,7 +230,7 @@ func askTarget(talk *TalkState, correlation string) string {
 func wakeKey(t *WakeTarget) string {
 	sum := sha256.New()
 	sum.Write([]byte(t.Participant))
-	for _, group := range [][]string{t.Ready, t.Assigned, t.Waiting, t.Asks, t.Owes} {
+	for _, group := range [][]string{t.Ready, t.Assigned, t.Waiting, t.Asks, t.Owes, t.Stalled} {
 		items := append([]string(nil), group...)
 		sort.Strings(items)
 		for _, item := range items {

@@ -109,6 +109,9 @@ func (c *Controller) agentBusWakeSnapshot(ctx context.Context) (*agentBusState, 
 		Hearings: hearings,
 		Limits:   bus.limitsForHearing(),
 		Now:      time.Now().UTC(),
+		// The same budget the dispatcher hands work out under: once a step has spent it,
+		// the wake is the only thing that still mentions the step (G5).
+		StallAfter: agentBusDispatchTries,
 	}, nil
 }
 

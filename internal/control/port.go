@@ -338,6 +338,12 @@ type AgentBusControl interface {
 	// correlation an answer travels back along; AgentBusAnswer closes one.
 	AgentBusAsk(ctx context.Context, topic, to, text string) (string, error)
 	AgentBusAnswer(ctx context.Context, correlation, topic, to, text string) (uint64, error)
+	// The deliberation on a contested node: open it, answer it, settle it. A host that
+	// lets a person or a model act on the board needs all three, or a refutation nobody
+	// can settle is where the work stops (T12-1).
+	OpenAgentBusHearing(ctx context.Context, node string, required []string) (agentbus.HearingRecord, error)
+	AnswerAgentBusHearing(ctx context.Context, node, text string, evidence []board.Evidence) (agentbus.HearingRecord, error)
+	SettleAgentBusHearing(ctx context.Context, node string) (agentbus.HearingRecord, error)
 	// AgentBusWithdraw retires this session's address on the board. A host that is
 	// going away must call it: the board addresses participants by announcement, and
 	// one that is gone keeps accepting work it will never look at.

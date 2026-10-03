@@ -2,7 +2,10 @@ package control
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"reasonix/internal/agentbus"
 	"reasonix/internal/agentbus/board"
@@ -137,5 +140,77 @@ func TestWakeAgentBusDedupsAcrossControllers(t *testing.T) {
 	second.SetAgentBusWaker(waker)
 	if n := second.WakeAgentBus(ctx); n != 0 {
 		t.Fatalf("a rebuilt controller re-woke %d for the same work set: %v", n, woken)
+	}
+}
+
+// The host tick is what turns a stalled step back into signal: once a step has spent the
+// dispatcher's retry budget nothing about it changes any more, so a wake — addressed to
+// whoever asked for it, and saying why — is the only thing left that can move it (G5).
+func TestAStalledStepIsWokenBackToWhoeverAskedForIt(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	alice := newAgentBusTalkController(t, dir, "alice")
+	if _, err := alice.ApplyAgentBusOp(ctx, busAssert("design", "alice")); err != nil {
+		t.Fatalf("assert: %v", err)
+	}
+	if _, err := alice.ApplyAgentBusOp(ctx, busRequire("design", "alice", "schema")); err != nil {
+		t.Fatalf("require: %v", err)
+	}
+
+	// Two hand-outs to bob, both lapsed: the sweeper records no progress for each, which is
+	// exactly what stops the dispatcher from offering the step a third time.
+	brd, err := board.Open(dir)
+	if err != nil {
+		t.Fatalf("open board: %v", err)
+	}
+	for attempt := 0; attempt < agentBusDispatchTries; attempt++ {
+		// Each hand-out is named by its own deadline: the sweeper keys a reclaim by
+		// node + deadline, so two attempts sharing one would collapse into one record.
+		if _, err := brd.Apply(ctx, board.Op{
+			Verb: board.VerbClaim, Node: "schema", Actor: "bob",
+			ID:       fmt.Sprintf("handout-%d", attempt),
+			Bounds:   &board.Bounds{Steps: 1},
+			Deadline: time.Now().UTC().Add(time.Duration(attempt+1) * time.Minute),
+		}); err != nil {
+			t.Fatalf("claim %d: %v", attempt, err)
+		}
+		if _, err := brd.Sweep(ctx, time.Now().UTC().Add(10*time.Minute)); err != nil {
+			t.Fatalf("sweep %d: %v", attempt, err)
+		}
+	}
+
+	var woken []agentbus.WakeTarget
+	host := newAgentBusTalkController(t, dir, "host")
+	host.SetAgentBusWaker(func(_ context.Context, target agentbus.WakeTarget) error {
+		woken = append(woken, target)
+		return nil
+	})
+	if n := host.WakeAgentBus(ctx); n != 1 {
+		state, snapErr := brd.Snapshot(ctx, time.Now().UTC())
+		_, input, probeErr := host.agentBusWakeSnapshot(ctx)
+		t.Fatalf("woken = %d, want alice told her step stopped moving (snap err=%v probe err=%v node=%+v targets=%+v)",
+			n, snapErr, probeErr, state.Nodes["schema"], agentbus.WakeTargets(input))
+	}
+	if len(woken) != 1 || woken[0].Participant != "alice" {
+		t.Fatalf("woken = %+v, want alice alone", woken)
+	}
+	if len(woken[0].Stalled) != 1 || woken[0].Stalled[0] != "schema" {
+		t.Fatalf("stalled = %v, want the step nobody will hand out again", woken[0].Stalled)
+	}
+
+	// Whoever is woken has to be able to tell why, and what to do about it.
+	prompt := AgentBusWakePrompt(woken[0])
+	for _, want := range []string{"schema", "stopped moving", "replan"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("wake prompt = %q, want it to contain %q", prompt, want)
+		}
+	}
+	if line := AgentBusWakeLine(woken[0]); !strings.Contains(line, "stopped moving") {
+		t.Fatalf("the human line = %q, want the same fact", line)
+	}
+
+	// The same state is one wake, however often the host ticks.
+	if n := alice.WakeAgentBus(ctx); n != 0 {
+		t.Fatalf("a second tick woke %d, want 0", n)
 	}
 }

@@ -39,6 +39,9 @@ func AgentBusWakePrompt(target agentbus.WakeTarget) string {
 	writeWakeList("waiting on you", target.Waiting)
 	writeWakeList("questions addressed to you", target.Asks)
 	writeWakeList("deliberations you owe an answer about", target.Owes)
+	// The host already stopped handing these out, so the line has to say why: without the
+	// reason it reads like any other "startable" line (G5).
+	writeWakeList(fmt.Sprintf("steps that stopped moving (handed out %d times with no progress): take one, replan it, or say why it cannot move", agentBusDispatchTries), target.Stalled)
 	b.WriteString("</agentbus-wake>\n")
 	return b.String()
 }
@@ -73,5 +76,6 @@ func AgentBusWakeLine(target agentbus.WakeTarget) string {
 	appendList("waiting on you", target.Waiting)
 	appendList("questions for you", target.Asks)
 	appendList("deliberations you owe", target.Owes)
+	appendList(fmt.Sprintf("stopped moving (handed out %d times)", agentBusDispatchTries), target.Stalled)
 	return b.String()
 }
