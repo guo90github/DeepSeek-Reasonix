@@ -1310,6 +1310,15 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 ④ `TakeRanked` 只排**可领的那一小撮**（队列条目），`releaseIdleSlots` 只看持有者。
 ⇒ 整条链是 O(nodes)，n=1000 时是微秒到毫秒级，**没有超线性或无限上的动作**，所以没有"该加什么上限"这件事；
 唯一的上限（sweep 256）是为**写入节流**而设，与规模无关。
+
+**可重放面（2026-10-04 核实）**：同一份 op log ⇒ 同一份状态这件事，**早就钉得很密** ——
+`internal/agentbus/board/fold_test.go` 有 `TestFoldIsDeterministic`、`TestFoldCountsDuplicateIDs`、
+**`TestConcurrentApplyFoldsLikeSerial`**（并发写折叠等价于串行，最强的一档），`log_test.go` 另有"尾部半行不算 op / 中段坏行跳过并计数 /
+空行计数 / seq 来自日志 / 撕裂尾被下一位写者修好 / 快照报告读损伤"一整族；`doc.go` 与 `fold.go` 都写明"**fold 不读时钟**"。
+**唯一缺口是"时钟那一半"没有用例**：`validateFreshness`（`board.go:160-174`）只对 `VerbClaim`/`VerbHeartbeat` 判定
+（缺 `Deadline` ⇒ `missing_deadline`；`Deadline` 不在未来 ⇒ `deadline_not_future`；其它 verb 不管），此前只有代码与注释、没有用例。
+补 `TestAFreshnessLapseIsJudgedAtWriteAndNeverAtReplay`（`internal/agentbus/board/freshness_test.go`）：三种判定 + "assert 带旧 deadline 也放行" +
+**重放侧**：把一条"写在当时就过期"的 claim 直接 `Fold` 进日志 ⇒ 它照样应用、节点保留记录里的 owner 与 deadline（重放没有钟可再判）。
 **同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
 
 **另一处已核实（2026-10-04）：地址簿 TTL 与两种投递失败的可见性。**
