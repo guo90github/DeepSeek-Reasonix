@@ -178,11 +178,22 @@ func TestTheRefuteToVerdictChainRunsWithoutAnyoneClickingAnything(t *testing.T) 
 	if _, err := alice.OpenAgentBusHearing(ctx, "design", nil); err != nil {
 		t.Fatalf("open the hearing on her own refutation: %v", err)
 	}
+	// The round window is a nanosecond, but it only counts as lapsed once the clock has moved
+	// past the round start: a check in the same tick compares equal and stays quiet. So the
+	// write *after* the wait is the one that has to notice the silence — that is what the host
+	// would otherwise need a tick for (G1).
+	time.Sleep(time.Millisecond)
+	if _, err := alice.ApplyAgentBusOp(ctx, board.Op{
+		Verb: board.VerbRefute, Node: "design", Actor: "alice",
+		Reason: "and the part of that reference I could check is about a different version",
+	}); err != nil {
+		t.Fatalf("refute again once the round has lapsed: %v", err)
+	}
 	if len(woken) == 0 {
 		// The opener does not wake herself, so the only target here is the owner: the
 		// write path is what has to ask, and no production path asked before this (G1).
 		_, input, probeErr := alice.agentBusWakeSnapshot(ctx)
-		t.Fatalf("opening a deliberation woke nobody (probe err=%v, targets=%+v)", probeErr, agentbus.WakeTargets(input))
+		t.Fatalf("a write after the round lapsed woke nobody (probe err=%v, targets=%+v)", probeErr, agentbus.WakeTargets(input))
 	}
 	for _, target := range woken {
 		if target.Participant != "bob" {
