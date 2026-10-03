@@ -83,6 +83,37 @@ func TestBudgetRefusalsAccumulatePerLevel(t *testing.T) {
 	}
 }
 
+// The tally is per level, so a refusal has to land in the field that names the ceiling that made
+// it: a turn-level ceiling must move Turn and leave Node alone (the mapping is where a copy-paste
+// slip would hide, and the panel reads these fields by name).
+func TestBudgetRefusalsLandInTheFieldOfTheRefusingLevel(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	ctrl := newAgentBusTalkController(t, dir, "bob")
+	ctrl.SetAgentBusLedger(agentbus.NewLedger(agentbus.BudgetLimits{Turn: 1}))
+
+	baseline := AgentBusBudgetRefusals()
+	if _, err := ctrl.ApplyAgentBusOp(ctx, busAssert("step", "bob")); err != nil {
+		t.Fatalf("assert: %v", err)
+	}
+	_, err := ctrl.ApplyAgentBusOp(ctx, board.Op{
+		Verb: board.VerbClaim, Node: "step", Actor: "bob",
+		Bounds:   &board.Bounds{Steps: 5},
+		Deadline: time.Now().UTC().Add(time.Hour),
+	})
+	if reason, refused := agentbus.IsBudgetReject(err); !refused || reason != agentbus.RefuseBudgetTurn {
+		t.Fatalf("claim = %v, want a turn-budget refusal", err)
+	}
+
+	got := AgentBusBudgetRefusals()
+	if delta := got.Turn - baseline.Turn; delta != 1 {
+		t.Fatalf("turn refusals +%d, want the turn ceiling counted", delta)
+	}
+	if delta := got.Node - baseline.Node; delta != 0 {
+		t.Fatalf("node refusals +%d, want the level that refused to be the only field that moved", delta)
+	}
+}
+
 // A budget refusal has to reach the host's own record, naming the ceiling that refused: the
 // tool result tells the model, and a brake nobody can see is not a brake (G3/T12-3).
 func TestABudgetRefusalIsRecordedWithItsCeiling(t *testing.T) {
