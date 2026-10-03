@@ -24567,6 +24567,20 @@
           }
         },
         {
+          "name": "lastHold",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "lastHoldAt",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
           "name": "newConversationEachRun",
           "optional": true,
           "type": {

@@ -17,6 +17,8 @@ export interface HeartbeatTask {
   topicId?: string;
   lastRunAt?: number;  // unix millis, moved only by a real run
   lastAttemptAt?: number; // unix millis, a tick spent without running (Goal hold / no topic)
+  lastHold?: string;      // why the last tick left it alone (host-computed)
+  lastHoldAt?: number;    // unix millis of that tick
   newConversationEachRun?: boolean; // true = create new topic each run
   runHistory?: HeartbeatRun[];      // recent executions (oldest first)
   createdAt?: number;

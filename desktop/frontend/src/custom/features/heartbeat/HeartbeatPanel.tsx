@@ -38,7 +38,7 @@ import { useHeartbeatT, type HeartbeatTranslator } from "./heartbeat.i18n";
 // 静态导入：Vite 保证 CSS 在模块 evaluate 前注入 DOM，避免首次访问自动化页
 // 无样式闪烁（FOUC）。node 单测通过 css-stub-register.mjs 的 loader hook 解析。
 import "./heartbeat.css";
-import { formatInterval, formatTaskNextRun, prepareTasksByNextRun, splitWorkspaceTail } from "./heartbeat.presentation";
+import { taskHoldNote, formatInterval, formatTaskNextRun, prepareTasksByNextRun, splitWorkspaceTail } from "./heartbeat.presentation";
 import { TaskEditor } from "./HeartbeatTaskEditor";
 import { CirclePlaySolid } from "./HeartbeatShared";
 export { changeHeartbeatFrequency, cronToInterval, heartbeatNextRunAt, intervalToCron, nextCycleRunAt, prepareTasksByNextRun } from "./heartbeat.presentation";
@@ -648,7 +648,7 @@ export function HeartbeatView({ onOpenTopic, active = true, onBack = () => {} }:
                   <div className="worktree-tree heartbeat-flat">
                     {filtered.map(({ task, nextRunAt }) => {
                       const isSelected = detailOpen && editing?.id === task.id;
-                      const nextRun = formatTaskNextRun(nextRunAt, now, t);
+                      const nextRun = [formatTaskNextRun(nextRunAt, now, t), taskHoldNote(task, t)].filter(Boolean).join(" · ");
                       const scopeLabel = task.scope === "project" && task.workspaceRoot
                         ? (workspaceMap[task.workspaceRoot] || splitWorkspaceTail(task.workspaceRoot) || task.workspaceRoot)
                         : t("heartbeat.scopeGlobal");
@@ -756,7 +756,7 @@ export function HeartbeatView({ onOpenTopic, active = true, onBack = () => {} }:
                           {/* ── Tasks under group (depth 1: 14 + 16 = 30px indent) ── */}
                           {isExpanded && groupTasks.map(({ task, nextRunAt }) => {
                             const isSelected = detailOpen && editing?.id === task.id;
-                            const nextRun = formatTaskNextRun(nextRunAt, now, t);
+                            const nextRun = [formatTaskNextRun(nextRunAt, now, t), taskHoldNote(task, t)].filter(Boolean).join(" · ");
                             return (
                               <div
                                 key={task.id}

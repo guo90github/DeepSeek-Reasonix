@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:4720e9acf4c8f6df6888ee368401e7f91b3dd9cb33f74aa1b895bf7142d7d3a4";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:a6d261177aaf43b18a668c3b82ba3073ad3eebf97fa38d5a1156a90e51faa066";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -2163,6 +2163,8 @@ export interface HeartbeatTask {
   topicId?: string;
   lastRunAt?: number;
   lastAttemptAt?: number;
+  lastHold?: string;
+  lastHoldAt?: number;
   newConversationEachRun?: boolean;
   runHistory?: HeartbeatRun[];
   createdAt?: number;

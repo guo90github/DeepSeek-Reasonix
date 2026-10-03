@@ -31,36 +31,6 @@ import (
 
 // ── Data model ──────────────────────────────────────────────────────────────
 
-// HeartbeatTask defines a single scheduled prompt.
-type HeartbeatTask struct {
-	ID                     string         `json:"id"`
-	Title                  string         `json:"title"`          // user-visible label
-	Prompt                 string         `json:"prompt"`         // the prompt to submit
-	Goal                   string         `json:"goal,omitempty"` // unattended Goal contract; empty = a plain scheduled prompt
-	Interval               string         `json:"interval"`       // e.g. "5m", "1h", "30s"
-	Enabled                bool           `json:"enabled"`
-	Scope                  string         `json:"scope,omitempty"`                  // "global" or "project"
-	WorkspaceRoot          string         `json:"workspaceRoot,omitempty"`          // project root path when scope="project"
-	TopicID                string         `json:"topicId,omitempty"`                // created topic, reused on re-run
-	LastRunAt              int64          `json:"lastRunAt,omitempty"`              // unix millis, moved only by a real run
-	LastAttemptAt          int64          `json:"lastAttemptAt,omitempty"`          // unix millis, a tick spent without running (Goal hold / no topic)
-	NewConversationEachRun bool           `json:"newConversationEachRun,omitempty"` // true = create new topic every run
-	RunHistory             []HeartbeatRun `json:"runHistory,omitempty"`             // recent executions (oldest first, capped)
-	CreatedAt              int64          `json:"createdAt,omitempty"`
-	ApprovalMode           string         `json:"approvalMode"`              // "ask" | "auto" | "yolo"; empty defaults to "yolo"
-	TimeWindowStart        string         `json:"timeWindowStart,omitempty"` // "HH:MM" — interval tasks only run after this time (inclusive)
-	TimeWindowEnd          string         `json:"timeWindowEnd,omitempty"`   // "HH:MM" — interval tasks only run before this time (exclusive)
-	NotifyChannels         *bool          `json:"notifyChannels,omitempty"`  // true = push to bot channels; nil/false = skip
-}
-
-// HeartbeatRun records a single successful execution of a heartbeat task.
-// TopicID is the conversation created/reused by that run (may be empty if
-// the run produced no topic).
-type HeartbeatRun struct {
-	At      int64  `json:"at"`      // unix millis execution time
-	TopicID string `json:"topicId"` // topic used/created by this run
-}
-
 // maxRunHistory caps how many recent executions are kept per task.
 const maxRunHistory = 20
 
@@ -150,7 +120,7 @@ type HeartbeatEngine struct {
 	cfgInitialized bool                             // engine has observed existing or missing config state
 	cfgDeleted     bool                             // an existing config was removed externally
 	pendingTopics  map[string]heartbeatPendingTopic // in-memory retry/in-flight safety for NewConversationEachRun
-	holdLog        map[string]string                // last unattended hold reason per task, so a steady state logs once
+	holdLog        map[string]string                // last hold reason per task, so a steady state logs once
 	handoffPreface map[string]string                // one-shot preface for a task just moved to a fresh session
 	unattended     bool                             // master switch, snapshotted at Start so a toggle lands on the next launch
 	handoffPercent int                              // context threshold, snapshotted at Start from handoffPercent
@@ -396,7 +366,7 @@ func (e *HeartbeatEngine) resolveHeartbeatTopic(t HeartbeatTask, scope, workspac
 			meta, err := e.app.CreateTopic(scope, workspaceRoot, title)
 			if err != nil {
 				log.Printf("[heartbeat] CreateTopic(%q): %v", t.Title, err)
-				t.LastAttemptAt = time.Now().UnixMilli()
+				noteHold(&t, "could not create the task's topic", time.Now())
 				return t, "", false, false
 			}
 			topicID = meta.ID
@@ -415,7 +385,7 @@ func (e *HeartbeatEngine) resolveHeartbeatTopic(t HeartbeatTask, scope, workspac
 			meta, err := e.app.CreateTopic(scope, workspaceRoot, title)
 			if err != nil {
 				log.Printf("[heartbeat] CreateTopic(%q): %v", t.Title, err)
-				t.LastAttemptAt = time.Now().UnixMilli()
+				noteHold(&t, "could not create the task's topic", time.Now())
 				return t, "", false, false
 			}
 			topicID = meta.ID
@@ -423,6 +393,18 @@ func (e *HeartbeatEngine) resolveHeartbeatTopic(t HeartbeatTask, scope, workspac
 		}
 	}
 	return t, topicID, pendingSubmitted, true
+}
+
+// waitForTabController waits out the asynchronous build openTopicTab starts: forty 250ms
+// attempts is the budget a slow tab build gets before the tick is left to the next one.
+func (e *HeartbeatEngine) waitForTabController(tabID string) heartbeatRuntimeStatus {
+	for range 40 {
+		if candidate := e.app.ctrlByTabID(tabID); candidate != nil {
+			return candidate
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return nil
 }
 
 func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
@@ -448,27 +430,20 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 	}
 	if err != nil {
 		log.Printf("[heartbeat] OpenTab(%q): %s", t.Title, secrets.RedactError(err))
-		t.LastAttemptAt = time.Now().UnixMilli()
+		noteHold(&t, "could not open the task's tab", time.Now())
 		return t
 	}
 
-	// Wait for the tab's controller to be built (it's started
-	// asynchronously in a goroutine by openTopicTab).
-	var ctrl heartbeatRuntimeStatus
-	for range 40 {
-		if candidate := e.app.ctrlByTabID(tabMeta.ID); candidate != nil {
-			ctrl = candidate
-			break
-		}
-		time.Sleep(250 * time.Millisecond)
-	}
+	ctrl := e.waitForTabController(tabMeta.ID)
 	if ctrl == nil {
 		log.Printf("[heartbeat] controller not ready for %q, skipping", t.Title)
+		noteHold(&t, "the task's session was not ready", time.Now())
 		return t // don't update LastRunAt — retry next tick
 	}
 	if heartbeatControllerBusy(ctrl) {
 		e.cancelWedgedUnattendedTurn(t, ctrl)
 		log.Printf("[heartbeat] controller busy for %q, skipping", t.Title)
+		noteHold(&t, "the task's session was still busy with a turn", time.Now())
 		return t // don't change approval mode for an existing turn — retry next tick
 	}
 	if t.NewConversationEachRun && pendingSubmitted {
@@ -482,6 +457,7 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 	// A finished build waits next to us: switching versions restarts the app, so
 	// it happens here, at a turn boundary, and never mid-turn.
 	if e.maybeRelaunchForUpgrade(&t) {
+		noteHold(&t, "a finished update is waiting to install", time.Now())
 		return t
 	}
 	// Spent windows and the switch are independent of a Goal, and they outrank
@@ -520,6 +496,7 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 	// shell or slash-command handlers such as "!cmd", "/clear", or "/compact".
 	if !e.app.submitUserTurnToTabWithSink(tabMeta.ID, e.takeHandoffPrompt(t), botForwarder) {
 		log.Printf("[heartbeat] submit skipped for %q", t.Title)
+		noteHold(&t, "the prompt could not be submitted", time.Now())
 		return t
 	}
 
@@ -535,6 +512,7 @@ func (e *HeartbeatEngine) executeTaskOwned(t HeartbeatTask) HeartbeatTask {
 	}
 
 	t.LastRunAt = time.Now().UnixMilli()
+	t.LastHold, t.LastHoldAt = "", 0
 	if t.CreatedAt == 0 {
 		t.CreatedAt = t.LastRunAt
 	}

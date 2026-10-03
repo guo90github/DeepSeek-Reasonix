@@ -1247,7 +1247,7 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 
 **查实、但尚未修的两处（同族；形状已写明，留给下一刀）**
 
-- **心跳任务跑失败或被 hold**：引擎只 `log.Printf("[heartbeat] …")`（`desktop/heartbeat.go:292/398/417/450/659`），
+- **心跳任务跑失败或被 hold**：~~引擎只 `log.Printf("[heartbeat] …")`~~ ⇒ **已修（2026-10-04，见交接区检查单第 23 笔）**：任务视图新增 `lastHold`/`lastHoldAt`（`desktop/heartbeat_task.go` 的 `noteHold` 一处记账，8 个"这次没跑"的 site 各带原因，成功提交时清空；`holdTick` 那条 Goal-hold 路径也记在任务上），面板在同一单元格里**原样转述**它 ⇒ 设计性 hold 与真故障可分辨。下面这段是修前的证据（引擎只 `log.Printf("[heartbeat] …")`，`desktop/heartbeat.go:292/398/417/450/659`，
   任务视图**没有**错误字段（只有 `LastRunAt` / `LastAttemptAt`）⇒ 面板只能显示"**已到期、晚了多久**"，
   说不出**为什么**（是 Goal hold 的设计，还是打不开话题的故障）。宿主机**其实已经**为每个任务算了 hold 原因
   （`holdLog map[string]string`，注释写着 "so a steady state logs once"）⇒ 修法就是把这份原因放进任务视图并在面板显示。

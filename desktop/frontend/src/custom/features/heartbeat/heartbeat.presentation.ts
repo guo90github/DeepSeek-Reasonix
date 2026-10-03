@@ -496,6 +496,14 @@ export function formatTaskNextRun(next: number | null, now: number, t: Heartbeat
   return t("heartbeat.dueSoon");
 }
 
+// 上轮为何没跑：宿主机自己算的原因原样转述（可能是设计——比如正在跑的 Goal 自己驱动这一轮；
+// 也可能是故障——比如打不开任务的话题）。面板不替它分类，只把理由和多久之前一起说出来。
+export function taskHoldNote(task: Pick<HeartbeatTask, "lastHold" | "lastHoldAt">, t: HeartbeatTranslator): string | null {
+  const reason = (task.lastHold || "").trim();
+  if (!reason) return null;
+  if (!task.lastHoldAt) return t("heartbeat.holdNote", { reason });
+  return t("heartbeat.holdNoteAt", { reason, ago: formatRelativeTime(task.lastHoldAt, Date.now(), t) });
+}
 export function taskNextRun(task: HeartbeatTask, t: HeartbeatTranslator): string | null {
   const now = Date.now();
   return formatTaskNextRun(taskNextRunAt(task, now), now, t);
