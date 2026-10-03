@@ -35,6 +35,7 @@ func AgentBusWakePrompt(target agentbus.WakeTarget) string {
 		b.WriteString("\n")
 	}
 	writeWakeList("startable now", target.Ready)
+	writeWakeList("addressed to you, and nobody else may take it", target.Assigned)
 	writeWakeList("waiting on you", target.Waiting)
 	writeWakeList("questions addressed to you", target.Asks)
 	writeWakeList("deliberations you owe an answer about", target.Owes)
@@ -68,6 +69,7 @@ func AgentBusWakeLine(target agentbus.WakeTarget) string {
 		b.WriteString(strings.Join(items, ", "))
 	}
 	appendList("startable now", target.Ready)
+	appendList("addressed to you", target.Assigned)
 	appendList("waiting on you", target.Waiting)
 	appendList("questions for you", target.Asks)
 	appendList("deliberations you owe", target.Owes)

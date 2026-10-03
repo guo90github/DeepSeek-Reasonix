@@ -21,6 +21,9 @@ type WakeTarget struct {
 	Key string
 	// Ready are unowned nodes this participant asked for and that can start now.
 	Ready []string
+	// Assigned are nodes the board addressed to this participant: unowned and startable,
+	// and takeable by nobody else, so the wake has to say that they are theirs (§13.4).
+	Assigned []string
 	// Waiting are nodes of theirs that cannot start until Ready is done.
 	Waiting []string
 	// Asks are questions addressed to this participant that nobody has answered.
@@ -108,7 +111,7 @@ func WakeTargets(in WakeInput) []WakeTarget {
 			// anyone is waiting on it, and it wakes nobody else (board.Node.Assignee).
 			if assignee := strings.TrimSpace(dep.Assignee); assignee != "" {
 				t := target(assignee)
-				t.Ready = appendUnique(t.Ready, depID)
+				t.Assigned = appendUnique(t.Assigned, depID)
 				for _, blocked := range waiting[depID] {
 					t.Waiting = appendUnique(t.Waiting, blocked)
 				}
@@ -187,7 +190,7 @@ func askTarget(talk *TalkState, correlation string) string {
 func wakeKey(t *WakeTarget) string {
 	sum := sha256.New()
 	sum.Write([]byte(t.Participant))
-	for _, group := range [][]string{t.Ready, t.Waiting, t.Asks, t.Owes} {
+	for _, group := range [][]string{t.Ready, t.Assigned, t.Waiting, t.Asks, t.Owes} {
 		items := append([]string(nil), group...)
 		sort.Strings(items)
 		for _, item := range items {

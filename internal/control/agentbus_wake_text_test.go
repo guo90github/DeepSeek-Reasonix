@@ -42,6 +42,19 @@ func TestAgentBusWakePromptSaysItsListsAreASnapshot(t *testing.T) {
 	}
 }
 
+// Work the board addressed to one participant has to say so: the wake is the reader's only
+// account of why it was woken, and nobody else may take these.
+func TestAgentBusWakePromptNamesWorkAddressedToTheReader(t *testing.T) {
+	woken := AgentBusWakePrompt(agentbus.WakeTarget{Participant: "bob", Key: "k", Assigned: []string{"schema"}})
+	if !strings.Contains(woken, "addressed to you") || !strings.Contains(woken, "schema") {
+		t.Fatalf("wake block = %q, want the addressed work named", woken)
+	}
+	line := AgentBusWakeLine(agentbus.WakeTarget{Participant: "bob", Assigned: []string{"schema"}})
+	if !strings.Contains(line, "addressed to you") || !strings.Contains(line, "schema") {
+		t.Fatalf("wake line = %q, want a person told the same thing", line)
+	}
+}
+
 // The block is the model's only account of why it was woken: a target with nothing to say must
 // still render a closed block rather than labels with no content under them.
 func TestAgentBusWakePromptRendersEmptyListsAsABlock(t *testing.T) {

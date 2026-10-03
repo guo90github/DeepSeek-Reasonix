@@ -20,8 +20,11 @@ func TestWakeTargetsAddressAnAssignedStepToItsAssignee(t *testing.T) {
 	if len(targets) != 1 || targets[0].Participant != "bob" {
 		t.Fatalf("targets = %+v, want only bob, the assignee", targets)
 	}
-	if len(targets[0].Ready) != 1 || targets[0].Ready[0] != "step" {
-		t.Fatalf("ready = %v, want the assigned step", targets[0].Ready)
+	if len(targets[0].Assigned) != 1 || targets[0].Assigned[0] != "step" {
+		t.Fatalf("assigned = %v, want the step in the addressed group, not the pool", targets[0].Assigned)
+	}
+	if len(targets[0].Ready) != 0 {
+		t.Fatalf("ready = %v, want nothing pooled: the assignment is what keeps others out", targets[0].Ready)
 	}
 }
 

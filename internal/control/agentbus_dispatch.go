@@ -101,7 +101,9 @@ func parkStartableWork(ctx context.Context, queueLog *agentbus.QueueLog, st *boa
 		return nil
 	}
 	for _, target := range agentbus.WakeTargets(agentbus.WakeInput{State: st, Now: now}) {
-		for _, node := range target.Ready {
+		// Addressed work parks like pooled work: the queue is what the take rule reads,
+		// whichever group named the node.
+		for _, node := range append(append([]string(nil), target.Ready...), target.Assigned...) {
 			if !dispatchable(st, node) {
 				continue
 			}
