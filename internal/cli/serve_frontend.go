@@ -156,6 +156,10 @@ func startServeBalanceDiagnostics(ctrl *control.Controller) {
 func serveFrontendLoop(ctrl *control.Controller, srv *serve.Server, resources *serveFrontendResources, opts serveFrontendOptions) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// A terminating serve is a host leaving the board: it retires the addresses it
+	// hosted, so the next wake goes to a session that still exists. A session retired
+	// on its own (an idle tab, a detached session) keeps its address.
+	defer srv.WithdrawAgentBus()
 	if resources.listener == nil {
 		if err := srv.RunGraceful(ctx, opts.address); err != nil {
 			fmt.Fprintln(os.Stderr, i18n.M.ErrorPrefix, err)

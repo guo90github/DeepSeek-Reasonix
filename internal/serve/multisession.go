@@ -222,6 +222,34 @@ func (s *Server) closeTaggedController(ctrl *control.Controller) {
 	s.forgetSessionTag(ctrl)
 }
 
+// WithdrawAgentBus retires every hosted session's board address. A process on its way out
+// must not keep being woken somewhere it no longer is — and unlike a session retired on its
+// own, it will not come back to re-announce itself.
+func (s *Server) WithdrawAgentBus() {
+	for _, ctrl := range s.taggedControllers() {
+		if !ctrl.AgentBusEnrolled() {
+			continue
+		}
+		if err := ctrl.AgentBusWithdraw(); err != nil {
+			slog.Warn("serve: agentbus withdraw", "participant", ctrl.AgentBusParticipant(), "err", err)
+		}
+	}
+}
+
+// taggedControllers snapshots the hosted controllers, so a session is never asked to do
+// anything while the tag lock is held.
+func (s *Server) taggedControllers() []*control.Controller {
+	s.tagsMu.Lock()
+	ctrls := make([]*control.Controller, 0, len(s.tags))
+	for ctrl := range s.tags {
+		if ctrl != nil {
+			ctrls = append(ctrls, ctrl)
+		}
+	}
+	s.tagsMu.Unlock()
+	return ctrls
+}
+
 func (s *Server) setControllerPath(ctrl *control.Controller, path string) {
 	if path != "" {
 		path = agent.CanonicalSessionPath(path)
