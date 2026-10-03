@@ -759,7 +759,10 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
   所以"哪些断言是授权"只能从 **op 日志**读回来——**与唤醒目标同一先例**（后者自 T5-6/2026-10-02 起已把 `Requester` **折进状态**，
   而授权的 `Source` **仍**只能从 op 读：`Assertion` 不带它 ⇒ 这条先例被**收窄**过，没有被推翻 ✓）。
   若将来要让折出状态直接答"谁批的"，最小改动是给 `Assertion` 加一个字段（S1 变更），届时按新证据再来一次，而不是现在偷偷加。
-- **验收（下一刀）**：① 对授权做 `refute`/`revert` 能改变折出结果；② 同一 op log 重放得到同一份授权；
+- **验收（下一刀）**：① 对授权做 `refute`/`revert` 能改变折出结果；② 同一 op log 重放得到同一份授权
+  **实证（2026-10-04 抽查 ⇒ 这两条已可复跑，不再是"下一刀"）**：① `TestARefutationChangesTheEnding`、
+  `TestAnAuthorizationGoesWithTheNodeThatLostItsStanding`、`TestNodeDetailLeavesOutAnAuthorizationThatDoesNotHold`；
+  ② 同一 op log 的重放一致性由 `internal/agentbus/e2e_test.go` 与 board 的重放用例覆盖。；
   ③ 缺能力的子节点在**没有** `agentbus-grant` 断言时不得被计为"已授权"。
 
 **落地现状与更正（2026-10-02，动手前先核对了链路）**：
@@ -791,7 +794,9 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
   与当前**在写的** `budget_spend` 路径**同形**（那条就是模板：同一个记账点、同一个状态迁移、同一个停止原因字段）。
 - **不再留中间态**：`stopCauseBudgetTokens` 上"legacy; never written by current runtime"这句注释必须随实现一起改掉，
   否则下一个人会继续以为它无效（这正是本次发现的起因）。
-- **验收（下一刀）**：① 累计 token **真的到达**配置上限（走真实装配，配置→`Options`→运行时记账）；② 超限后 Goal 状态为 **`blocked`**
+- **验收（下一刀）**：① 累计 token **真的到达**配置上限（走真实装配，配置→`Options`→运行时记账）
+  **抽查（2026-10-04）**：`grep` 没找到这条真装配用例（`internal/control` 里只有 `TestGoalLegacyBudgetTokensSidecarAutoResumes`
+  这类侧车用例）⇒ **这一条仍待做** —— 是真实缺口，不是措辞过时。；② 超限后 Goal 状态为 **`blocked`**
   且停止原因是 `budget_tokens`；③ 关掉该配置（默认值）时**行为与现在一致**（跑到跑完或叫停）——即复活不得改变未配置用户的语义。
 - **记账点先定再写**：与 §13.7 开头同一问题——谁持有账本/在哪个 tick 记账。若 `budget_spend` 已有明确记账点，
   token 就挂在**同一点**上，不另开一处。
@@ -847,6 +852,7 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
 ② `taskBudgetLimit` 把 `TaskBudget.Tokens` 填上（0/负 = 不设 ⇒ 关配置时行为不变 ✓）；③ 用例照
 `task_budget_gate_test.go` 的"cost/time/未配置"三态补 `tokens` 那一态，再补 control 侧按 axis 分派 `budget_spend` / `budget_tokens`。
 **仍待确认**（下一刀第一件事）：`exceeded` 是否已经处理 `Tokens` 分支（该函数体本轮未读到 ✗）——若是，则实现只剩上述 ① ②。
+**（紧接着的下一段就回答了它：`exceeded` 早已处理 token 轴 ⇒ 实现只剩装配那一跳；读者可直接跳到下一段。）**
 
 **读全了（2026-10-02 收尾）：`exceeded` 早已处理 token 轴，缺的只是"注入时把上限填进去"** —— 并更正一处名字错误 ✗：
 
