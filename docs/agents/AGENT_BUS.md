@@ -1154,3 +1154,18 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 **技能与缓存**：正文只在被调用时进上下文；新增内置技能给宿主生成的 `session-context` 的 Skills 目录**加一行**
 （`internal/control/session_context.go`；会话上下文属回合尾部，不是 cache-stable 前缀），golden 基准本身不含技能目录
 （`internal/boot/golden_baseline_test.go` 明记交由 session-context 测试覆盖）⇒ `TestGoldenBaseline` 实测未变。
+
+### 13.15 宿主派发回环的三条真实规则（2026-10-04，`5578284b8`）
+
+桌面宿主的派发回环 `agentBusDispatchTick`（`desktop/agentbus_waker.go`）此前没有用例；补用例时**实测问清了三条规则**
+（前两条我的初稿写错过，跑出来才知道）：
+
+| 规则 | 为什么 | 用例 |
+|---|---|---|
+| 每位参与者**每 tick 只发一步**，且**该参与者已有排队唤醒时按住**（`RuntimeStatus().PendingPrompt` 让它算"在做的事"） | 不把活堆在还没开工的会话上；派发本身留下的唤醒就是"它还没消化"的证据 | `TestADispatchTickHandsWorkToTheSessionOneStepPerTick`（`desktop/agentbus_dispatch_tick_test.go`） |
+| **投递不了就交回**：`deliver` 失败时把 claim 交回板上（"没人被告知的活不该留着"） | 否则活被一个**从没听说过它**的会话占着 | `TestADispatchTickLeavesNoClaimWhenTheSessionCannotBeTold` |
+| **没入列的标签不是派发目标**（跳过，不替它猜参与者/板子） | 猜出来的身份等于把活发错人 | `TestADispatchTickSkipsATabWithoutABoard` |
+
+**已知边界（记档，不做，2026-10-04 用户定调）**：会话摘要（recap）的后台 lane **自带它建立时的 provider/凭据** ⇒
+轮换 API key 后它仍可能用旧 key 发请求（栈：`SendWithRetry ← openai.Stream ← boundedllm.Call ← recap.Generator ← recap.Runner`）。
+判定为**可接受的边界**（摘要属辅助产物、lane 生命周期独立于会话运行时），不改代码，仅此记档。
