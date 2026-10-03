@@ -1345,6 +1345,19 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 **并且它可见**：投影把它映成 `SignalUndecided` 一行，详情写着"**closed by rule: nobody may call it settled**"（`observe.go:209-213`），
 节点详情同时给 `Deliberating`/`Verdict`（`detail.go:34-35,60`）；三处都有用例（`hearing_test.go:159/160/218-228`、`observe_test.go:187-198`、`detail_test.go:99-101`）。
 ⇒ "听证没人回应 ⇒ 结果不可被少数人当既定结论"这条设计，既**落地**又**看得见**。
+
+**预算五条轴：拒绝还是仅记账（2026-10-04 核实 —— §13.7/§13.9 说的是前者，代码一致）**
+
+| 轴 | 闸门在哪 | 拒绝面 |
+|---|---|---|
+| board / 子树 / 节点 / 回合 | `Ledger.Charge`（`internal/agentbus/budget.go:133-142`，逐层 `check` 后返回 error） | `internal/control/agentbus_budget.go:49` ⇒ `recordBudgetRefusal`（带 level/reason/limit/board/node） |
+| 槽位 | `Ledger.AcquireSlot`（`budget.go:98-110`，满则 `BudgetReject{Level: "slots"}`） | `internal/control/agentbus_dispatch.go:60-61`（不 claim、只记账） |
+| token | 不在账本里：agent 的 `exceeded`（`run_budget.go:110-115`）把回合落成**可恢复的 `task_budget` 暂停** | 由 `c209dc79f` 补的两条用例钉住 |
+
+**`Settle`（验收后记账）是例外，而且是写在文档里的例外**：它的 doc 明说 "a refusal here is **bookkeeping and not a gate**: it says stop
+starting new work, never undo the work that was accepted"（`internal/control/agentbus_budget.go:144-146`）；它能失败的情形是 nil/未知节点/节点未 `done`/
+board 或子树超限（`budget.go:148-167`），失败时只 `slog.Warn`（`:162`）—— 而"停止新活"由**同一上限在下一次 `Charge` 上自然生效**，
+所以这条 log-only 既不丢语义也不留缺口（前两类失败是防御路径，后两类是设计选择）。
 **同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
 
 **另一处已核实（2026-10-04）：地址簿 TTL 与两种投递失败的可见性。**
