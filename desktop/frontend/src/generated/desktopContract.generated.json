@@ -19393,6 +19393,13 @@
           }
         },
         {
+          "name": "retryReason",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "streamAttempt",
           "optional": true,
           "type": {

@@ -45,7 +45,8 @@ type Event struct {
 	Recovery         *event.RecoveryStatus            `json:"recovery,omitempty"`
 	RetryAttempt     int                              `json:"retryAttempt,omitempty"`
 	RetryMax         int                              `json:"retryMax,omitempty"`
-	RetryScope       string                           `json:"retryScope,omitempty"` // "headers" | "stream" | "protocol"; omit for older clients
+	RetryScope       string                           `json:"retryScope,omitempty"`  // "headers" | "stream" | "protocol"; omit for older clients
+	RetryReason      string                           `json:"retryReason,omitempty"` // "rate_limited" | "server_error" | "timeout" | "network"
 	StreamAttempt    *StreamAttempt                   `json:"streamAttempt,omitempty"`
 	// ItemID correlates Steer / TurnDone / unapplied-steer with a durable
 	// session-inbox entry. Empty for legacy text-only guidance.

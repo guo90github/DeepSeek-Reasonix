@@ -174,6 +174,9 @@ func ToWire(e event.Event) Event {
 		if e.RetryScope != "" {
 			w.RetryScope = string(e.RetryScope)
 		}
+		if e.RetryReason != "" {
+			w.RetryReason = string(e.RetryReason)
+		}
 	case event.StreamAttempt:
 		w.StreamAttempt = &StreamAttempt{
 			ID:      e.StreamAttempt.ID,

@@ -307,6 +307,44 @@ func TestSendWithRetryRecoversAndNotifies(t *testing.T) {
 	}
 }
 
+// A 429 this host rides out is still a fact an unattended operator has to be able to count:
+// the total grows for every absorbed one, and the final attempt (the one that fails) is not
+// an absorption (G6).
+func TestAnAbsorbedRateLimitIsCountedAndTheLastAttemptIsNot(t *testing.T) {
+	calls := 0
+	cl := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if calls <= 2 {
+			return statusResp(http.StatusTooManyRequests, nil), nil
+		}
+		return statusResp(200, nil), nil
+	})}
+	before := RateLimitRetries()
+
+	resp, err := SendWithRetry(context.Background(), cl, SendOptions{Provider: "p", KeyEnv: "KEY"}, newDummyReq)
+	if err != nil {
+		t.Fatalf("should recover after the rate limits clear: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK || calls != 3 {
+		t.Fatalf("status=%d calls=%d, want 200 after 3 calls", resp.StatusCode, calls)
+	}
+	if got := RateLimitRetries(); got != before+2 {
+		t.Fatalf("rate-limit total = %d, want %d: both ridden-out 429s count", got, before+2)
+	}
+
+	// The same status with no attempts left is not absorbed: nothing was ridden out.
+	exhausted := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
+		return statusResp(http.StatusTooManyRequests, nil), nil
+	})}
+	before = RateLimitRetries()
+	if _, err := SendWithRetry(WithManagedRecovery(context.Background()), exhausted, SendOptions{Provider: "p", KeyEnv: "KEY"}, newDummyReq); err == nil {
+		t.Fatal("a 429 that never clears has to come back as an error")
+	}
+	if got := RateLimitRetries(); got != before {
+		t.Fatalf("rate-limit total = %d, want %d unchanged: managed recovery does not retry", got, before)
+	}
+}
+
 func TestRequestAttemptCountSurvivesRetriesThenTerminalFailure(t *testing.T) {
 	calls := 0
 	cl := &http.Client{Transport: rtFunc(func(r *http.Request) (*http.Response, error) {

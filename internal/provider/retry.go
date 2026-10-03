@@ -232,6 +232,16 @@ func IsConnReset(err error) bool {
 	return errors.As(err, &netErr)
 }
 
+// rateLimitRetries counts the 429s this process rode out (see NoteRateLimitRetry).
+var rateLimitRetries atomic.Int64
+
+// NoteRateLimitRetry reports the running total after one more rate-limited attempt.
+func NoteRateLimitRetry() int64 { return rateLimitRetries.Add(1) }
+
+// RateLimitRetries is how many rate-limited attempts this process has absorbed. A host
+// records it so a 429 storm is countable instead of invisible (G6).
+func RateLimitRetries() int64 { return rateLimitRetries.Load() }
+
 func backoffDelay(attempt int, retryAfter time.Duration) time.Duration {
 	if retryAfter > 0 {
 		if retryAfter > maxRetryAfter {
@@ -369,6 +379,11 @@ func SendWithRetry(ctx context.Context, httpClient *http.Client, opts SendOption
 				return nil, replayErr
 			}
 			return nil, apiErr
+		}
+		if resp.StatusCode == http.StatusTooManyRequests && attempt < limit {
+			// Ridden out, not surfaced: a rate limit this host absorbs is still a fact the
+			// operator has to be able to count (G6). The final attempt is not absorbed.
+			NoteRateLimitRetry()
 		}
 		lastErr = apiErr
 	}

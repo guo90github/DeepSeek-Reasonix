@@ -555,6 +555,7 @@ type Event struct {
 	RetryAttempt       int                       // Retrying: 1-based attempt about to be made
 	RetryMax           int                       // Retrying: total attempts before giving up
 	RetryScope         RetryScope                // Retrying: optional "headers" | "stream"; empty for older emitters
+	RetryReason        RetryReason               // Retrying: why, when the emitter classifies it
 	StreamAttempt      StreamAttemptInfo         // StreamAttempt lifecycle
 	ReadStatus         *ReadStatusPayload        // ReadStatus: one logical read's delivery state
 	ReadPause          *provider.ReadPause       // TurnDone: durable display-only pause receipt

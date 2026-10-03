@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:ca67c524793d628ec97249a8aa01e1d744fd36d44a4f0fba2650d1c822f5754d";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:ffe2073441ee5e1f41266bb125a1564614521a89e588dd39bb9f51a4d2a5cab5";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -1205,6 +1205,7 @@ export interface Event {
   retryAttempt?: number;
   retryMax?: number;
   retryScope?: string;
+  retryReason?: string;
   streamAttempt?: StreamAttempt | null;
   itemId?: string;
   sessionPath?: string;

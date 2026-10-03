@@ -113,6 +113,9 @@ func TestAgentEmitsRetryingThenStreams(t *testing.T) {
 	if retries[0].RetryMax != maxStreamRecoveries {
 		t.Errorf("RetryMax = %d, want %d", retries[0].RetryMax, maxStreamRecoveries)
 	}
+	if retries[0].RetryReason != event.RetryReasonServer {
+		t.Errorf("RetryReason = %q, want %q for an overloaded provider", retries[0].RetryReason, event.RetryReasonServer)
+	}
 
 	var answer strings.Builder
 	for _, e := range sink.kinds(event.Text) {
@@ -120,6 +123,47 @@ func TestAgentEmitsRetryingThenStreams(t *testing.T) {
 	}
 	if !strings.Contains(answer.String(), "hi there") {
 		t.Errorf("streamed answer = %q, want it to contain %q", answer.String(), "hi there")
+	}
+}
+
+// A 429 is the retry an unattended host has to be able to count: the event names it and the
+// process keeps the running total, so a rate-limit storm is greppable instead of invisible
+// (G6). No throttling policy is invented here — only what happened is reported.
+func TestAgentNamesARateLimitedRetryAndCountsIt(t *testing.T) {
+	var reqs int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reqs++
+		if reqs == 1 {
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = w.Write([]byte(`{"error":"rate limited"}`))
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\ndata: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	prov, err := openai.New(provider.Config{Name: "deepseek", BaseURL: srv.URL, Model: "deepseek-v4", APIKey: "k"})
+	if err != nil {
+		t.Fatalf("New provider: %v", err)
+	}
+
+	before := provider.RateLimitRetries()
+	sink := &recordSink{}
+	a := New(prov, tool.NewRegistry(), NewSession(""), Options{}, sink)
+	if err := a.Run(context.Background(), "hi"); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	retries := sink.kinds(event.Retrying)
+	if len(retries) != 1 || retries[0].RetryReason != event.RetryReasonRateLimited {
+		t.Fatalf("retries = %+v, want exactly one %q retry", retries, event.RetryReasonRateLimited)
+	}
+	if got := provider.RateLimitRetries(); got != before+1 {
+		t.Fatalf("rate-limit total = %d, want %d: an absorbed 429 has to be countable", got, before+1)
+	}
+	if reqs != 2 {
+		t.Fatalf("upstream requests = %d, want the retry after the rate limit", reqs)
 	}
 }
 

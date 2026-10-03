@@ -11,6 +11,18 @@ const (
 	RetryScopeProtocol RetryScope = "protocol"
 )
 
+// RetryReason is why a retry is happening, in the closed set a host records. It is empty
+// for an emitter that does not classify, and an unknown value is ignored, so a 429 storm
+// can be counted separately from a flaky link without inventing a throttling policy (G6).
+type RetryReason string
+
+const (
+	RetryReasonRateLimited RetryReason = "rate_limited" // 429: the provider asked this host to slow down
+	RetryReasonServer      RetryReason = "server_error" // 5xx: the provider is unwell, not this host
+	RetryReasonTimeout     RetryReason = "timeout"      // 408 or a deadline the host hit
+	RetryReasonNetwork     RetryReason = "network"      // connection reset, dial failure
+)
+
 // RecoveryStatus is a local UI projection, never provider-visible metadata.
 type RecoveryStatus struct {
 	// State is the durable tool-recovery state (for example recovery_required).
