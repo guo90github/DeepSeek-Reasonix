@@ -76,7 +76,7 @@ func (agentBusBoard) Schema() json.RawMessage {
 "properties":{
   "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","assign","unassign","capability_gap","abandon","revert","ask","answer","hearing_open","hearing_answer","hearing_settle"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new; pass reason to state the claim in one line). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. assign: address the node to one participant (set assignee=), who is then the only one that may take it. unassign: hand the node back to the pool. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=). hearing_open: start a deliberation on a contested node (required= names who must answer; empty means its owner and everyone who refuted it). hearing_answer: record your side of the deliberation (text, optional evidence — an answer that brings nothing checkable weighs nothing). hearing_settle: weigh the deliberation and record the verdict; a refuted assertion blocks the node."},
   "node":{"type":"string","description":"Node id. Required for every action except view and split."},
-  "title":{"type":"string","description":"Human-readable title; used when the action creates the node (require/split children)."},
+  "title":{"type":"string","description":"Human-readable title; names the node the action creates (require/split children, or the node an assert lays down)."},
   "reason":{"type":"string","description":"Why: assert stores it as the assertion's summary; required by refute, capability_gap and abandon (for capability_gap: what you need, what you tried, why it did not work)."},
   "outcome":{"type":"string","enum":["done","blocked","abandoned"],"description":"decide only."},
   "evidence":{"type":"array","description":"Evidence for assert/abandon and for decide(done): each item needs a ref (command, path, test, URL) that another participant can check.","items":{"type":"object","properties":{"kind":{"type":"string","description":"e.g. test, command, file, url"},"ref":{"type":"string"},"note":{"type":"string"}},"required":["ref"]}},
@@ -292,6 +292,7 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 	case "assert":
 		op.Evidence = evidenceOf(in.Evidence)
 		op.Reason = strings.TrimSpace(in.Reason)
+		op.Title = strings.TrimSpace(in.Title)
 	case "claim":
 		op.Deadline = time.Now().UTC().Add(leaseOf(in.LeaseSeconds))
 		bounds := &board.Bounds{Steps: in.Steps, Tokens: in.Tokens, Output: strings.TrimSpace(in.Output)}

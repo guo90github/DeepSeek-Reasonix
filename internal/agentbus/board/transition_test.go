@@ -87,6 +87,31 @@ func TestAssertOnUnknownNodeCreatesItOpen(t *testing.T) {
 	}
 }
 
+// An assertion can name what it asserts: the deliverable root a session lays down is what a
+// person reads in the panel, and until now only require/split could give a node a name, so an
+// orchestration spec had to build structure with those two verbs to avoid id-only nodes.
+func TestAssertNamesANodeItCreates(t *testing.T) {
+	b := openTestBoard(t)
+	named := opAssert("root", "alice")
+	named.Title = "Ship the parser"
+	mustApply(t, b, named)
+	if got := snapshot(t, b).Nodes["root"].Title; got != "Ship the parser" {
+		t.Fatalf("title = %q, want the name the assertion carried", got)
+	}
+	// A later assertion never renames what somebody named: a title identifies a node.
+	rename := opAssert("root", "bob")
+	rename.Title = "Something else"
+	mustApply(t, b, rename)
+	if got := snapshot(t, b).Nodes["root"].Title; got != "Ship the parser" {
+		t.Fatalf("title = %q, want the first name kept", got)
+	}
+	// Without a title nothing changes: the node stays id-only, exactly as before.
+	mustApply(t, b, opAssert("other", "alice"))
+	if got := snapshot(t, b).Nodes["other"].Title; got != "" {
+		t.Fatalf("title = %q, want an assert without a title to leave the node id-only", got)
+	}
+}
+
 func TestIllegalTransitionsAreRejectedWithReason(t *testing.T) {
 	live := func(b *Board) error {
 		if _, err := b.Apply(context.Background(), opAssert("n", "alice")); err != nil {

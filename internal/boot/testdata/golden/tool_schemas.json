@@ -140,7 +140,7 @@
           "type": "string"
         },
         "title": {
-          "description": "Human-readable title; used when the action creates the node (require/split children).",
+          "description": "Human-readable title; names the node the action creates (require/split children, or the node an assert lays down).",
           "type": "string"
         },
         "to": {

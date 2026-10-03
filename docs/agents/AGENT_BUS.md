@@ -1078,8 +1078,10 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 **代价（如实记）**：`agent_bus` 常驻 ⇒ 每个会话的 provider 可见工具面变一次（golden 实测 `ToolSchemaTokens` 5150 → 5975，
 `SystemHash` 不变、`ToolsHash`/`PrefixHash` 变）。若改成"只在入列的会话里出现"，代价是中途入列必须重启会话才生效 —— 未选。
 
-**已知边界**：`assert` 建的节点**没有 Title**（标题只由 `require`/`split` 的 `NodeSpec` 带）⇒ 面板"新建根节点"后只显示 id；
-要让标题上人读面，须给 op 增可选 `Title`（**内核 op schema 变更**，须同步 §11.1），属独立一刀，本轮未做。
+**已修（2026-10-03）**：`assert` 的 op 现在也带**可选** `Title`（`board.Op.Title`，JSON 省略即零值；`DeriveID` 的 payload 用
+`omitempty` ⇒ 对既有 op 的派生 id **逐字节不变**）⇒ `assert` 建的节点可以自带名字，`applyAssert` 只在节点尚无标题时写入
+（后来的 `assert` 不改名：标题是标识，动词表里没有"改名"）。工具面 `agent_bus` 的 `title` 参数已同时适用于 `assert`。
+用例：`TestAssertNamesANodeItCreates`（内核：带名/不改名/无名三态）、`TestAgentBusToolAssertNamesTheNodeItCreates`（工具面透传）。
 
 ### 13.12 审议边界旋钮：`RoundTTL` 是"沉默"的唯一来源（2026-10-03，G1 尾落地）
 
@@ -1146,8 +1148,9 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 | 会话入口 | 内置技能 `agentbus-orchestration`（`internal/skill/builtincontent/agentbus-orchestration/SKILL.md`，`runAs: inline`） | 编排者会话（任何会话）可 `run_skill` 取得打法清单；正文只在被调用时进上下文 |
 | 演练 | `internal/agentbus/orchestration_drill_test.go` | 编排者写下交付物 + 一块工作后**消失** ⇒ 幸存者只读文件、**补出图上没有的第二块** ⇒ 交付物 `done` ⇒ `AssessLanding` 落地 ⇒ 新读者折出同一结局 |
 
-**边界（如实记）**：`assert` 建的节点**没有 Title**，所以规范要求"结构用 `require`/`split` 建、`assert` 只用于给已有节点落断言"——
-这是**绕开**内核缺口的写法，不是修好它；给 op 增可选 `Title` 属 S1 结构变更（§13.11 末），仍未做。
+**边界（已收口，2026-10-03）**：`assert` 建的节点原先**没有 Title**，规范因此要求"结构用 `require`/`split` 建、`assert` 只用于给已有节点落断言"
+——那是**绕开**内核缺口的写法。现在 op 带**可选** `Title`（`board.Op.Title`，`omitempty` ⇒ 既有 op 派生 id 不变），
+`applyAssert` 在节点尚无标题时写入，工具面 `title` 参数同时适用于 `assert` ⇒ 规范里那条绕行写法已退休。
 **技能与缓存**：正文只在被调用时进上下文；新增内置技能给宿主生成的 `session-context` 的 Skills 目录**加一行**
 （`internal/control/session_context.go`；会话上下文属回合尾部，不是 cache-stable 前缀），golden 基准本身不含技能目录
 （`internal/boot/golden_baseline_test.go` 明记交由 session-context 测试覆盖）⇒ `TestGoldenBaseline` 实测未变。

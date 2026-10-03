@@ -297,6 +297,11 @@ func applyAssert(st *State, op Op) error {
 	case StateDone, StateAbandoned, StateStale:
 		return reject(op.Verb, op.Node, ReasonIllegalTransition)
 	}
+	// The name lands on the node this assert creates. A later assertion keeps the first name:
+	// titles identify a node, and no verb in this vocabulary renames one.
+	if n.Title == "" {
+		n.Title = strings.TrimSpace(op.Title)
+	}
 	n.Asserts = append(n.Asserts, Assertion{
 		Actor: op.Actor, At: op.At, Seq: op.Seq, Evidence: op.Evidence, Summary: op.Reason,
 	})

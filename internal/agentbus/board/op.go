@@ -75,11 +75,14 @@ type Op struct {
 	Evidence     []Evidence `json:"evidence,omitempty"`
 	ReproducedBy string     `json:"reproducedBy,omitempty"`
 	Reason       string     `json:"reason,omitempty"`
-	Children     []NodeSpec `json:"children,omitempty"`
-	Dep          *NodeSpec  `json:"dep,omitempty"`
-	Assignee     string     `json:"assignee,omitempty"`
-	Bounds       *Bounds    `json:"bounds,omitempty"`
-	Source       string     `json:"source,omitempty"`
+	// Title names a node an operation creates: require and split name their children, and
+	// assert names the node it lays down (2026-10-03).
+	Title    string     `json:"title,omitempty"`
+	Children []NodeSpec `json:"children,omitempty"`
+	Dep      *NodeSpec  `json:"dep,omitempty"`
+	Assignee string     `json:"assignee,omitempty"`
+	Bounds   *Bounds    `json:"bounds,omitempty"`
+	Source   string     `json:"source,omitempty"`
 }
 
 // DeriveID builds the idempotency key for an op that did not carry one. It
@@ -95,6 +98,7 @@ func DeriveID(op Op) string {
 		Evidence     []Evidence `json:"evidence"`
 		ReproducedBy string     `json:"reproducedBy"`
 		Reason       string     `json:"reason"`
+		Title        string     `json:"title,omitempty"`
 		Children     []NodeSpec `json:"children"`
 		Dep          *NodeSpec  `json:"dep"`
 		Assignee     string     `json:"assignee"`
@@ -102,6 +106,7 @@ func DeriveID(op Op) string {
 	}{
 		Verb: op.Verb, Node: op.Node, Actor: op.Actor, Outcome: op.Outcome,
 		Evidence: op.Evidence, ReproducedBy: op.ReproducedBy, Reason: op.Reason,
+		Title:    op.Title,
 		Children: op.Children, Dep: op.Dep, Bounds: op.Bounds, Assignee: op.Assignee,
 	}
 	raw, err := json.Marshal(payload)

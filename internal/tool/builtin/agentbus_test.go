@@ -103,6 +103,23 @@ func TestAgentBusToolAssertCarriesItsReason(t *testing.T) {
 	}
 }
 
+// The same call can name the node it lays down. Without that a deliverable root reaches the
+// panel as a bare id, which is what forced the orchestration spec onto require/split.
+func TestAgentBusToolAssertNamesTheNodeItCreates(t *testing.T) {
+	port := &fakeBoardPort{dir: "/tmp/board/default", participant: "alice"}
+	tool := NewAgentBusTool(port)
+	if _, err := tool.Execute(context.Background(), boardArgs(t,
+		`{"action":"assert","node":"build","title":"Ship the parser","evidence":[{"ref":"go test ./..."}]}`)); err != nil {
+		t.Fatalf("assert: %v", err)
+	}
+	if len(port.applied) != 1 {
+		t.Fatalf("applied %d ops, want one", len(port.applied))
+	}
+	if got := port.applied[0].Title; got != "Ship the parser" {
+		t.Fatalf("assert title = %q, want the name the caller stated", got)
+	}
+}
+
 // The tool is registered for every session, so the session without a board is the
 // common case: it has to say why, in terms the user's own UI uses.
 func TestAgentBusToolRefusesWithoutABoardRatherThanFailing(t *testing.T) {
