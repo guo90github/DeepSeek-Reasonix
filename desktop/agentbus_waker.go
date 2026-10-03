@@ -27,13 +27,30 @@ var agentBusWakeLedger = control.NewWakeLedger()
 var (
 	agentBusBudgetOnce sync.Once
 	agentBusBudget     *agentbus.Ledger
+	agentBusBrake      bool
 )
 
 func hostAgentBusBudget() *agentbus.Ledger {
 	agentBusBudgetOnce.Do(func() {
-		agentBusBudget = agentbus.NewLedger(agentBusBudgetLimits(agentBusConfig()))
+		cfg := agentBusConfig()
+		agentBusBudget = agentbus.NewLedger(agentBusBudgetLimits(cfg))
+		agentBusBrake = agentBusBudgetBrake(cfg)
 	})
 	return agentBusBudget
+}
+
+// hostAgentBusBudgetBrake reports whether the account above has any spending ceiling. It reads
+// through that account, so the answer can never describe a brake the enforcing ledger lacks.
+func hostAgentBusBudgetBrake() bool {
+	hostAgentBusBudget()
+	return agentBusBrake
+}
+
+// agentBusBudgetBrake is true when any of the four spending levels carries a limit. The slot
+// ceiling bounds how many sessions work at once, not how far the work can go, so it is not a
+// brake on cost — and an operator whose host has none cannot see that anywhere else (2026-10-03).
+func agentBusBudgetBrake(cfg config.AgentBusConfig) bool {
+	return cfg.BudgetBoard > 0 || cfg.BudgetSubtree > 0 || cfg.BudgetNode > 0 || cfg.BudgetTurn > 0
 }
 
 // agentBusBudgetLimits maps the operator's knobs onto the kernel's four levels plus the host's

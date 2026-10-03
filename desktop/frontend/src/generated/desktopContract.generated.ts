@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:9af55be0ce4a9768d62dab1453d20f2a3e40a95b7b741e17a74c84938a6b9330";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:ca67c524793d628ec97249a8aa01e1d744fd36d44a4f0fba2650d1c822f5754d";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -2139,6 +2139,7 @@ export interface HeartbeatConfigView {
   etag: string;
   unattended: boolean;
   tasks: HeartbeatTask[];
+  agentBusBudget: boolean;
 }
 
 export interface HeartbeatRun {

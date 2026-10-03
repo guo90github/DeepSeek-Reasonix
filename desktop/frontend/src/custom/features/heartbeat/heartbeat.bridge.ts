@@ -9,12 +9,21 @@ interface HeartbeatConfigView {
   revision: number;
   etag: string;
   unattended?: boolean;
+  /** Whether the host has any agentbus ceiling at all, straight from the host. */
+  agentBusBudget?: boolean;
   tasks: HeartbeatTask[];
+}
+
+/** What the switch has to say: the switch itself, and whether anything bounds a run. */
+export interface HeartbeatUnattendedState {
+  on: boolean;
+  budgeted: boolean;
 }
 
 let loadedConfigToken: Pick<HeartbeatConfigView, "revision" | "etag"> | null = null;
 let loadedTasks: HeartbeatTask[] = [];
 let loadedUnattended = false;
+let loadedAgentBusBudget = false;
 let configQueue: Promise<void> = Promise.resolve();
 
 function enqueueConfigOperation<T>(operation: () => Promise<T>): Promise<T> {
@@ -29,6 +38,7 @@ async function reloadConfig(): Promise<HeartbeatTask[]> {
   loadedConfigToken = { revision: view.revision || 0, etag: view.etag || "" };
   loadedTasks = Array.isArray(view.tasks) ? view.tasks : [];
   loadedUnattended = Boolean(view.unattended);
+  loadedAgentBusBudget = Boolean(view.agentBusBudget);
   return loadedTasks;
 }
 
@@ -42,6 +52,7 @@ async function saveConfig(tasks: HeartbeatTask[]): Promise<HeartbeatTask[]> {
   loadedConfigToken = { revision: saved.revision || 0, etag: saved.etag || "" };
   loadedTasks = Array.isArray(saved.tasks) ? saved.tasks : tasks;
   loadedUnattended = Boolean(saved.unattended);
+  loadedAgentBusBudget = Boolean(saved.agentBusBudget);
   return loadedTasks;
 }
 
@@ -49,17 +60,17 @@ export function heartbeatListTasks(): Promise<HeartbeatTask[]> {
   return enqueueConfigOperation(reloadConfig);
 }
 
-/** Reads the unattended master switch. It persists in the config file, while
- *  the running app keeps the value it captured at startup. */
-export function heartbeatUnattended(): Promise<boolean> {
+/** Reads the unattended master switch and the host's brake. The switch persists in
+ *  the config file, while the running app keeps the value it captured at startup. */
+export function heartbeatUnattended(): Promise<HeartbeatUnattendedState> {
   return enqueueConfigOperation(async () => {
     await reloadConfig();
-    return loadedUnattended;
+    return { on: loadedUnattended, budgeted: loadedAgentBusBudget };
   });
 }
 
 /** Writes the master switch, leaving the task list untouched. */
-export function heartbeatSetUnattended(on: boolean): Promise<boolean> {
+export function heartbeatSetUnattended(on: boolean): Promise<HeartbeatUnattendedState> {
   return enqueueConfigOperation(async () => {
     if (!loadedConfigToken) await reloadConfig();
     const raw = await app.HeartbeatSaveConfig({
@@ -72,7 +83,8 @@ export function heartbeatSetUnattended(on: boolean): Promise<boolean> {
     loadedConfigToken = { revision: view.revision || 0, etag: view.etag || "" };
     loadedTasks = Array.isArray(view.tasks) ? view.tasks : loadedTasks;
     loadedUnattended = Boolean(view.unattended);
-    return loadedUnattended;
+    loadedAgentBusBudget = Boolean(view.agentBusBudget);
+    return { on: loadedUnattended, budgeted: loadedAgentBusBudget };
   });
 }
 

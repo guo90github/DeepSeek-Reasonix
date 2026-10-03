@@ -3,22 +3,27 @@
 // so both the label and the hover hint say that a restart applies the change.
 import { useCallback, useEffect, useState } from "react";
 import { Tooltip } from "../../../components/Tooltip";
-import { heartbeatSetUnattended, heartbeatUnattended } from "./heartbeat.bridge";
+import {
+  heartbeatSetUnattended,
+  heartbeatUnattended,
+  type HeartbeatUnattendedState,
+} from "./heartbeat.bridge";
 import { useHeartbeatT } from "./heartbeat.i18n";
+import { unattendedPresentation } from "./heartbeat.presentation";
 
 export function UnattendedToggle() {
   const t = useHeartbeatT();
-  const [on, setOn] = useState<boolean | null>(null);
+  const [state, setState] = useState<HeartbeatUnattendedState | null>(null);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
     let live = true;
     void heartbeatUnattended().then(
       (value) => {
-        if (live) setOn(value);
+        if (live) setState(value);
       },
       () => {
-        if (live) setOn(null);
+        if (live) setState(null);
       },
     );
     return () => {
@@ -27,32 +32,33 @@ export function UnattendedToggle() {
   }, []);
 
   const flip = useCallback(() => {
-    if (on === null || pending) return;
+    if (state === null || pending) return;
     setPending(true);
-    void heartbeatSetUnattended(!on)
-      .then((value) => setOn(value), () => undefined)
+    void heartbeatSetUnattended(!state.on)
+      .then((value) => setState(value), () => undefined)
       .finally(() => setPending(false));
-  }, [on, pending]);
+  }, [state, pending]);
 
-  if (on === null) return null;
-  const state = on ? t("heartbeat.unattendedOn") : t("heartbeat.unattendedOff");
-  const hint = on ? t("heartbeat.unattendedOnHint") : t("heartbeat.unattendedOffHint");
+  if (state === null) return null;
+  const presentation = unattendedPresentation(state);
+  const label = t(presentation.stateKey);
+  const hint = t(presentation.hintKey);
   return (
-    <Tooltip label={`${t("heartbeat.unattended")} · ${state} — ${hint}`}>
+    <Tooltip label={`${t("heartbeat.unattended")} · ${label} — ${hint}`}>
       <button
         type="button"
         className="tabbar__unattended"
         role="switch"
-        aria-checked={on}
-        aria-label={`${t("heartbeat.unattended")}：${state}`}
-        data-unattended={on ? "on" : "off"}
+        aria-checked={state.on}
+        aria-label={`${t("heartbeat.unattended")}：${label}`}
+        data-unattended={state.on ? "on" : "off"}
         disabled={pending}
         onClick={flip}
       >
         <span className="tabbar__unattended-track" aria-hidden="true">
           <span className="tabbar__unattended-knob" />
         </span>
-        <span className="tabbar__unattended-label">{state}</span>
+        <span className="tabbar__unattended-label">{label}</span>
       </button>
     </Tooltip>
   );

@@ -25,6 +25,10 @@ lives in `desktop/` (host, Electron shell, frontend); the kernel
   written at once but, like the switch, protects the **next** launch — the marker
   carries the launch-time value, so that is the run a crash would restore. A refused
   registration is logged, never fails the switch write.
+- The switch also reports whether an unattended run has a **brake**: with none of the
+  `[agentbus]` budget levels set (see `reasonix.example.toml`), it labels itself
+  "on (no budget)" and the host logs the same. No default ceiling is invented for the
+  operator — a ceiling nobody chose would stop work that is already running.
 
 ## 2. Task model: the `goal` contract
 

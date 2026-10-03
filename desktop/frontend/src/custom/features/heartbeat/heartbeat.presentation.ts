@@ -1,6 +1,21 @@
 import type { HeartbeatTask } from "./heartbeat.types";
-import type { HeartbeatTranslator } from "./heartbeat.i18n";
+import type { HeartbeatTranslationKey, HeartbeatTranslator } from "./heartbeat.i18n";
 import { heartbeatNextRunAt as calendarHeartbeatNextRunAt, parseCalendarSchedule, nextCalendarRunImpl } from "./heartbeat.schedule";
+
+// 无人值守开关的呈现：开着却没有预算刹车时，标签自己就要说出来——这是一个
+// 别处看不见的状态（宿主侧同时会写一条日志，见 desktop/heartbeat.go）。
+export function unattendedPresentation(state: { on: boolean; budgeted: boolean }): {
+  stateKey: HeartbeatTranslationKey;
+  hintKey: HeartbeatTranslationKey;
+} {
+  if (!state.on) {
+    return { stateKey: "heartbeat.unattendedOff", hintKey: "heartbeat.unattendedOffHint" };
+  }
+  if (!state.budgeted) {
+    return { stateKey: "heartbeat.unattendedOnNoBudget", hintKey: "heartbeat.unattendedNoBudgetHint" };
+  }
+  return { stateKey: "heartbeat.unattendedOn", hintKey: "heartbeat.unattendedOnHint" };
+}
 
 const WEEKDAYS = [
   { key: "mon", labelKey: "heartbeat.weekdayMon" },

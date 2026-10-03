@@ -107,6 +107,8 @@ type HeartbeatConfigView struct {
 	ETag       string          `json:"etag"`
 	Unattended bool            `json:"unattended"`
 	Tasks      []HeartbeatTask `json:"tasks"`
+	// AgentBusBudget is whether anything bounds what an unattended run can spend (2026-10-03).
+	AgentBusBudget bool `json:"agentBusBudget"`
 }
 
 type HeartbeatConfigUpdate struct {
@@ -686,7 +688,7 @@ func (a *App) HeartbeatReloadConfig() HeartbeatConfigView {
 	if a.heartbeat == nil {
 		return HeartbeatConfigView{Tasks: []HeartbeatTask{}}
 	}
-	return a.heartbeat.ReloadConfig()
+	return withAgentBusBudget(a.heartbeat.ReloadConfig())
 }
 
 // HeartbeatSaveTasks replaces the full task list and persists it.
@@ -705,15 +707,28 @@ func (a *App) HeartbeatSaveConfig(update HeartbeatConfigUpdate) (HeartbeatConfig
 	}
 	view, err := a.heartbeat.ReplaceConfig(update)
 	if err != nil {
-		return view, err
+		return withAgentBusBudget(view), err
 	}
+	view = withAgentBusBudget(view)
 	if update.Unattended != nil {
 		// The switch owns the OS entry too, so turning unattended on needs no
 		// second command. It takes effect on the next launch, so the entry is
 		// pre-written now; a refusal must never fail the switch itself.
 		_ = syncWatchdogWithUnattended(*update.Unattended)
+		if *update.Unattended && !view.AgentBusBudget {
+			// Nobody is watching an unattended run, so the one moment the operator can
+			// be told it has no brake is the moment they turn it on (2026-10-03).
+			log.Printf("[heartbeat] unattended is on with no agentbus budget: nothing bounds the run, and no ceiling was invented for you; set [agentbus] budget_board/subtree/node/turn in reasonix.toml")
+		}
 	}
 	return view, nil
+}
+
+// withAgentBusBudget attaches the host's brake to a config view, so the switch that turns
+// unattended on can report it. The engine stays free of the operator's config.
+func withAgentBusBudget(view HeartbeatConfigView) HeartbeatConfigView {
+	view.AgentBusBudget = hostAgentBusBudgetBrake()
+	return view
 }
 
 // HeartbeatTriggerNow immediately executes the task with the given ID.

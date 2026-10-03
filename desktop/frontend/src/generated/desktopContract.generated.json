@@ -24446,6 +24446,12 @@
             },
             "kind": "array"
           }
+        },
+        {
+          "name": "agentBusBudget",
+          "type": {
+            "kind": "boolean"
+          }
         }
       ]
     },

@@ -65,3 +65,39 @@ func TestConfiguredBudgetRefusesAnOverBudgetClaim(t *testing.T) {
 		t.Fatalf("step = %+v, want the refused claim to leave nothing behind", step)
 	}
 }
+
+// A brake is a ceiling on spending, so any of the four levels set is one, and the slot ceiling
+// on its own is not: it bounds how many sessions work at once, not how far the work can go.
+func TestAgentBusBudgetBrakeFollowsTheSpendingLevels(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  config.AgentBusConfig
+		want bool
+	}{
+		{"an unconfigured host has no brake", config.AgentBusConfig{}, false},
+		{"slots alone do not bound spending", config.AgentBusConfig{DispatchSlots: 3}, false},
+		{"the board level", config.AgentBusConfig{BudgetBoard: 40}, true},
+		{"the subtree level", config.AgentBusConfig{BudgetSubtree: 20}, true},
+		{"the node level", config.AgentBusConfig{BudgetNode: 5}, true},
+		{"the turn level", config.AgentBusConfig{BudgetTurn: 3}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := agentBusBudgetBrake(tc.cfg); got != tc.want {
+				t.Fatalf("agentBusBudgetBrake(%+v) = %v, want %v", tc.cfg, got, tc.want)
+			}
+		})
+	}
+}
+
+// The switch reads one view, and that view has to carry the host's own answer: a frontend that
+// never learns the brake is missing cannot show it, which is how this gap stayed invisible.
+func TestTheConfigViewReportsTheHostsBudgetAnswer(t *testing.T) {
+	t.Setenv("REASONIX_HOME", t.TempDir())
+	a := &App{heartbeat: newHeartbeatEngine(nil)}
+
+	view := a.HeartbeatReloadConfig()
+	if view.AgentBusBudget != hostAgentBusBudgetBrake() {
+		t.Fatalf("AgentBusBudget = %v, want the host's answer %v", view.AgentBusBudget, hostAgentBusBudgetBrake())
+	}
+}
