@@ -26,33 +26,33 @@
   未知值回落 `off`、**读不到不渲染**）+ 同名 CSS（已登记 `check:css`），挂 `Composer.tsx` 底部 meta 行 `--shell-async` 位；**设置页原字段保留**。
 - **第十六 · 召回记录并入桌面「面板」**（`72c88bb2e`）：`FooterRecallModule.tsx` 注册进 `footerPanelModules.tsx`（`id: "recall-record"`，记忆族之后）；
   `RecapRecallStrip` 加受控入口 `record`（调用方已有记录就不再问宿主）；卡片规矩 ⇒ 无记录整块不出现（含表头）。
-- **第十六 · 召回记录要给人看懂**（`e50e02a13` + `b51a824d1`，用户反馈"只有 id 看不懂、没有内容"）：**记录仍 content-free**，只在**显示时**解析名字——
-  新 `lib/recallLabels.ts`（按 `id` 与 `name` 双键、名称取 `title||name`、hint=`description·type·scope·freshness`）；`RecapRecallStrip` 加可选 `facts`
-  （有名则**事实名领读、id 留旁边**可追溯；无名则退回 id，不瞎编）；**三个面全部接上**：「面板」卡片（读 `MemoryForTab(tabId)`）、记忆面板「召回记录」页（用它已加载的 `facts`）、
-  回顾页会话详情（该页自己读一次 `app.Memory()`——`recallRecord` 那条链是 4 层转发，不值得为 facts 再走一遍；含 `recap-recall-wiring.test.ts` 4 条新断言）。
+- **第十六 · 召回记录要给人看懂**（`e50e02a13`/`b51a824d1`/`c70d701e1`，用户反馈"只有 id 看不懂"）：**记录自带短标签**——
+  `MemoryRecallTurnHit`/`RecallHitView` 加 `name`/`title`（写侧车时手上就有 `hit.Memory.Name/Title`，正文仍不进记录；契约按仓库方式 `go run . -emit-contract` 重生成），
+  `RecapRecallStrip` **记录自带标签优先**、`facts` 只作老记录兜底、都没有才显示 id。**根因**：记录读侧车文件（不需要控制器），而旧实现的名字要活着的控制器
+  （`MemoryForTab` → `memoryForCtrl(..., false)`，`desktop/app.go:11147-11163` 在 `ctrl==nil` 时直接返回空视图）⇒ 重启后记录在、名字空 ⇒ 只剩 id。三个面（面板卡片/记忆面板召回页/回顾页）同源修好。
 - **打包：默认用本机缓存的 Electron zip**（`f537fecdc`，用户建议）：packager 的 `SHASUMS256.txt` 校验每次联网、绕过缓存 ⇒ 本机两次 `ECONNRESET` 打包失败（zip 早在盘上）。
   `lib.mjs` 新增 `defaultElectronCacheRoot`/`electronZipNames`/`findElectronZipDir`/`resolveElectronZipDir`（显式变量优先，否则本机缓存；找不到仍回落下载，`universal` 缺 zip 不误用半套），`package.mjs` 默认调用并打印所用目录。
-- **真机**：dev.118/119/120 均 rc 0 + 装机并列新增 + verifier **exit 0**；最新 `v0.0.0-dev.120`（commit `b51a824d1d9c` = HEAD），`dist\Reasonix-windows-amd64.zip` 239,332,132 B（16:06）。
-  dev.119 起为**不带任何环境变量**构建，日志出现 `==> using the Electron zip in …\electron\Cache\e71119b6… (nothing to download)` ⇒ 当日那条坑已由默认行为消除。
-- **UI 观感仍待你重启 App**：在跑的 service 是 `v0.0.0-dev.114`（托管本对话，SOP 禁忌不得杀）⇒ 会报 `build_mismatch (-32004)`。
+- **真机**：dev.118/119/120 均 rc 0 + 装机并列新增 + verifier **exit 0**；最新装机 `v0.0.0-dev.120`（commit `b51a824d1d9c`）。**召回名字的修复尚未打包**（阻塞见 §3/§4）。
 
-## 3. 下一步（你重启 App 后照此看 · dev.120 含全部改动）
+## 3. 下一步（唯一阻塞项是别人的在飞改动；其编译通过后即可出包）
 
-输入框**底部**滑动开关（关/平衡/极速，设置页三段仍在）；桌面「面板」召回段带事实名；记忆面板「召回记录」页同样带名；**回顾页卡片展开后的召回条也带名**（悬停看描述·类型·范围·新鲜度）；
-会话回顾页热力图；待办归档折叠区；标签页撕下后浮层可拖拽/缩放/停靠且重启保持；回合尾 `<turn-progress>`。**无待做单元**：新的体验问题按你点名开工。
+**打包被别人的未提交改动挡住**：`desktop/agentbus_apply.go`(123/127)、`agentbus_waker.go`、`heartbeat.go` 引用 `control.AgentBusControl.AgentBusAsk/AgentBusAnswer`（该接口尚无这两个方法）
+⇒ `scripts/desktop-build.sh` 编不出 desktop 模块（规则上我不碰别人的文件）。**一旦它编译通过，直接跑**
+`bash scripts/desktop-build.sh windows/amd64 v0.0.0-dev.121`（三个 SKIP 变量）→ 装机 → `verify-windows-portable.sh`，本单元即收口。
 
 ## 4. 待拍板（收尾后剩 ≤2 条）
 
-- **B-1（真机确认）**：打包+装机已完成（dev.118，verifier exit 0）；**只剩你重启 App 后的人眼确认**（清单见 §3 ②）。
+- **B-2（等你定）**：**召回名字的修法已提交但还没打包**（见 §3 阻塞）。可选：① 等别的会话把 agentbus WIP 提交/修好，我再出 dev.121；② 你允许我在**临时 worktree**（HEAD+我的提交，不含他们的在飞改动）出包——该法可行但要给 worktree 接 node_modules，脆。
 - **U-1（第七 · 未答复）**：是否为「框架知识」新增独立 `type=framework`。**按「不新增」结项**。
 - 已决（2026-10-03）：**D-2 选 ③**（接受 37）；U-2 排队、U-3 热力图 30 天/日格、U-4 前置块默认开最多 3 轮无字符上限、U-5 建议不自动写；
   晚：**「面板」＝底部面板带卡片（`footerPanel.title`）**（召回记录按此落点，若指别处说一声即挪）。
 
 ## 5. 未验证 / 暂缓
 
-- 立项书验收 5（全量门禁）：Go 侧三项绿、`make lint` 30 条 / `repolint` 7 条 / 失败**全在别的会话文件**（本任务 0 条）；前端全量：`72c88bb2e` 前 **401/401**，之后一次 **401/403**（唯二红＝那条 `TypeError`），**修复后只单独复跑那两个套件（7 / 8 PASS），未再跑全量**。
-- **真机 UI 观感：未完成**（`build_mismatch` 需重启 App；dev.118 已装好待启动）；**回顾页会话详情的召回条仍未接名字**（见 §3 ①）。
+- 立项书验收 5（全量门禁）：Go 侧三项绿、`make lint` 30 条 / `repolint` 7 条 / 失败**全在别的会话文件**（本任务 0 条）；前端全量：`72c88bb2e` 前 **401/401**，此后一次 **401/403**（唯二红＝那条 `TypeError`），修复后只复跑受影响套件，**未再跑全量**。
+- **既有抖动（非本次回归）**：满负载下 `go test ./internal/agent/` 全量报 2 条 `loop_e2e_test.go`（推理循环）失败，但**干净 HEAD worktree 与我的树里单独跑都 PASS** ⇒ 判为负载抖动，必要时复跑。
+- **未验证**：召回名字修复的**真机 UI**（等出包 + 重启 App）；**老记录**（本次改动前写入的侧车）仍只有 id，除非 `facts` 能解析到。
 - 超出验收判据的留白：第十「后台标签多面板并行」；第八 BA4（按 verdict 触发记忆建议——现有候选机制已满足 U-5 实质）；第十二 复跑**未建模**外部轨迹变化，37 是同轨迹上界。
 
-END-UNIT：四处用户点名（输入框档位开关 `89c58d096`、面板召回段 `72c88bb2e`、召回可读性 `e50e02a13`、打包默认用本机缓存 `f537fecdc`）均已改完、验证、提交，
-并打包装机 dev.119（verifier exit 0，包内 commit `f537fecdca63` = HEAD）；**唯一的真 blocker = 需你重启 App 才能用眼看新 UI**（清单见 §3 ②）。
+END-UNIT：五处用户点名（档位开关 `89c58d096`、面板召回段 `72c88bb2e`、召回可读性 `e50e02a13`+`b51a824d1`+`c70d701e1`、打包默认用缓存 `f537fecdc`）均已改完、验证、提交；
+**唯一真 blocker＝别的会话的 agentbus 未提交改动让 desktop 模块编译失败**（见 §3/§4），其通过后跑 `dev.121` 即收口。
