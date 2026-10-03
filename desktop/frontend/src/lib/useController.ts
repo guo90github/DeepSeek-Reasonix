@@ -520,7 +520,7 @@ export interface State extends ReadStatusHost {
   sessionTokens: number;
   sessionCost: number;
   sessionCurrency: string;
-  retry?: { attempt: number; max: number; observedAt: number; recovery?: WireEvent["recovery"] };
+  retry?: { attempt: number; max: number; observedAt: number; reason?: string; recovery?: WireEvent["recovery"] };
   seq: number;
   sessionGen: number;
   // Per-session counter bumped after hydration ancillary data (context, effort,
@@ -1515,7 +1515,7 @@ function applyEvent(s: State, e: WireEvent, preserveToolPayloads = false): State
       retry: {
         recovery: e.recovery,
         attempt: e.retryAttempt ?? 0,
-        max: e.retryMax ?? 0,
+        max: e.retryMax ?? 0, reason: e.retryReason,
         observedAt: promptEventClock(),
       },
       running: true,

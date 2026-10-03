@@ -841,6 +841,10 @@ export const zhTW: Record<DictKey, string> = {
   "status.recoveryWaitHint": "會持續重試，直到等待預算用盡後本輪報錯結束。可檢查網路、代理或供應商狀態，也可立即停止。",
   "status.recoveryWaitStop": "停止等待",
   "status.retrying": "正在重試 ({attempt}/{max})…",
+  "status.retryReasonRateLimited": "（限流）",
+  "status.retryReasonServer": "（伺服器錯誤）",
+  "status.retryReasonTimeout": "（逾時）",
+  "status.retryReasonNetwork": "（網路）",
   "status.balanceTitle": "錢包餘額",
   "status.spendTitle": "本會話估算計費費用，包含主模型、子代理和輔助呼叫",
 

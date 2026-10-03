@@ -1142,6 +1142,10 @@ export const zh: Record<DictKey, string> = {
   "status.recoveryWaitHint": "会持续重试，直到等待预算用尽后本轮报错结束。可检查网络、代理或供应商状态，也可立即停止。",
   "status.recoveryWaitStop": "停止等待",
   "status.retrying": "正在重试 ({attempt}/{max})…",
+  "status.retryReasonRateLimited": "（限流）",
+  "status.retryReasonServer": "（服务端错误）",
+  "status.retryReasonTimeout": "（超时）",
+  "status.retryReasonNetwork": "（网络）",
   "status.balanceTitle": "钱包余额",
   "status.spendTitle": "当前会话估算计费费用，包含主模型、子代理和辅助调用",
 
