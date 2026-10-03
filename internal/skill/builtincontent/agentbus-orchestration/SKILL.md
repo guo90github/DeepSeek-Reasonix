@@ -22,13 +22,19 @@ So the **board** carries the truth — nodes, dependencies, evidence, verdicts �
 2. **One node = one deliverable somebody else can re-run.** `decide(done)` demands checkable evidence
    plus a reproducer who is not the producer. Write that command / file / URL on the node when you
    create it, not when you close it.
-3. **Create structure with `require` / `split` (they carry `title`), not `assert`.** `assert` makes an
-   id-only node (known boundary) — use it to assert on nodes that already exist.
+3. **Create structure with `require` / `split`, and name what you create.** Both carry `title` on their
+   child; `assert` names the node it lays down through the same `title` argument (the kernel op carries
+   an optional `Title`, 2026-10-03), so an asserted root is no longer id-only. A node somebody else
+   has to act on must carry a title whichever verb created it.
 4. **One subtree = one deliverable.** Subtree ownership (budget, affinity) is derived by walking
    dependencies up, so splitting one deliverable across two subtrees splits the accounting.
 5. **Cross subtrees only through a boundary node.** The board view is cropped (≤200 lines, ≤8 KiB):
    a dependency on somebody else's internal step can be invisible to you, and can be split away or
    reverted from under you.
+6. **The host hands out one step per participant per tick**, and holds off while that session still has
+   a wake queued (it counts as work in flight, 2026-10-04). So claim the step you were handed in your
+   very next op; a session that sits on its lease stalls the whole subtree, and a step nobody picks up
+   is handed back to the pool once it has spent the host's retry budget.
 
 ## Run it
 
