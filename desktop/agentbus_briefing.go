@@ -86,6 +86,9 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 	if signal, refused := budgetRefusalSignal(control.AgentBusBudgetRefusals()); refused {
 		view.Signals = append(view.Signals, signal)
 	}
+	if signal, failed := wakeFailureSignal(control.AgentBusWakeFailures()); failed {
+		view.Signals = append(view.Signals, signal)
+	}
 	if signal, throttled := rateLimitSignal(provider.RateLimitRetriesByProvider(), provider.RateLimitRetries()); throttled {
 		view.Signals = append(view.Signals, signal)
 	}
@@ -136,4 +139,18 @@ func budgetRefusalSignal(counts control.BudgetRefusalCounts) (AgentBusSignalView
 		Kind:   "budget",
 		Detail: fmt.Sprintf("a ceiling refused %d claim(s): %s", counts.Total(), strings.Join(named, ", ")),
 	}, true
+}
+
+// wakeFailureSignal turns wakes the host could not hand over into one row a person can act on.
+// A wake that reaches nobody leaves the board standing still, and without this row the sender’s
+// log is its only witness — the same invisible brake the refusal row exists for (G3/T12-3).
+func wakeFailureSignal(failures control.WakeFailures) (AgentBusSignalView, bool) {
+	if failures.Count == 0 {
+		return AgentBusSignalView{}, false
+	}
+	detail := fmt.Sprintf("could not hand a wake to a participant %d time(s) this process", failures.Count)
+	if failures.Last != "" {
+		detail += ": " + failures.Last
+	}
+	return AgentBusSignalView{Kind: "wake_undelivered", Detail: detail}, true
 }

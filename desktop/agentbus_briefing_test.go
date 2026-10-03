@@ -108,3 +108,23 @@ func TestRateLimitSignalNamesTheLaneThatWasThrottled(t *testing.T) {
 		t.Fatalf("detail = %q, want the total with no lane list", unnamed.Detail)
 	}
 }
+
+// A wake that reached nobody is a brake like a spent ceiling: the board stands still and the
+// sender’s log is the only witness. The panel gets the participant and the reason (G3/T12-3).
+func TestWakeFailureSignalNamesWhoCouldNotBeReached(t *testing.T) {
+	if _, failed := wakeFailureSignal(control.WakeFailures{}); failed {
+		t.Fatal("a host that delivered every wake must add no row")
+	}
+	signal, failed := wakeFailureSignal(control.WakeFailures{Count: 2, Last: "alice: no address owns it"})
+	if !failed {
+		t.Fatal("an undelivered wake must reach the panel")
+	}
+	if signal.Kind != "wake_undelivered" {
+		t.Fatalf("kind = %q, want the panel’s wake row", signal.Kind)
+	}
+	for _, want := range []string{"2", "alice", "no address owns it"} {
+		if !strings.Contains(signal.Detail, want) {
+			t.Fatalf("detail = %q, want it to name %q", signal.Detail, want)
+		}
+	}
+}

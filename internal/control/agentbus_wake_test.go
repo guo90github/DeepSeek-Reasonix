@@ -79,9 +79,12 @@ func TestWakeAgentBusWithoutAWakerWakesNobody(t *testing.T) {
 func TestWakeAgentBusCountsAFailedWakeForRetry(t *testing.T) {
 	ctx := context.Background()
 	ctrl := newAgentBusTalkController(t, t.TempDir(), "orchestrator")
+	failuresBefore := AgentBusWakeFailures().Count
 	attempts := 0
-	ctrl.SetAgentBusWaker(func(_ context.Context, _ agentbus.WakeTarget) error {
+	seen := ""
+	ctrl.SetAgentBusWaker(func(_ context.Context, target agentbus.WakeTarget) error {
 		attempts++
+		seen = target.Participant
 		if attempts == 1 {
 			return context.DeadlineExceeded
 		}
@@ -102,6 +105,13 @@ func TestWakeAgentBusCountsAFailedWakeForRetry(t *testing.T) {
 	}
 	if n := ctrl.WakeAgentBus(ctx); n != 0 {
 		t.Fatalf("a delivered wake must not repeat, got %d", n)
+	}
+	// A failed wake is not only retried, it is recorded against the participant the host could
+	// not reach: otherwise the board simply stops moving and only the sender's log knows (G3).
+	if got := AgentBusWakeFailures(); got.Count != failuresBefore+1 {
+		t.Fatalf("wake failures = %+v, want exactly one more than before", got)
+	} else if want := seen + ": "; len(got.Last) < len(want) || got.Last[:len(want)] != want {
+		t.Fatalf("wake failures = %+v, want the participant %q named", got, seen)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"reasonix/internal/agentbus"
@@ -23,10 +24,48 @@ func (c *Controller) SetAgentBusWaker(fn func(context.Context, agentbus.WakeTarg
 	}
 }
 
+// WakeFailures is the host's record of wakes it could not hand over: which participant and
+// why, for the last one. A wake that reaches nobody leaves the board standing still and the
+// sender's log as its only witness — the same invisible brake a spent ceiling is (G3).
+type WakeFailures struct {
+	Count int64
+	Last  string
+}
+
+// wakeFailures is process-wide like the refusal counts: the routing belongs to the machine.
+var wakeFailures = struct {
+	mu    sync.Mutex
+	count atomic.Int64
+	last  string
+}{}
+
+// AgentBusWakeFailures reports the wakes this process could not deliver.
+func AgentBusWakeFailures() WakeFailures {
+	wakeFailures.mu.Lock()
+	defer wakeFailures.mu.Unlock()
+	return WakeFailures{Count: wakeFailures.count.Load(), Last: wakeFailures.last}
+}
+
+func noteWakeFailure(participant string, err error) {
+	detail := participant + ": " + err.Error()
+	if len(detail) > maxWakeFailureDetail {
+		detail = detail[:maxWakeFailureDetail] + "…"
+	}
+	wakeFailures.mu.Lock()
+	defer wakeFailures.mu.Unlock()
+	wakeFailures.count.Add(1)
+	wakeFailures.last = detail
+}
+
+// A refusal's message is the host's own, but a delivery error can wrap a peer's whole body,
+// and this row is read in a panel line rather than a log.
+const maxWakeFailureDetail = 160
+
 // WakeAgentBus wakes the participants who have work waiting on them and reports
 // how many were woken. The wake is keyed by the work, not by the clock, so an
 // unchanged board wakes nobody however often a host ticks; a new work set wakes
-// exactly once. A failed wake releases its key so the next tick retries it.
+// exactly once. A failed wake releases its key so the next tick retries it, and is
+// recorded against the participant it could not reach.
 func (c *Controller) WakeAgentBus(ctx context.Context) int {
 	bus, input, err := c.agentBusWakeSnapshot(ctx)
 	if err != nil {
@@ -49,6 +88,7 @@ func (c *Controller) WakeAgentBus(ctx context.Context) int {
 		}
 		if err := waker(ctx, target); err != nil {
 			slog.Warn("controller: agentbus wake", "participant", target.Participant, "err", err)
+			noteWakeFailure(target.Participant, err)
 			bus.releaseWake(target.Participant, target.Key)
 			continue
 		}
