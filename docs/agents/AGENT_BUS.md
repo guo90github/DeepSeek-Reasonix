@@ -1258,6 +1258,16 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 3. **画**：前端**真的渲染**那个字段吗？（**别只看类型声明** —— 类型在契约里 ≠ 有人在画；这个坑本轮踩到两次）
 4. **钉**：把这一半删掉，**用例会不会变红**？（没有用例 ⇒ 那不是结论，只是阅读印象）
 
+**谁 tick 谁（2026-10-04 追到底）**
+
+| 宿主形态 | 定时器起在哪 | 间隔 | 覆盖 |
+|---|---|---|---|
+| 桌面 | 心跳引擎的 loop（`desktop/heartbeat.go:196` 的 ticker → `tick()` → `agentBusWakeTick()`） | 30s | **每个 tab 的 controller 都 tick**（`agentBusWakeTick` 遍历 tabs，每 tab 一次 sweep；多次 sweep 幂等）；`tick()` 里这一步**不受无人值守开关影响**（注释：The board is host-wide, not per task） |
+| headless / serve | `internal/cli/cli.go:976` → `startAgentBusTick(ctrl, …)`（`internal/cli/agentbus_tick.go:24`） | `agentBusTickInterval`（30s） | 起在**一个** controller 上；但唤醒是**宿主级**的 —— serve 装的 waker 按参与者路由（本机每个会话 + 邻机地址簿），且任何写入路径自己也会 sweep（`internal/control/agentbus.go:176`） |
+| 派发那一半 | 同上（`agentBusWakeTick` 末尾调 `agentBusDispatchTick`） | 随宿主 tick | 每个 tab 的 controller 都跑一次派发 |
+
+⇒ 三种形态都接了，**没有哪个启动路径漏 tick**；健康时静默、失败才 slog（见上一节的判读）。
+
 **（headless 特例）** `serve` 宿主**没有**状态面：它没有 `/agentbus` 之类的只读路由，"画"就是它自己的 stdout ——
 拒绝（`recordBudgetRefusal`）与投递失败（`noteWakeFailure`）两处都保留着 `slog`，所以对 headless 操作者**够**；
 桌面要面板，是因为它的用户从不读日志。判断"缺不缺画"时要先问**谁在看这台宿主的标准输出**。
