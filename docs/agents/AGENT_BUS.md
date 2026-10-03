@@ -501,6 +501,13 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 5. **派生谓词的边界**：`ready` 允许 `open` **或** `blocked`——`blocked` 兼有"等依赖"与"被裁决阻塞"两义，用 `Outcome != blocked` 区分；split 出的容器在子节点全部完成后重新 ready（组装它们本身就是它的工作）。`revert` 把下游 `done` 变 `stale` 时**同时清掉 Outcome**（stale 不是结论）。
 6. **`decide(done)` 不设依赖门**（澄清迁移表 `decide` 行）：`done` 是**裁决**，不是"装配确认"——依赖门只在 `claim` 上（`blocked` 须依赖全 `done`）；"容器先于子节点被裁决"由**落地判定**兜住：`AssessLanding` 把未完成的依赖报成 `not_done`，verdict 不会绿。落地时真撞到一次（先给容器 `decide(done)`，板面立刻报 `not landed`），故在此写死：这条不是待修的缺口，而是规格本身（`internal/agentbus/decide_deps_test.go` 钉住）。
 
+### 11.5 编排期修正（2026-10-03，agentbus 编排落地时发现）
+
+对着**正在跑的看板**（不是文字）发现两点，都是"用起来才知道"的语义：
+
+1. **`require` 不随 `split` 传给子节点**：容器上的依赖只管容器自己的收口。拆出的子节点必须各自声明依赖，否则调度会认为它已经能开工——真机上 `ab-participant-ttl`（依赖 headless 重申）因此被立刻派给了一个无法开工的参与者，而它自己 `deps_open=0`。**推论**：`split` 之后要把"为什么这个子节点还不能动"重新记在子节点上，不然那条依赖在调度面上等于不存在。
+2. **`split` 后的父节点就是容器**：子节点未完成前它即 `blocked`、`deps_open` 等于未完成的子节点数；它自己不需要额外处置，子节点全部 `done` 即收口。落地时核对过一次（`ab-participant-freshness` 在两个孩子一 `done` 一 `blocked` 时正是这个形状）。
+
 ### 11.4 第二轮评审（对着 S1 代码）的处置（2026-10-02）
 
 第二轮改看**代码**（不是文字），抓到 17 条：已修 10 条、明记为边界 3 条、其余同类归并。对本稿的**规格修正**：
