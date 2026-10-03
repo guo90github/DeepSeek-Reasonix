@@ -2501,27 +2501,36 @@ func (a *App) EnsureBlankTab(scope, workspaceRoot string) (TabMeta, error) {
 	return a.ensureBlankTab(scope, workspaceRoot)
 }
 
+// blankTabScopeRoots resolves the roots a blank tab needs: the absolute project root it was
+// asked for, or the global workspace (created if missing). It touches no tab state, so it can
+// be reasoned about apart from the locking its caller does.
+func blankTabScopeRoots(scope, workspaceRoot string) (projectRoot, globalRoot string, err error) {
+	if scope != "project" {
+		globalRoot = globalWorkspaceRoot()
+		if err := os.MkdirAll(globalRoot, 0o755); err != nil {
+			return "", "", fmt.Errorf("create global workspace: %w", err)
+		}
+		return "", globalRoot, nil
+	}
+	projectRoot = strings.TrimSpace(workspaceRoot)
+	if projectRoot == "" {
+		return "", "", fmt.Errorf("workspaceRoot is required")
+	}
+	if abs, err := filepath.Abs(projectRoot); err == nil {
+		projectRoot = abs
+	}
+	return projectRoot, "", nil
+}
+
 func (a *App) ensureBlankTab(scope, workspaceRoot string) (TabMeta, error) {
 	scope = strings.TrimSpace(scope)
 	if scope != "project" {
 		scope = "global"
 	}
 
-	globalRoot := ""
-	if scope == "project" {
-		workspaceRoot = strings.TrimSpace(workspaceRoot)
-		if workspaceRoot == "" {
-			return TabMeta{}, fmt.Errorf("workspaceRoot is required")
-		}
-		if abs, err := filepath.Abs(workspaceRoot); err == nil {
-			workspaceRoot = abs
-		}
-	} else {
-		workspaceRoot = ""
-		globalRoot = globalWorkspaceRoot()
-		if err := os.MkdirAll(globalRoot, 0o755); err != nil {
-			return TabMeta{}, fmt.Errorf("create global workspace: %w", err)
-		}
+	workspaceRoot, globalRoot, err := blankTabScopeRoots(scope, workspaceRoot)
+	if err != nil {
+		return TabMeta{}, err
 	}
 
 	var created *WorkspaceTab
