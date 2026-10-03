@@ -64,6 +64,32 @@ func (p boardToolPort) AnswerBoard(ctx context.Context, correlation, topic, to, 
 	return c.AgentBusAnswer(ctx, correlation, topic, to, text)
 }
 
+// OpenHearing/AnswerHearing/SettleHearing are the deliberation chain the board tool
+// drives: the controller owns the hearing log, its bounds, and who owes an answer.
+func (p boardToolPort) OpenHearing(ctx context.Context, node string, required []string) (agentbus.HearingRecord, error) {
+	c, err := p.controller()
+	if err != nil {
+		return agentbus.HearingRecord{}, err
+	}
+	return c.OpenAgentBusHearing(ctx, node, required)
+}
+
+func (p boardToolPort) AnswerHearing(ctx context.Context, node, text string, evidence []board.Evidence) (agentbus.HearingRecord, error) {
+	c, err := p.controller()
+	if err != nil {
+		return agentbus.HearingRecord{}, err
+	}
+	return c.AnswerAgentBusHearing(ctx, node, text, evidence)
+}
+
+func (p boardToolPort) SettleHearing(ctx context.Context, node string) (agentbus.HearingRecord, error) {
+	c, err := p.controller()
+	if err != nil {
+		return agentbus.HearingRecord{}, err
+	}
+	return c.SettleAgentBusHearing(ctx, node)
+}
+
 func (p boardToolPort) BoardView(now time.Time) (agentbus.View, error) {
 	c, err := p.controller()
 	if err != nil {

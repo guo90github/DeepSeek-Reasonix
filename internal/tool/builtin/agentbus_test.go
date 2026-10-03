@@ -22,6 +22,9 @@ type fakeBoardPort struct {
 	identityErr error
 	asked       []string
 	answered    []string
+	hearing     []string
+	hearingRec  agentbus.HearingRecord
+	hearingErr  error
 }
 
 func (f *fakeBoardPort) ApplyBoardOp(_ context.Context, op board.Op) (board.Receipt, error) {
@@ -51,6 +54,28 @@ func (f *fakeBoardPort) AskBoard(_ context.Context, topic, to, text string) (str
 func (f *fakeBoardPort) AnswerBoard(_ context.Context, correlation, topic, to, text string) (uint64, error) {
 	f.answered = append(f.answered, strings.Join([]string{correlation, topic, to, text}, "|"))
 	return uint64(len(f.answered)), nil
+}
+
+// The deliberation seam: this fake records what the tool asked the hearing log to do
+// and hands back the record a host would have produced, so the argument wiring is
+// pinned here and the delivery by the effect guard in internal/boot.
+func (f *fakeBoardPort) OpenHearing(_ context.Context, node string, required []string) (agentbus.HearingRecord, error) {
+	f.hearing = append(f.hearing, strings.Join([]string{"open", node, strings.Join(required, ",")}, "|"))
+	return f.hearingRec, f.hearingErr
+}
+
+func (f *fakeBoardPort) AnswerHearing(_ context.Context, node, text string, evidence []board.Evidence) (agentbus.HearingRecord, error) {
+	refs := make([]string, 0, len(evidence))
+	for _, item := range evidence {
+		refs = append(refs, item.Ref)
+	}
+	f.hearing = append(f.hearing, strings.Join([]string{"answer", node, text, strings.Join(refs, ",")}, "|"))
+	return f.hearingRec, f.hearingErr
+}
+
+func (f *fakeBoardPort) SettleHearing(_ context.Context, node string) (agentbus.HearingRecord, error) {
+	f.hearing = append(f.hearing, "settle|"+node)
+	return f.hearingRec, f.hearingErr
 }
 
 func boardArgs(t *testing.T, raw string) json.RawMessage {
@@ -309,5 +334,92 @@ func TestAgentBusToolViewRendersTheParticipantsOwnView(t *testing.T) {
 	}
 	if len(port.applied) != 0 {
 		t.Fatalf("a read must not write an op: %+v", port.applied)
+	}
+}
+
+// A hearing is how a contested node stops being contested: the tool has to be able to
+// start one, or a refutation on a board nobody can click leaves the work stalled (G1).
+func TestAgentBusToolOpensADeliberationAndNamesWhoMustAnswer(t *testing.T) {
+	port := &fakeBoardPort{
+		dir: "/tmp/board/default", participant: "alice",
+		hearingRec: agentbus.HearingRecord{Node: "design", Kind: agentbus.HearingOpen, Required: []string{"bob", "carol"}},
+	}
+	out, err := NewAgentBusTool(port).Execute(context.Background(), boardArgs(t, `{"action":"hearing_open","node":"design"}`))
+	if err != nil {
+		t.Fatalf("hearing_open: %v", err)
+	}
+	// An empty required list means "whoever must answer": the host decides, and the
+	// tool reports the list it actually got back.
+	if len(port.hearing) != 1 || port.hearing[0] != "open|design|" {
+		t.Fatalf("hearing calls = %+v, want the empty required list handed to the host", port.hearing)
+	}
+	for _, want := range []string{"design", "bob", "carol"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("result = %q, want it to name %q", out, want)
+		}
+	}
+}
+
+func TestAgentBusToolPassesTheNamedAnswerersAndDropsBlanks(t *testing.T) {
+	port := &fakeBoardPort{dir: "/tmp/board/default", participant: "alice"}
+	_, err := NewAgentBusTool(port).Execute(context.Background(), boardArgs(t,
+		`{"action":"hearing_open","node":"design","required":["bob",""," alice "]}`))
+	if err != nil {
+		t.Fatalf("hearing_open: %v", err)
+	}
+	if len(port.hearing) != 1 || port.hearing[0] != "open|design|bob,alice" {
+		t.Fatalf("hearing calls = %+v, want the named answerers, trimmed and without blanks", port.hearing)
+	}
+}
+
+func TestAgentBusToolAnsweringADeliberationNeedsTextAndCarriesEvidence(t *testing.T) {
+	port := &fakeBoardPort{dir: "/tmp/board/default", participant: "alice"}
+	tool := NewAgentBusTool(port)
+	if _, err := tool.Execute(context.Background(), boardArgs(t, `{"action":"hearing_answer","node":"design"}`)); err == nil {
+		t.Fatal("an answer with no text says nothing, which is not an answer")
+	}
+	if len(port.hearing) != 0 {
+		t.Fatalf("a refused call must not reach the hearing log: %+v", port.hearing)
+	}
+	if _, err := tool.Execute(context.Background(), boardArgs(t,
+		`{"action":"hearing_answer","node":"design","text":"it does not hold","evidence":[{"kind":"test","ref":"go test ./..."}]}`)); err != nil {
+		t.Fatalf("hearing_answer: %v", err)
+	}
+	if len(port.hearing) != 1 || port.hearing[0] != "answer|design|it does not hold|go test ./..." {
+		t.Fatalf("hearing calls = %+v, want the answer with its checkable reference", port.hearing)
+	}
+}
+
+func TestAgentBusToolReportingAVerdictSaysWhatItWas(t *testing.T) {
+	port := &fakeBoardPort{
+		dir: "/tmp/board/default", participant: "alice",
+		hearingRec: agentbus.HearingRecord{Node: "design", Verdict: agentbus.VerdictRefuted, Reason: agentbus.ReasonWeight},
+	}
+	out, err := NewAgentBusTool(port).Execute(context.Background(), boardArgs(t, `{"action":"hearing_settle","node":"design"}`))
+	if err != nil {
+		t.Fatalf("hearing_settle: %v", err)
+	}
+	if len(port.hearing) != 1 || port.hearing[0] != "settle|design" {
+		t.Fatalf("hearing calls = %+v, want the settle forwarded", port.hearing)
+	}
+	for _, want := range []string{"design", agentbus.VerdictRefuted, agentbus.ReasonWeight} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("result = %q, want it to contain %q", out, want)
+		}
+	}
+}
+
+// Every deliberation action names the node it is about: without one there is nothing to
+// open, answer or settle, and the caller gets told rather than a hearing about "".
+func TestAgentBusToolRefusesADeliberationWithNoNode(t *testing.T) {
+	port := &fakeBoardPort{dir: "/tmp/board/default", participant: "alice"}
+	for _, action := range []string{"hearing_open", "hearing_answer", "hearing_settle"} {
+		if _, err := NewAgentBusTool(port).Execute(context.Background(), boardArgs(t,
+			`{"action":"`+action+`"}`)); err == nil {
+			t.Fatalf("%s with no node must be refused", action)
+		}
+	}
+	if len(port.hearing) != 0 {
+		t.Fatalf("nothing may reach the hearing log: %+v", port.hearing)
 	}
 }

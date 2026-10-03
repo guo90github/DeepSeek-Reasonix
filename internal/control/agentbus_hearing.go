@@ -35,12 +35,20 @@ func (c *Controller) OpenAgentBusHearing(ctx context.Context, node string, requi
 	if err != nil {
 		return agentbus.HearingRecord{}, err
 	}
-	return log.Append(ctx, agentbus.HearingRecord{
+	record, err := log.Append(ctx, agentbus.HearingRecord{
 		Node:     strings.TrimSpace(node),
 		Kind:     agentbus.HearingOpen,
 		Actor:    bus.participantID(c),
 		Required: required,
 	}, bus.limitsForHearing())
+	if err != nil {
+		return agentbus.HearingRecord{}, err
+	}
+	// The writer that changes who owes an answer wakes them — no host tick required. The
+	// key is derived from the work set, so waking again over an unchanged deliberation
+	// wakes nobody: that missing wake is what left this chain unrun in production (G1).
+	c.WakeAgentBus(ctx)
+	return record, nil
 }
 
 // AnswerAgentBusHearing records this participant's answer in the current round.
@@ -55,13 +63,18 @@ func (c *Controller) AnswerAgentBusHearing(ctx context.Context, node, text strin
 	if err != nil {
 		return agentbus.HearingRecord{}, err
 	}
-	return log.Append(ctx, agentbus.HearingRecord{
+	record, err := log.Append(ctx, agentbus.HearingRecord{
 		Node:     strings.TrimSpace(node),
 		Kind:     agentbus.HearingAnswer,
 		Actor:    bus.participantID(c),
 		Text:     text,
 		Evidence: evidence,
 	}, bus.limitsForHearing())
+	if err != nil {
+		return agentbus.HearingRecord{}, err
+	}
+	c.WakeAgentBus(ctx)
+	return record, nil
 }
 
 // SettleAgentBusHearing weighs a deliberation and records the verdict. A refuted
@@ -92,6 +105,7 @@ func (c *Controller) SettleAgentBusHearing(ctx context.Context, node string) (ag
 			return record, fmt.Errorf("control: block the refuted node %q: %w", node, err)
 		}
 	}
+	c.WakeAgentBus(ctx)
 	return record, nil
 }
 

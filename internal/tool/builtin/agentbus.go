@@ -35,6 +35,11 @@ type BoardPort interface {
 	// was addressed here. Both write to the board this session is enrolled on.
 	AskBoard(ctx context.Context, topic, to, text string) (string, error)
 	AnswerBoard(ctx context.Context, correlation, topic, to, text string) (uint64, error)
+	// OpenHearing/AnswerHearing/SettleHearing run the deliberation on a contested node.
+	// The host owns the hearing log; this package asks for one and reports the record.
+	OpenHearing(ctx context.Context, node string, required []string) (agentbus.HearingRecord, error)
+	AnswerHearing(ctx context.Context, node, text string, evidence []board.Evidence) (agentbus.HearingRecord, error)
+	SettleHearing(ctx context.Context, node string) (agentbus.HearingRecord, error)
 }
 
 // NewAgentBusTool binds the blackboard tool to a session's board. A nil port keeps the
@@ -61,6 +66,7 @@ func (agentBusBoard) Description() string {
 	return "Shared blackboard for multi-agent work: record what must be true, claim a step before working on it, and let a step be done only with evidence someone else can re-run. One board is shared by every participant, so a node's state — not this conversation — is the source of truth. " +
 		"action=view lists the nodes addressed to you; use it before claiming. " +
 		"claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason. assign addresses a step to one participant, and only that participant may take it; unassign hands it back to the pool. " +
+		"A refuted result with nobody to settle it stalls the work: hearing_open starts a deliberation on that node (required= names who must answer; empty means its owner and everyone who refuted it), hearing_answer records your side, hearing_settle records the verdict, and a refuted assertion blocks the node. " +
 		"A refusal comes back as a reason (illegal transition, missing evidence, unknown node): read it and fix the op instead of retrying it unchanged."
 }
 
@@ -68,7 +74,7 @@ func (agentBusBoard) Schema() json.RawMessage {
 	return json.RawMessage(`{
 "type":"object",
 "properties":{
-  "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","assign","unassign","capability_gap","abandon","revert","ask","answer"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new; pass reason to state the claim in one line). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. assign: address the node to one participant (set assignee=), who is then the only one that may take it. unassign: hand the node back to the pool. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=)."},
+  "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","assign","unassign","capability_gap","abandon","revert","ask","answer","hearing_open","hearing_answer","hearing_settle"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new; pass reason to state the claim in one line). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. assign: address the node to one participant (set assignee=), who is then the only one that may take it. unassign: hand the node back to the pool. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=). hearing_open: start a deliberation on a contested node (required= names who must answer; empty means its owner and everyone who refuted it). hearing_answer: record your side of the deliberation (text, optional evidence — an answer that brings nothing checkable weighs nothing). hearing_settle: weigh the deliberation and record the verdict; a refuted assertion blocks the node."},
   "node":{"type":"string","description":"Node id. Required for every action except view and split."},
   "title":{"type":"string","description":"Human-readable title; used when the action creates the node (require/split children)."},
   "reason":{"type":"string","description":"Why: assert stores it as the assertion's summary; required by refute, capability_gap and abandon (for capability_gap: what you need, what you tried, why it did not work)."},
@@ -85,7 +91,8 @@ func (agentBusBoard) Schema() json.RawMessage {
   "topic":{"type":"string","description":"ask/answer only: the conversation surface this belongs to."},
   "to":{"type":"string","description":"ask/answer only: the participant addressed (a question reaches only them)."},
   "text":{"type":"string","description":"ask/answer only: what to say. Speech that names nobody stays out of everyone's context."},
-  "correlation":{"type":"string","description":"answer only: the correlation the ask returned."}
+  "correlation":{"type":"string","description":"answer only: the correlation the ask returned."},
+  "required":{"type":"array","description":"hearing_open only: who must answer (empty = the node's owner and everyone who refuted it).","items":{"type":"string"}}
 },
 "required":["action"]
 }`)
@@ -127,6 +134,7 @@ type agentBusArgs struct {
 	To           string                `json:"to"`
 	Text         string                `json:"text"`
 	Correlation  string                `json:"correlation"`
+	Required     []string              `json:"required"`
 }
 
 func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string, error) {
@@ -136,13 +144,16 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	}
 	action := strings.ToLower(strings.TrimSpace(in.Action))
 	if action == "" {
-		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer")
+		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle")
 	}
 	if action == "view" {
 		return t.readBoard()
 	}
 	if action == "ask" || action == "answer" {
 		return t.talk(action, in)
+	}
+	if action == "hearing_open" || action == "hearing_answer" || action == "hearing_settle" {
+		return t.deliberate(action, in)
 	}
 	actor, _, err := t.identity()
 	if err != nil {
@@ -187,6 +198,56 @@ func (t agentBusBoard) talk(action string, in agentBusArgs) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("answer recorded on %q at seq %d", topic, seq), nil
+}
+
+// deliberate is the deliberation chain this session can drive on its own: a refuted
+// result is opened up for a verdict, both sides answer, and the verdict is recorded.
+// A refusal from the hearing log passes through as the host's own reason.
+func (t agentBusBoard) deliberate(action string, in agentBusArgs) (string, error) {
+	if _, _, err := t.identity(); err != nil {
+		return "", err
+	}
+	node := strings.TrimSpace(in.Node)
+	if node == "" {
+		return "", fmt.Errorf("%s needs node: the contested step this deliberation is about", action)
+	}
+	if action == "hearing_open" {
+		record, err := t.port.OpenHearing(context.Background(), node, trimmed(in.Required))
+		if err != nil {
+			return "", err
+		}
+		if len(record.Required) == 0 {
+			return fmt.Sprintf("hearing opened on %q with nobody required to answer: it can only settle as it stands", node), nil
+		}
+		return fmt.Sprintf("hearing opened on %q; %s must answer", node, strings.Join(record.Required, ", ")), nil
+	}
+	if action == "hearing_answer" {
+		text := strings.TrimSpace(in.Text)
+		if text == "" {
+			return "", fmt.Errorf("hearing_answer needs text: what your side of the deliberation is; evidence is what it will weigh")
+		}
+		if _, err := t.port.AnswerHearing(context.Background(), node, text, evidenceOf(in.Evidence)); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("answer recorded on %q; it weighs what its evidence can be checked for", node), nil
+	}
+	record, err := t.port.SettleHearing(context.Background(), node)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("hearing on %q settled: %s (%s)", node, record.Verdict, record.Reason), nil
+}
+
+// trimmed drops blank entries, so "required": [""] means "whoever must answer"
+// instead of a requirement nobody can satisfy.
+func trimmed(items []string) []string {
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		if value := strings.TrimSpace(item); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 // identity names the board and who is speaking on it. The host's own error passes
@@ -275,7 +336,7 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 		op.Dep = &board.NodeSpec{ID: strings.TrimSpace(in.Dep.ID), Title: strings.TrimSpace(in.Dep.Title)}
 	case "revert":
 	default:
-		return board.Op{}, fmt.Errorf("unknown action %q: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer", action)
+		return board.Op{}, fmt.Errorf("unknown action %q: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle", action)
 	}
 	return op, nil
 }
