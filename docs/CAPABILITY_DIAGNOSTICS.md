@@ -294,6 +294,6 @@ config files.
 
 ## Cache impact
 
-Adding the built-in `reasonix-guide` skill appends one line to the next changed
-`session-context` Skills catalog. The skill body is loaded only on invocation.
-Diagnostics itself is not part of the provider prompt.
+Adding a built-in skill (`reasonix-guide`, `agentbus-orchestration`) appends one
+line to the next changed `session-context` Skills catalog. The skill body is loaded
+only on invocation. Diagnostics itself is not part of the provider prompt.

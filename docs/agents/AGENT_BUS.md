@@ -1133,3 +1133,20 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 只在人读面报 `stalled`；要"更早交回 pool"应当在超时后写一条 `unassign`（既有 op，回到板级 pool）。本刀没做，因为它需要新的宿主循环
 （哪个 tick 写这条 op、写几次、与租约过期如何错开），而**它的下游已被本刀覆盖**：指派迟迟没人取 ⇒ 租约过期 ⇒ 计入重试 ⇒ 耗尽后由
 `Stalled` 报给请求者。
+
+### 13.14 编排规范落在哪（G4，2026-10-03）
+
+内核**没有自动 planner**：节点图是**写出来**的。缺件不是能力，而是"**怎么写**"那份可复用的规范 + 一个把它接到会话里的入口。
+三件落点：
+
+| 件 | 落点 | 说明 |
+|---|---|---|
+| 规范（节点粒度 / 子树划分 / 边界节点 / 交付物根 / 编排者被删后怎么继续长图） | `docs/agents/ORCHESTRATION.md` | 每条规则带**内核实现位置 + 用例**，只写内核真做得到的 |
+| 会话入口 | 内置技能 `agentbus-orchestration`（`internal/skill/builtincontent/agentbus-orchestration/SKILL.md`，`runAs: inline`） | 编排者会话（任何会话）可 `run_skill` 取得打法清单；正文只在被调用时进上下文 |
+| 演练 | `internal/agentbus/orchestration_drill_test.go` | 编排者写下交付物 + 一块工作后**消失** ⇒ 幸存者只读文件、**补出图上没有的第二块** ⇒ 交付物 `done` ⇒ `AssessLanding` 落地 ⇒ 新读者折出同一结局 |
+
+**边界（如实记）**：`assert` 建的节点**没有 Title**，所以规范要求"结构用 `require`/`split` 建、`assert` 只用于给已有节点落断言"——
+这是**绕开**内核缺口的写法，不是修好它；给 op 增可选 `Title` 属 S1 结构变更（§13.11 末），仍未做。
+**技能与缓存**：正文只在被调用时进上下文；新增内置技能给宿主生成的 `session-context` 的 Skills 目录**加一行**
+（`internal/control/session_context.go`；会话上下文属回合尾部，不是 cache-stable 前缀），golden 基准本身不含技能目录
+（`internal/boot/golden_baseline_test.go` 明记交由 session-context 测试覆盖）⇒ `TestGoldenBaseline` 实测未变。

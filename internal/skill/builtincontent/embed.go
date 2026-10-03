@@ -13,7 +13,7 @@ import (
 	"reasonix/internal/frontmatter"
 )
 
-//go:embed reasonix-guide/SKILL.md
+//go:embed reasonix-guide/SKILL.md agentbus-orchestration/SKILL.md
 var files embed.FS
 
 // SkillMarkdown is one embedded skill file after frontmatter split.

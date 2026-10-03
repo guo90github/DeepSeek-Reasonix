@@ -253,5 +253,6 @@ MCP 仅列出 env/header 的 **key**。可能携带 HTTP 响应体或 MCP stderr
 
 ## 缓存影响
 
-内置 `reasonix-guide` 仅在 system prompt 的 Skill 索引中增加 **一行稳定索引**；
-正文按需加载。诊断本身不进入 provider 请求。
+新增内置技能（`reasonix-guide`、`agentbus-orchestration`）会给**下一次变化的 `session-context` 的 Skills 目录**
+加一行——会话上下文是回合尾部，不是 cache-stable 前缀（golden 基准不含技能目录，见
+`internal/boot/golden_baseline_test.go` 的说明）；正文按需加载。诊断本身不进入 provider 请求。
