@@ -2,10 +2,13 @@
 
 > **状态：部分已实现（2026-10-03 校）。** `internal/agentbus` 已落地：内核 `board/`（op 日志 + 确定性 fold +
 > 节点状态机 + 逐节点租约），以及队列/排班/预算/投影/唤醒/落地判定的实现与 `internal/control`、桌面宿主的接线
-> （`internal/cli` 的 `REASONIX_AGENTBUS_*` 是 headless 入列口）。**仍未接线**：talk 的写入口（`say/ask/answer`
-> 有定义无调用者）、`Take`（非排班版取用；`TakeRanked` 与预算账本已由桌面宿主接线 —— `desktop/agentbus_waker.go`
-> 用 `[agentbus]` 的四个额度加 `dispatch_slots` 建账本并装到每个 controller 上）、宿主侧唤醒 tick、唤醒去重的
-> 持久化；过期租约的回收只发生在写路径（`control.ApplyAgentBusOp` 写前 sweep）。下表标 *待建* 的行仍以 §11.1 为准。
+> （`internal/cli` 的 `REASONIX_AGENTBUS_*` 是 headless 入列口）。**接线情况（2026-10-04 复核）**：talk 的写入口**已接**
+> （面板 `desktop/agentbus_apply.go` 的 `AgentBusAsk/Answer` + 模型工具 `internal/boot/agentbus_board_tool.go`）；
+> `TakeRanked` 与预算账本已由桌面宿主接线（`desktop/agentbus_waker.go` 用 `[agentbus]` 的四个额度加 `dispatch_slots`
+> 建账本并装到每个 controller 上）；**宿主侧唤醒 tick 也已接**（桌面 `agentBusWakeTick`/`agentBusDispatchTick` +
+> headless `internal/cli/agentbus_tick.go`）；**仍只测试用**的是非排班版的 `Take`；去重以进程内 `WakeLedger` 为主，
+> 落盘那层靠 inbox 的 `idempotencyKey`（同 key 重投在接收侧收敛）；过期租约回收**不只**在写路径 —— 宿主 tick 也 sweep
+> （`AgentBusTick`，2026-10-04 进程级验过：t+20s `claimed` ⇒ 跨过 30s tick 变 `open/noProgress=1`）。下表标 *待建* 的行仍以 §11.1 为准。
 > 并列读：`docs/COLLAB-SURFACE.md`（**已实现**的跨仓封闭面，由 `tools/collabgate` 钉住）、
 > `docs/agents/multi-agent-collaboration-design.md`（本稿部分取代之，见 §10）。
 > 执行清单：`docs/agents/TODO.md`；**S1 的可实现规格见 §11.1**（S1 实现以 §11.1 为准）；评审留痕见 §11.2。
@@ -863,8 +866,9 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
   **非授权类 `assert` 的 actor ∪ `claim` 的 actor**。授权类 `assert`（`Source == "agentbus-grant"`）**不计入**产出者，
   否则"谁批的"会把自己算成"干了活的人" ⇒ 谁也批不了 ✗。
 - **`Authorized` 与 `AuthorizedGrants` 不再各写一份**：前者委托后者 ✓（两份重复逻辑正是它们能悄悄漂移的原因 ✗）。
-- **仍缺（如实记）**：`Authorized` / `AuthorizedGrants` 在**生产代码里没有调用方** ⇒ 授权记录能写、能读、能核，
-  但**会话侧还没有"开工前查授权"这道门**（与 §13.9 的槽位/队列同一形状：机制就绪、入口未接）。
+- **仍缺（如实记，2026-10-04 复核）**：`AuthorizedGrants` 已被**读面**调用（`internal/agentbus/detail.go:55` 的节点明细），
+  `Authorized` 仍只在内核内部用 ⇒ 授权记录能写、能读、能核，**但会话侧"开工前查授权"这道门仍未接**（与 §13.9 的槽位/队列
+  同一形状：机制就绪、入口未接）。
   接线点 = 会话认领/开工之前那一处，与 S5 的"宿主接纳"是同一道门，**宜一并做** ✗。
 
 ### 13.9 账本宿主与记账时机（T4-8 之外的最后一处 S5 落地，2026-10-02 定规格）
@@ -947,7 +951,10 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
   ⇒ 让账本"真的有宿主"的最小落地 = **宿主创建一份并交给队列路径**；
   `Charge`/`Settle`（四级额度的记账）**可以先不接**——它们在不设上限时是空转 ✓，等哪天真的给某一级设了上限再接，
   且那时**只需要在既有绑定点与验收点各加一行**（缝已在 §13.9 记明）。
-- **仍是待办（不冒充）**：槽位上限**由谁来设**（宿主配置面）尚未定；`Charge`/`Settle` 的挂钩也尚未落，但两者都已具名。
+- **~~仍是待办~~ 已落（2026-10-04 复核）**：槽位上限由**配置面**给 —— `internal/config/config.go:51-53` 的
+  `[agentbus] dispatch_slots`，桌面 `desktop/agentbus_waker.go` 的 `agentBusBudgetLimits` 把它与四级额度一起建账本、
+  `SetAgentBusLedger` 装到每个 controller 上；`Charge`/`Settle` 的挂钩**也已落**（`internal/control/agentbus.go:180` 的
+  `chargeClaim`、`:191` 的 `settleBudget`，见 T7-2/T7-4）。⇒ 本节"给账本找宿主"这件事已经完成，剩下的是 §13.8 那道门。
 
 **动手前又核出一处前提（2026-10-02）：S5 的队列与账本在生产里没有任何驱动者** ✗。
 
@@ -1138,10 +1145,10 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
 **测试踩到的内核坑（写下来免得下次再踩）**：`Sweep` 的回收 op 用 `SweepID(node, deadline)` 做幂等键 ⇒ **两次派活必须各有各的 deadline**，
 否则第二次回收被判重放、`NoProgress` 只加一次（本刀 1/8 概率复现过）。
 
-**仍未做（G5 的另一半）**：**指派超时更早回落 pool** —— 指派给某人却没人来取时，`ObserveLimits.AssignedWait`（默认 10 分钟）
-只在人读面报 `stalled`；要"更早交回 pool"应当在超时后写一条 `unassign`（既有 op，回到板级 pool）。本刀没做，因为它需要新的宿主循环
-（哪个 tick 写这条 op、写几次、与租约过期如何错开），而**它的下游已被本刀覆盖**：指派迟迟没人取 ⇒ 租约过期 ⇒ 计入重试 ⇒ 耗尽后由
-`Stalled` 报给请求者。
+**已落（2026-10-04 复核，提交 `b36e8f3d1`）**：**指派超时回落 pool** —— 超时后宿主写一条 `unassign`（既有 op，
+回到板级 pool），不再把活锁给不在场的受派人；`ObserveLimits.AssignedWait`（默认 10 分钟）仍是"何时算停滞"的窗口，
+两件事各司其职。原条目记录的顾虑（哪个 tick 写这条 op、写几次、与租约过期如何错开）由那一笔一并处理，
+用例（`internal/control` 的 stall 族）随之补上。
 
 ### 13.14 编排规范落在哪（G4，2026-10-03）
 
