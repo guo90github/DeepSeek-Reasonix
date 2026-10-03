@@ -23,27 +23,7 @@ import {
   waitFor,
 } from "../test-support/settingsTestFixtures";
 import { installDesktopHostStub } from "./desktopHostStub";
-
-let passed = 0;
-let failed = 0;
-
-function ok(value: boolean, label: string) {
-  if (value) {
-    process.stdout.write(`  PASS  ${label}\n`);
-    passed += 1;
-  } else {
-    process.stdout.write(`  FAIL  ${label}\n`);
-    failed += 1;
-  }
-}
-
-function eq(actual: unknown, expected: unknown, label: string) {
-  if (actual === expected) {
-    ok(true, label);
-  } else {
-    ok(false, `${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
-  }
-}
+import { eq, ok, suiteSummary } from "./suiteHarness";
 
 // press folds the click-then-settle idiom the settings suites repeat dozens of times
 // into one line: the button may be absent, and the assertion that says so follows.
@@ -977,5 +957,4 @@ await act(async () => {
 });
 dom.window.close();
 
-console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
-if (failed > 0) process.exit(1);
+suiteSummary();
