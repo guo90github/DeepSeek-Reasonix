@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -49,6 +50,10 @@ func (a *App) AgentBusJoin() (AgentBusStatusView, error) {
 	if err := rememberAgentBusEnrolment(ctrl.SessionPath(), dir, bus.AgentBusParticipant()); err != nil {
 		return AgentBusStatusView{}, fmt.Errorf("desktop: remember the board: %w", err)
 	}
+	// Joining is the one switch: it also lifts a host-level opt-out.
+	if err := setAgentBusOptOut(false); err != nil {
+		return AgentBusStatusView{}, fmt.Errorf("desktop: clear the opt-out: %w", err)
+	}
 	a.enrollAgentBus(ctrl)
 	return agentBusStatusOf(bus, dir), nil
 }
@@ -65,9 +70,16 @@ func (a *App) restoreAgentBusEnrolmentFor(sessionPath string, ctrl control.Sessi
 	if !ok || bus.AgentBusEnrolled() {
 		return
 	}
-	record, ok := rememberedAgentBusEnrolment(sessionPath)
-	if !ok {
-		return
+	record, remembered := rememberedAgentBusEnrolment(sessionPath)
+	if !remembered {
+		// No record for this session, but a board this machine already uses: joining is a
+		// choice the user made for the host, and a new session silently left off the board
+		// reads nothing and is told nothing (found on a real machine, 2026-10-03).
+		dir := agentBusUsedBoardDir()
+		if dir == "" {
+			return
+		}
+		record = agentBusEnrolment{Dir: dir}
 	}
 	bus.SetAgentBus(record.Dir, record.Participant)
 	// The waker captured the board the controller had at build time, which was none:
@@ -81,8 +93,28 @@ func (a *App) restoreAgentBusEnrolment(ctrl control.SessionAPI) {
 	a.restoreAgentBusEnrolmentFor(ctrl.SessionPath(), ctrl)
 }
 
+// agentBusUsedBoardDir names the default board when this machine has one on disk and the
+// user has not opted out, and nothing when it does not: a host that never joined stays out.
+func agentBusUsedBoardDir() string {
+	if agentBusOptedOut() {
+		return ""
+	}
+	dir := agentBusDefaultBoardDir()
+	if dir == "" {
+		return ""
+	}
+	info, err := os.Stat(filepath.Join(dir, "board.jsonl"))
+	if err != nil || info.IsDir() {
+		return ""
+	}
+	return dir
+}
+
 // AgentBusLeave opts the session out. The board and its log stay on disk untouched:
 // leaving is losing sight of the work, never deleting it.
+//
+// It also records the opt-out for the host, because a session that simply forgets its board
+// would be put straight back on it by the machine-level fallback above.
 func (a *App) AgentBusLeave() (AgentBusStatusView, error) {
 	bus, err := a.agentBusControl()
 	if err != nil {
@@ -91,8 +123,48 @@ func (a *App) AgentBusLeave() (AgentBusStatusView, error) {
 	if err := forgetAgentBusEnrolment(ctrlSessionPath(bus)); err != nil {
 		return AgentBusStatusView{}, fmt.Errorf("desktop: forget the board: %w", err)
 	}
+	if err := setAgentBusOptOut(true); err != nil {
+		return AgentBusStatusView{}, fmt.Errorf("desktop: record the opt-out: %w", err)
+	}
 	bus.SetAgentBus("", "")
 	return agentBusStatusOf(bus, agentBusDefaultBoardDir()), nil
+}
+
+// agentBusOptOutPath is the host-level "keep my sessions off the board" marker. Joining
+// clears it, so the choice stays a single switch rather than a per-session accident.
+func agentBusOptOutPath() string {
+	root := strings.TrimSpace(config.UserSupportDir())
+	if root == "" {
+		return ""
+	}
+	return filepath.Join(root, "agentbus", "opt-out")
+}
+
+func agentBusOptedOut() bool {
+	path := agentBusOptOutPath()
+	if path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+func setAgentBusOptOut(off bool) error {
+	path := agentBusOptOutPath()
+	if path == "" {
+		return nil
+	}
+	if !off {
+		err := os.Remove(path)
+		if err == nil || os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte("left the board; delete this file to rejoin on the next session\n"), 0o644)
 }
 
 // ctrlSessionPath reads the session path from the controller a host holds.
