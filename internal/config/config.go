@@ -40,6 +40,19 @@ func SkillNameKey(name string) string {
 	return name
 }
 
+// AgentBusConfig is the operator's allowance for the agent blackboard (AGENT_BUS §S5). Every
+// budget field counts steps, and zero means no bound at that level: the kernel invents no
+// ceilings on the operator's behalf, so an absent section is exactly an unconfigured host.
+type AgentBusConfig struct {
+	BudgetBoard   int64 `toml:"budget_board"`
+	BudgetSubtree int64 `toml:"budget_subtree"`
+	BudgetNode    int64 `toml:"budget_node"`
+	BudgetTurn    int64 `toml:"budget_turn"`
+	// DispatchSlots is this host's ceiling on participants working at once. It is the
+	// machine's ceiling, not one board's, so the account holding it is per host.
+	DispatchSlots int `toml:"dispatch_slots"`
+}
+
 // Config is Reasonix's runtime configuration.
 type Config struct {
 	ConfigVersion    int                 `toml:"config_version"`
@@ -53,6 +66,7 @@ type Config struct {
 	Telemetry        TelemetryConfig     `toml:"telemetry"`
 	Notifications    NotificationsConfig `toml:"notifications"`
 	Agent            AgentConfig         `toml:"agent"`
+	AgentBus         AgentBusConfig      `toml:"agentbus"`
 	Providers        []ProviderEntry     `toml:"providers"`
 	Tools            ToolsConfig         `toml:"tools"`
 	Permissions      PermissionsConfig   `toml:"permissions"`

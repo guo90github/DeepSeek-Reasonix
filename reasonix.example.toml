@@ -50,6 +50,16 @@ compact_ratio       = 0.80  # sole auto trigger; presets 0.70 (active) / 0.80 (r
 # output_style = "explanatory"   # persona/tone folded into the prompt: explanatory | learning | concise,
 #                                  or a custom .reasonix/output-styles/<name>.md ; empty = default
 
+[agentbus]
+# The agent blackboard's allowance, in steps. 0 means no bound at that level: the kernel
+# invents no ceilings, so an absent value is exactly an unconfigured host's behavior.
+# Read once when a host starts — changing these needs a restart.
+# budget_board = 400     # the whole board
+# budget_subtree = 120   # one subtree of it
+# budget_node = 20       # one node's own work
+# budget_turn = 5        # one turn
+# dispatch_slots = 2     # how many participants this host works on at once
+
 # A provider is a vendor endpoint (one base_url + key) that offers one or more
 # models. Use `models = [...]` to expose several under a single entry — switching
 # models reuses the same connection; no need to re-declare base_url/api_key.
