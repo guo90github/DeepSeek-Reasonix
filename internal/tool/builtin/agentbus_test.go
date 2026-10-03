@@ -20,6 +20,8 @@ type fakeBoardPort struct {
 	reject      error
 	duplicate   bool
 	identityErr error
+	asked       []string
+	answered    []string
 }
 
 func (f *fakeBoardPort) ApplyBoardOp(_ context.Context, op board.Op) (board.Receipt, error) {
@@ -39,14 +41,16 @@ func (f *fakeBoardPort) BoardIdentity() (string, string, error) {
 	return f.participant, f.dir, nil
 }
 
-// The talk seam: this fake only has to satisfy it — the wiring itself is covered by the
-// effect guard, which drives a real controller through boot.Build.
-func (f *fakeBoardPort) AskBoard(context.Context, string, string, string) (string, error) {
+// The talk seam: this fake records what the tool asked it to say, so the argument wiring is
+// pinned here and the delivery itself by the effect guard in internal/boot.
+func (f *fakeBoardPort) AskBoard(_ context.Context, topic, to, text string) (string, error) {
+	f.asked = append(f.asked, strings.Join([]string{topic, to, text}, "|"))
 	return "correlation-1", nil
 }
 
-func (f *fakeBoardPort) AnswerBoard(context.Context, string, string, string, string) (uint64, error) {
-	return 1, nil
+func (f *fakeBoardPort) AnswerBoard(_ context.Context, correlation, topic, to, text string) (uint64, error) {
+	f.answered = append(f.answered, strings.Join([]string{correlation, topic, to, text}, "|"))
+	return uint64(len(f.answered)), nil
 }
 
 func boardArgs(t *testing.T, raw string) json.RawMessage {
