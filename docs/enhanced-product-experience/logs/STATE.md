@@ -29,10 +29,11 @@
 - **第十六 · 召回记录要给人看懂**（`e50e02a13`，用户反馈"只有 id 看不懂、没有内容"）：**记录仍 content-free**，只在**显示时**解析名字——
   新 `lib/recallLabels.ts`（按 `id` 与 `name` 双键、名称取 `title||name`、hint=`description·type·scope·freshness`）；`RecapRecallStrip` 加可选 `facts`
   （有名则**事实名领读、id 留旁边**可追溯；无名则退回 id，不瞎编）；接上「面板」卡片（读 `MemoryForTab(tabId)`）与记忆面板「召回记录」页（用它已加载的 `facts`，零额外请求）。
-- **真机**：`v0.0.0-dev.118` rc 0 + 装机并列新增 + verifier **exit 0**；包内 `build.json` = `v0.0.0-dev.118 / stable / commit e50e02a137e5`（= HEAD）；
-  `dist\Reasonix-windows-amd64.zip` 239,332,022 B（15:55）；构建前后 `git status` 均只有 `desktop/frontend/dist/.gitkeep`（构建副产物）。
-  **构建环境的坑（下次照用）**：打包步骤会联网取 Electron `SHASUMS256.txt`，本机两次 `ECONNRESET` 失败；按 `desktop/packaging/package.mjs:92` 的注释
-  给 `REASONIX_ELECTRON_ZIP_DIR=<本机 electron 缓存目录，内含 electron-v44.2.0-win32-x64.zip>` 即绕开联网、第三次成功。
+- **打包：默认用本机缓存的 Electron zip**（`f537fecdc`，用户建议）：packager 的 `SHASUMS256.txt` 校验每次联网、绕过缓存 ⇒ 本机两次 `ECONNRESET` 打包失败（zip 早在盘上）。
+  `lib.mjs` 新增 `defaultElectronCacheRoot`/`electronZipNames`/`findElectronZipDir`/`resolveElectronZipDir`（显式变量优先，否则本机缓存；找不到仍回落下载，`universal` 缺 zip 不误用半套），`package.mjs` 默认调用并打印所用目录。
+- **真机**：`v0.0.0-dev.118`（commit `e50e02a137e5`）与 `v0.0.0-dev.119`（commit `f537fecdca63`）均 rc 0 + 装机并列新增 + verifier **exit 0**；
+  `dist\Reasonix-windows-amd64.zip` 239,332,018 B（16:00，dev.119）。**dev.119 是"不带任何环境变量"构建的** ⇒ 日志出现
+  `==> using the Electron zip in …\electron\Cache\e71119b6… (nothing to download)`，即那条坑已由默认行为消除（不再需要手工设变量）。
 - **UI 观感仍待你重启 App**：在跑的 service 是 `v0.0.0-dev.114`（托管本对话，SOP 禁忌不得杀）⇒ 会报 `build_mismatch (-32004)`。
 
 ## 3. 下一步（① 先做；② 你重启 App 后照此看）
@@ -53,8 +54,7 @@
 
 - 立项书验收 5（全量门禁）：Go 侧三项绿、`make lint` 30 条 / `repolint` 7 条 / 失败**全在别的会话文件**（本任务 0 条）；前端全量：`72c88bb2e` 前 **401/401**，之后一次 **401/403**（唯二红＝那条 `TypeError`），**修复后只单独复跑那两个套件（7 / 8 PASS），未再跑全量**。
 - **真机 UI 观感：未完成**（`build_mismatch` 需重启 App；dev.118 已装好待启动）；**回顾页会话详情的召回条仍未接名字**（见 §3 ①）。
-- 超出验收判据的留白：第十「后台标签多面板并行」；第八 BA4（按 verdict 触发记忆建议——现有候选机制已满足 U-5 实质）。
-- 第十二 复跑**未建模**外部改动与轨迹变化（只会让残余更高），故 37 是同轨迹上界。
+- 超出验收判据的留白：第十「后台标签多面板并行」；第八 BA4（按 verdict 触发记忆建议——现有候选机制已满足 U-5 实质）；第十二 复跑**未建模**外部轨迹变化，37 是同轨迹上界。
 
-END-UNIT：三处用户点名（输入框档位开关 `89c58d096`、面板召回段 `72c88bb2e`、召回可读性 `e50e02a13`）均已改完、验证、提交，并打包装机 dev.118（verifier exit 0，包内 commit `e50e02a137e5` = HEAD）；
-**唯一的真 blocker = 需你重启 App 才能用眼看新 UI**（清单见 §3 ②）。
+END-UNIT：四处用户点名（输入框档位开关 `89c58d096`、面板召回段 `72c88bb2e`、召回可读性 `e50e02a13`、打包默认用本机缓存 `f537fecdc`）均已改完、验证、提交，
+并打包装机 dev.119（verifier exit 0，包内 commit `f537fecdca63` = HEAD）；**唯一的真 blocker = 需你重启 App 才能用眼看新 UI**（清单见 §3 ②）。
