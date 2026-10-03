@@ -228,7 +228,10 @@ func (a *App) listSessionsForRemote(all bool) []serve.SessionInfo {
 		metas = append(metas, a.listAllWorkspaceSessions(metas)...)
 	}
 	_, ctrl := a.activeTabAndCtrl()
-	foregroundRunning := ctrl != nil && ctrl.Running()
+	// RuntimeStatus().Running folds in the finishing window; a bare Running() is
+	// false while TurnDone is delivered. The phone routes on this row, so a false
+	// idle sends its message down the submit path instead of the guidance queue.
+	foregroundRunning := ctrl != nil && ctrl.RuntimeStatus().Running
 	_, sessionOverlays := a.catalogRuntimeOverlays()
 	out := make([]serve.SessionInfo, 0, len(metas))
 	for _, meta := range metas {

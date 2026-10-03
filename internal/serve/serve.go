@@ -825,9 +825,10 @@ func (s *Server) submit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctrl := s.ctl()
-	// Fix false 202 while a turn is active: SubmitHTTPFormat silently drops
-	// concurrent input. Clients must use POST /inbox/items for durable follow-up.
-	if ctrl.Running() {
+	// A busy session must not be handed a turn: callers queue the follow-up and
+	// keep steering. RuntimeStatus().Running folds in the finishing window, where
+	// a bare Running() is false — the hole that answered 202 with no queue item.
+	if ctrl.RuntimeStatus().Running {
 		s.bindMu.Unlock()
 		http.Error(w, "session is busy; use POST /inbox/items for durable follow-up", http.StatusConflict)
 		return
