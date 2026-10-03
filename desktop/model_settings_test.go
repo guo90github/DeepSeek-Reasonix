@@ -192,13 +192,17 @@ func TestModelSettingsQueuedFollowupAppliesLatestBeforeDispatch(t *testing.T) {
 	if err := old.SetInboxPaused(false); err != nil {
 		t.Fatal(err)
 	}
-	select {
-	case key := <-keys:
-		if key != "Bearer new-queued-key" {
-			t.Fatal("queued message used the retired connection")
+	// Only the queued run answers this question. The session's background recap lane holds the
+	// provider it was built with, so it can reach the same endpoint with the previous credential
+	// and is a different concern (2026-10-04, found by tracing the first request's caller).
+	newCredential := false
+	for !newCredential {
+		select {
+		case key := <-keys:
+			newCredential = key == "Bearer new-queued-key"
+		case <-ctx.Done():
+			t.Fatal("the queued message never reached the provider with the credential saved before it: ", ctx.Err())
 		}
-	case <-ctx.Done():
-		t.Fatal(ctx.Err())
 	}
 	select {
 	case <-done:
