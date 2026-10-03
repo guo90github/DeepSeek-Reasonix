@@ -1293,6 +1293,15 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 
 **至此这张清单没有未修项**：六类里**四处曾悬空、本会话补齐**（各带提交号），两处**一直齐**；另有两处"看着像刹车"
 经核实是**自愈**的（上表）——它们只在"失败那一刻"静默，而失败会被下一次写/下一次载入消解，且迹象本身可见。
+**"大板三问"（2026-10-04 收尾；规模用例此前只证明"收敛与有界"，不证明这三件事）**
+
+| 问 | 现在的答案 |
+|---|---|
+| **卡被裁掉**（第一屏装不下时计数还准吗） | 新用例 `TestObserveTrimsALargeBoardToTheCap`（`internal/agentbus/observe_test.go`，`4a9c6d5fd`）：100 个无依赖节点各自成子树根 ⇒ `MaxCards: 5` 时画 5 张、`HiddenCards == 95`（**余数**）；信号上限自己的算术仍在原小用例 |
+| **唤醒面**（大板 + 多人有待办时目标对不对） | 新用例 `TestWakeTargetsNameEveryWaitingParticipantOnceOnALargeBoard`（`internal/agentbus/wake_test.go`，`496689b9d`）：20 个参与者各要一份活 ⇒ 目标 = 20 个 worker（各 `Ready` 恰是自己那步）**+ `planner`**（§13.3 有意加宽：`assert` 也算"要"）；重算幂等（key 不随调用漂移）；"不唤醒自己"由 `internal/control` 的用例承担 |
+| **派发不重复**（同一 tick 不会把同一步给两个人） | **已有用例，无需新增**：`internal/control/agentbus_dispatch_test.go`（注释即规则："one step per claimant per tick, taken out of the queue"）与 `TestWithoutASlotCeilingEachClaimantTakesAStep`（`agentbus_dispatch_slots_test.go:72`）⇒ 这是**逐认领者**的规则、与人数无关，再写"20 个认领者"的版本只会重复它 |
+
+⇒ 三问都有答案：两条新用例补上"规模形状"这一维，第三问早就钉在规则发生的那一层（派发回环）。
 **同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
 
 **另一处已核实（2026-10-04）：地址簿 TTL 与两种投递失败的可见性。**
