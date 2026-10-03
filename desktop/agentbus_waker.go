@@ -6,8 +6,10 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 
 	"reasonix/internal/agentbus"
+	"reasonix/internal/config"
 	"reasonix/internal/control"
 )
 
@@ -17,9 +19,44 @@ import (
 var agentBusWakeLedger = control.NewWakeLedger()
 
 // agentBusBudget is this host's spending account, shared for the same reason the wake
-// ledger is: the ceilings belong to the machine. Zero limits mean the kernel invents no
-// ceiling — an operator sets them, not this host.
-var agentBusBudget = agentbus.NewLedger(agentbus.BudgetLimits{})
+// ledger is: the ceilings belong to the machine.
+//
+// The ceilings come from [agentbus] in config, read once per process. One account per host is
+// what keeps a settings change — which rebuilds controllers — from forgiving what was already
+// spent; the price is that a change needs a restart.
+var (
+	agentBusBudgetOnce sync.Once
+	agentBusBudget     *agentbus.Ledger
+)
+
+func hostAgentBusBudget() *agentbus.Ledger {
+	agentBusBudgetOnce.Do(func() {
+		agentBusBudget = agentbus.NewLedger(agentBusBudgetLimits(agentBusConfig()))
+	})
+	return agentBusBudget
+}
+
+// agentBusBudgetLimits maps the operator's knobs onto the kernel's four levels plus the host's
+// slot ceiling. Zero stays zero: the kernel invents no ceilings on the operator's behalf.
+func agentBusBudgetLimits(cfg config.AgentBusConfig) agentbus.BudgetLimits {
+	return agentbus.BudgetLimits{
+		Board:   cfg.BudgetBoard,
+		Subtree: cfg.BudgetSubtree,
+		Node:    cfg.BudgetNode,
+		Turn:    cfg.BudgetTurn,
+		Slots:   cfg.DispatchSlots,
+	}
+}
+
+func agentBusConfig() config.AgentBusConfig {
+	cfg, err := config.Load()
+	if err != nil {
+		// A config that cannot be read leaves every ceiling at zero, which is the behavior of
+		// a host nobody configured.
+		return config.AgentBusConfig{}
+	}
+	return cfg.AgentBus
+}
 
 // agentBusWakeTick is the board's share of the host tick: every enrolled controller
 // reclaims what a lapsed lease left behind and wakes whoever was waiting on it. One
@@ -103,7 +140,7 @@ func (a *App) enrollAgentBus(ctrl control.SessionAPI) {
 	}
 	boardDir := bus.AgentBusDir()
 	bus.SetAgentBusWakeLedger(agentBusWakeLedger)
-	bus.SetAgentBusLedger(agentBusBudget)
+	bus.SetAgentBusLedger(hostAgentBusBudget())
 	bus.SetAgentBusWaker(func(ctx context.Context, target agentbus.WakeTarget) error {
 		return a.routeAgentBusWakeOn(ctx, boardDir, target)
 	})
@@ -116,7 +153,11 @@ func (a *App) enrollAgentBus(ctrl control.SessionAPI) {
 // becomes a durable follow-up keyed by the wake itself, so a repeat collapses and an
 // idle session actually gets a turn out of it.
 func (a *App) routeAgentBusWakeOn(ctx context.Context, boardDir string, target agentbus.WakeTarget) error {
-	if tab := a.agentBusWakeRecipient(target.Participant); tab != nil {
+	tab, err := a.agentBusWakeRecipient(target.Participant)
+	if err != nil {
+		return err
+	}
+	if tab != nil {
 		return enqueueAgentBusWake(tab, target)
 	}
 	return a.deliverAgentBusWakeRemotely(ctx, boardDir, target)
@@ -186,12 +227,17 @@ func readAgentBusToken(path string) (string, error) {
 
 // agentBusWakeRecipient finds the tab that owns a participant. It is the whole
 // routing decision, kept separate so it can be tested without an inbox.
-func (a *App) agentBusWakeRecipient(participant string) *WorkspaceTab {
+//
+// Two tabs speaking as one participant is an error, not a coin toss: waking the wrong session
+// is the failure this routing exists to prevent, and serve reports the same ambiguity
+// (internal/serve/agentbus_waker.go). "别搞错会话" is a criterion, not a nicety.
+func (a *App) agentBusWakeRecipient(participant string) (*WorkspaceTab, error) {
 	if strings.TrimSpace(participant) == "" {
-		return nil
+		return nil, nil
 	}
 	a.mu.RLock()
 	defer a.mu.RUnlock()
+	var found *WorkspaceTab
 	for _, tab := range a.tabs {
 		if tab == nil || tab.Ctrl == nil {
 			continue
@@ -200,9 +246,12 @@ func (a *App) agentBusWakeRecipient(participant string) *WorkspaceTab {
 		if !ok || bus.AgentBusParticipant() != participant {
 			continue
 		}
-		return tab
+		if found != nil {
+			return nil, fmt.Errorf("desktop: two tabs speak as agentbus participant %q", participant)
+		}
+		found = tab
 	}
-	return nil
+	return found, nil
 }
 
 // agentBusWakePrompt renders the block a woken session reads. The rendering itself lives in

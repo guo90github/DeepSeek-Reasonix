@@ -29,14 +29,29 @@ func TestAgentBusWakeRecipientFindsTheOwningTab(t *testing.T) {
 		"t2": agentBusTab(t, dir, "t2", "bob"),
 	}}
 
-	if tab := app.agentBusWakeRecipient("bob"); tab == nil || tab.ID != "t2" {
-		t.Fatalf("recipient = %+v, want the tab that speaks as bob", tab)
+	if tab, err := app.agentBusWakeRecipient("bob"); err != nil || tab == nil || tab.ID != "t2" {
+		t.Fatalf("recipient = %+v (err %v), want the tab that speaks as bob", tab, err)
 	}
-	if tab := app.agentBusWakeRecipient("nobody"); tab != nil {
-		t.Fatalf("recipient = %+v, want none for a participant no tab owns", tab)
+	if tab, err := app.agentBusWakeRecipient("nobody"); err != nil || tab != nil {
+		t.Fatalf("recipient = %+v (err %v), want none for a participant no tab owns", tab, err)
 	}
-	if tab := app.agentBusWakeRecipient("   "); tab != nil {
+	if tab, err := app.agentBusWakeRecipient("   "); err != nil || tab != nil {
 		t.Fatal("an empty participant must route to nobody rather than to the first tab")
+	}
+}
+
+// Two tabs speaking as one participant must be reported, not resolved by luck: waking the wrong
+// session is the failure this routing exists to prevent ("别搞错会话", 2026-10-03).
+func TestAgentBusWakeRecipientReportsTwoTabsSpeakingAsOneParticipant(t *testing.T) {
+	dir := t.TempDir()
+	app := &App{tabs: map[string]*WorkspaceTab{
+		"t1": agentBusTab(t, dir, "t1", "bob"),
+		"t2": agentBusTab(t, dir, "t2", "bob"),
+	}}
+
+	tab, err := app.agentBusWakeRecipient("bob")
+	if err == nil {
+		t.Fatalf("recipient = %+v, want the ambiguity reported rather than one of two tabs", tab)
 	}
 }
 
