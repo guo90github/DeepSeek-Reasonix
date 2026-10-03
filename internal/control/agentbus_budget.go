@@ -57,11 +57,61 @@ func (b *agentBusState) chargeClaim(op board.Op) error {
 // ceiling refused belongs in the host's own record, not only in the tool result (T12-3).
 var budgetRefusals atomic.Int64
 
+// budgetRefusalCounts says which ceiling refused, not only how often. A single total answers
+// "is a brake biting"; the level is what a person has to move, and it is what the panel shows
+// (G3's "which layer topped out", 2026-10-03).
+var budgetRefusalCounts = struct {
+	board, subtree, node, turn, slots atomic.Int64
+}{}
+
+// BudgetRefusalCounts is the host's refusal record, by the level that refused.
+type BudgetRefusalCounts struct {
+	Board   int64
+	Subtree int64
+	Node    int64
+	Turn    int64
+	Slots   int64
+}
+
+// Total is how many claims were refused at any level.
+func (c BudgetRefusalCounts) Total() int64 {
+	return c.Board + c.Subtree + c.Node + c.Turn + c.Slots
+}
+
+// AgentBusBudgetRefusals reports the host's refusals. Process-wide, like the account itself:
+// the ceilings belong to the machine, so the count does.
+func AgentBusBudgetRefusals() BudgetRefusalCounts {
+	return BudgetRefusalCounts{
+		Board:   budgetRefusalCounts.board.Load(),
+		Subtree: budgetRefusalCounts.subtree.Load(),
+		Node:    budgetRefusalCounts.node.Load(),
+		Turn:    budgetRefusalCounts.turn.Load(),
+		Slots:   budgetRefusalCounts.slots.Load(),
+	}
+}
+
+// noteBudgetRefusal records one refusal against the level that made it.
+func noteBudgetRefusal(level string) {
+	switch level {
+	case "board":
+		budgetRefusalCounts.board.Add(1)
+	case "subtree":
+		budgetRefusalCounts.subtree.Add(1)
+	case "node":
+		budgetRefusalCounts.node.Add(1)
+	case "turn":
+		budgetRefusalCounts.turn.Add(1)
+	case "slots":
+		budgetRefusalCounts.slots.Add(1)
+	}
+}
+
 func recordBudgetRefusal(err error, ledger *agentbus.Ledger, boardName, node string) {
 	var reject *agentbus.BudgetReject
 	if !errors.As(err, &reject) {
 		return
 	}
+	noteBudgetRefusal(reject.Level)
 	limit := int64(0)
 	if ledger != nil {
 		limits := ledger.Limits()

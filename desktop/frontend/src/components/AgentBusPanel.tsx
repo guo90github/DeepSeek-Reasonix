@@ -63,8 +63,9 @@ export type AgentBusNodeDetailView = {
 };
 
 // Order mirrors the kernel's severity: what cannot ever run, then what nobody will
-// notice on its own, then the rest.
-const SEVERITY: Record<string, number> = { orphan: 0, stalled: 1, escalated: 2, disputed: 3, undecided: 4 };
+// notice on its own, then the rest. A refused claim means work is parked for budget
+// rather than for a reason the board knows, so it ranks with "nobody will notice".
+const SEVERITY: Record<string, number> = { orphan: 0, stalled: 1, escalated: 2, disputed: 3, undecided: 4, budget: 5 };
 
 const KIND_LABEL: Record<string, DictKey> = {
   orphan: "agentbus.kind.orphan",
@@ -72,6 +73,7 @@ const KIND_LABEL: Record<string, DictKey> = {
   escalated: "agentbus.kind.escalated",
   disputed: "agentbus.kind.disputed",
   undecided: "agentbus.kind.undecided",
+  budget: "agentbus.kind.budget",
 };
 
 function severityOf(kind: string): number {
@@ -173,6 +175,18 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
       {notice ? <p className="agentbus-panel__notice">{notice}</p> : null}
       {cards.length === 0 ? (
         <p className="agentbus-panel__clear">{t("agentbus.clear", { n: view.healthySubtrees })}</p>
+      ) : null}
+      {(view.signals ?? []).some((signal) => !signal.subtree) ? (
+        <ul className="agentbus-panel__signals agentbus-panel__host-signals" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {(view.signals ?? [])
+            .filter((signal) => !signal.subtree)
+            .map((signal) => (
+              <li key={`${signal.kind}:${signal.detail}`} className="agentbus-panel__signal" data-kind={signal.kind}>
+                <span>{t(KIND_LABEL[signal.kind] ?? "agentbus.kind.disputed")}</span>
+                <span className="agentbus-panel__detail"> {signal.detail}</span>
+              </li>
+            ))}
+        </ul>
       ) : null}
       <ul className="agentbus-panel__cards" style={{ listStyle: "none", margin: 0, padding: 0 }}>
         {cards.map((card) => {

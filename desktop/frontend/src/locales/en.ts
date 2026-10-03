@@ -4000,6 +4000,7 @@ export const en = {
   "agentbus.kind.escalated": "escalated to a human",
   "agentbus.kind.disputed": "under deliberation",
   "agentbus.kind.undecided": "closed by rule",
+  "agentbus.kind.budget": "parked for budget",
   "agentbus.unavailable": "Collaboration data is unavailable for this session",
   "agentbus.join": "Join a board",
   "agentbus.leave": "Leave the board",

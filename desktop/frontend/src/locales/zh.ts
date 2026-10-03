@@ -4003,6 +4003,7 @@ export const zh: Record<DictKey, string> = {
   "agentbus.kind.escalated": "已升级给人",
   "agentbus.kind.disputed": "正在审议",
   "agentbus.kind.undecided": "按规则收口",
+  "agentbus.kind.budget": "因预算停住",
   "agentbus.unavailable": "这个会话取不到协作数据",
   "agentbus.join": "加入看板",
   "agentbus.leave": "离开看板",

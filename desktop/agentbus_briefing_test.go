@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"reasonix/internal/control"
@@ -27,12 +28,24 @@ func TestAgentBusBriefingBindingShapesWhatThePanelDraws(t *testing.T) {
 	if len(view.Cards) != 1 || view.Cards[0].Subtree != "design" || view.Cards[0].Disputed != 1 {
 		t.Fatalf("cards = %+v, want the subtree under deliberation", view.Cards)
 	}
-	if len(view.Signals) != 1 || view.Signals[0].Kind != "disputed" {
+	// Found by kind, not counted: the host appends its own rows (a refusal record) to this
+	// list, so a fixed length would make the panel's content depend on test order.
+	disputed := signalOfKind(view.Signals, "disputed")
+	if disputed == nil {
 		t.Fatalf("signals = %+v, want the drill-in row", view.Signals)
 	}
-	if view.Signals[0].Node != "design" || view.Signals[0].Detail == "" {
-		t.Fatalf("signal = %+v, want an address and a reason", view.Signals[0])
+	if disputed.Node != "design" || disputed.Detail == "" {
+		t.Fatalf("signal = %+v, want an address and a reason", *disputed)
 	}
+}
+
+func signalOfKind(signals []AgentBusSignalView, kind string) *AgentBusSignalView {
+	for i := range signals {
+		if signals[i].Kind == kind {
+			return &signals[i]
+		}
+	}
+	return nil
 }
 
 func TestAgentBusBriefingBindingSaysWhyItHasNothing(t *testing.T) {
@@ -43,5 +56,28 @@ func TestAgentBusBriefingBindingSaysWhyItHasNothing(t *testing.T) {
 	app := &App{tabs: map[string]*WorkspaceTab{"t1": {ID: "t1", Ctrl: offBoard}}, activeTabID: "t1"}
 	if _, err := app.AgentBusBriefing(); err == nil {
 		t.Fatal("a session that never joined a board must say so")
+	}
+}
+
+// A brake a person cannot see is not a brake (G3): when the host's account turned work down, the
+// panel's own signal list says which ceiling did it and how often. Nothing refused, no row.
+func TestBudgetRefusalSignalNamesTheCeilingThatRefused(t *testing.T) {
+	if _, refused := budgetRefusalSignal(control.BudgetRefusalCounts{}); refused {
+		t.Fatal("a host that refused nothing must add no row")
+	}
+	signal, refused := budgetRefusalSignal(control.BudgetRefusalCounts{Node: 2, Turn: 1})
+	if !refused {
+		t.Fatal("refusals must reach the panel")
+	}
+	if signal.Kind != "budget" {
+		t.Fatalf("kind = %q, want the panel's budget row", signal.Kind)
+	}
+	for _, want := range []string{"3", "node 2", "turn 1"} {
+		if !strings.Contains(signal.Detail, want) {
+			t.Fatalf("detail = %q, want it to name %q", signal.Detail, want)
+		}
+	}
+	if strings.Contains(signal.Detail, "board") {
+		t.Fatalf("detail = %q, want only the levels that refused", signal.Detail)
 	}
 }

@@ -32,7 +32,9 @@ lives in `desktop/` (host, Electron shell, frontend); the kernel
 - When a ceiling does refuse, the host says **which one**: one record per refusal naming
   `level` / `reason` / `limit` / `board` / `node` (plus `remaining` at the node level, since
   a refusal spends nothing) and a per-process refusal count, so "which ceiling topped out"
-  is answerable without a panel. The slot ceiling is the host's, not a cost brake: work it
+  is answerable without a panel. The counts are also kept **per level**, and the collaboration
+  panel carries one row for them, so the answer does not require reading the log at all. The slot
+  ceiling is the host's, not a cost brake: work it
   refuses stays **parked rather than failed** (its node keeps its state), and a holder whose
   work went away gives the slot back on the next dispatch instead of holding it forever.
 - A provider 429 is named the same way: the running total says **that** it is happening, and the

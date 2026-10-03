@@ -61,6 +61,7 @@ func TestABudgetRefusalIsRecordedWithItsCeiling(t *testing.T) {
 	records := &captureHandler{}
 	slog.SetDefault(slog.New(records))
 	t.Cleanup(func() { slog.SetDefault(previous) })
+	refusedAt := AgentBusBudgetRefusals()
 
 	if _, err := ctrl.ApplyAgentBusOp(ctx, busAssert("step", "bob")); err != nil {
 		t.Fatalf("assert: %v", err)
@@ -95,5 +96,10 @@ func TestABudgetRefusalIsRecordedWithItsCeiling(t *testing.T) {
 	}
 	if attrs["refusals"] == "" || attrs["refusals"] == "0" {
 		t.Fatalf("record refusals = %q, want a running count", attrs["refusals"])
+	}
+	// The level is what a person has to move, so the host counts it per level — that is what
+	// the collaboration panel shows when budget, not time, is what stopped the work (G3).
+	if got := AgentBusBudgetRefusals(); got.Node != refusedAt.Node+1 || got.Total() != refusedAt.Total()+1 {
+		t.Fatalf("refusal counts = %+v, want the node level up by one from %+v", got, refusedAt)
 	}
 }

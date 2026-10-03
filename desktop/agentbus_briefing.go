@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"reasonix/internal/control"
@@ -80,5 +81,35 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 			Kind: string(signal.Kind), Subtree: signal.Subtree, Node: signal.Node, Detail: signal.Detail,
 		})
 	}
+	if signal, refused := budgetRefusalSignal(control.AgentBusBudgetRefusals()); refused {
+		view.Signals = append(view.Signals, signal)
+	}
 	return view, nil
+}
+
+// budgetRefusalSignal turns the host's refusal counts into one row a person can act on: which
+// ceiling turned work down and how often. The board's own projection has no refusals in it —
+// the account belongs to the machine — so the host adds this row where a reader already looks
+// for what needs attention. Nothing refused means no row.
+func budgetRefusalSignal(counts control.BudgetRefusalCounts) (AgentBusSignalView, bool) {
+	if counts.Total() == 0 {
+		return AgentBusSignalView{}, false
+	}
+	levels := []struct {
+		name  string
+		count int64
+	}{
+		{"board", counts.Board}, {"subtree", counts.Subtree}, {"node", counts.Node},
+		{"turn", counts.Turn}, {"slots", counts.Slots},
+	}
+	named := make([]string, 0, len(levels))
+	for _, level := range levels {
+		if level.count > 0 {
+			named = append(named, fmt.Sprintf("%s %d", level.name, level.count))
+		}
+	}
+	return AgentBusSignalView{
+		Kind:   "budget",
+		Detail: fmt.Sprintf("a ceiling refused %d claim(s): %s", counts.Total(), strings.Join(named, ", ")),
+	}, true
 }

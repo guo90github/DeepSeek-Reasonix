@@ -77,6 +77,7 @@ const attention: AgentBusBriefingView = {
     { kind: "stalled", subtree: "root", node: "mid", detail: "needs handoff: lease lapsed" },
     { kind: "disputed", subtree: "root", node: "design", detail: "under deliberation" },
     { kind: "orphan", subtree: "hub", node: "dep1", detail: "depends on gone, which does not exist" },
+    { kind: "budget", subtree: "", node: "", detail: "a ceiling refused 2 claim(s): node 2" },
   ],
   hidden: 0,
   hiddenCards: 0,
@@ -88,6 +89,7 @@ const html = render(attention);
 ok(html.indexOf("alice") !== -1, "shows the identity this session speaks as");
 ok(html.indexOf("hub") < html.indexOf("root"), "an orphan subtree outranks a stall on the first screen");
 ok(html.indexOf("dep1") !== -1 && html.indexOf("depends on gone") !== -1, "every signal carries its address and its reason");
+ok(html.indexOf("parked for budget") !== -1, "the host's own refusal row carries the panel's own label");
 ok(html.indexOf("1 at work, 1 parked, 1/3 done") !== -1, "a card folds its counts");
 ok(html.indexOf("Nothing needs attention") === -1, "a card list must not claim everything is fine");
 ok(html.indexOf("did not fit") === -1, "hidden counts stay out of the way when nothing was hidden");
