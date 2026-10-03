@@ -177,7 +177,7 @@ func (a *App) submitRemoteInput(input string) error {
 	if tab == nil || ctrl == nil {
 		return errors.New("no foreground tab to receive this message")
 	}
-	return a.submitDisplayToTab(tab.ID, input, input, "")
+	return a.submitRemoteInputToTab(tab.ID, input)
 }
 
 // submitRemoteInputFor is the session-aware form: a wake names the session it
@@ -192,7 +192,18 @@ func (a *App) submitRemoteInputFor(sessionPath, input string) error {
 	if err != nil {
 		return err
 	}
-	return a.submitDisplayToTab(tab.ID, input, input, "")
+	return a.submitRemoteInputToTab(tab.ID, input)
+}
+
+// submitRemoteInputToTab submits, then asks the renderer to re-read the controller
+// state: a remote prompt is written to the transcript by the host alone, and the
+// renderer already re-reads on "desktop:resync" — no new event surface needed.
+func (a *App) submitRemoteInputToTab(tabID, input string) error {
+	if err := a.submitDisplayToTab(tabID, input, input, ""); err != nil {
+		return err
+	}
+	a.emitRuntimeEvent("desktop:resync")
+	return nil
 }
 
 // tabBySessionPath resolves an open tab by canonical session path. It is shared
