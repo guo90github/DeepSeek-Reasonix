@@ -33,6 +33,22 @@ type ParticipantRef struct {
 	At          time.Time `json:"at,omitempty"`
 }
 
+// ParticipantTTL is how long an announcement stays live.
+//
+// Hosts renew by re-announcing (the headless tick does it every 30s), so a live participant
+// stays well inside this window; a host that is gone cannot, and an address nobody renews must
+// stop being addressable rather than accept wakes it will never look at (AGENT_BUS §11.5).
+const ParticipantTTL = 30 * time.Minute
+
+// Stale reports whether an announcement is older than the TTL. A record without a timestamp is
+// left alone: an unstamped line is malformed input, not evidence that a host went away.
+func (r ParticipantRef) Stale(now time.Time) bool {
+	if r.At.IsZero() {
+		return false
+	}
+	return now.Sub(r.At) > ParticipantTTL
+}
+
 // Refusal reasons for an announcement.
 const (
 	RefuseDirectoryNoParticipant = "directory_participant_missing"
@@ -154,7 +170,7 @@ func (d *ParticipantDirectory) All() ([]ParticipantRef, error) {
 	out := make([]ParticipantRef, 0, len(order))
 	for _, participant := range order {
 		ref := newest[participant]
-		if ref.Withdrawn {
+		if ref.Withdrawn || ref.Stale(time.Now().UTC()) {
 			continue
 		}
 		out = append(out, ref)
