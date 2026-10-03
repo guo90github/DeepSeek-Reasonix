@@ -57,6 +57,23 @@ func boardArgs(t *testing.T, raw string) json.RawMessage {
 	return json.RawMessage(raw)
 }
 
+// An assertion carries the claim it makes: the board keeps that as the assertion's summary,
+// so a reader sees why the step is believed to hold instead of only that somebody said so.
+func TestAgentBusToolAssertCarriesItsReason(t *testing.T) {
+	port := &fakeBoardPort{dir: "/tmp/board/default", participant: "alice"}
+	tool := NewAgentBusTool(port)
+	if _, err := tool.Execute(context.Background(), boardArgs(t,
+		`{"action":"assert","node":"build","reason":"tests pass on the shipped path","evidence":[{"ref":"go test ./..."}]}`)); err != nil {
+		t.Fatalf("assert: %v", err)
+	}
+	if len(port.applied) != 1 {
+		t.Fatalf("applied %d ops, want one", len(port.applied))
+	}
+	if got := port.applied[0].Reason; got != "tests pass on the shipped path" {
+		t.Fatalf("assertion reason = %q, want the claim the caller stated", got)
+	}
+}
+
 // The tool is registered for every session, so the session without a board is the
 // common case: it has to say why, in terms the user's own UI uses.
 func TestAgentBusToolRefusesWithoutABoardRatherThanFailing(t *testing.T) {
