@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:588803888bb5c3c76328f471b955832b63ac762bcc5cd46fade13ef72c40d15c";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:2021962182fd452282d4a1980048ebe23597ed65b1001b5a3b7d606d37f160a4";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3122,6 +3122,8 @@ export interface QuestionAnswer {
 
 export interface RecallHitView {
   id: string;
+  name?: string;
+  title?: string;
   revision?: number;
   score?: number;
   injected?: boolean;

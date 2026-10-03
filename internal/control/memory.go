@@ -337,12 +337,14 @@ func (c *Controller) recordMemoryRecallTurn(result memory.RecallResult) {
 	}
 	for _, hit := range result.Hits {
 		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
-			ID: hit.Memory.ID, Revision: hit.Memory.Revision, Score: hit.Score, Injected: true,
+			ID: hit.Memory.ID, Name: hit.Memory.Name, Title: hit.Memory.Title,
+			Revision: hit.Memory.Revision, Score: hit.Score, Injected: true,
 		})
 	}
 	for _, hit := range result.Dropped {
 		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
-			ID: hit.Memory.ID, Revision: hit.Memory.Revision, Score: hit.Score,
+			ID: hit.Memory.ID, Name: hit.Memory.Name, Title: hit.Memory.Title,
+			Revision: hit.Memory.Revision, Score: hit.Score,
 		})
 	}
 	if len(turn.Hits) == 0 && turn.Suppressed == "" {

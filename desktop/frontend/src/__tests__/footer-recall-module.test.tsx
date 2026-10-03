@@ -113,6 +113,32 @@ const unnamed = await renderControlled(withRecord, { expand: true });
 ok(unnamed.includes("mem-injected"), "without a fact list the row falls back to the id alone");
 ok(!unnamed.includes("方案与决策记录"), "an unknown fact never invents a name");
 
+// 用户实测：重启后「面板」里记录在、名字却没有 —— 记录读的是侧车文件，而事实清单要活着的控制器
+// （`MemoryForTab` 在 tab 没有控制器时返回空视图）。所以记录必须自带名字：下面这条就是那个现场。
+const withLabels: RecallRecordView = {
+  available: true,
+  turns: [
+    {
+      turnSeq: 7,
+      hits: [
+        { id: "mem-labeled", name: "slug-only", title: "只读落盘也能读的名字", injected: true },
+        { id: "mem-slugless", name: "fallback-slug", injected: true },
+      ],
+    },
+  ],
+};
+const selfNamed = await renderControlled(withLabels, { expand: true });
+ok(selfNamed.includes("只读落盘也能读的名字"), "a hit names itself from the label the record wrote, with no fact list at all");
+ok(selfNamed.includes("fallback-slug"), "a hit with only a name shows that name");
+ok(selfNamed.includes("mem-labeled") && selfNamed.includes("mem-slugless"), "the ids stay beside the names for traceability");
+
+const beaten = await renderControlled(
+  { available: true, turns: [{ turnSeq: 7, hits: [{ id: "mem-injected", name: "stale-slug", title: "写入时的名字", injected: true }] }] },
+  { facts, expand: true },
+);
+ok(beaten.includes("写入时的名字"), "a record's own label wins over today's fact list (facts can be renamed since)");
+ok(!beaten.includes("方案与决策记录"), "the live fact list is only the fallback for records written without a label");
+
 const labels = buildRecallLabels([
   { id: "mem-a", name: "slug-a", title: "标题A", description: "摘要A", type: "project", scope: "project", body: "", freshness: "fresh" },
   { id: "mem-b", name: "slug-b", description: "摘要B", type: "global", scope: "global", body: "", freshness: "stale" },

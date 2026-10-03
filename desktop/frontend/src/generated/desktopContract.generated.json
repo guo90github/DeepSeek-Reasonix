@@ -29770,6 +29770,20 @@
           }
         },
         {
+          "name": "name",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "title",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "revision",
           "optional": true,
           "type": {

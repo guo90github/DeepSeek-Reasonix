@@ -8,8 +8,8 @@ import (
 
 // RecallRecordView is one session's recorded fingerprints: what each turn asked
 // memory for, which facts reached the model, and which skill it ran (docs/50 §2.2).
-// It is content-free by construction — identifiers, counters and digests only, so
-// the review page can render it without exposing memory or skill text.
+// It carries each hit's id, counters, digests and short label — never a fact's
+// body — so the review page can render it without a live controller.
 type RecallRecordView struct {
 	Available   bool             `json:"available"`
 	SessionPath string           `json:"sessionPath,omitempty"`
@@ -28,9 +28,13 @@ type RecallTurnView struct {
 }
 
 // RecallHitView is one fact's fingerprint in a turn; Injected separates the facts
-// the model saw from the ones that were dropped.
+// the model saw from the ones that were dropped, and Name/Title are the fact's
+// short label so a reader can tell the ids apart. Records written before the label
+// existed carry neither, so the page falls back to the id.
 type RecallHitView struct {
 	ID       string  `json:"id"`
+	Name     string  `json:"name,omitempty"`
+	Title    string  `json:"title,omitempty"`
 	Revision int     `json:"revision,omitempty"`
 	Score    float64 `json:"score,omitempty"`
 	Injected bool    `json:"injected,omitempty"`
@@ -93,7 +97,8 @@ func recallRecordView(meta agent.BranchMeta, path string) RecallRecordView {
 		}
 		for _, hit := range turn.Hits {
 			out.Hits = append(out.Hits, RecallHitView{
-				ID: hit.ID, Revision: hit.Revision, Score: hit.Score, Injected: hit.Injected,
+				ID: hit.ID, Name: hit.Name, Title: hit.Title,
+				Revision: hit.Revision, Score: hit.Score, Injected: hit.Injected,
 			})
 		}
 		view.Turns = append(view.Turns, out)

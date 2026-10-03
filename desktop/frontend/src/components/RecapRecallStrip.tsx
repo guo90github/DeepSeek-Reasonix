@@ -7,12 +7,12 @@ import "./RecapRecallStrip.css";
 
 /**
  * 第十六: what a session's turns asked memory for and which skill they ran. The
- * record is content-free by construction — identifiers, counters and digests —
- * so this panel can show it without exposing any memory or skill text.
+ * record carries ids, counters, digests and each hit's short label — never a
+ * fact's body — so this panel renders without exposing memory or skill text.
  *
- * Ids alone say nothing to a person, so a caller that already holds the live fact
- * list passes `facts` and each row shows the fact's name with its id kept beside
- * it. The record keeps its own shape; the names come from a list the caller had.
+ * A hit names itself from the label the record wrote (a tab whose controller is
+ * not loaded has no live fact list to resolve ids against); a record written
+ * before that label existed falls back to `facts`, and only then to the bare id.
  *
  * It is read-only: folding is local, and nothing here reaches a prompt.
  */
@@ -94,12 +94,19 @@ export function RecapRecallStrip({
                   : ""}
               </div>
               {(turn.hits ?? []).map((hit) => {
-                const named = labels.get(hit.id);
+                // The record's own label wins: it is the fact's name as of that turn
+                // and it is there even when no controller is loaded to list facts.
+                const own = (hit.title ?? "").trim() || (hit.name ?? "").trim();
+                const slug = (hit.name ?? "").trim();
+                const known =
+                  own !== ""
+                    ? { label: own, hint: slug !== "" && slug !== own ? slug : undefined }
+                    : labels.get(hit.id);
                 return (
                   <div key={`hit:${hit.id}`} className="recap-recall__hit">
-                    {named !== undefined && (
-                      <span className="recap-recall__name" title={named.hint}>
-                        {named.label}
+                    {known !== undefined && (
+                      <span className="recap-recall__name" title={known.hint}>
+                        {known.label}
                       </span>
                     )}
                     <span className="recap-recall__fingerprint" title={hit.id}>

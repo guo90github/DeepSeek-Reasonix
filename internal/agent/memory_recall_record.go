@@ -2,7 +2,8 @@ package agent
 
 // Memory-recall record (docs/50 §2.2): what each turn asked memory for and which
 // facts reached the model. It rides the session sidecar for the review page, and
-// stays content-free: identifiers, numbers, and the query's hash, never text.
+// stays content-free apart from each hit's short label: identifiers, numbers, the
+// query's hash and a fact's name/title — a fact's body never appears.
 
 // MemoryRecallTurnLimit caps the recorded turns. The record is a review aid, not
 // a ledger; the oldest turns fall off.
@@ -19,9 +20,13 @@ type MemoryRecallTurn struct {
 }
 
 // MemoryRecallTurnHit is one fact's fingerprint in that turn. Injected separates
-// the facts the model saw from the ones that matched and were dropped.
+// the facts the model saw from the ones that matched and were dropped. Name and
+// Title are recorded at write time so a reader can tell the ids apart without a
+// live controller — the store lookup fails whenever a tab has no controller yet.
 type MemoryRecallTurnHit struct {
 	ID       string  `json:"id"`
+	Name     string  `json:"name,omitempty"`
+	Title    string  `json:"title,omitempty"`
 	Revision int     `json:"revision,omitempty"`
 	Score    float64 `json:"score,omitempty"`
 	Injected bool    `json:"injected,omitempty"`
