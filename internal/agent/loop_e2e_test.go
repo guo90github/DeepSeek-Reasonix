@@ -869,9 +869,20 @@ func TestMissingReasoningRecoverySeparatesProviderConfigurations(t *testing.T) {
 	}
 }
 
+// The incident state only counts an observation that is strictly later than the last one, which
+// is what keeps a stale healthy turn from clearing a newer incident. Observations inside one
+// timer tick are indistinguishable, and the clock granularity here is coarse enough to hit that.
+func waitForDistinctClockTick() {
+	before := time.Now()
+	for !time.Now().After(before) {
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func TestThreeHealthyToolCallReasoningTurnsRearmFutureRegression(t *testing.T) {
 	stateDir := t.TempDir()
 	run := func(turns ...testutil.Turn) int {
+		waitForDistinctClockTick()
 		mp := testutil.NewMock("deepseek-proxy", turns...)
 		sink := &recordSink{}
 		a := New(strictToolCallReasoningProvider{mp}, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, sink)
@@ -900,20 +911,24 @@ func TestHealthyToolCallReasoningStreakWorksWithinOneAgentAndResetsOnMissing(t *
 	prov := strictToolCallReasoningProvider{testutil.NewMock("deepseek-proxy")}
 	a := New(prov, echoRegistry(), NewSession(""), Options{MissingReasoningWarnStateDir: stateDir}, event.Discard)
 	calls := []provider.ToolCall{{ID: "c1", Name: "echo", Arguments: `{"text":"hi"}`}}
+	observe := func(reasoning string) (bool, bool) {
+		waitForDistinctClockTick()
+		return a.observeMissingToolCallReasoning(calls, reasoning)
+	}
 
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || !retry {
+	if missing, retry := observe(""); !missing || !retry {
 		t.Fatalf("initial observation = missing:%v retry:%v, want true/true", missing, retry)
 	}
 	for healthy := 1; healthy < missingReasoningHealthyResolveStreak; healthy++ {
-		a.observeMissingToolCallReasoning(calls, "healthy reasoning")
+		observe("healthy reasoning")
 	}
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || retry {
+	if missing, retry := observe(""); !missing || retry {
 		t.Fatalf("missing reset = missing:%v retry:%v, want true/false", missing, retry)
 	}
 	for healthy := 1; healthy <= missingReasoningHealthyResolveStreak; healthy++ {
-		a.observeMissingToolCallReasoning(calls, "healthy reasoning")
+		observe("healthy reasoning")
 	}
-	if missing, retry := a.observeMissingToolCallReasoning(calls, ""); !missing || !retry {
+	if missing, retry := observe(""); !missing || !retry {
 		t.Fatalf("post-recovery observation = missing:%v retry:%v, want true/true", missing, retry)
 	}
 }
