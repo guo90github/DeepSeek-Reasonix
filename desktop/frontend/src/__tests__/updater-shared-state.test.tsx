@@ -479,6 +479,39 @@ ok(
   "discard failure keeps the recovery disposition when the message matches",
 );
 
+// A check that cannot reach the manifest must never read as "you're on the latest version".
+// The failure is classified before the availability check, so it keeps its own copy and its
+// own disposition — this is the line the migration boundary error arrives on for an old client.
+const boundaryChecks: string[] = [];
+const boundaryTable = ({
+  main: {
+    App: {
+      async CheckUpdate(channel: string) {
+        boundaryChecks.push(channel);
+        return {
+          ...debInfo,
+          available: false,
+          latest: "",
+          err: 'update: fetch manifest: unsupported install_layout "electron-v1" (keeping current version)',
+        };
+      },
+    } as AppBindings,
+  },
+}).main.App;
+installDesktopHostStub(boundaryTable);
+
+await act(async () => {
+  (document.getElementById("settings-force-check") as HTMLButtonElement).click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+ok(boundaryChecks[0] === "stable", "a failed check still asks the official channel");
+ok(document.getElementById("settings-status")?.textContent === "error", "a failed check reads as an error, not as up to date");
+ok(document.getElementById("banner-status")?.textContent === "error", "the failed check is shared with the banner");
+ok(
+  (document.getElementById("settings-manual")?.textContent ?? "") !== "",
+  "a failed check carries a disposition, so the failure view can offer the right next step",
+);
+
 desktopStub.uninstall();
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
