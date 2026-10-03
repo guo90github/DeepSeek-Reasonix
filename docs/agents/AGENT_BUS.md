@@ -499,6 +499,7 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 3. **形状校验先于状态校验**：动词必填项（证据 / 理由 / deadline / bounds / children / dep / outcome）由 `validateOpShape` 在任何节点查找之前判——理由才可行动（"缺 bounds" 比 "unknown_node" 有用），且与节点状态无关。
 4. **截断尾行要在下一次写事务里修掉**（覆盖「日志与损坏行」段）：只跳过不够——新纪录会追加在那半行之后、被埋在坏行里。`appendOp` 先 `repairTornTail`（截到最后一条完整行）再写；修不动（尾行超过 64 KiB 窗口）**报错，不静默丢**。
 5. **派生谓词的边界**：`ready` 允许 `open` **或** `blocked`——`blocked` 兼有"等依赖"与"被裁决阻塞"两义，用 `Outcome != blocked` 区分；split 出的容器在子节点全部完成后重新 ready（组装它们本身就是它的工作）。`revert` 把下游 `done` 变 `stale` 时**同时清掉 Outcome**（stale 不是结论）。
+6. **`decide(done)` 不设依赖门**（澄清迁移表 `decide` 行）：`done` 是**裁决**，不是"装配确认"——依赖门只在 `claim` 上（`blocked` 须依赖全 `done`）；"容器先于子节点被裁决"由**落地判定**兜住：`AssessLanding` 把未完成的依赖报成 `not_done`，verdict 不会绿。落地时真撞到一次（先给容器 `decide(done)`，板面立刻报 `not landed`），故在此写死：这条不是待修的缺口，而是规格本身（`internal/agentbus/decide_deps_test.go` 钉住）。
 
 ### 11.4 第二轮评审（对着 S1 代码）的处置（2026-10-02）
 

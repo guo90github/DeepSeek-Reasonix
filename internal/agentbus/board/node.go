@@ -482,6 +482,9 @@ func applyDecide(st *State, op Op) error {
 	}
 	switch op.Outcome {
 	case OutcomeDone:
+		// No dependency gate here, deliberately (§11.1 lists any pre-state but abandoned and
+		// stale): done is a verdict, the gate lives on claim, and an assembly decided before
+		// its parts are done is caught by the landing check rather than refused here.
 		switch n.State {
 		case StateAbandoned, StateStale:
 			return reject(op.Verb, op.Node, ReasonIllegalTransition)
