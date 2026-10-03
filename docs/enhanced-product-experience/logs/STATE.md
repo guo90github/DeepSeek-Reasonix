@@ -43,7 +43,7 @@
 
 ## 5. 未验证 / 暂缓
 
-- 立项书验收 5（全量门禁）**已复跑**（见 `docs/99` §一标准 5）：三项绿；lint 30 条 / repolint 7 条 / 测试失败全部落在别的会话文件（本任务改动面 0 条）。
+- 立项书验收 5（全量门禁）**已复跑**（见 `docs/99` §一标准 5）：Go 侧三项绿；lint 30 条 / repolint 7 条 / 测试失败全部落在别的会话文件（本任务改动面 0 条）。**前端全量套件已补跑全绿**：`node scripts/run-tests.mjs --keep-going` → **all 401 suites passed**（含改到的共享组件 `MemoryPanel` 与 `RecapRecallStrip`），此前只跑过相关套件与 `make frontend-check`。
 - 超出验收判据的留白：第十「后台标签多面板并行」（A-30 收窄，需把 `ChatPaneRegion` 的 region props 按 tabId 参数化，且需真机验证）。
 - 第八 的 U-5「后置在 `delivered` 后自动建议记忆候选」：机制本身已在（`desktop/memory_suggestions.go` 按 tab 只读生成候选、**人确认才落盘**、每会话上限 12/每条 6），但**没有按 verdict 触发**——设计 `docs/70` §四 把「delivered 后触发」标为 BA4（可选）。判据（前置/后置在回合结束链路可见且可核对）不含此项。
 - 第七 的**召回质量**（索引变短后模型选事实的准确度）属真机观察项，并入 B-1 可选确认。
