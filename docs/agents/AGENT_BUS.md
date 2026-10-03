@@ -1387,3 +1387,16 @@ board 或子树超限（`budget.go:148-167`），失败时只 `slog.Warn`（`:16
   往返都有用例（`internal/control/agentbus_test.go:167`、`internal/serve/agentbus_withdraw_test.go:23`）。
   **残留只有硬杀**（关停钩子没跑到）：公告留到 30min TTL —— 而那段窗口里投递失败现在**看得见**
   （`AgentBusWakeFailures` 计数 + 面板 `wake_undelivered` 行，`d2081d750`）⇒ 连这条残留也不是"看不见"。
+
+**同一族的第二例：":337 的收敛优先级没有单一实现点（2026-10-04 核实）**
+
+文档那行是"**收敛**：预算 > 未决矛盾 > 轮次/速率上限 > 静默窗口"。代码里四个条件**都在**，但分散在三处、各答各的问题：
+
+- **预算/轮次/速率**：都在 `talk.go` 的**逐行接受顺序**里（`:171` `rounds_exhausted` → `:174` `budget_exhausted` → `:177` `rate_limited`），
+  答的是"**这一行能不能收**"——注意这个顺序与文档措辞**恰好相反**（先轮次后预算），但两者不是同一个问题；
+- **未决矛盾**：在听证/裁决侧（`undecided-by-rule`、`SignalDisputed`，见上一节），答的是"**这个问题算不算定了**"；
+- **静默窗口**：是**派生谓词** `TopicLapsed`（`talk.go:250-260`，只读日志时间戳）加一个**公开的收口** `CloseLapsed`/`CloseSilence`（`talklog.go:74`），
+  注释写明 "Silence is visible work, never a quiet deletion"（`hearing.go:296-297`，T6-4）。
+
+⇒ 与上一例同族：**不是"没实现"，而是没有一处代码把那条优先级写成判定顺序**。真要落地，应当先明确"收敛"是谁的职责
+（话题级？听证级？还是宿主 tick 每轮评一次），再决定要不要引入单一收敛点 —— 仍属**待论证**，本轮只记录、不动语义。
