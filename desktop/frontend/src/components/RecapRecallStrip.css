@@ -69,6 +69,18 @@
   font-size: 11px;
 }
 
+/* The record's ids are unreadable on their own: when the caller supplied the
+   tab's fact list, the fact's name leads and the id stays beside it as the
+   traceable fingerprint (dim, monospace) that it always was. */
+.recap-recall__name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .recap-recall__fingerprint {
   flex: 0 0 auto;
   font-family: var(--font-mono, monospace);

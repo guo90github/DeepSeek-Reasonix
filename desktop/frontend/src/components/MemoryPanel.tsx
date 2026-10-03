@@ -1644,7 +1644,7 @@ export function MemorySettingsPage() {
 				</div>
 				{/* 第十六: the turn-by-turn record (which facts reached the model, which
 				    were dropped, which skill ran) in the panel the requirement names. */}
-				{effectiveTabId && <RecapRecallStrip load={() => app.RecallRecordForTab(effectiveTabId)} />}
+				{effectiveTabId && <RecapRecallStrip load={() => app.RecallRecordForTab(effectiveTabId)} facts={facts} />}
 				{view.lastRecall.suppressed && (
 					<div className="mem-context-notice mem-context-notice--muted">
 						<AlertTriangle size={15} />

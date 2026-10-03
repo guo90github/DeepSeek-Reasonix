@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { RecallRecordView } from "../generated/desktopContract.generated";
+import type { MemoryFact, RecallRecordView } from "../generated/desktopContract.generated";
 import { useT } from "../lib/i18n";
+import { buildRecallLabels } from "../lib/recallLabels";
 import "./RecapRecallStrip.css";
 
 /**
  * 第十六: what a session's turns asked memory for and which skill they ran. The
  * record is content-free by construction — identifiers, counters and digests —
  * so this panel can show it without exposing any memory or skill text.
+ *
+ * Ids alone say nothing to a person, so a caller that already holds the live fact
+ * list passes `facts` and each row shows the fact's name with its id kept beside
+ * it. The record keeps its own shape; the names come from a list the caller had.
  *
  * It is read-only: folding is local, and nothing here reaches a prompt.
  */
@@ -16,6 +21,7 @@ export function RecapRecallStrip({
   recallRecord,
   load: providedLoad,
   record: controlled,
+  facts,
 }: {
   sessionPath?: string;
   recallRecord?: (sessionPath: string) => Promise<RecallRecordView>;
@@ -23,10 +29,13 @@ export function RecapRecallStrip({
   /** When the caller already holds the record — a section that must hide itself
    *  when there is none — the strip renders that instead of asking again. */
   record?: RecallRecordView | null;
+  /** The caller's live fact list, for naming the ids the record carries. */
+  facts?: readonly MemoryFact[];
 }) {
   const t = useT();
   const [fetched, setFetched] = useState<RecallRecordView | null>(null);
   const [open, setOpen] = useState(false);
+  const labels = useMemo(() => buildRecallLabels(facts ?? []), [facts]);
 
   // Two surfaces read the same record: the recap page knows a session path, the
   // memory panel knows only its tab, so `load` is the tab-scoped shape.
@@ -84,16 +93,26 @@ export function RecapRecallStrip({
                   ? ` · ${t("history.recallStripOmitted", { n: String(turn.omitted) })}`
                   : ""}
               </div>
-              {(turn.hits ?? []).map((hit) => (
-                <div key={`hit:${hit.id}`} className="recap-recall__hit">
-                  <span className="recap-recall__fingerprint">{hit.id}</span>
-                  <span className="recap-recall__meta">
-                    {`r${hit.revision ?? 1} · ${(hit.score ?? 0).toFixed(2)} · ${t(
-                      hit.injected === true ? "history.recallStripInjected" : "history.recallStripDropped",
-                    )}`}
-                  </span>
-                </div>
-              ))}
+              {(turn.hits ?? []).map((hit) => {
+                const named = labels.get(hit.id);
+                return (
+                  <div key={`hit:${hit.id}`} className="recap-recall__hit">
+                    {named !== undefined && (
+                      <span className="recap-recall__name" title={named.hint}>
+                        {named.label}
+                      </span>
+                    )}
+                    <span className="recap-recall__fingerprint" title={hit.id}>
+                      {hit.id}
+                    </span>
+                    <span className="recap-recall__meta">
+                      {`r${hit.revision ?? 1} · ${(hit.score ?? 0).toFixed(2)} · ${t(
+                        hit.injected === true ? "history.recallStripInjected" : "history.recallStripDropped",
+                      )}`}
+                    </span>
+                  </div>
+                );
+              })}
               {turn.suppressed !== undefined && turn.suppressed !== "" && (
                 <div className="recap-recall__meta">
                   {t("history.recallStripSuppressed", { reason: turn.suppressed })}
