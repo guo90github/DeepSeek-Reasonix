@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -201,43 +200,9 @@ func (c *Controller) ApplyAgentBusOp(ctx context.Context, op board.Op) (board.Re
 	return receipt, nil
 }
 
-// AgentBusTask is one board node as the human side renders it: flat rows the task
-// tree nests by Deps, so the panel needs no new storage.
-type AgentBusTask struct {
-	ID         string
-	Title      string
-	State      board.NodeState
-	Owner      string
-	Deps       []string
-	Ready      bool
-	Refuted    bool
-	NoProgress int
-	LastSeq    uint64
-}
-
-// AgentBusTasks projects the whole board into human rows, sorted by id so two
-// reads of the same board agree.
-func (c *Controller) AgentBusTasks(now time.Time) ([]AgentBusTask, bool) {
-	bus, st := c.agentBusSnapshot(now)
-	if bus == nil {
-		return nil, false
-	}
-	ids := make([]string, 0, len(st.Nodes))
-	for id := range st.Nodes {
-		ids = append(ids, id)
-	}
-	sort.Strings(ids)
-	out := make([]AgentBusTask, 0, len(ids))
-	for _, id := range ids {
-		n := st.Nodes[id]
-		out = append(out, AgentBusTask{
-			ID: n.ID, Title: n.Title, State: n.State, Owner: n.Owner,
-			Deps: append([]string(nil), n.Deps...), Ready: n.Ready(st),
-			Refuted: len(n.Refutes) > 0, NoProgress: n.NoProgress, LastSeq: n.LastSeq,
-		})
-	}
-	return out, true
-}
+// AgentBusBoardRows used to live here: a whole-board projection no frontend consumed (the
+// panel reads Briefing/Detail, the tool reads a participant-scoped view). Removed rather than
+// left looking used (G8); re-add with the §13.1 row cap if a frontend ever needs it.
 
 func (c *Controller) agentBusSnapshot(now time.Time) (*agentBusState, *board.State) {
 	c.mu.Lock()

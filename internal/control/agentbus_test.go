@@ -120,7 +120,7 @@ func TestUnreadableBoardLeavesTheTurnIntact(t *testing.T) {
 	}
 }
 
-func TestAgentBusWritePathAndHumanRows(t *testing.T) {
+func TestAgentBusWritePathReachesTheAuthor(t *testing.T) {
 	dir := t.TempDir()
 	c := newAgentBusTestController(t)
 	c.SetAgentBus(dir, "alice")
@@ -128,9 +128,10 @@ func TestAgentBusWritePathAndHumanRows(t *testing.T) {
 	if _, err := c.ApplyAgentBusOp(bg, busAssert("design", "alice")); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	rows, ok := c.AgentBusTasks(time.Now().UTC())
-	if !ok || len(rows) != 1 || rows[0].ID != "design" || !rows[0].Ready {
-		t.Fatalf("rows = %+v ok=%v, want one ready node", rows, ok)
+	// The view the tool reads is what has to show it, with the state the write left.
+	view, ok := c.AgentBusView(time.Now().UTC())
+	if !ok || !strings.Contains(view.Render(), "design") {
+		t.Fatalf("view = %+v ok=%v, want the written node", view, ok)
 	}
 	if !strings.Contains(c.agentBusTurnBlock(), "node id=design") {
 		t.Fatal("a written op must reach its author's next turn")
@@ -156,8 +157,8 @@ func TestAgentBusUnwiredWriteFails(t *testing.T) {
 	if _, err := c.ApplyAgentBusOp(context.Background(), busAssert("n", "alice")); err == nil {
 		t.Fatal("an unenrolled controller must refuse to write")
 	}
-	if _, ok := c.AgentBusTasks(time.Now().UTC()); ok {
-		t.Fatal("an unenrolled controller has no human rows")
+	if _, ok := c.AgentBusView(time.Now().UTC()); ok {
+		t.Fatal("an unenrolled controller reads no board")
 	}
 }
 

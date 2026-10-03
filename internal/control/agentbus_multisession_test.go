@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"reasonix/internal/agentbus/board"
 	"reasonix/internal/event"
 )
 
@@ -26,12 +27,20 @@ func TestTwoSessionsShareOneBoardWithoutSeeingEachOther(t *testing.T) {
 		t.Fatalf("bob apply: %v", err)
 	}
 
-	rows, ok := alice.AgentBusTasks(time.Now().UTC())
-	if !ok || len(rows) != 2 {
-		t.Fatalf("board rows = %+v ok=%v, want both sessions' nodes on one board", rows, ok)
+	// One board, two writers: a reader that is neither of them folds both nodes out of the
+	// same file (the whole-board row projection this used to read is gone — G8).
+	brd, err := board.Open(boardDir)
+	if err != nil {
+		t.Fatalf("open the shared board: %v", err)
 	}
-	if rows[0].ID != "alice-task" || rows[1].ID != "bob-task" {
-		t.Fatalf("rows are not id-sorted: %+v", rows)
+	state, err := brd.Snapshot(bg, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("snapshot the shared board: %v", err)
+	}
+	for _, id := range []string{"alice-task", "bob-task"} {
+		if state.Nodes[id] == nil {
+			t.Fatalf("shared board = %+v, want both sessions' nodes", state.Nodes)
+		}
 	}
 
 	aliceBlock := alice.agentBusTurnBlock()
