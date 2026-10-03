@@ -21,11 +21,13 @@ vet:
 fmt:
 	gofmt -w .
 
-# Both gates CI runs, at the version CI pins. Skipping golangci-lint locally
-# trades a second here for a ten-minute CI round trip: `modernize` findings in
-# particular never surface in `go vet`.
+# The gates CI runs, at the version CI pins (the doc-command gate is a test, so CI
+# reaches it through `go test ./...`). Skipping golangci-lint locally trades a
+# second here for a ten-minute CI round trip: `modernize` findings in particular
+# never surface in `go vet`.
 lint: lint-go
 	go run ./tools/repolint
+	go test ./tools/doccmdgate/
 
 lint-go:
 	@command -v golangci-lint >/dev/null || { echo "golangci-lint not installed; run: make lint-install"; exit 1; }

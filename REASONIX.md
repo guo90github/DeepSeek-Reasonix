@@ -78,9 +78,10 @@ Run these **before every commit** to catch the fastest CI failures locally:
 ```bash
 gofmt -w .                          # catches gofmt (saves ~13s CI)
 go vet ./...                        # catches vet warnings (saves ~52s CI/lint)
-make lint                           # golangci-lint at CI's pin + repolint
+make lint                           # golangci-lint at CI's pin + repolint + doccmdgate
 go test ./internal/tool/builtin/ ./internal/boot/  # catches tool/boot test breaks
 go test ./tools/collabgate/         # catches COLLAB-SURFACE anchors you shifted
+go test ./tools/doccmdgate/         # catches documented commands that run no test
 make frontend-check                 # app tsconfig typecheck (see the note below)
 ```
 
@@ -88,7 +89,13 @@ make frontend-check                 # app tsconfig typecheck (see the note below
 that row claims, so adding lines anywhere above a cited line breaks it silently —
 `make lint` does not run it.
 
-`make lint` runs both gates CI runs, at the version in `.golangci-version`;
+`tools/doccmdgate` fails when a documented `go test` command cannot select a test:
+a name that no longer exists, or the grep-style `\|` that RE2 reads as a literal
+pipe (so the pattern matches nothing and `go test` still reports ok). Writing such
+a form while *explaining* the trap is fine — only a pattern sitting immediately
+after the flag is read as an instruction. `make lint` runs it; it needs no build.
+
+`make lint` runs the gates CI runs, at the version in `.golangci-version`;
 `make lint-install` installs it. Do not skip it: a `modernize` finding never
 shows up in `go vet`, and the CI round trip that catches it instead costs ten
 minutes.
