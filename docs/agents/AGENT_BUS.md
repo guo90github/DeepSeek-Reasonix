@@ -798,7 +798,13 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
   **已钉（2026-10-04）**：`TestTaskBudgetGateLandsARunawayOnTokens`（真装配：`New(&spendingProvider{max: 500}, …, Options{TaskBudget:{Tokens: 3000}})`，
   该 double 每轮 1100 tokens ⇒ 第三轮落成 `task_budget` 暂停，轴名 `"token"`、`HostOwned`，理由点出所到上限）+
   `TestTaskBudgetGateNamesTheTokenAxisAtTheCeiling`（9/10 不过线、10/10 过线；轴名是**单数** `"token"`）。
-  **边界（如实）**：两条走的都是 agent 级装配（`Options` 那一跳）；`配置 → Options` 那一跳由 boot 侧既有用例覆盖，本轮未重查。；② 超限后 Goal 状态为 **`blocked`**
+  **配置那一跳也核过（2026-10-04 补查）**：链路 = `goal_token_budget`（`internal/config/config.go:1326`）→
+  `control.Options.GoalTokenBudget`（`controller.go:507/737`）→ `Controller.goalTaskBudget()` 里 `b.Tokens = c.goalTokenBudget`
+  （`internal/control/run_ceiling.go:29-32`）→ `agent.WithTaskBudget` 注入 ⇒ agent 的 `exceeded` 报 `"token"`；
+  control 侧由 `TestGoalTokenBudgetPausesAndResumes`（`internal/control/goal_spend_budget_test.go:37`）与 `goal_runtime_test.go`
+  的 token 用例钉住 ⇒ **本项两端都有用例**。
+  **一句设计说明（免得被当成缺口）**：**任务级**配置只有 `task_cost_budget` / `task_time_budget_minutes`，**没有** `task_token_budget` ——
+  token 上限是 **Goal 的**旋钮（`goal_token_budget`），走上面那条链注入；**不是漏配**。；② 超限后 Goal 状态为 **`blocked`**
   且停止原因是 `budget_tokens`；③ 关掉该配置（默认值）时**行为与现在一致**（跑到跑完或叫停）——即复活不得改变未配置用户的语义。
 - **记账点先定再写**：与 §13.7 开头同一问题——谁持有账本/在哪个 tick 记账。若 `budget_spend` 已有明确记账点，
   token 就挂在**同一点**上，不另开一处。
