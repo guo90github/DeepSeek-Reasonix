@@ -360,6 +360,8 @@ func rejectHint(reason string) string {
 		return "another participant's state does not allow this: read action=view first"
 	case board.ReasonNotOwner:
 		return "only the claimer may do this: claim the node first, or ask its owner"
+	case board.ReasonNotAssignee:
+		return "the board addressed this step to someone else: ask for it to be reassigned (assign) or handed back (unassign)"
 	default:
 		return "the board's reason is in the message above"
 	}

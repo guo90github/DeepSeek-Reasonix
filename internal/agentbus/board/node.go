@@ -330,6 +330,12 @@ func applyClaim(st *State, op Op) error {
 	if n == nil {
 		return reject(op.Verb, op.Node, ReasonUnknownNode)
 	}
+	// An assignment is a promise to one participant, so a stranger's claim is refused
+	// here too — enforcing it only where the queue is read would leave the direct tool
+	// path open (AGENT_BUS §13.4).
+	if n.Assignee != "" && n.Assignee != op.Actor {
+		return reject(op.Verb, op.Node, ReasonNotAssignee)
+	}
 	// Taking over is legal only when the previous lease had already lapsed at
 	// the moment this op was written: the comparison uses the log's own
 	// timestamps, so it replays identically anywhere.

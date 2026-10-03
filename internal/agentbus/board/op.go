@@ -147,6 +147,7 @@ const (
 	ReasonMissingDeadline        = "missing_deadline"
 	ReasonMissingBounds          = "missing_bounds"
 	ReasonNotOwner               = "not_owner"
+	ReasonNotAssignee            = "not_assignee"
 	ReasonMissingReproducer      = "missing_reproducer"
 	ReasonSelfReproduced         = "self_reproduced"
 	ReasonMissingAbandonRequest  = "missing_abandon_request"

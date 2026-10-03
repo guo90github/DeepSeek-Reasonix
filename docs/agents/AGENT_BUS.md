@@ -214,7 +214,7 @@ rg -n 'session-scoped concurrency' internal/agent/scheduler.go      # 并发闸�
 | `refute` | 反驳某条断言/产出，**须带理由**；反驳与断言同级，不是「下级打小报告」 |
 | `claim` / `release` | 认领 / 放回一个节点（认领 = 承诺，**带 deadline 且须心跳续租**；超时被回收） |
 | `split` / `require` | 拆分节点 / 声明对新节点的依赖——**DAG 由此在运行时长出来**；跨子树时生成**边界节点** |
-| `assign` | 把一个节点**指派给一个参与者**（`Node.Assignee`）：`WakeTargets` 只向他发 `Ready`，`Take`/`TakeRanked` 也**只许他取**（不许改派已 `claimed` 的节点）；**无指派 = 板级 pool**（接管自愈不变）；**承办者不在了不会自动回落 pool**——宁可停住也不给错会话；出路有两条且都是显式 op：改派（`assign` 给别人）与**收回**（`unassign` = `assign` 不带 `assignee`，交回板级 pool） |
+| `assign` | 把一个节点**指派给一个参与者**（`Node.Assignee`）：`WakeTargets` 只向他发 `Ready`，`Take`/`TakeRanked` 也**只许他取**（不许改派已 `claimed` 的节点）；**无指派 = 板级 pool**（接管自愈不变）；**已指派节点的 `claim` 由板本身拒收**（`not_assignee`，不只靠队列取用过滤）；**承办者不在了不会自动回落 pool**——宁可停住也不给错会话；出路有两条且都是显式 op：改派（`assign` 给别人）与**收回**（`unassign` = `assign` 不带 `assignee`，交回板级 pool） |
 | `decide` | 对一个有争议的节点下结论（人也可以下，见 §4）；**前置条件含「可核对证据 + 非产出者复跑」** |
 | `abandon` | 放弃一个节点：**只能由 `decide` 批准**，且须带「试过哪些路径 + 为什么不行」的证据——**不许静默停手** |
 | `revert` | 撤销一个已 `done` 的节点（打回 `open`），并把下游标 `stale`——**错误必须可回滚** |
