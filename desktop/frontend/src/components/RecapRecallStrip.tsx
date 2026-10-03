@@ -15,13 +15,17 @@ export function RecapRecallStrip({
   sessionPath = "",
   recallRecord,
   load: providedLoad,
+  record: controlled,
 }: {
   sessionPath?: string;
   recallRecord?: (sessionPath: string) => Promise<RecallRecordView>;
   load?: () => Promise<RecallRecordView>;
+  /** When the caller already holds the record — a section that must hide itself
+   *  when there is none — the strip renders that instead of asking again. */
+  record?: RecallRecordView | null;
 }) {
   const t = useT();
-  const [record, setRecord] = useState<RecallRecordView | null>(null);
+  const [fetched, setFetched] = useState<RecallRecordView | null>(null);
   const [open, setOpen] = useState(false);
 
   // Two surfaces read the same record: the recap page knows a session path, the
@@ -37,9 +41,11 @@ export function RecapRecallStrip({
   }, [providedLoad, recallRecord, sessionPath]);
 
   useEffect(() => {
-    void fetchRecord().then(setRecord);
-  }, [fetchRecord]);
+    if (controlled !== undefined) return;
+    void fetchRecord().then(setFetched);
+  }, [controlled, fetchRecord]);
 
+  const record = controlled !== undefined ? controlled : fetched;
   if (record === null || record.available !== true) return null;
   const turns = record.turns ?? [];
   const skills = record.skills ?? [];

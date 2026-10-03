@@ -10,6 +10,7 @@ import { FooterGitHistoryModule } from "./FooterGitHistoryModule";
 import { FooterGitUncommittedModule } from "./FooterGitUncommittedModule";
 import { FooterMemoryModule } from "./FooterMemoryModule";
 import { FooterMemorySuggestionsModule } from "./FooterMemorySuggestionsModule";
+import { FooterRecallModule } from "./FooterRecallModule";
 import type { FooterPanelModule } from "./FooterPanel";
 
 export const FOOTER_PANEL_MODULES: readonly FooterPanelModule[] = [
@@ -32,5 +33,9 @@ export const FOOTER_PANEL_MODULES: readonly FooterPanelModule[] = [
   {
     id: "memory-suggestions",
     render: (props) => <FooterMemorySuggestionsModule {...props} />,
+  },
+  {
+    id: "recall-record",
+    render: (props) => <FooterRecallModule {...props} />,
   },
 ];
