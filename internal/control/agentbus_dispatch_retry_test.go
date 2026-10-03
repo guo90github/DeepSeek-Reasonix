@@ -86,3 +86,53 @@ func TestAgentBusDispatchStopsHandingOutWorkThatKeepsLapsing(t *testing.T) {
 		t.Fatalf("dispatch = %d (%v), want nothing handed out once the budget is spent", n, err)
 	}
 }
+
+// An assignment is a promise to one participant, and a promise to somebody who is not there
+// locks the step away from everybody else. Once the step has spent the retry budget the host
+// has to hand it back to the pool, or a dead assignee keeps work nobody can take.
+func TestAStalledAssignmentGoesBackToThePool(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	c := agentBusDispatchFixture(t, dir)
+	brd, err := board.Open(dir)
+	if err != nil {
+		t.Fatalf("open board: %v", err)
+	}
+	if _, err := c.ApplyAgentBusOp(ctx, board.Op{
+		Verb: board.VerbAssign, Node: "step", Assignee: "alice", Actor: "host",
+	}); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	deliver := func(context.Context, agentbus.WakeTarget) error { return nil }
+	lapsed := func(attempt int) {
+		if _, err := brd.Sweep(ctx, time.Now().UTC().Add(31*time.Minute)); err != nil {
+			t.Fatalf("sweep %d: %v", attempt, err)
+		}
+	}
+	// The assignee's session dies twice over: each dispatch hands the step to alice, and the
+	// lease it took lapses into the reclaim counter.
+	for attempt := range agentBusDispatchTries {
+		if n, err := c.AgentBusDispatch(ctx, "alice", deliver); err != nil || n != 1 {
+			t.Fatalf("dispatch %d = %d (%v), want the assigned step handed to its assignee", attempt, n, err)
+		}
+		lapsed(attempt)
+	}
+	if spent := agentBusTickState(t, dir).Nodes["step"].NoProgress; spent < agentBusDispatchTries {
+		t.Fatalf("no_progress = %d, want the retry budget spent (%d)", spent, agentBusDispatchTries)
+	}
+
+	if n, err := c.AgentBusDispatch(ctx, "alice", deliver); err != nil || n != 0 {
+		t.Fatalf("dispatch after the budget = %d (%v), want the stalled step handed back, not out", n, err)
+	}
+	if got := agentBusTickState(t, dir).Nodes["step"].Assignee; got != "" {
+		t.Fatalf("assignee = %q, want the stalled step back in the pool", got)
+	}
+	// Back in the pool means somebody else can take it — the assignment forbade exactly that.
+	if _, err := c.ApplyAgentBusOp(ctx, board.Op{
+		Verb: board.VerbClaim, Node: "step", Actor: "worker",
+		Bounds:   &board.Bounds{Steps: 1},
+		Deadline: time.Now().UTC().Add(time.Hour),
+	}); err != nil {
+		t.Fatalf("claim by another participant once the pool took it back: %v", err)
+	}
+}

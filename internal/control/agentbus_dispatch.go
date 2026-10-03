@@ -40,6 +40,9 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 	if err != nil {
 		return 0, err
 	}
+	if err := c.releaseStalledAssignments(ctx, bus.participantID(c), st); err != nil {
+		return 0, err
+	}
 	if err := parkStartableWork(ctx, queueLog, st, now); err != nil {
 		return 0, err
 	}
@@ -91,6 +94,31 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 		dispatched++
 	}
 	return dispatched, nil
+}
+
+// releaseStalledAssignments hands a step nobody picked up back to the pool. It has spent the
+// retry budget — the same signal that stops auto-dispatch — so keeping the assignment would
+// only lock it to a participant that is not there; a cleared one can still be taken by a
+// person or another participant. The board itself refuses to re-address a live lease.
+func (c *Controller) releaseStalledAssignments(ctx context.Context, actor string, st *board.State) error {
+	if st == nil {
+		return nil
+	}
+	ids := make([]string, 0, len(st.Nodes))
+	for id := range st.Nodes {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	for _, id := range ids {
+		n := st.Nodes[id]
+		if n.Assignee == "" || n.State != board.StateOpen || n.NoProgress < agentBusDispatchTries {
+			continue
+		}
+		if _, err := c.ApplyAgentBusOp(ctx, board.Op{Verb: board.VerbAssign, Node: id, Actor: actor}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // releaseIdleSlots gives back the slot of a holder with no claim on the board. The board is
