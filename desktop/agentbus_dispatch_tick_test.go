@@ -124,3 +124,31 @@ func TestADispatchTickSkipsATabWithoutABoard(t *testing.T) {
 
 	app.agentBusDispatchTick()
 }
+
+// The rule is per participant, not per tick: one tab that can be told and one that cannot are
+// handled independently in the same tick — the reachable one gets its step, and the one nobody
+// could reach gives its claim back instead of swallowing the board.
+func TestADispatchTickHandlesEachParticipantIndependently(t *testing.T) {
+	app, alice, brd := dispatchTickApp(t, true)
+	// No SessionPath on purpose: this participant's wake cannot be delivered, so its claim has to
+	// come back — and that must not stop the other tab from being served in the same tick.
+	silent := control.New(control.Options{SessionDir: t.TempDir(), Sink: event.Discard})
+	t.Cleanup(silent.Close)
+	silent.SetAgentBus(alice.AgentBusDir(), "bob")
+	app.tabs["t2"] = &WorkspaceTab{ID: "t2", Ctrl: silent}
+
+	app.agentBusDispatchTick()
+	if got := claimsByAlice(t, brd); got != 1 {
+		t.Fatalf("alice claimed %d steps, want exactly one despite the other tab failing", got)
+	}
+	state, err := brd.Snapshot(context.Background(), time.Now().UTC())
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if second := state.Nodes["step-2"]; second != nil && second.Owner != "" {
+		t.Fatalf("step-2 owner = %q, want it left startable: nobody was told about it", second.Owner)
+	}
+	if entry := state.Nodes["step"]; entry == nil || entry.Owner != "alice" {
+		t.Fatal("the earliest step belongs to the session that could be told")
+	}
+}
