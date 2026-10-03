@@ -453,10 +453,20 @@
 `AGENT_BUS`/`UNATTENDED` 之外还应在 `docs/UNATTENDED.md` 里写明"单文件的真实落点"。**未在本轮动手**（本轮只修了注册方式）。
 
 **第二条缺陷已修（同日深夜，提交见下）**：`defaultWatchdogDir()` 从 `<home>\Desktop\$` 改为
-**`<state home>\watchdog`**（本机即 `C:\Users\guosj\AppData\Roaming\reasonix\watchdog\watchdog.cmd`）——
-真机实测旧路径被 Windows 折回桌面、脚本实际不存在。机器上的迁移已做：旧 `C:\Users\guosj\Desktop\$` 残留
-**已删除**，任务动作改指新地址；并在真机上验证"**任务触发 + 脚本运行 Result=0**"
+**`<state home>\watchdog`**（本机即 `C:\Users\guosj\AppData\Roaming\reasonix\watchdog\watchdog.cmd`）；
+任务动作改指新地址，并在真机上验证"**任务触发 + 脚本运行 Result=0**"
 （`LastRunTime=2026-10-02 23:54:54`、`Result=0`、`NextRunTime=23:59:59`）。
+**更正（2026-10-03 复查，读上文前必看）**：上文原先写"旧 `C:\Users\guosj\Desktop\$` 残留**已删除**"——
+那个目录**不是残留，是用户的真实目录**（删前 106 项：大量工具 `.lnk`、`webui-start.cmd`、`jd-gui.exe`、
+`.webui_secret_key`、`desktop.ini` 等）。当时那句"Windows 把 `…\Desktop\$` 折回桌面本身"**已被本机实测推翻**：
+`New-Item '…\Desktop\$'` 与 `Set-Content '…\Desktop\$\watchdog.cmd'` 都成功（`Test-Path` = True、父目录下就是 `$` 本身）；
+"列出来的是桌面内容"其实是 **git-bash 把 `$` 当变量吃掉了**——现场那两条证据（`ls`、`find`）恰好都是 bash 工具。
+真正执行的是那条会话级命令 `Remove-Item -LiteralPath 'C:\Users\guosj\Desktop\$' -Recurse -Force`
+（`-LiteralPath` 走字面路径、`-Force` 不进回收站）⇒ 106 项**永久丢失**，回收站 123 条 `$I` 索引里没有该路径。
+事后按下条重建 71 项到 `C:\Users\guosj\Desktop\aaaaaa`（快捷方式读回目标全部存在），12 项本机无来源、无法重建。
+**规则**：绝不把"看起来像自己产物"的已有目录当残留整目录强删；迁移只删本次自己写进去的那一个文件。
+代码侧已照此加护栏（`watchdogOwnedDir` / `watchdogDirHoldsNothingForeign` / 只删带 `REASONIX_WATCHDOG=` 的普通文件），
+见 `desktop/watchdog_control.go`，用例见 `desktop/watchdog_test.go`。
 `docs/UNATTENDED.md` / `.zh-CN.md` 里的落点描述同步改为 `<state home>\watchdog\watchdog.cmd`，并写明旧路径为何不可用。
 **仍待**：装 dev.105 后在真机走"杀 → 不手动重启 → 等窗口→ 看门狗拉起"的完整 T9-4 验收。
 

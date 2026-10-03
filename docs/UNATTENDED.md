@@ -211,7 +211,8 @@ reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desk
 - **Policy**: `<home>/desktop-autostart.json` (`enabled` + `watchdog`, defaulting to the
   policy's `enabled`) is the switch's **mirror**, and it also drives the Electron login
   item — so turning the switch on turns the login item on with it, and off takes both away.
-- **The one management file**: `C:\Users\guosj\Desktop\$\watchdog.cmd` — the watchdog's
+- **The one management file**: `<state home>\watchdog\watchdog.cmd` (on Windows,
+  `%APPDATA%\reasonix\watchdog\watchdog.cmd`) — the watchdog's
   visible twin: run it by hand, read it, or delete it. It makes **no version decision**:
   it starts the **stable launcher** with `REASONIX_WATCHDOG=1` in the environment, and
   that launcher resolves `current.json` on every run — so after a build or a version
@@ -220,9 +221,10 @@ reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desk
   and removes it when the watchdog is disabled. That directory holds only this file;
   the inspection trail goes to `<home>/desktop-watchdog.log` (one line
   per run: time, action, reason).
-  It used to live at `…\Desktop\$`; a real machine showed Windows folds that path onto
-  the Desktop, so the registered task named a script that did not exist and every run
-  failed (2026-10-02). The registration now also asks for `-AllowStartIfOnBatteries`,
+  It used to live at `…\Desktop\$`, a folder of the person's own (106 files) — a migration
+  deleted that directory whole, with them (2026-10-02). Publishing and removing are now
+  confined to the app's own directory, and both refuse one holding other files (see
+  `docs/agents/TODO.md`). The registration now also asks for `-AllowStartIfOnBatteries`,
   `-DontStopIfGoingOnBatteries` and `-StartWhenAvailable`: without them Windows accepted
   the task, reported it registered, and never ran it.
 

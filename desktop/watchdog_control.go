@@ -161,13 +161,9 @@ func applyWatchdogRegistration(enabled bool) (bool, error) {
 			if err := writeWatchdogScript(); err != nil {
 				return false, err
 			}
-			// The task points at the script, never at a version: the script runs the
-			// stable launcher, which resolves the active version on every run.
-			//
-			// Registration goes through PowerShell rather than `schtasks /Create`:
-			// schtasks' trigger plus Windows' default conditions left the task
-			// registered and never run on a real machine (2026-10-02), which the
-			// status view cannot distinguish from a working watchdog.
+			// The action is the script (never a version), and registration goes through
+			// PowerShell: with `schtasks /Create` the task stayed registered and never ran
+			// (2026-10-02), which the status view cannot tell from a working watchdog.
 			out, err := watchdogPlatformRunner("powershell", "-NoProfile", "-NonInteractive",
 				"-Command", watchdogRegisterCommand(watchdogTaskName, script))
 			if err != nil {
@@ -286,9 +282,11 @@ func setWatchdogEnabled(enabled bool) (WatchdogStatusView, error) {
 	}
 	registered, err := applyWatchdogRegistration(enabled)
 	if enabled {
-		_ = writeWatchdogScript()
-	} else {
-		_ = removeWatchdogScript()
+		if err := writeWatchdogScript(); err != nil {
+			slog.Warn("desktop watchdog: could not publish the script", "err", err)
+		}
+	} else if err := removeWatchdogScript(); err != nil {
+		slog.Warn("desktop watchdog: could not remove the script", "err", err)
 	}
 	view := watchdogStatusView()
 	if err != nil {
@@ -386,17 +384,16 @@ func refreshWatchdogEntry() {
 	}
 }
 
-// watchdogDirFunc is a seam for tests; production keeps the single watchdog file
-// on the desktop so it can be read, run and removed by hand.
+// watchdogDirFunc is a seam for tests; production keeps the single watchdog file in
+// the app's own directory, where a person can read, run or remove it by hand.
 var watchdogDirFunc = defaultWatchdogDir
 
 func watchdogDir() string { return watchdogDirFunc() }
 
 func defaultWatchdogDir() string {
-	// The state home, not the Desktop: a Windows path ending in `\$` is not a real
-	// directory name — `…\Desktop\$` resolves to the Desktop itself, so the script the
-	// OS task pointed at did not exist and every run failed (found on a real machine,
-	// 2026-10-02). One unambiguous directory holds the one file.
+	// The state home, never a folder a person uses: the Desktop location this once
+	// pointed at held their own files, and a migration deleted the whole directory
+	// with them (2026-10-02). One dedicated directory holds the one file.
 	root := config.MemoryUserDir()
 	if strings.TrimSpace(root) == "" {
 		return ""
@@ -415,6 +412,44 @@ func watchdogScriptPath() string {
 	return filepath.Join(dir, "watchdog.cmd")
 }
 
+// watchdogScriptMarker is in every body this file publishes, so removal can tell
+// this app's script from anything else parked at the same path.
+const watchdogScriptMarker = "REASONIX_WATCHDOG="
+
+// watchdogOwnedDir reports whether dir is this app's own directory: strictly inside
+// the state home, so nothing here can publish into or delete from a folder a person
+// uses. The Desktop one the watchdog once sat in was deleted whole, with the 106
+// files of theirs that were in it (2026-10-02).
+func watchdogOwnedDir(dir string) bool {
+	root := config.MemoryUserDir()
+	if strings.TrimSpace(dir) == "" || strings.TrimSpace(root) == "" {
+		return false
+	}
+	rel, err := filepath.Rel(root, dir)
+	if err != nil || filepath.IsAbs(rel) || rel == "." || rel == ".." ||
+		strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	return true
+}
+
+// watchdogDirHoldsNothingForeign is true while the directory is missing or holds
+// only the script this app publishes: a directory with someone else's files in it
+// is not ours to write into.
+func watchdogDirHoldsNothingForeign(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return os.IsNotExist(err)
+	}
+	mine := filepath.Base(watchdogScriptPath())
+	for _, entry := range entries {
+		if entry.Name() != mine {
+			return false
+		}
+	}
+	return true
+}
+
 // writeWatchdogScript publishes the single watchdog file: one command a person
 // can read, run or delete. It launches the stable launcher, which resolves the
 // active version on every run, so no version is ever pinned here.
@@ -422,6 +457,13 @@ func writeWatchdogScript() error {
 	path := watchdogScriptPath()
 	if path == "" {
 		return errors.New("no home directory for the watchdog script")
+	}
+	dir := watchdogDir()
+	if !watchdogOwnedDir(dir) {
+		return fmt.Errorf("refusing to publish the watchdog script outside the state directory: %s", dir)
+	}
+	if !watchdogDirHoldsNothingForeign(dir) {
+		return fmt.Errorf("refusing to publish the watchdog script into a directory that holds other files: %s", dir)
 	}
 	root := portableInstallRoot()
 	if root == "" {
@@ -461,15 +503,35 @@ func watchdogScriptBody(launcher string) string {
 	}, "\r\n")
 }
 
+// removeWatchdogScript takes back only the file this app published: a directory, or
+// a file without its marker, is left alone — the migration that deleted the Desktop
+// directory whole is why removal is this narrow (2026-10-02).
 func removeWatchdogScript() error {
 	path := watchdogScriptPath()
 	if path == "" {
 		return nil
 	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	if !watchdogOwnedDir(watchdogDir()) {
+		return fmt.Errorf("refusing to remove anything outside the state directory: %s", path)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
-	return nil
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("refusing to remove %s: it is not a regular file", path)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if !strings.Contains(string(body), watchdogScriptMarker) {
+		return fmt.Errorf("refusing to remove %s: it is not the watchdog script", path)
+	}
+	return os.Remove(path)
 }
 
 // watchdogLogPath keeps the inspection trail in the host's own log directory so

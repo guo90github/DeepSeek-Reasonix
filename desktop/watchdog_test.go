@@ -145,10 +145,16 @@ func TestWatchdogPolicyDefaultsToOnWithThePolicy(t *testing.T) {
 }
 
 func TestWatchdogScriptIsOneFileThatComesAndGoes(t *testing.T) {
-	dir := t.TempDir()
-	previous := watchdogDirFunc
+	// The file only ever lives in the app's own directory, so the seam is pointed at
+	// the state home the ownership guard checks against.
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("REASONIX_STATE_HOME", home)
+	dir := filepath.Join(home, "watchdog")
+	previous, previousRoot := watchdogDirFunc, portableInstallRootFunc
 	watchdogDirFunc = func() string { return dir }
-	t.Cleanup(func() { watchdogDirFunc = previous })
+	portableInstallRootFunc = func() string { return "" }
+	t.Cleanup(func() { watchdogDirFunc, portableInstallRootFunc = previous, previousRoot })
 
 	// Without an active version there is nothing to point the script at, so it
 	// must refuse rather than publish a file that cannot run.
@@ -158,7 +164,10 @@ func TestWatchdogScriptIsOneFileThatComesAndGoes(t *testing.T) {
 	if err := removeWatchdogScript(); err != nil {
 		t.Fatalf("removing an absent script must be a no-op: %v", err)
 	}
-	if err := os.WriteFile(watchdogScriptPath(), []byte("@echo off\n"), 0o644); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("seed the directory: %v", err)
+	}
+	if err := os.WriteFile(watchdogScriptPath(), []byte(watchdogScriptBody("launcher")), 0o644); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	if err := removeWatchdogScript(); err != nil {
@@ -439,5 +448,95 @@ func TestWatchdogRegistrationRunsTheScriptItPublishes(t *testing.T) {
 	registration := calls.registrationCommand()
 	if !strings.Contains(registration, script) {
 		t.Fatalf("the registration does not run the published script %q:\n%s", script, registration)
+	}
+}
+
+// The directory the watchdog publishes into must never be one a person uses: the
+// Desktop location it once pointed at was deleted whole, with the 106 files of theirs
+// that were in it (2026-10-02). Outside the state home both calls must refuse.
+func TestWatchdogRefusesToTouchADirectoryItDoesNotOwn(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("REASONIX_HOME", home)
+	t.Setenv("REASONIX_STATE_HOME", home)
+	theirs := t.TempDir()
+	previous := watchdogDirFunc
+	watchdogDirFunc = func() string { return theirs }
+	t.Cleanup(func() { watchdogDirFunc = previous })
+
+	theirFile := filepath.Join(theirs, "Adobe Acrobat DC.lnk")
+	theirDir := filepath.Join(theirs, "keep")
+	if err := os.MkdirAll(theirDir, 0o755); err != nil {
+		t.Fatalf("seed their directory: %v", err)
+	}
+	if err := os.WriteFile(theirFile, []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed their file: %v", err)
+	}
+	if err := os.WriteFile(watchdogScriptPath(), []byte(watchdogScriptBody("launcher")), 0o644); err != nil {
+		t.Fatalf("seed a script-shaped file of theirs: %v", err)
+	}
+
+	if err := writeWatchdogScript(); err == nil {
+		t.Fatal("publishing outside the state directory must refuse")
+	}
+	if err := removeWatchdogScript(); err == nil {
+		t.Fatal("removing outside the state directory must refuse")
+	}
+	for _, path := range []string{theirFile, theirDir, watchdogScriptPath()} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("%s must survive: %v", path, err)
+		}
+	}
+}
+
+// A directory holding someone else's files is not ours to publish into, even inside
+// the state home — that is what made the old Desktop location dangerous.
+func TestWatchdogRefusesToPublishIntoADirectoryThatHoldsOtherFiles(t *testing.T) {
+	_, home := watchdogTestHarness(t)
+	dir := filepath.Join(home, "watchdog")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("seed the directory: %v", err)
+	}
+	theirFile := filepath.Join(dir, "their-notes.txt")
+	if err := os.WriteFile(theirFile, []byte("x"), 0o644); err != nil {
+		t.Fatalf("seed their file: %v", err)
+	}
+
+	if err := writeWatchdogScript(); err == nil {
+		t.Fatal("a directory holding someone else's files is not ours to write into")
+	}
+	if err := removeWatchdogScript(); err != nil {
+		t.Fatalf("an absent script is still a no-op: %v", err)
+	}
+	if _, err := os.Stat(theirFile); err != nil {
+		t.Fatalf("their file must survive: %v", err)
+	}
+}
+
+// Removal may take only the file this app published: a directory at that path, or a
+// file someone else put there, stays exactly where it is.
+func TestWatchdogRemovesOnlyItsOwnScript(t *testing.T) {
+	watchdogTestHarness(t)
+	path := watchdogScriptPath()
+
+	if err := os.MkdirAll(path, 0o755); err != nil {
+		t.Fatalf("seed a directory at the script path: %v", err)
+	}
+	if err := removeWatchdogScript(); err == nil {
+		t.Fatal("a directory at the script path is not ours to remove")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("the directory must survive: %v", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("clear the directory: %v", err)
+	}
+	if err := os.WriteFile(path, []byte("rem a file the person left at this path"), 0o644); err != nil {
+		t.Fatalf("seed their file: %v", err)
+	}
+	if err := removeWatchdogScript(); err == nil {
+		t.Fatal("a file that is not the watchdog script is not ours to remove")
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("their file must survive: %v", err)
 	}
 }
