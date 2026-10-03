@@ -1343,6 +1343,13 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 
 **审议/听证面：沉默会发生什么（2026-10-04 核实 —— 这一面本来就没问题）**
 
+**跨进程身份/令牌面（2026-10-04 核实：失败面可分辨、且不泄密）**
+
+- **顺序**：中间件是 `log → gzip → auth → hostGuard → csrf → mux`（`internal/serve/serve.go:661`）⇒ 未带令牌的调用在**任何寻址之前**就被 401 拒掉，没人能靠探针问出"这台宿主有哪些会话"。
+- **码**：鉴权失败 401（`internal/serve/auth.go:397`、`:597`）；**地址到不了**是 **409**（`inbox_addressing_test.go:33/88` 断言 409，报文 "session is not open in the desktop window; open it there first"）；成功是 202（`inbox.go:202`）⇒ 三种结果**不同码**，投递方（`agentbus.DeliverWake`）能据此区分"没人/地址错/收下了"。
+- **不泄密**：`auth.go` 的拒绝报文只有 "Bad Request" / "Method Not Allowed" 一类的通用词（`403`/`401` 路径也一样），**不回显令牌**；地址失败报文只说"那个会话不在桌面窗口里"，**不回显 session path** ✓。
+- 与文档一致：§11.5/§13.3 的"带令牌投递"就是 `Authorization: Bearer <announced token>` + `X-Reasonix-Session-Path` 寻址，令牌本身**只经文件引用**（`ReadAnnouncedToken`，地址簿里只有路径）。
+
 **§13.10 与 `landing.go` 逐条对完（2026-10-04）**：文档声称的**六条用例**逐一对上 ——
 `TestLandingNeedsEveryDeliverableDone`、`TestLandingStopsWhileADisputeIsUnresolved`、
 `TestLandingStopsWhileAVerdictIsStillOut`（现开 / 已升级 / 按规则未决三态都在同一用例里）、
