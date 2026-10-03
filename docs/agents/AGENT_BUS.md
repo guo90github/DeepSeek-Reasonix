@@ -1323,6 +1323,12 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 同一份写完的日志**三种读法必须一致**：写出它的板（`Snapshot`）、把它按行重放（`Fold(lines.Ops)`）、以及**重新打开同一目录**再读
 ⇒ `Applied`/`Rejected`/`Seq`/节点数/`OpIDs` 数与每个节点的 State/Owner 逐项相等。上面几族用例分别钉"怎么写"（并发等价串行、撕裂/坏行），
 这一条钉"读的人只有一个"。
+
+**授权面（同日核实）**：`AuthorizedGrants(ops, state, node)` 天然是**逐节点**的（`internal/agentbus/grant.go:75-77`），
+既有用例覆盖"自授权不算 / 别人有证据才算 / 节点失去立场就失去授权 / 无证据写不进"；缺的是**边界**：
+加 `TestAnAuthorizationIsNotInheritedByTheNodesItSplitsInto`（`internal/agentbus/grant_test.go`）——
+父节点被授权后 `split` 出两个子节点、再 `require` 引入一个新鲜节点 ⇒ 三者**都不**被授权（`Authorized` 与 `AuthorizedGrants` 双向都查），
+而父自己的授权仍在 ⇒ 钉住"一条授权只命名一个节点"，不让它靠子树关系被继承。
 **同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
 
 **另一处已核实（2026-10-04）：地址簿 TTL 与两种投递失败的可见性。**

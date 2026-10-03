@@ -214,3 +214,39 @@ func TestAnUnevidencedGrantCannotBeWritten(t *testing.T) {
 		t.Fatalf("grants = %+v, want none: the refused one must not be in the log", grants)
 	}
 }
+
+// An authorization is a statement about one node, and only that node: splitting a step into
+// children must not authorize them, and pulling a fresh node in with require must not either.
+// AuthorizedGrants takes a node id (grant.go), so this pins that nothing leans on subtree
+// membership by accident — the boundary the small cases around it cannot see.
+func TestAnAuthorizationIsNotInheritedByTheNodesItSplitsInto(t *testing.T) {
+	ctx := context.Background()
+	evidence := e2eEvidence()
+	_, brd := grantBoard(t,
+		board.Op{Verb: board.VerbAssert, Node: "big", Actor: "orchestrator", Evidence: evidence},
+		grantOp("big", "operator", "install the driver", evidence),
+		board.Op{Verb: board.VerbSplit, Node: "big", Actor: "orchestrator",
+			Children: []board.NodeSpec{{ID: "left"}, {ID: "right"}}},
+		board.Op{Verb: board.VerbAssert, Node: "fresh", Actor: "orchestrator", Evidence: evidence},
+		board.Op{Verb: board.VerbRequire, Node: "left", Actor: "orchestrator", Dep: &board.NodeSpec{ID: "fresh"}},
+	)
+	ops, err := brd.Ops(ctx)
+	if err != nil {
+		t.Fatalf("ops: %v", err)
+	}
+	state, err := brd.Snapshot(ctx, time.Now().UTC())
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if !Authorized(ops, state, "big") {
+		t.Fatal("the parent's own grant must survive the split")
+	}
+	for _, child := range []string{"left", "right", "fresh"} {
+		if Authorized(ops, state, child) {
+			t.Fatalf("%s is authorized by the parent's grant; an authorization names one node", child)
+		}
+		if grants := AuthorizedGrants(ops, state, child); len(grants) != 0 {
+			t.Fatalf("%s carries grants = %+v, want none", child, grants)
+		}
+	}
+}
