@@ -191,7 +191,7 @@ watchdog is a **pre-shell mode** of the host binary, called on a schedule:
 
 ```bash
 reasonix-desktop.exe --watchdog          # the scheduler calls this every 5 minutes
-reasonix-desktop.exe --watchdog-status   # policy / registered on this machine / entry point
+reasonix-desktop.exe --watchdog-status   # policy / registered / when it last ran / entry point
 reasonix-desktop.exe --watchdog-enable   # write the policy and register at once
 reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desktop file
 ```

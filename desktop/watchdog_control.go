@@ -240,6 +240,10 @@ type WatchdogStatusView struct {
 	Platform   string `json:"platform"`
 	LastError  string `json:"lastError,omitempty"`
 	Note       string `json:"note,omitempty"`
+	// LastRunAt is when the machine last started the entry, RFC3339 UTC. Empty
+	// while Registered: the entry exists and has never run — the difference
+	// between a working watchdog and false comfort (2026-10-03).
+	LastRunAt string `json:"lastRunAt,omitempty"`
 }
 
 // WatchdogStatus reports the policy, the machine, and the binary it would run.
@@ -260,7 +264,61 @@ func watchdogStatusView() WatchdogStatusView {
 		return view
 	}
 	view.Registered = watchdogRegistrationPresent()
+	if view.Registered {
+		view.LastRunAt = watchdogLastRunAt()
+	}
 	return view
+}
+
+// watchdogLastRunAt is when the machine last started the entry. Windows answers
+// from the scheduler, which is the authoritative "the trigger really fires" — the
+// defect this view exists to expose (2026-10-02/03). Elsewhere the inspection log,
+// which the watchdog appends to on every tick it runs, is the only record left.
+func watchdogLastRunAt() string {
+	if runtime.GOOS == "windows" {
+		out, err := watchdogPlatformRunner("powershell", "-NoProfile", "-NonInteractive", "-Command",
+			"(Get-ScheduledTaskInfo -TaskName '"+psQuote(watchdogTaskName)+"').LastRunTime.ToUniversalTime().ToString('o')")
+		if err != nil {
+			return ""
+		}
+		return watchdogRunTimeFromTaskInfo(string(out))
+	}
+	if at, ok := watchdogLastLogTime(); ok {
+		return at.UTC().Format(time.RFC3339)
+	}
+	return ""
+}
+
+// watchdogRunTimeFromTaskInfo reads Get-ScheduledTaskInfo's LastRunTime. A task
+// that never ran answers 1999-11-30, so anything before 2000 means "never".
+func watchdogRunTimeFromTaskInfo(out string) string {
+	body := strings.Trim(string(out), " \t\r\n\x00\ufeff")
+	at, err := time.Parse(time.RFC3339Nano, body)
+	if err != nil || at.Year() < 2000 {
+		return ""
+	}
+	return at.UTC().Format(time.RFC3339)
+}
+
+// watchdogLastLogTime reads the newest entry of the inspection log. A line the
+// watchdog did not write (a half-written one) is skipped, never guessed.
+func watchdogLastLogTime() (time.Time, bool) {
+	path := watchdogLogPath()
+	if path == "" {
+		return time.Time{}, false
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return time.Time{}, false
+	}
+	lines := strings.Split(strings.TrimRight(string(body), "\r\n"), "\n")
+	for i := len(lines) - 1; i >= 0; i-- {
+		fields := strings.SplitN(strings.TrimSpace(lines[i]), "\t", 2)
+		if at, err := time.Parse(time.RFC3339, fields[0]); err == nil {
+			return at, true
+		}
+	}
+	return time.Time{}, false
 }
 
 // SetWatchdogEnabled writes the policy and applies it at once, so the switch

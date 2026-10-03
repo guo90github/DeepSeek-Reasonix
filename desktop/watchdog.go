@@ -177,6 +177,15 @@ func watchdogStatusText() string {
 	fmt.Fprintf(&b, "OS watchdog: %s\n", state)
 	fmt.Fprintf(&b, "policy: enabled=%v watchdog=%v\n", policy.Enabled, policy.Watchdog == nil || *policy.Watchdog)
 	fmt.Fprintf(&b, "platform: %s\n", runtime.GOOS)
+	// "registered" alone cannot tell a working entry from an inert one, which is how
+	// a task Windows never triggered read as healthy (2026-10-02/03).
+	if registered {
+		if at := watchdogLastRunAt(); at != "" {
+			fmt.Fprintf(&b, "last run: %s\n", at)
+		} else {
+			fmt.Fprintf(&b, "last run: never\n")
+		}
+	}
 	if exe := watchdogEntryPoint(); exe != "" {
 		fmt.Fprintf(&b, "entry point: %s\n", exe)
 	}

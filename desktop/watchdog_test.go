@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -538,5 +539,91 @@ func TestWatchdogRemovesOnlyItsOwnScript(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatalf("their file must survive: %v", err)
+	}
+}
+
+// "Registered" is what the machine says it was told, never what it did: a task
+// Windows accepts and never triggers reads exactly like a working one.
+func TestWatchdogRunTimeFromTaskInfoIsHonestAboutNever(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"the scheduler's answer", "2026-10-02T15:54:54.0000000Z\r\n", "2026-10-02T15:54:54Z"},
+		{"a local answer is converted to UTC", "2026-10-02T15:54:54.0000000+08:00", "2026-10-02T07:54:54Z"},
+		{"a redirected stream may carry a BOM", "\ufeff2026-10-02T15:54:54.0000000Z", "2026-10-02T15:54:54Z"},
+		{"never ran (the Windows sentinel)", "1999-11-30T16:00:00.0000000Z", ""},
+		{"the task is gone", "", ""},
+		{"an error message is not a time", "Get-ScheduledTaskInfo : No MSFT_ScheduledTask objects found", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := watchdogRunTimeFromTaskInfo(tc.in); got != tc.want {
+				t.Fatalf("watchdogRunTimeFromTaskInfo(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+// Where the scheduler cannot be asked, the inspection log is the record that the
+// watchdog ran — and a line it did not finish writing is not a run time.
+func TestWatchdogLastRunFallsBackToTheInspectionLog(t *testing.T) {
+	_, _ = watchdogTestHarness(t)
+	if _, ok := watchdogLastLogTime(); ok {
+		t.Fatal("an absent log means nothing ran, not a made-up time")
+	}
+	writeWatchdogLogLine("skip", "the marker does not ask for unattended", "marker: seen=true")
+	body, err := os.ReadFile(watchdogLogPath())
+	if err != nil {
+		t.Fatalf("read the inspection log: %v", err)
+	}
+	// A tick killed mid-write leaves no timestamp: it must be skipped, not guessed.
+	if err := os.WriteFile(watchdogLogPath(), append(body, []byte("2026-10-03T00:0")...), 0o600); err != nil {
+		t.Fatalf("seed a half-written line: %v", err)
+	}
+	at, ok := watchdogLastLogTime()
+	if !ok {
+		t.Fatal("the last written tick is a run time")
+	}
+	if time.Since(at) > time.Hour {
+		t.Fatalf("the newest usable line is the one just written, got %s", at)
+	}
+}
+
+func TestWatchdogStatusReportsTheRunTimeTheSchedulerGives(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("only Windows keeps a run time next to the entry")
+	}
+	_, _ = watchdogTestHarness(t)
+	watchdogPlatformRunner = func(name string, args ...string) ([]byte, error) {
+		if !strings.Contains(strings.Join(args, " "), "Get-ScheduledTaskInfo") {
+			return nil, nil // schtasks /Query: the entry is there
+		}
+		return []byte("2026-10-02T15:54:54.0000000Z\r\n"), nil
+	}
+	view := watchdogStatusView()
+	if !view.Registered {
+		t.Fatal("the harness's fake scheduler reports the entry as present")
+	}
+	if view.LastRunAt != "2026-10-02T15:54:54Z" {
+		t.Fatalf("LastRunAt = %q, want the scheduler's answer", view.LastRunAt)
+	}
+	if !strings.Contains(watchdogStatusText(), "last run: 2026-10-02T15:54:54Z") {
+		t.Fatalf("the CLI must show it too:\n%s", watchdogStatusText())
+	}
+}
+
+func TestWatchdogStatusSaysNeverInsteadOfStayingSilent(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("only Windows keeps a run time next to the entry")
+	}
+	_, _ = watchdogTestHarness(t)
+	// The sentinel a task that never ran answers with.
+	watchdogPlatformRunner = func(name string, args ...string) ([]byte, error) {
+		return []byte("1999-11-30T16:00:00.0000000Z\r\n"), nil
+	}
+	view := watchdogStatusView()
+	if !view.Registered || view.LastRunAt != "" {
+		t.Fatalf("registered with no run must report no run, got %+v", view)
+	}
+	if !strings.Contains(watchdogStatusText(), "last run: never") {
+		t.Fatalf("a registered entry that never ran must say so:\n%s", watchdogStatusText())
 	}
 }

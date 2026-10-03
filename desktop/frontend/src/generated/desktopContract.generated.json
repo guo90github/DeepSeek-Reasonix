@@ -35416,6 +35416,13 @@
           "type": {
             "kind": "string"
           }
+        },
+        {
+          "name": "lastRunAt",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
         }
       ]
     },

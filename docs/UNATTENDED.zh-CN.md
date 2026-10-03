@@ -161,7 +161,7 @@ go run ./tools/repolint                                              # 注释/�
 
 ```bash
 reasonix-desktop.exe --watchdog          # 计划器每 5 分钟调一次（宿主日志留痕）
-reasonix-desktop.exe --watchdog-status   # 查：策略 / 机器上是否已注册 / 入口 exe
+reasonix-desktop.exe --watchdog-status   # 查：策略 / 是否已注册 / 上次运行时间（从未运行会写明）/ 入口 exe
 reasonix-desktop.exe --watchdog-enable   # 开：写策略 + 立刻注册（不等重启）
 reasonix-desktop.exe --watchdog-disable  # 关：写策略 + 立刻注销 + 删除桌面那份文件
 ```
