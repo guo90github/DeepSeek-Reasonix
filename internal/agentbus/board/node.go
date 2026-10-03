@@ -78,10 +78,8 @@ func noteRequester(n *Node, actor string) {
 	if n == nil || strings.TrimSpace(actor) == "" {
 		return
 	}
-	for _, existing := range n.Requesters {
-		if existing == actor {
-			return
-		}
+	if slices.Contains(n.Requesters, actor) {
+		return
 	}
 	n.Requesters = append(n.Requesters, actor)
 }

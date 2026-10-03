@@ -21,7 +21,7 @@ func TestRunnerCoalescesAndDrains(t *testing.T) {
 	if runner.Submit(path) {
 		t.Fatal("a queued path must not be queued twice")
 	}
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		if !runner.Submit(h.session(t, "2026010"+string(rune('2'+i))+"-000000.000000000-fake.jsonl", "two\n")) {
 			t.Fatalf("submit %d must be accepted", i)
 		}

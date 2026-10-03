@@ -2,6 +2,7 @@ package agentbus
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -26,12 +27,7 @@ func e2eSnapshot(t *testing.T, dir string) *board.State {
 }
 
 func hasDep(n *board.Node, dep string) bool {
-	for _, existing := range n.Deps {
-		if existing == dep {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(n.Deps, dep)
 }
 
 // planAndFinish lays down one finished chain: schema, then design on top of it.

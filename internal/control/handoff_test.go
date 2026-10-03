@@ -16,7 +16,7 @@ import (
 func handoffController(t *testing.T, path string, items []recap.OpenItem, withLoader bool, priorTurns int) *Controller {
 	t.Helper()
 	session := agent.NewSession("sys")
-	for i := 0; i < priorTurns; i++ {
+	for range priorTurns {
 		session.Add(provider.Message{Role: provider.RoleUser, Content: "earlier turn"})
 	}
 	opts := Options{

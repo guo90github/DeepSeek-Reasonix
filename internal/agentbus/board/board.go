@@ -3,6 +3,7 @@ package board
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -239,9 +240,7 @@ func (st *State) Clone() *State {
 		out.Nodes[id] = &clone
 	}
 	out.OpIDs = make(map[string]uint64, len(st.OpIDs))
-	for id, seq := range st.OpIDs {
-		out.OpIDs[id] = seq
-	}
+	maps.Copy(out.OpIDs, st.OpIDs)
 	return &out
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -54,9 +55,9 @@ type fakeProvider struct {
 // lastMessageText is the request's last user-role message: what the lane actually
 // asked with.
 func lastMessageText(req provider.Request) string {
-	for i := len(req.Messages) - 1; i >= 0; i-- {
-		if req.Messages[i].Role == provider.RoleUser {
-			return req.Messages[i].Content
+	for _, v := range slices.Backward(req.Messages) {
+		if v.Role == provider.RoleUser {
+			return v.Content
 		}
 	}
 	return ""
@@ -385,7 +386,7 @@ func TestGenerateSingleFlight(t *testing.T) {
 		o.Models = fakeModels{prov: prov, ref: "fake/model", ok: true}
 	})
 	var wg sync.WaitGroup
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		path := h.session(t, "2026010"+string(rune('1'+i))+"-000000.000000000-fake.jsonl", "one\n")
 		wg.Add(1)
 		go func(p string) {
@@ -514,7 +515,7 @@ func TestParseEntriesKeepsOnlyUsablePointersAndTiers(t *testing.T) {
 func TestParseEntriesDropsUnknownKindsAndCapsTheList(t *testing.T) {
 	var b strings.Builder
 	b.WriteString(`[{"kind":"fact","body":"kept"},{"kind":"gibberish","body":"dropped"},{"body":"kindless"},`)
-	for i := 0; i < maxEntries+4; i++ {
+	for i := range maxEntries + 4 {
 		fmt.Fprintf(&b, `{"kind":"refuted","body":"r%d"},`, i)
 	}
 	b.WriteString(`{"kind":"refuted","body":"r0"}]`)

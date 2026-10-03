@@ -25,7 +25,7 @@ func TestComposeCarriesEarlierConclusionsAsBackground(t *testing.T) {
 	}
 	carry := func(priorTurns int, turn string) string {
 		session := agent.NewSession("sys")
-		for i := 0; i < priorTurns; i++ {
+		for range priorTurns {
 			session.Add(provider.Message{Role: provider.RoleUser, Content: "earlier turn"})
 		}
 		return New(Options{

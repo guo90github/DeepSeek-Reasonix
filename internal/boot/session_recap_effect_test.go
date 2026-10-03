@@ -250,7 +250,7 @@ func TestEffectRecapSendsWhatTheConfiguredWindowAllows(t *testing.T) {
 	sessionPath := filepath.Join(sessions, "20260101-000000.000000000-test-model.jsonl")
 	session := agent.NewSession("system")
 	line := "这一轮我在查打包脚本里的路径处理，顺便核对了 NSIS 与 portable 目录的约定。"
-	for i := 0; i < 400; i++ {
+	for i := range 400 {
 		session.Add(provider.Message{Role: provider.RoleUser, Content: fmt.Sprintf("%d %s", i, strings.Repeat(line, 6))})
 		session.Add(provider.Message{Role: provider.RoleAssistant, Content: "记下了：" + strings.Repeat(line, 3)})
 	}

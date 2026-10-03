@@ -135,12 +135,9 @@ func NewGenerator(opts GeneratorOptions) *Generator {
 	if opts.ShadowChecks == 0 {
 		opts.ShadowChecks = defaultShadowChecks
 	}
-	budget := opts.ShadowChecks
-	if budget < 0 {
-		budget = 0
-	}
+	budget := max(opts.ShadowChecks, 0)
 	shadowBudget := make(chan struct{}, budget)
-	for i := 0; i < budget; i++ {
+	for range budget {
 		shadowBudget <- struct{}{}
 	}
 	return &Generator{opts: opts, gate: make(chan struct{}, 1), shadowBudget: shadowBudget}

@@ -123,7 +123,10 @@ model = "x"
 	if len(reqs) == 0 {
 		t.Fatal("no request reached the provider boundary")
 	}
-	if body := conversationText(reqs[0]); strings.Contains(body, "agentbus") {
+	// The view is the thing that must not be here. The bare word "agentbus" is now the wrong
+	// marker: the skills catalog legitimately names an orchestration skill (2026-10-03), so
+	// this asserts on the view's own header instead.
+	if body := conversationText(reqs[0]); strings.Contains(body, "agentbus view schema=") {
 		t.Fatalf("an unenrolled controller must not carry a view:\n%s", body)
 	}
 }

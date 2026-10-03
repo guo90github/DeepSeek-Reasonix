@@ -141,7 +141,7 @@ func createUpload(dir, name string) (*os.File, error) {
 	stamp := time.Now().Format("20060102-150405")
 	ext := path.Ext(name)
 	stem := strings.TrimSuffix(name, ext)
-	for attempt := 0; attempt < 1000; attempt++ {
+	for attempt := range 1000 {
 		label := stamp
 		if attempt > 0 {
 			label = fmt.Sprintf("%s-%d", stamp, attempt)

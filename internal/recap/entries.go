@@ -135,7 +135,7 @@ func parseEntries(raw string) ([]Entry, bool) {
 func salvageEntryObjects(body string) []entryPayload {
 	var out []entryPayload
 	depth, start, escaped, inString := 0, -1, false, false
-	for i := 0; i < len(body); i++ {
+	for i := range len(body) {
 		c := body[i]
 		if escaped {
 			escaped = false

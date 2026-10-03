@@ -60,7 +60,7 @@ func TestAgentBusDispatchStopsHandingOutWorkThatKeepsLapsing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open board: %v", err)
 	}
-	for attempt := 0; attempt < agentBusDispatchTries; attempt++ {
+	for attempt := range agentBusDispatchTries {
 		// Each attempt is an op of its own: a replayed id would be refused as a duplicate
 		// rather than counted as a lapsed claim.
 		if _, err := c.ApplyAgentBusOp(ctx, board.Op{

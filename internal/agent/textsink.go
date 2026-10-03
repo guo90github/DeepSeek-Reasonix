@@ -96,9 +96,10 @@ func (s *TextSink) Emit(e event.Event) {
 		// call surfaces the same "⊘ name <reason>" line the agent used to print.
 		if e.Tool.Err != "" {
 			name := e.Tool.Name
-			if e.Tool.Name == "use_capability" {
+			switch e.Tool.Name {
+			case "use_capability":
 				name = textSinkToolHead(e.Tool.Name, e.Tool.Args)
-			} else if e.Tool.Name == "bash" {
+			case "bash":
 				name = tool.ShellDisplayLabel
 			}
 			errText := e.Tool.Err

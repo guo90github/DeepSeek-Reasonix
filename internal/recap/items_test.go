@@ -99,7 +99,7 @@ func TestMatchOpenItemsIsBounded(t *testing.T) {
 func TestMatchOpenItemsOnlyWeighsTheNewestOnes(t *testing.T) {
 	turn := "接着把 Git 未提交面板的用例补上"
 	items := make([]OpenItem, 0, consideredLimit+1)
-	for i := 0; i < consideredLimit; i++ {
+	for i := range consideredLimit {
 		items = append(items, openItem("other-"+string(rune('a'+i)),
 			"别的第 "+string(rune('a'+i))+" 件事", matchNow.Add(-time.Duration(i)*time.Minute)))
 	}

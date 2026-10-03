@@ -42,9 +42,9 @@ func scaleGone(worker string) bool {
 
 func scaleIDs() []string {
 	out := make([]string, 0, scaleSubtrees*(scaleStepsPerSubtree+1))
-	for i := 0; i < scaleSubtrees; i++ {
+	for i := range scaleSubtrees {
 		out = append(out, scaleRoot(i))
-		for j := 0; j < scaleStepsPerSubtree; j++ {
+		for j := range scaleStepsPerSubtree {
 			out = append(out, scaleStep(i, j))
 		}
 	}
@@ -58,9 +58,9 @@ func scaleIDs() []string {
 func scalePlan(t *testing.T, brd *board.Board) {
 	t.Helper()
 	ctx := context.Background()
-	for i := 0; i < scaleSubtrees; i++ {
+	for i := range scaleSubtrees {
 		ops := []board.Op{{Verb: board.VerbAssert, Node: scaleRoot(i), Actor: scaleRootOwner(i), Evidence: e2eEvidence()}}
-		for j := 0; j < scaleStepsPerSubtree; j++ {
+		for j := range scaleStepsPerSubtree {
 			ops = append(ops, board.Op{
 				Verb: board.VerbRequire, Node: scaleRoot(i), Actor: scaleStepOwner(i, j),
 				Dep: &board.NodeSpec{ID: scaleStep(i, j), Title: "a step of " + scaleRoot(i)},
@@ -120,8 +120,8 @@ func TestAHundredNodesConvergeAfterLosingAFifthOfTheParticipants(t *testing.T) {
 	// claim behind that lapses on its own — which is all a crash leaves. A lease has to be in
 	// the future to be written at all, so this one is short and the clock moves past it.
 	lost := 0
-	for i := 0; i < scaleSubtrees; i++ {
-		for j := 0; j < scaleStepsPerSubtree; j++ {
+	for i := range scaleSubtrees {
+		for j := range scaleStepsPerSubtree {
 			node, owner := scaleStep(i, j), scaleStepOwner(i, j)
 			if !scaleGone(owner) {
 				scaleAssemble(t, brd, node, owner, true, time.Hour)
@@ -162,8 +162,8 @@ func TestAHundredNodesConvergeAfterLosingAFifthOfTheParticipants(t *testing.T) {
 		t.Fatalf("sweep reclaimed %d claims, want the %d whose owner is gone", len(receipts), lost)
 	}
 	afterSweep := e2eSnapshot(t, dir)
-	for i := 0; i < scaleSubtrees; i++ {
-		for j := 0; j < scaleStepsPerSubtree; j++ {
+	for i := range scaleSubtrees {
+		for j := range scaleStepsPerSubtree {
 			node := scaleStep(i, j)
 			want := 0
 			if scaleGone(scaleStepOwner(i, j)) {
@@ -214,7 +214,7 @@ func TestAHundredNodesConvergeAfterLosingAFifthOfTheParticipants(t *testing.T) {
 	if len(final.Nodes) != len(ids) {
 		t.Fatalf("nodes = %d, want %d", len(final.Nodes), len(ids))
 	}
-	for i := 0; i < scaleSubtrees; i++ {
+	for i := range scaleSubtrees {
 		if got := final.Nodes[scaleRoot(i)].State; got != board.StateDone {
 			t.Fatalf("deliverable %s = %q, want done", scaleRoot(i), got)
 		}

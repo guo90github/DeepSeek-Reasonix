@@ -122,7 +122,7 @@ func TestPruneKeepsWhatThePersonProduced(t *testing.T) {
 			t.Fatalf("put resume %s: %v", path, err)
 		}
 	}
-	for i := 0; i < maxActivityRows+20; i++ {
+	for i := range maxActivityRows + 20 {
 		if err := store.Trace(ctx, "submit", "/sessions/a.jsonl", fmt.Sprintf("row %d", i), now); err != nil {
 			t.Fatalf("trace: %v", err)
 		}

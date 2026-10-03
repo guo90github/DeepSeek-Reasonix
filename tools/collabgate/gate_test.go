@@ -52,7 +52,7 @@ func readLines(t *testing.T, root, rel string) []string {
 func anchorsFrom(doc string) []anchor {
 	var out []anchor
 	section := 0
-	for _, line := range strings.Split(doc, "\n") {
+	for line := range strings.SplitSeq(doc, "\n") {
 		if strings.HasPrefix(line, "## ") {
 			section = sectionNumber(line)
 			continue
@@ -97,7 +97,7 @@ func sectionNumber(text string) int {
 // as WakeMethod).
 func candidates(token string) []string {
 	out := []string{token}
-	for _, part := range strings.Split(token, ".") {
+	for part := range strings.SplitSeq(token, ".") {
 		if len(part) >= 4 && part != token {
 			out = append(out, part)
 		}

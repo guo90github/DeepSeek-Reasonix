@@ -11,7 +11,7 @@ import (
 
 // agentBusViewLine returns the rendered row for one node, or "" when it is absent.
 func agentBusViewLine(rendered, id string) string {
-	for _, line := range strings.Split(rendered, "\n") {
+	for line := range strings.SplitSeq(rendered, "\n") {
 		if strings.HasPrefix(line, "node id="+id+" ") {
 			return line
 		}

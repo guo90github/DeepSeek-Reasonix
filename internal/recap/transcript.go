@@ -152,10 +152,7 @@ func renderMessagesFrom(msgs []provider.Message, turnBase int) string {
 			turn++
 			fmt.Fprintf(&b, "## User (turn %d)\n%s\n\n", turn, clipRunes(m.Content, 2000))
 		case provider.RoleAssistant:
-			label := turn
-			if label < 1 {
-				label = 1
-			}
+			label := max(turn, 1)
 			if m.Content != "" {
 				fmt.Fprintf(&b, "## Assistant (turn %d)\n%s\n\n", label, clipRunes(m.Content, 2000))
 			}

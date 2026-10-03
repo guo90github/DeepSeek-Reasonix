@@ -51,7 +51,7 @@ func parkedHarness(t *testing.T) (*harness, *parkedProvider, []string) {
 		o.Models = fakeModels{prov: parked, ref: "fake/model", ok: true}
 	})
 	paths := make([]string, 0, 80)
-	for i := 0; i < 80; i++ {
+	for i := range 80 {
 		name := fmt.Sprintf("20260101-%06d.000000000-fake.jsonl", i)
 		path := filepath.Join(h.dir, name)
 		if err := os.WriteFile(path, []byte("body\n"), 0o644); err != nil {
