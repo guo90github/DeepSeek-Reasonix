@@ -1294,3 +1294,13 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 **至此这张清单没有未修项**：六类里**四处曾悬空、本会话补齐**（各带提交号），两处**一直齐**；另有两处"看着像刹车"
 经核实是**自愈**的（上表）——它们只在"失败那一刻"静默，而失败会被下一次写/下一次载入消解，且迹象本身可见。
 **同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
+
+**另一处已核实（2026-10-04）：地址簿 TTL 与两种投递失败的可见性。**
+- **TTL**：`ParticipantTTL = 30min`（`internal/agentbus/directory.go:36-41`），由 headless tick **每 30s 续租**；
+  `Lookup` 的态度是**设计上的并档**："A withdrawn participant is reported as absent, not as an address that no longer works."
+  ⇒ 过期与"从未公告"合并成同一句 `no address owns it` —— 对操作者而言下一步动作相同（让那台宿主重新公告），不是缺陷。
+- **两种失败可以分辨**：① 没人/没地址 ⇒ `serve: … no address owns it`；② **地址在、令牌文件没了** ⇒ `agentbus: the announced
+  address carries no token file` / `read announced token: …`（`ReadAnnouncedToken`）。两者都经 waker 错误进 `noteWakeFailure`，
+  面板那一行是 `Last` 的**原样转述** ⇒ 文本上分得清（差别在文案而不在结构，够用且不新增分类）。
+- **TTL 行为已被钉**：`internal/agentbus/directory_ttl_test.go`（用 `-ParticipantTTL - time.Minute` 造过期公告，并断言
+  `ParticipantTTL >= 10min` 以容纳 30s 续租节奏）⇒ 因此**没有必要**用两个真宿主等 30 分钟做近似读数（单测更强）。
