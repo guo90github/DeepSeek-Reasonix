@@ -12,31 +12,33 @@ import "./RecapRecallStrip.css";
  * It is read-only: folding is local, and nothing here reaches a prompt.
  */
 export function RecapRecallStrip({
-  sessionPath,
+  sessionPath = "",
   recallRecord,
+  load: providedLoad,
 }: {
-  sessionPath: string;
-  recallRecord: (sessionPath: string) => Promise<RecallRecordView>;
+  sessionPath?: string;
+  recallRecord?: (sessionPath: string) => Promise<RecallRecordView>;
+  load?: () => Promise<RecallRecordView>;
 }) {
   const t = useT();
   const [record, setRecord] = useState<RecallRecordView | null>(null);
   const [open, setOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    if (sessionPath.trim() === "") {
-      setRecord(null);
-      return;
-    }
+  // Two surfaces read the same record: the recap page knows a session path, the
+  // memory panel knows only its tab, so `load` is the tab-scoped shape.
+  const fetchRecord = useCallback(async () => {
     try {
-      setRecord(await recallRecord(sessionPath));
+      if (providedLoad) return await providedLoad();
+      if (!recallRecord || sessionPath.trim() === "") return null;
+      return await recallRecord(sessionPath);
     } catch {
-      setRecord(null);
+      return null;
     }
-  }, [recallRecord, sessionPath]);
+  }, [providedLoad, recallRecord, sessionPath]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void fetchRecord().then(setRecord);
+  }, [fetchRecord]);
 
   if (record === null || record.available !== true) return null;
   const turns = record.turns ?? [];

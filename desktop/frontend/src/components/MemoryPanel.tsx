@@ -8,6 +8,7 @@ import { AnchoredPopover } from "./AnchoredPopover";
 import { ResizableDrawer } from "./ResizableDrawer";
 import { Tooltip } from "./Tooltip";
 import { ModalCloseButton } from "./ModalCloseButton";
+import { RecapRecallStrip } from "./RecapRecallStrip";
 
 type LinkInfo = {
   name: string;
@@ -1641,6 +1642,9 @@ export function MemorySettingsPage() {
 						<span>{t("memory.recallBudget", { used: view.lastRecall.usedChars, budget: view.lastRecall.charBudget, omitted: view.lastRecall.omitted })}</span>
 					</div>
 				</div>
+				{/* 第十六: the turn-by-turn record (which facts reached the model, which
+				    were dropped, which skill ran) in the panel the requirement names. */}
+				{effectiveTabId && <RecapRecallStrip load={() => app.RecallRecordForTab(effectiveTabId)} />}
 				{view.lastRecall.suppressed && (
 					<div className="mem-context-notice mem-context-notice--muted">
 						<AlertTriangle size={15} />
