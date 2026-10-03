@@ -1304,3 +1304,10 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
   面板那一行是 `Last` 的**原样转述** ⇒ 文本上分得清（差别在文案而不在结构，够用且不新增分类）。
 - **TTL 行为已被钉**：`internal/agentbus/directory_ttl_test.go`（用 `-ParticipantTTL - time.Minute` 造过期公告，并断言
   `ParticipantTTL >= 10min` 以容纳 30s 续租节奏）⇒ 因此**没有必要**用两个真宿主等 30 分钟做近似读数（单测更强）。
+- **退列会撤回（2026-10-04 核实，早已实现）**：`AgentBusAnnounce` 在 `internal/boot/agentbus_wiring.go:31`（每个入列宿主都公告）与
+  `internal/cli/serve_multisession.go:71`（serve）调用；`AgentBusWithdraw` 在 **桌面关停**（`desktop/shutdown.go:102` 逐 tab 调
+  `withdrawAgentBusOnShutdown`，其注释记着真机史：*a leftover headless serve stayed addressable for a day … a wake sent to it was
+  accepted and dropped (2026-10-03)*）与 **serve 会话离场**（`internal/serve/multisession.go:236`）各调用一次；
+  往返都有用例（`internal/control/agentbus_test.go:167`、`internal/serve/agentbus_withdraw_test.go:23`）。
+  **残留只有硬杀**（关停钩子没跑到）：公告留到 30min TTL —— 而那段窗口里投递失败现在**看得见**
+  （`AgentBusWakeFailures` 计数 + 面板 `wake_undelivered` 行，`d2081d750`）⇒ 连这条残留也不是"看不见"。
