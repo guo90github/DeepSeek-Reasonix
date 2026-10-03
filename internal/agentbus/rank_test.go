@@ -153,3 +153,58 @@ func TestRankFallsBackToArrivalWithoutABoard(t *testing.T) {
 		t.Fatalf("order = %v, want arrival order when nothing is known", rankedNodes(ranked))
 	}
 }
+
+// The four levels are one chain, not four independent rules: a tie at one level has to fall
+// through to the next. These cases make the first two levels equal *in substance* (same subtree,
+// same number of dependents) rather than only trivially empty, and the last case puts all three
+// in play at once — where affinity has to win over both criticality and a larger step ceiling.
+func TestRankBreaksTiesDownTheWholeChain(t *testing.T) {
+	// root <- mid <- leaf, and root <- mid2 <- leaf2: mid and mid2 sit in the same subtree and
+	// each unblocks exactly one node, so only the declared step ceiling can separate them.
+	st := testState(t,
+		assertOp("root", "alice"),
+		assertOp("mid", "alice"), requireOp("mid", "root"),
+		assertOp("mid2", "alice"), requireOp("mid2", "root"),
+		assertOp("leaf", "alice"), requireOp("leaf", "mid"),
+		assertOp("leaf2", "alice"), requireOp("leaf2", "mid2"),
+		// root has to be done before mid/mid2 can be claimed — and the claim is what carries the
+		// declared step ceiling the ranking reads.
+		board.Op{Verb: board.VerbDecide, Node: "root", Actor: "alice", Outcome: board.OutcomeDone,
+			Evidence: ev("root"), ReproducedBy: "bob"},
+		claimOpSteps("mid", 2), claimOpSteps("mid2", 9),
+		// hub unblocks two nodes but lives in its own subtree.
+		assertOp("hub", "alice"), assertOp("dep1", "alice"), requireOp("dep1", "hub"),
+		assertOp("dep2", "alice"), requireOp("dep2", "hub"),
+	)
+	held := []string{"leaf"}
+
+	// Same subtree, same dependents, different ceilings: the hardest one leads.
+	bySteps := []QueueEntry{parkEntry("mid", "root", 1), parkEntry("mid2", "root", 2)}
+	if !sameOrder(rankedNodes(Rank(st, bySteps, held)), []string{"mid2", "mid"}) {
+		t.Fatalf("order = %v, want the larger ceiling after two equal levels", rankedNodes(Rank(st, bySteps, held)))
+	}
+
+	// Affinity equal *in substance* (both entries are already inside the root subtree) and only
+	// criticality separating them: mid unblocks leaf, leaf unblocks nothing.
+	byCritical := []QueueEntry{parkEntry("leaf", "root", 5), parkEntry("mid", "root", 6)}
+	rankedByCritical := Rank(st, byCritical, held)
+	if !sameOrder(rankedNodes(rankedByCritical), []string{"mid", "leaf"}) {
+		t.Fatalf("order = %v, want criticality to decide once affinity ties", rankedNodes(rankedByCritical))
+	}
+	if !rankedByCritical[0].Affinity || !rankedByCritical[1].Affinity {
+		t.Fatalf("affinity = %+v, want both entries inside the held subtree", rankedNodes(rankedByCritical))
+	}
+
+	// All three levels in play: affinity outranks both the more critical node and its larger ceiling.
+	mixed := []QueueEntry{parkEntry("hub", "hub", 1), parkEntry("mid2", "root", 2)}
+	ranked := Rank(st, mixed, held)
+	if !sameOrder(rankedNodes(ranked), []string{"mid2", "hub"}) {
+		t.Fatalf("order = %v, want affinity over criticality and steps", rankedNodes(ranked))
+	}
+	if !ranked[0].Affinity || ranked[0].Critical != 1 || ranked[0].Steps != 9 {
+		t.Fatalf("first = %+v, want the affine node with its own numbers", ranked[0])
+	}
+	if ranked[1].Affinity || ranked[1].Critical != 2 || ranked[1].Steps >= 9 {
+		t.Fatalf("second = %+v, want the foreign subtree that unblocks more", ranked[1])
+	}
+}
