@@ -118,3 +118,11 @@ func (p agentBusPanelPort) BoardView(now time.Time) (agentbus.View, error) {
 func (p agentBusPanelPort) ApplyBoardOp(ctx context.Context, op board.Op) (board.Receipt, error) {
 	return p.bus.ApplyAgentBusOp(ctx, op)
 }
+
+func (p agentBusPanelPort) AskBoard(ctx context.Context, topic, to, text string) (string, error) {
+	return p.bus.AgentBusAsk(ctx, topic, to, text)
+}
+
+func (p agentBusPanelPort) AnswerBoard(ctx context.Context, correlation, topic, to, text string) (uint64, error) {
+	return p.bus.AgentBusAnswer(ctx, correlation, topic, to, text)
+}

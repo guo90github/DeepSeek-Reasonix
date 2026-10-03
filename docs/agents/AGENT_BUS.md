@@ -1,7 +1,10 @@
 # 多智能体契约（AGENT_BUS · 黑板为骨）
 
-> **状态：目标契约（尚未实现）。** 本仓当前**没有** `internal/agentbus`，因此下表「定义处」一栏凡标 *待建* 的
-> 都是落地后必须回填的 `文件:行`，不是现有代码的指针。别把本稿当已实现面读。
+> **状态：部分已实现（2026-10-03 校）。** `internal/agentbus` 已落地：内核 `board/`（op 日志 + 确定性 fold +
+> 节点状态机 + 逐节点租约），以及队列/排班/预算/投影/唤醒/落地判定的实现与 `internal/control`、桌面宿主的接线
+> （`internal/cli` 的 `REASONIX_AGENTBUS_*` 是 headless 入列口）。**仍未接线**：talk 的写入口（`say/ask/answer`
+> 有定义无调用者）、队列取用与预算账本（`Take`/`TakeRanked`/`Ledger` 无生产调用者）、宿主侧唤醒 tick、唤醒去重的
+> 持久化；过期租约的回收只发生在写路径（`control.ApplyAgentBusOp` 写前 sweep）。下表标 *待建* 的行仍以 §11.1 为准。
 > 并列读：`docs/COLLAB-SURFACE.md`（**已实现**的跨仓封闭面，由 `tools/collabgate` 钉住）、
 > `docs/agents/multi-agent-collaboration-design.md`（本稿部分取代之，见 §10）。
 > 执行清单：`docs/agents/TODO.md`；**S1 的可实现规格见 §11.1**（S1 实现以 §11.1 为准）；评审留痕见 §11.2。
@@ -574,12 +577,12 @@ turn-tail 注入看到视图；**没有直接读 `board.jsonl` 的通道**——
 
 | 面向 | 形状 | 大小上限 | 新鲜度 |
 |---|---|---|---|
-| 智能体（机读） | `agentbus.View`：固定头（`schema` / `board` / `participant`）+ **自游标起的增量行** | 默认 ≤ 8 KiB/轮、行数 ≤ 200 | 每轮拉一次（游标 = `seq`），**不重发历史** |
+| 智能体（机读） | `agentbus.View`：固定头（`schema` / `board` / `participant`）+ **自游标起的增量行** | 默认 ≤ 8 KiB/轮、行数 ≤ 200 | 每轮拉一次（游标 = `seq`），**不重发历史**；`action=view` 的窥视不推进游标，**增量为空且该参与者仍有工作时回落到从头读当前工作集**——否则被唤醒那一轮消耗掉的 delta 就再也复核不到 |
 | 人（桌面 / CLI） | 既有任务树事件（`agent.*` 事件族）+ 节点行 | 复用现有面板阈值 | 沿用既有 5 s 轮询，**不新增轮询** |
 | 编排者 | 同智能体视图，scope 覆盖整棵子树 + 全局计数 | 同上，另加 ≤ 1 KiB 计数头 | 同上 |
 
 **行字段集**（机读行；顺序固定、只追加）：`id` / `title`（截 120 字符）/ `state` / `outcome` / `owner` /
-`deadline`（RFC3339 或空）/ `deps_done`(bool) / `deps_open`(int) / `evidence`(int) / `refuted`(bool) /
+`deadline`（RFC3339 或空）/ `startable`(bool；= `Node.Ready`，不是"依赖已完成") / `deps_open`(int) / `evidence`(int) / `refuted`(bool) /
 `no_progress`(int) / `last_seq`。
 
 **「我的子树」怎么廉价物化**（T2-1 的关键）：**不做逐参与者索引**。每轮 fold 一次（一次 O(nodes) 遍历）后用

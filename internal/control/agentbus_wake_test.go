@@ -101,3 +101,41 @@ func TestWakeAgentBusCountsAFailedWakeForRetry(t *testing.T) {
 		t.Fatalf("a delivered wake must not repeat, got %d", n)
 	}
 }
+
+// A host shares one ledger across its controllers, so rebuilding one — a join, a tab
+// switch, a settings change — does not re-wake work this host already delivered. The
+// per-controller map could not: a join re-woke the same work set on a real machine.
+func TestWakeAgentBusDedupsAcrossControllers(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	ledger := NewWakeLedger()
+
+	writer := newAgentBusTalkController(t, dir, "orchestrator")
+	writer.SetAgentBusWakeLedger(ledger)
+	if _, err := writer.ApplyAgentBusOp(ctx, busAssert("design", "alice")); err != nil {
+		t.Fatalf("assert: %v", err)
+	}
+	// alice asked for a step that can start now, and somebody waits on it.
+	if _, err := writer.ApplyAgentBusOp(ctx, busRequire("design", "alice", "schema")); err != nil {
+		t.Fatalf("require: %v", err)
+	}
+
+	var woken []string
+	waker := func(_ context.Context, target agentbus.WakeTarget) error {
+		woken = append(woken, target.Participant)
+		return nil
+	}
+	first := newAgentBusTalkController(t, dir, "host")
+	first.SetAgentBusWakeLedger(ledger)
+	first.SetAgentBusWaker(waker)
+	if n := first.WakeAgentBus(ctx); n != 1 || len(woken) != 1 || woken[0] != "alice" {
+		t.Fatalf("first sweep woken = %v (%d), want alice exactly once", woken, n)
+	}
+
+	second := newAgentBusTalkController(t, dir, "host")
+	second.SetAgentBusWakeLedger(ledger)
+	second.SetAgentBusWaker(waker)
+	if n := second.WakeAgentBus(ctx); n != 0 {
+		t.Fatalf("a rebuilt controller re-woke %d for the same work set: %v", n, woken)
+	}
+}

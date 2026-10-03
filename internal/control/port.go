@@ -310,8 +310,20 @@ type AgentBusControl interface {
 	AgentBusEnrolled() bool
 	// SetAgentBusWaker installs the host's routing for ready-work wakes.
 	SetAgentBusWaker(func(context.Context, agentbus.WakeTarget) error)
+	// SetAgentBusWakeLedger shares the host's ledger across the controllers it
+	// rebuilds, so a rebuild does not re-wake work already delivered.
+	SetAgentBusWakeLedger(*WakeLedger)
+	// SetAgentBusLedger shares the host's spending account: the ceilings belong to the
+	// machine, so every controller on it pays the same account.
+	SetAgentBusLedger(*agentbus.Ledger)
 	// WakeAgentBus wakes whoever has work waiting and reports how many were woken.
 	WakeAgentBus(ctx context.Context) int
+	// AgentBusTick reclaims lapsed leases and then wakes, for a host that runs it on
+	// a timer: with no writer, nothing else would notice a holder that went away.
+	AgentBusTick(ctx context.Context) int
+	// AgentBusDispatch hands the next startable step to one named participant and asks
+	// the host to deliver it to that participant's own session.
+	AgentBusDispatch(ctx context.Context, claimant string, deliver func(context.Context, agentbus.WakeTarget) error) (int, error)
 	// AgentBusBriefing folds the board, queue and deliberations for the first screen.
 	AgentBusBriefing(now time.Time) (agentbus.Briefing, bool)
 	// AgentBusNodeDetail reads one board node, including who authorized it (§13.8).
@@ -322,6 +334,10 @@ type AgentBusControl interface {
 	// ApplyAgentBusOp writes one op, so a host that displays the board may also act
 	// on it. The board validates and refuses with a reason; nothing writes around it.
 	ApplyAgentBusOp(ctx context.Context, op board.Op) (board.Receipt, error)
+	// AgentBusAsk puts a bounded question to one participant and returns the
+	// correlation an answer travels back along; AgentBusAnswer closes one.
+	AgentBusAsk(ctx context.Context, topic, to, text string) (string, error)
+	AgentBusAnswer(ctx context.Context, correlation, topic, to, text string) (uint64, error)
 }
 
 var _ AgentBusControl = (*Controller)(nil)

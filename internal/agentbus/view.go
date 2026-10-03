@@ -10,7 +10,7 @@ import (
 )
 
 // SchemaVersion identifies the machine view's field order and header shape.
-const SchemaVersion = "agentbus-view/1"
+const SchemaVersion = "agentbus-view/2"
 
 const (
 	defaultMaxLines = 200
@@ -30,13 +30,14 @@ type ViewSpec struct {
 // ViewLine is one node as a participant may see it. Field order is part of the
 // schema: new fields go last so a reader's own prefix stays stable.
 type ViewLine struct {
-	ID         string
-	Title      string
-	State      board.NodeState
-	Outcome    board.Outcome
-	Owner      string
-	Deadline   string
-	DepsDone   bool
+	ID       string
+	Title    string
+	State    board.NodeState
+	Outcome  board.Outcome
+	Owner    string
+	Deadline string
+	// Startable is Node.Ready: can run now, which a live claim makes false.
+	Startable  bool
 	DepsOpen   int
 	Evidence   int
 	Refuted    bool
@@ -148,8 +149,8 @@ func (v View) header() string {
 
 func renderLine(l ViewLine) string {
 	return fmt.Sprintf(
-		"node id=%s state=%s outcome=%s owner=%s deadline=%s deps_done=%t deps_open=%d evidence=%d refuted=%t no_progress=%d last_seq=%d title=%q\n",
-		l.ID, l.State, l.Outcome, l.Owner, l.Deadline, l.DepsDone, l.DepsOpen,
+		"node id=%s state=%s outcome=%s owner=%s deadline=%s startable=%t deps_open=%d evidence=%d refuted=%t no_progress=%d last_seq=%d title=%q\n",
+		l.ID, l.State, l.Outcome, l.Owner, l.Deadline, l.Startable, l.DepsOpen,
 		l.Evidence, l.Refuted, l.NoProgress, l.LastSeq, l.Title,
 	)
 }
@@ -165,7 +166,7 @@ func lineFor(st *board.State, n *board.Node) ViewLine {
 		Refuted:    len(n.Refutes) > 0,
 		NoProgress: n.NoProgress,
 		LastSeq:    n.LastSeq,
-		DepsDone:   n.Ready(st),
+		Startable:  n.Ready(st),
 	}
 	if !n.Deadline.IsZero() {
 		line.Deadline = n.Deadline.UTC().Format(time.RFC3339)

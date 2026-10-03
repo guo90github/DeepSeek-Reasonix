@@ -99,7 +99,7 @@ model = "x"
 	if strings.Contains(secondBody, "node id=first") {
 		t.Fatalf("turn two re-sent what turn one already delivered:\n%s", secondBody)
 	}
-	if !strings.Contains(secondBody, "agentbus view schema=agentbus-view/1") {
+	if !strings.Contains(secondBody, "agentbus view schema=agentbus-view/2") {
 		t.Fatalf("the view header must stay byte-identical:\n%s", secondBody)
 	}
 }

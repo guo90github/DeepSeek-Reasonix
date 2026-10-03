@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -29,9 +30,12 @@ type agentBusState struct {
 	observeLimits agentbus.ObserveLimits
 	// waker is the host's routing for ready-work wakes; nil means wake nobody.
 	waker func(context.Context, agentbus.WakeTarget) error
-	// woken remembers the last work set each participant was woken for, so a host
-	// may re-run the sweep every tick without waking anyone twice.
-	woken map[string]string
+	// wakeLedger remembers the last work set each participant was woken for. A host
+	// may share one across the controllers it rebuilds, so a rebuild cannot re-wake.
+	wakeLedger *WakeLedger
+	// ledger is the host's spending account; nil means nothing is charged at all.
+	// Ceilings belong to the machine, so a host shares one account across controllers.
+	ledger *agentbus.Ledger
 }
 
 // agentBusCursors are this participant's "delivered up to" watermarks, one per
@@ -55,7 +59,7 @@ func (c *Controller) SetAgentBus(dir, participant string) {
 		c.agentBus = nil
 		return
 	}
-	c.agentBus = &agentBusState{dir: dir, participant: participant}
+	c.agentBus = &agentBusState{dir: dir, participant: participant, wakeLedger: NewWakeLedger()}
 }
 
 // AgentBusEnrolled reports whether a board was set for this session. A session can be
@@ -106,17 +110,25 @@ func (c *Controller) AgentBusWithdraw() error {
 }
 
 // AgentBusView peeks at this participant's view without advancing the cursor.
-// Frontends and diagnostics read it; the turn path consumes deltas instead.
+// Frontends and diagnostics read it; the turn path consumes deltas instead. A turn
+// that already carried the delta leaves nothing new to show, so a participant that
+// still has work gets the current set rather than a page it cannot re-read.
 func (c *Controller) AgentBusView(now time.Time) (agentbus.View, bool) {
 	bus, st := c.agentBusSnapshot(now)
 	if bus == nil {
 		return agentbus.View{}, false
 	}
-	return agentbus.BuildView(st, agentbus.ViewSpec{
+	spec := agentbus.ViewSpec{
 		Board:       filepath.Base(bus.dir),
 		Participant: bus.participantID(c),
 		Cursor:      bus.currentCursor(),
-	}), true
+	}
+	view := agentbus.BuildView(st, spec)
+	if len(view.Lines) == 0 && view.Owned+view.Waiting+view.Needed > 0 {
+		spec.Cursor = 0
+		view = agentbus.BuildView(st, spec)
+	}
+	return view, true
 }
 
 // agentBusTurnBlock renders everything addressed to this participant since the
@@ -159,9 +171,26 @@ func (c *Controller) ApplyAgentBusOp(ctx context.Context, op board.Op) (board.Re
 	if err != nil {
 		return board.Receipt{}, err
 	}
+	// A lapsed lease has nobody left to notice it: the holder is gone and a claimed
+	// node is invisible to the wake surface, so this write is the only thing that
+	// runs. Reclaim before writing, so the wake below can advertise what it freed.
+	if _, err := brd.Sweep(ctx, time.Now().UTC()); err != nil {
+		slog.Warn("controller: agentbus reclaim before write", "board", bus.dir, "err", err)
+	}
+	// Work is paid for as it starts: an over-budget claim is refused before it lands.
+	if err := bus.chargeClaim(op); err != nil {
+		return board.Receipt{}, err
+	}
 	receipt, err := brd.Apply(ctx, op)
 	if err != nil {
 		return receipt, err
+	}
+	// An accepted step settles against the board and subtree allowances — the levels
+	// only accepted work may spend.
+	if !receipt.Duplicate && op.Verb == board.VerbDecide && op.Outcome == board.OutcomeDone {
+		if state, err := brd.Snapshot(ctx, time.Now().UTC()); err == nil {
+			bus.settleBudget(state, op.Node)
+		}
 	}
 	// The writer that makes work startable wakes whoever asked for it rather than
 	// waiting for a tick: work that can begin now should begin now (AGENT_BUS §13.2).

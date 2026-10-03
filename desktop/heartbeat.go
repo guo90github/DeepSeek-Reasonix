@@ -237,6 +237,12 @@ func (e *HeartbeatEngine) tick() {
 	tasks := append([]HeartbeatTask(nil), e.tasks...)
 	e.mu.Unlock()
 
+	// The board is host-wide, not per task: a tick reclaims lapsed leases and wakes
+	// whoever is waiting on them, so work moves while nobody is writing.
+	if e.app != nil {
+		e.app.agentBusWakeTick()
+	}
+
 	now := time.Now()
 	for _, t := range tasks {
 		if !t.Enabled {

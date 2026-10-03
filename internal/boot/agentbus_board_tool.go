@@ -46,6 +46,24 @@ func (p boardToolPort) ApplyBoardOp(ctx context.Context, op board.Op) (board.Rec
 	return c.ApplyAgentBusOp(ctx, op)
 }
 
+// AskBoard and AnswerBoard are the bounded direct channel: a question reaches the one
+// participant it names, and the answer travels back along the correlation.
+func (p boardToolPort) AskBoard(ctx context.Context, topic, to, text string) (string, error) {
+	c, err := p.controller()
+	if err != nil {
+		return "", err
+	}
+	return c.AgentBusAsk(ctx, topic, to, text)
+}
+
+func (p boardToolPort) AnswerBoard(ctx context.Context, correlation, topic, to, text string) (uint64, error) {
+	c, err := p.controller()
+	if err != nil {
+		return 0, err
+	}
+	return c.AgentBusAnswer(ctx, correlation, topic, to, text)
+}
+
 func (p boardToolPort) BoardView(now time.Time) (agentbus.View, error) {
 	c, err := p.controller()
 	if err != nil {

@@ -35,7 +35,7 @@
       "parameters": {
         "properties": {
           "action": {
-            "description": "view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale).",
+            "description": "view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=).",
             "enum": [
               "view",
               "assert",
@@ -48,7 +48,9 @@
               "require",
               "capability_gap",
               "abandon",
-              "revert"
+              "revert",
+              "ask",
+              "answer"
             ],
             "type": "string"
           },
@@ -69,6 +71,10 @@
               "type": "object"
             },
             "type": "array"
+          },
+          "correlation": {
+            "description": "answer only: the correlation the ask returned.",
+            "type": "string"
           },
           "dep": {
             "description": "require only: the dependency the node waits for.",
@@ -142,13 +148,25 @@
             "minimum": 1,
             "type": "integer"
           },
+          "text": {
+            "description": "ask/answer only: what to say. Speech that names nobody stays out of everyone's context.",
+            "type": "string"
+          },
           "title": {
             "description": "Human-readable title; used when the action creates the node (require/split children).",
+            "type": "string"
+          },
+          "to": {
+            "description": "ask/answer only: the participant addressed (a question reaches only them).",
             "type": "string"
           },
           "tokens": {
             "description": "claim only: optional token ceiling for the work.",
             "type": "integer"
+          },
+          "topic": {
+            "description": "ask/answer only: the conversation surface this belongs to.",
+            "type": "string"
           }
         },
         "required": [

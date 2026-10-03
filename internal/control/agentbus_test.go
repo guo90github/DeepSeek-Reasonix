@@ -72,7 +72,7 @@ func TestAgentBusTurnBlockCarriesOnlyMyViewAndAdvancesTheCursor(t *testing.T) {
 	if strings.Contains(first, "node id=theirs") {
 		t.Fatalf("another participant's node leaked into my turn:\n%s", first)
 	}
-	if !strings.Contains(first, "schema=agentbus-view/1") {
+	if !strings.Contains(first, "schema=agentbus-view/2") {
 		t.Fatalf("the block must carry the schema header:\n%s", first)
 	}
 

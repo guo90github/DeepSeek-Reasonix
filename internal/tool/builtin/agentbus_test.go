@@ -39,6 +39,16 @@ func (f *fakeBoardPort) BoardIdentity() (string, string, error) {
 	return f.participant, f.dir, nil
 }
 
+// The talk seam: this fake only has to satisfy it — the wiring itself is covered by the
+// effect guard, which drives a real controller through boot.Build.
+func (f *fakeBoardPort) AskBoard(context.Context, string, string, string) (string, error) {
+	return "correlation-1", nil
+}
+
+func (f *fakeBoardPort) AnswerBoard(context.Context, string, string, string, string) (uint64, error) {
+	return 1, nil
+}
+
 func boardArgs(t *testing.T, raw string) json.RawMessage {
 	t.Helper()
 	if !json.Valid([]byte(raw)) {

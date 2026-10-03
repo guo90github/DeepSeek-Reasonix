@@ -31,6 +31,10 @@ type BoardPort interface {
 	BoardIdentity() (participant, boardDir string, err error)
 	BoardView(now time.Time) (agentbus.View, error)
 	ApplyBoardOp(ctx context.Context, op board.Op) (board.Receipt, error)
+	// AskBoard puts a bounded question to one participant; AnswerBoard answers one that
+	// was addressed here. Both write to the board this session is enrolled on.
+	AskBoard(ctx context.Context, topic, to, text string) (string, error)
+	AnswerBoard(ctx context.Context, correlation, topic, to, text string) (uint64, error)
 }
 
 // NewAgentBusTool binds the blackboard tool to a session's board. A nil port keeps the
@@ -64,7 +68,7 @@ func (agentBusBoard) Schema() json.RawMessage {
 	return json.RawMessage(`{
 "type":"object",
 "properties":{
-  "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","capability_gap","abandon","revert"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale)."},
+  "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","capability_gap","abandon","revert","ask","answer"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=)."},
   "node":{"type":"string","description":"Node id. Required for every action except view and split."},
   "title":{"type":"string","description":"Human-readable title; used when the action creates the node (require/split children)."},
   "reason":{"type":"string","description":"Why: required by refute, capability_gap and abandon (for capability_gap: what you need, what you tried, why it did not work)."},
@@ -76,7 +80,11 @@ func (agentBusBoard) Schema() json.RawMessage {
   "steps":{"type":"integer","description":"claim only: how many steps this work may take (bounds).","minimum":1},
   "tokens":{"type":"integer","description":"claim only: optional token ceiling for the work."},
   "output":{"type":"string","description":"claim only: optional description of what the step produces."},
-  "leaseSeconds":{"type":"integer","description":"claim/heartbeat: how long the lease lasts before someone else may take the step (default 900).","minimum":1}
+  "leaseSeconds":{"type":"integer","description":"claim/heartbeat: how long the lease lasts before someone else may take the step (default 900).","minimum":1},
+  "topic":{"type":"string","description":"ask/answer only: the conversation surface this belongs to."},
+  "to":{"type":"string","description":"ask/answer only: the participant addressed (a question reaches only them)."},
+  "text":{"type":"string","description":"ask/answer only: what to say. Speech that names nobody stays out of everyone's context."},
+  "correlation":{"type":"string","description":"answer only: the correlation the ask returned."}
 },
 "required":["action"]
 }`)
@@ -113,6 +121,10 @@ type agentBusArgs struct {
 	Tokens       int64                 `json:"tokens"`
 	Output       string                `json:"output"`
 	LeaseSeconds int                   `json:"leaseSeconds"`
+	Topic        string                `json:"topic"`
+	To           string                `json:"to"`
+	Text         string                `json:"text"`
+	Correlation  string                `json:"correlation"`
 }
 
 func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string, error) {
@@ -122,10 +134,13 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	}
 	action := strings.ToLower(strings.TrimSpace(in.Action))
 	if action == "" {
-		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, capability_gap, abandon, revert")
+		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, capability_gap, abandon, revert, ask, answer")
 	}
 	if action == "view" {
 		return t.readBoard()
+	}
+	if action == "ask" || action == "answer" {
+		return t.talk(action, in)
 	}
 	actor, _, err := t.identity()
 	if err != nil {
@@ -136,6 +151,40 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 		return "", err
 	}
 	return t.apply(op)
+}
+
+// talk is the bounded direct channel: an ask reaches the one participant it names and
+// an answer travels back along the correlation the ask returned. Neither is a
+// broadcast, which is what keeps speech from becoming a cost bomb.
+func (t agentBusBoard) talk(action string, in agentBusArgs) (string, error) {
+	if _, _, err := t.identity(); err != nil {
+		return "", err
+	}
+	topic := strings.TrimSpace(in.Topic)
+	text := strings.TrimSpace(in.Text)
+	if topic == "" || text == "" {
+		return "", fmt.Errorf("%s needs topic and text", action)
+	}
+	if action == "ask" {
+		to := strings.TrimSpace(in.To)
+		if to == "" {
+			return "", fmt.Errorf("ask needs to: a question that names nobody reaches nobody")
+		}
+		correlation, err := t.port.AskBoard(context.Background(), topic, to, text)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("ask recorded on %q for %q (correlation %s): it reaches them, not the board", topic, to, correlation), nil
+	}
+	correlation := strings.TrimSpace(in.Correlation)
+	if correlation == "" {
+		return "", fmt.Errorf("answer needs correlation: the value the ask returned")
+	}
+	seq, err := t.port.AnswerBoard(context.Background(), correlation, topic, strings.TrimSpace(in.To), text)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("answer recorded on %q at seq %d", topic, seq), nil
 }
 
 // identity names the board and who is speaking on it. The host's own error passes
@@ -216,7 +265,7 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 		op.Dep = &board.NodeSpec{ID: strings.TrimSpace(in.Dep.ID), Title: strings.TrimSpace(in.Dep.Title)}
 	case "revert":
 	default:
-		return board.Op{}, fmt.Errorf("unknown action %q: one of view, assert, claim, heartbeat, release, decide, refute, split, require, capability_gap, abandon, revert", action)
+		return board.Op{}, fmt.Errorf("unknown action %q: one of view, assert, claim, heartbeat, release, decide, refute, split, require, capability_gap, abandon, revert, ask, answer", action)
 	}
 	return op, nil
 }

@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"reasonix/internal/agentbus"
@@ -56,6 +57,23 @@ func (c *Controller) WakeAgentBus(ctx context.Context) int {
 	return woken
 }
 
+// AgentBusTick reclaims lapsed leases and then wakes whoever has work waiting: a host
+// calls it on a timer, because with nothing being written nothing else would notice a
+// holder that went away. The order matters — a claimed node is invisible to the wake
+// surface, so the reclaim has to land before the wake is computed.
+func (c *Controller) AgentBusTick(ctx context.Context) int {
+	bus, err := c.agentBusForTalk()
+	if err != nil {
+		return 0
+	}
+	if brd, err := board.Open(bus.dir); err == nil {
+		if _, err := brd.Sweep(ctx, time.Now().UTC()); err != nil {
+			slog.Warn("controller: agentbus reclaim on tick", "board", bus.dir, "err", err)
+		}
+	}
+	return c.WakeAgentBus(ctx)
+}
+
 func (c *Controller) agentBusWakeSnapshot(ctx context.Context) (*agentBusState, agentbus.WakeInput, error) {
 	bus, err := c.agentBusForTalk()
 	if err != nil {
@@ -100,26 +118,67 @@ func (b *agentBusState) currentWaker() func(context.Context, agentbus.WakeTarget
 	return b.waker
 }
 
+// WakeLedger remembers, per participant, the work set a wake was last delivered for.
+// It outlives one controller: a host shares one across the controllers it rebuilds
+// (a join, a tab switch, a settings change), which is what keeps the same work set
+// from being delivered twice, and the per-controller map could not do that.
+type WakeLedger struct {
+	mu    sync.Mutex
+	woken map[string]string
+}
+
+// NewWakeLedger opens an empty ledger.
+func NewWakeLedger() *WakeLedger { return &WakeLedger{woken: map[string]string{}} }
+
+// SetAgentBusWakeLedger shares a host's ledger with this controller. Without one the
+// controller keeps its own, which a rebuild — exactly what enrolment does — drops.
+func (c *Controller) SetAgentBusWakeLedger(ledger *WakeLedger) {
+	if ledger == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.agentBus != nil {
+		c.agentBus.wakeLedger = ledger
+	}
+}
+
 // claimWake records that this participant was woken for exactly this work set.
 // One entry per participant is enough: a participant is only ever owed its newest
 // wake, and the key makes an older one irrelevant.
 func (b *agentBusState) claimWake(participant, key string) bool {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.woken == nil {
-		b.woken = map[string]string{}
+	ledger := b.wakeLedger
+	b.mu.Unlock()
+	if ledger == nil {
+		return true
 	}
-	if b.woken[participant] == key {
-		return false
-	}
-	b.woken[participant] = key
-	return true
+	return ledger.claim(participant, key)
 }
 
 func (b *agentBusState) releaseWake(participant, key string) {
 	b.mu.Lock()
-	defer b.mu.Unlock()
-	if b.woken[participant] == key {
-		delete(b.woken, participant)
+	ledger := b.wakeLedger
+	b.mu.Unlock()
+	if ledger != nil {
+		ledger.release(participant, key)
+	}
+}
+
+func (l *WakeLedger) claim(participant, key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.woken[participant] == key {
+		return false
+	}
+	l.woken[participant] = key
+	return true
+}
+
+func (l *WakeLedger) release(participant, key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.woken[participant] == key {
+		delete(l.woken, participant)
 	}
 }
