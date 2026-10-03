@@ -320,6 +320,7 @@ func TestAnAbsorbedRateLimitIsCountedAndTheLastAttemptIsNot(t *testing.T) {
 		return statusResp(200, nil), nil
 	})}
 	before := RateLimitRetries()
+	beforeLane := RateLimitRetriesByProvider()["p"]
 
 	resp, err := SendWithRetry(context.Background(), cl, SendOptions{Provider: "p", KeyEnv: "KEY"}, newDummyReq)
 	if err != nil {
@@ -331,17 +332,25 @@ func TestAnAbsorbedRateLimitIsCountedAndTheLastAttemptIsNot(t *testing.T) {
 	if got := RateLimitRetries(); got != before+2 {
 		t.Fatalf("rate-limit total = %d, want %d: both ridden-out 429s count", got, before+2)
 	}
+	// The lane is what a multi-provider host has to be able to name, not only the total.
+	if got := RateLimitRetriesByProvider()["p"]; got != beforeLane+2 {
+		t.Fatalf("lane total = %d, want %d: the provider that rode the 429s is named", got, beforeLane+2)
+	}
 
 	// The same status with no attempts left is not absorbed: nothing was ridden out.
 	exhausted := &http.Client{Transport: rtFunc(func(*http.Request) (*http.Response, error) {
 		return statusResp(http.StatusTooManyRequests, nil), nil
 	})}
 	before = RateLimitRetries()
+	beforeLane = RateLimitRetriesByProvider()["p"]
 	if _, err := SendWithRetry(WithManagedRecovery(context.Background()), exhausted, SendOptions{Provider: "p", KeyEnv: "KEY"}, newDummyReq); err == nil {
 		t.Fatal("a 429 that never clears has to come back as an error")
 	}
 	if got := RateLimitRetries(); got != before {
 		t.Fatalf("rate-limit total = %d, want %d unchanged: managed recovery does not retry", got, before)
+	}
+	if got := RateLimitRetriesByProvider()["p"]; got != beforeLane {
+		t.Fatalf("lane total = %d, want %d unchanged: nothing was ridden out", got, beforeLane)
 	}
 }
 

@@ -81,3 +81,28 @@ func TestBudgetRefusalSignalNamesTheCeilingThatRefused(t *testing.T) {
 		t.Fatalf("detail = %q, want only the levels that refused", signal.Detail)
 	}
 }
+
+// The process total says rate limits are happening at all; the lane is what a multi-provider
+// operator has to act on. Nothing absorbed means no row, and a 429 the provider did not name is
+// counted in the total without ever being attributed to a guess.
+func TestRateLimitSignalNamesTheLaneThatWasThrottled(t *testing.T) {
+	if _, throttled := rateLimitSignal(nil, 0); throttled {
+		t.Fatal("a host that rode out nothing must add no row")
+	}
+	signal, throttled := rateLimitSignal(map[string]int64{"deepseek": 3, "other": 1}, 5)
+	if !throttled {
+		t.Fatal("absorbed 429s must reach the panel")
+	}
+	if signal.Kind != "rate_limited" {
+		t.Fatalf("kind = %q, want the panel's rate-limit row", signal.Kind)
+	}
+	for _, want := range []string{"5", "deepseek 3", "other 1"} {
+		if !strings.Contains(signal.Detail, want) {
+			t.Fatalf("detail = %q, want it to name %q", signal.Detail, want)
+		}
+	}
+	unnamed, throttled := rateLimitSignal(map[string]int64{}, 2)
+	if !throttled || strings.Contains(unnamed.Detail, ":") {
+		t.Fatalf("detail = %q, want the total with no lane list", unnamed.Detail)
+	}
+}

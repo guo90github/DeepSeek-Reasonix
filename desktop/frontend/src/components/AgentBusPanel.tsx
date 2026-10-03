@@ -65,7 +65,7 @@ export type AgentBusNodeDetailView = {
 // Order mirrors the kernel's severity: what cannot ever run, then what nobody will
 // notice on its own, then the rest. A refused claim means work is parked for budget
 // rather than for a reason the board knows, so it ranks with "nobody will notice".
-const SEVERITY: Record<string, number> = { orphan: 0, stalled: 1, escalated: 2, disputed: 3, undecided: 4, budget: 5 };
+const SEVERITY: Record<string, number> = { orphan: 0, stalled: 1, escalated: 2, disputed: 3, undecided: 4, budget: 5, rate_limited: 6 };
 
 const KIND_LABEL: Record<string, DictKey> = {
   orphan: "agentbus.kind.orphan",
@@ -74,6 +74,7 @@ const KIND_LABEL: Record<string, DictKey> = {
   disputed: "agentbus.kind.disputed",
   undecided: "agentbus.kind.undecided",
   budget: "agentbus.kind.budget",
+  rate_limited: "agentbus.kind.rateLimited",
 };
 
 function severityOf(kind: string): number {

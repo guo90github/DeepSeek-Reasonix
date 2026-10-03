@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -242,6 +243,31 @@ func NoteRateLimitRetry() int64 { return rateLimitRetries.Add(1) }
 // records it so a 429 storm is countable instead of invisible (G6).
 func RateLimitRetries() int64 { return rateLimitRetries.Load() }
 
+// rateLimitByProvider counts the same 429s per provider instance. A multi-provider host has to
+// be able to say *which* lane is throttled, and the total alone cannot (G6, 2026-10-03). The key
+// is the configured provider name (SendOptions.Provider), so the map is bounded by that list.
+var rateLimitByProvider sync.Map // configured provider name -> *atomic.Int64
+
+// RateLimitRetriesByProvider reports the absorbed 429s per provider instance. A 429 that named
+// no provider is in the total only: an unnamed lane is better than a guessed one.
+func RateLimitRetriesByProvider() map[string]int64 {
+	out := map[string]int64{}
+	rateLimitByProvider.Range(func(key, value any) bool {
+		out[key.(string)] = value.(*atomic.Int64).Load()
+		return true
+	})
+	return out
+}
+
+func noteRateLimitProvider(providerID string) {
+	providerID = strings.TrimSpace(providerID)
+	if providerID == "" {
+		return
+	}
+	counter, _ := rateLimitByProvider.LoadOrStore(providerID, &atomic.Int64{})
+	counter.(*atomic.Int64).Add(1)
+}
+
 func backoffDelay(attempt int, retryAfter time.Duration) time.Duration {
 	if retryAfter > 0 {
 		if retryAfter > maxRetryAfter {
@@ -384,6 +410,7 @@ func SendWithRetry(ctx context.Context, httpClient *http.Client, opts SendOption
 			// Ridden out, not surfaced: a rate limit this host absorbs is still a fact the
 			// operator has to be able to count (G6). The final attempt is not absorbed.
 			NoteRateLimitRetry()
+			noteRateLimitProvider(apiErr.Provider)
 		}
 		lastErr = apiErr
 	}

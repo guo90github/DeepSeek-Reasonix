@@ -3999,6 +3999,7 @@ export const zhTW: Record<DictKey, string> = {
   "agentbus.kind.disputed": "正在審議",
   "agentbus.kind.undecided": "按規則收口",
   "agentbus.kind.budget": "因預算停住",
+  "agentbus.kind.rateLimited": "被限流",
   "agentbus.unavailable": "這個會話取不到協作資料",
   "agentbus.join": "加入看板",
   "agentbus.leave": "離開看板",

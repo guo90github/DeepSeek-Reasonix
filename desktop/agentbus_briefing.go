@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"reasonix/internal/control"
+	"reasonix/internal/provider"
 )
 
 // AgentBusCardView is one subtree card the collaboration panel draws: counts plus
@@ -84,7 +86,29 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 	if signal, refused := budgetRefusalSignal(control.AgentBusBudgetRefusals()); refused {
 		view.Signals = append(view.Signals, signal)
 	}
+	if signal, throttled := rateLimitSignal(provider.RateLimitRetriesByProvider(), provider.RateLimitRetries()); throttled {
+		view.Signals = append(view.Signals, signal)
+	}
 	return view, nil
+}
+
+// rateLimitSignal turns the 429s this host rode out into one row. The process total says it is
+// happening at all; the per-provider counts say which lane, which is what a multi-provider
+// operator has to act on. A 429 the provider did not name is in the total only — never guessed.
+func rateLimitSignal(byProvider map[string]int64, total int64) (AgentBusSignalView, bool) {
+	if total == 0 {
+		return AgentBusSignalView{}, false
+	}
+	detail := fmt.Sprintf("rode out %d rate limit(s) this process", total)
+	if len(byProvider) > 0 {
+		lanes := make([]string, 0, len(byProvider))
+		for id, count := range byProvider {
+			lanes = append(lanes, fmt.Sprintf("%s %d", id, count))
+		}
+		sort.Strings(lanes)
+		detail += ": " + strings.Join(lanes, ", ")
+	}
+	return AgentBusSignalView{Kind: "rate_limited", Detail: detail}, true
 }
 
 // budgetRefusalSignal turns the host's refusal counts into one row a person can act on: which

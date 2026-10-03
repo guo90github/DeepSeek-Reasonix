@@ -40,6 +40,8 @@ lives in `desktop/` (host, Electron shell, frontend); the kernel
 - A provider 429 is named the same way: the running total says **that** it is happening, and the
   log line also says **where** — the provider instance, its protocol, and the provider's trace id
   when the response carried one. A field the error does not carry stays absent; nothing is guessed.
+  The absorbed 429s are also counted **per provider instance**, and the collaboration panel carries
+  one row for them, so a multi-provider host can name the throttled lane without reading the log.
 
 ## 2. Task model: the `goal` contract
 
