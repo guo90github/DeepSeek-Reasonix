@@ -24460,6 +24460,19 @@
           "type": {
             "kind": "boolean"
           }
+        },
+        {
+          "name": "unattendedDriving",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "unattendedHold",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
         }
       ]
     },

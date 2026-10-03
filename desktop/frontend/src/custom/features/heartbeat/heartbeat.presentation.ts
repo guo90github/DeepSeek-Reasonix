@@ -4,12 +4,18 @@ import { heartbeatNextRunAt as calendarHeartbeatNextRunAt, parseCalendarSchedule
 
 // 无人值守开关的呈现：开着却没有预算刹车时，标签自己就要说出来——这是一个
 // 别处看不见的状态（宿主侧同时会写一条日志，见 desktop/heartbeat.go）。
-export function unattendedPresentation(state: { on: boolean; budgeted: boolean }): {
+export function unattendedPresentation(state: { on: boolean; budgeted: boolean; driving?: boolean; hold?: string }): {
   stateKey: HeartbeatTranslationKey;
   hintKey: HeartbeatTranslationKey;
+  hintParams?: Record<string, string>;
 } {
   if (!state.on) {
     return { stateKey: "heartbeat.unattendedOff", hintKey: "heartbeat.unattendedOffHint" };
+  }
+  // 开着但本次启动没在驱动：崩溃降级时开关仍为开（故意的，见 desktop/host_state_marker.go），
+  // 这里必须说出来——不然标签就是一句没人兑现的承诺。
+  if (state.driving === false) {
+    return { stateKey: "heartbeat.unattendedHeld", hintKey: "heartbeat.unattendedHeldHint", hintParams: { reason: state.hold || "" } };
   }
   if (!state.budgeted) {
     return { stateKey: "heartbeat.unattendedOnNoBudget", hintKey: "heartbeat.unattendedNoBudgetHint" };

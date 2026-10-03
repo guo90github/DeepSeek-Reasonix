@@ -67,6 +67,14 @@ ok(saved.budgeted === true, "and with the brake the same save reported");
 const turnedOff = await heartbeatSetUnattended(false);
 ok(turnedOff.on === false && turnedOff.budgeted === true, "turning it off keeps reporting the host's ceiling");
 
+
+// 开关是"人的意图"，driving 是"本次启动的真实状态"：崩溃降级时开关仍为开（故意的），
+// 面板必须能把这两件事分开说，否则标签就是一句没人兑现的承诺。
+const heldSwitch = unattendedPresentation({ on: true, budgeted: true, driving: false, hold: "the previous launches crashed" });
+ok(heldSwitch.stateKey === "heartbeat.unattendedHeld", "a switch that is on while nothing drives says so");
+ok(heldSwitch.hintParams?.reason === "the previous launches crashed", "and the hint carries the reason the host gave");
+ok(unattendedPresentation({ on: true, budgeted: true }).stateKey === "heartbeat.unattendedOn", "a healthy launch still reads as on");
+
 dom.window.close();
 console.log(`\n${passed} passed, ${failed} failed, ${passed + failed} total`);
 if (failed > 0) process.exit(1);

@@ -109,6 +109,11 @@ type HeartbeatConfigView struct {
 	Tasks      []HeartbeatTask `json:"tasks"`
 	// AgentBusBudget is whether anything bounds what an unattended run can spend (2026-10-03).
 	AgentBusBudget bool `json:"agentBusBudget"`
+	// UnattendedDriving is whether this launch actually drives. The switch above can read
+	// "on" while a crash-degraded launch keeps driving off, and a toggle that said "on"
+	// then would promise progress nobody is making (2026-10-04).
+	UnattendedDriving bool   `json:"unattendedDriving"`
+	UnattendedHold    string `json:"unattendedHold,omitempty"`
 }
 
 type HeartbeatConfigUpdate struct {
@@ -193,10 +198,11 @@ func (e *HeartbeatEngine) Start() {
 	} else {
 		e.recordConfigSnapshotLocked(snapshot)
 		e.tasks = snapshot.cfg.Tasks
-		e.unattended = snapshot.cfg.Unattended && !hostCrashLoopDegraded()
+		driving, hold := unattendedDriving(snapshot.cfg.Unattended, hostCrashLoopDegraded())
+		e.unattended = driving
 		e.handoffPercent = normalizeUnattendedHandoffPercent(snapshot.cfg.HandoffPercent)
 		if snapshot.cfg.Unattended && !e.unattended {
-			log.Printf("[heartbeat] unattended driving stays off this launch: the previous launches crashed")
+			log.Printf("[heartbeat] unattended driving stays off this launch: %s", hold)
 		}
 	}
 	e.running = true
@@ -688,7 +694,7 @@ func (a *App) HeartbeatReloadConfig() HeartbeatConfigView {
 	if a.heartbeat == nil {
 		return HeartbeatConfigView{Tasks: []HeartbeatTask{}}
 	}
-	return withAgentBusBudget(a.heartbeat.ReloadConfig())
+	return withHeartbeatRuntimeFacts(a.heartbeat.ReloadConfig())
 }
 
 // HeartbeatSaveTasks replaces the full task list and persists it.
@@ -707,9 +713,9 @@ func (a *App) HeartbeatSaveConfig(update HeartbeatConfigUpdate) (HeartbeatConfig
 	}
 	view, err := a.heartbeat.ReplaceConfig(update)
 	if err != nil {
-		return withAgentBusBudget(view), err
+		return withHeartbeatRuntimeFacts(view), err
 	}
-	view = withAgentBusBudget(view)
+	view = withHeartbeatRuntimeFacts(view)
 	if update.Unattended != nil {
 		// The switch owns the OS entry too, so turning unattended on needs no
 		// second command. It takes effect on the next launch, so the entry is
@@ -726,8 +732,26 @@ func (a *App) HeartbeatSaveConfig(update HeartbeatConfigUpdate) (HeartbeatConfig
 
 // withAgentBusBudget attaches the host's brake to a config view, so the switch that turns
 // unattended on can report it. The engine stays free of the operator's config.
-func withAgentBusBudget(view HeartbeatConfigView) HeartbeatConfigView {
+// unattendedDriving says whether this launch actually drives, and why not when the switch is on.
+// A crash-degraded launch keeps driving off by design — the switch stays on so the watchdog
+// still pulls the host back up — and a panel reading the switch alone would promise progress
+// nobody is making.
+func unattendedDriving(switchOn, crashLoopDegraded bool) (bool, string) {
+	if !switchOn {
+		return false, ""
+	}
+	if crashLoopDegraded {
+		return false, "the previous launches crashed"
+	}
+	return true, ""
+}
+
+// withHeartbeatRuntimeFacts answers what the host is doing *now*, next to the switch the file
+// holds. The two have to be readable apart: a toggle that said "on" while nothing ran would be
+// a claim with nothing behind it.
+func withHeartbeatRuntimeFacts(view HeartbeatConfigView) HeartbeatConfigView {
 	view.AgentBusBudget = hostAgentBusBudgetBrake()
+	view.UnattendedDriving, view.UnattendedHold = unattendedDriving(view.Unattended, hostCrashLoopDegraded())
 	return view
 }
 

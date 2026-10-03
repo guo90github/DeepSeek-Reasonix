@@ -42,7 +42,7 @@ export function UnattendedToggle() {
   if (state === null) return null;
   const presentation = unattendedPresentation(state);
   const label = t(presentation.stateKey);
-  const hint = t(presentation.hintKey);
+  const hint = t(presentation.hintKey, presentation.hintParams);
   return (
     <Tooltip label={`${t("heartbeat.unattended")} · ${label} — ${hint}`}>
       <button

@@ -12,6 +12,8 @@ interface HeartbeatConfigView {
   /** Whether the host has any agentbus ceiling at all, straight from the host. */
   agentBusBudget?: boolean;
   tasks: HeartbeatTask[];
+	unattendedDriving?: boolean;
+	unattendedHold?: string;
 }
 
 /** What the switch has to say: the switch itself, and whether anything bounds a run. */
@@ -23,6 +25,8 @@ export interface HeartbeatUnattendedState {
 let loadedConfigToken: Pick<HeartbeatConfigView, "revision" | "etag"> | null = null;
 let loadedTasks: HeartbeatTask[] = [];
 let loadedUnattended = false;
+let loadedUnattendedDriving = false;
+let loadedUnattendedHold = "";
 let loadedAgentBusBudget = false;
 let configQueue: Promise<void> = Promise.resolve();
 
@@ -38,6 +42,8 @@ async function reloadConfig(): Promise<HeartbeatTask[]> {
   loadedConfigToken = { revision: view.revision || 0, etag: view.etag || "" };
   loadedTasks = Array.isArray(view.tasks) ? view.tasks : [];
   loadedUnattended = Boolean(view.unattended);
+	loadedUnattendedDriving = view.unattendedDriving === true;
+	loadedUnattendedHold = view.unattendedHold || "";
   loadedAgentBusBudget = Boolean(view.agentBusBudget);
   return loadedTasks;
 }
@@ -65,7 +71,7 @@ export function heartbeatListTasks(): Promise<HeartbeatTask[]> {
 export function heartbeatUnattended(): Promise<HeartbeatUnattendedState> {
   return enqueueConfigOperation(async () => {
     await reloadConfig();
-    return { on: loadedUnattended, budgeted: loadedAgentBusBudget };
+    return { on: loadedUnattended, budgeted: loadedAgentBusBudget, driving: loadedUnattendedDriving, hold: loadedUnattendedHold };
   });
 }
 
@@ -83,8 +89,10 @@ export function heartbeatSetUnattended(on: boolean): Promise<HeartbeatUnattended
     loadedConfigToken = { revision: view.revision || 0, etag: view.etag || "" };
     loadedTasks = Array.isArray(view.tasks) ? view.tasks : loadedTasks;
     loadedUnattended = Boolean(view.unattended);
+	loadedUnattendedDriving = view.unattendedDriving === true;
+	loadedUnattendedHold = view.unattendedHold || "";
     loadedAgentBusBudget = Boolean(view.agentBusBudget);
-    return { on: loadedUnattended, budgeted: loadedAgentBusBudget };
+    return { on: loadedUnattended, budgeted: loadedAgentBusBudget, driving: loadedUnattendedDriving, hold: loadedUnattendedHold };
   });
 }
 
