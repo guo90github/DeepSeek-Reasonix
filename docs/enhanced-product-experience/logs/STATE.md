@@ -20,39 +20,41 @@
 **终态口径**：立项书 §五 判据以"代码 + 可复跑命令"为准 ⇒ 8 条已验收；第十二 按用户选定 ③ 结项（判据未达，如实标注）。
 文档类提交（不含代码）：`e0bfa19db`、`8b08d628b`、`3b5e24c09`、`0877bea39`、`4b54f7d9f`、`3ab539b80`、`314f47666`、`95699ddcd`、`efaa9dad8`、`1609cb844`、`8e04d0dff`、`64fc6fe71`。
 
-## 2. 当前单元（2026-10-03 · 用户点名的两处落点变更，均已提交）
+## 2. 当前单元（2026-10-03 · 用户点名三处：输入框档位开关 / 面板召回段 / 召回可读性；均已提交）
 
-- **第九 · 档位控件挪到输入框底部并改滑动开关**（提交 `89c58d096`）：新件 `ShellAsyncTierSwitch.tsx`（轨随 `data-tier` 滑、三停位 `aria-pressed`、
-  写入中全禁、未知值回落 `off`、**读不到不渲染**）+ 同名 CSS（已登记进 `check:css`）；挂在 `Composer.tsx` 底部 meta 行的 `--shell-async` 位；
-  **设置页原字段保留**（与"模型切换器在输入框 + 模型设置页在设置里"同一套做法）。写路径仍是 `app.SetShellAsyncSpeedTier`。
-- **第十六 · 召回记录并入桌面「面板」**（提交 `72c88bb2e`）：`FooterRecallModule.tsx` 注册进 `footerPanelModules.tsx`（`id: "recall-record"`，记忆族之后）；
-  `RecapRecallStrip` 加**受控**入口 `record`，调用方已持有记录时不再重复问宿主。卡片规矩"不适用的模块不许留空表头" ⇒ 无记录时整块不出现。
-  修的坑：直接 `app.RecallRecordForTab(...)` 在无该命令的宿主/桩上同步抛 `TypeError`，崩掉 `footer-memory-module`/`footer-panel-visibility`（全量 403 套件里唯二红）→ 改走 promise 链。
-- **真机**：`v0.0.0-dev.117` 打包 rc 0、装机并列新增、`verify-windows-portable.sh` **exit 0**；包内 `build.json` = `v0.0.0-dev.117 / stable / commit 72c88bb2ea30`（= HEAD）。
-  `dist\Reasonix-windows-amd64.zip` 239,331,839 B（2026-10-03 15:40）。dev.115/116 保持并列不动。快照完整性：构建前/后 `git status` 均只有 `desktop/frontend/dist/.gitkeep`（构建副产物，未提交）⇒ 包＝HEAD 那棵树。
-- **UI 观感仍待你重启 App**：在跑的 service 是 `v0.0.0-dev.114`（托管本对话，SOP 禁忌不得杀）⇒ shell dev.117 会报 `build_mismatch (-32004)`。
+- **第九 · 档位控件挪到输入框底部并改滑动开关**（`89c58d096`）：`ShellAsyncTierSwitch.tsx`（轨随 `data-tier` 滑、三停位、写入中全禁、
+  未知值回落 `off`、**读不到不渲染**）+ 同名 CSS（已登记 `check:css`），挂 `Composer.tsx` 底部 meta 行 `--shell-async` 位；**设置页原字段保留**。
+- **第十六 · 召回记录并入桌面「面板」**（`72c88bb2e`）：`FooterRecallModule.tsx` 注册进 `footerPanelModules.tsx`（`id: "recall-record"`，记忆族之后）；
+  `RecapRecallStrip` 加受控入口 `record`（调用方已有记录就不再问宿主）；卡片规矩 ⇒ 无记录整块不出现（含表头）。
+- **第十六 · 召回记录要给人看懂**（`e50e02a13`，用户反馈"只有 id 看不懂、没有内容"）：**记录仍 content-free**，只在**显示时**解析名字——
+  新 `lib/recallLabels.ts`（按 `id` 与 `name` 双键、名称取 `title||name`、hint=`description·type·scope·freshness`）；`RecapRecallStrip` 加可选 `facts`
+  （有名则**事实名领读、id 留旁边**可追溯；无名则退回 id，不瞎编）；接上「面板」卡片（读 `MemoryForTab(tabId)`）与记忆面板「召回记录」页（用它已加载的 `facts`，零额外请求）。
+- **真机**：`v0.0.0-dev.118` rc 0 + 装机并列新增 + verifier **exit 0**；包内 `build.json` = `v0.0.0-dev.118 / stable / commit e50e02a137e5`（= HEAD）；
+  `dist\Reasonix-windows-amd64.zip` 239,332,022 B（15:55）；构建前后 `git status` 均只有 `desktop/frontend/dist/.gitkeep`（构建副产物）。
+  **构建环境的坑（下次照用）**：打包步骤会联网取 Electron `SHASUMS256.txt`，本机两次 `ECONNRESET` 失败；按 `desktop/packaging/package.mjs:92` 的注释
+  给 `REASONIX_ELECTRON_ZIP_DIR=<本机 electron 缓存目录，内含 electron-v44.2.0-win32-x64.zip>` 即绕开联网、第三次成功。
+- **UI 观感仍待你重启 App**：在跑的 service 是 `v0.0.0-dev.114`（托管本对话，SOP 禁忌不得杀）⇒ 会报 `build_mismatch (-32004)`。
 
-## 3. 下一步（你重启 App 后的自验清单 · dev.117 才含全部改动）
+## 3. 下一步（① 先做；② 你重启 App 后照此看）
 
-① 输入框**底部**应有一条滑动开关（关/平衡/极速），点档滑块跟着走；设置页「通用」里的三段控件仍在；
-② 桌面「面板」（底部面板带的卡片）里应出现**召回记录**一段（有记录才出现）；③ 记忆面板 →「召回记录」页逐轮召回条；④ 会话回顾页热力图；
-⑤ 待办面板 → 已完成项归档折叠区、未完成项跨批次留在队列；⑥ 标签页撕下 → 浮层可拖拽/缩放/停靠且重启保持；⑦ 正常回合正文尾部 `<turn-progress>`（最多 3 轮）。
+① **回顾页会话详情的召回条仍是 id**：它要经 4 层转发（controller → adapter → app view → overlay → page，`recap-recall-wiring.test.ts` 钉着），
+   需为 facts 再走一遍那条链（或改由该页自己取一次），单独一轮做；
+② 重启后看（dev.118 才含全部改动）：输入框**底部**滑动开关（关/平衡/极速）；桌面「面板」召回段**应带事实名**（悬停看描述·类型·范围·新鲜度）；
+   设置页三段仍在；记忆面板 →「召回记录」页同样带名；会话回顾页热力图；待办归档折叠区；标签页撕下后浮层可拖拽/缩放/停靠且重启保持；回合尾 `<turn-progress>`。
 
 ## 4. 待拍板（收尾后剩 ≤2 条）
 
-- **B-1（真机确认）**：打包+装机已完成（dev.117，verifier exit 0）；**只剩你重启 App 后的人眼确认**（清单见 §3）。
+- **B-1（真机确认）**：打包+装机已完成（dev.118，verifier exit 0）；**只剩你重启 App 后的人眼确认**（清单见 §3 ②）。
 - **U-1（第七 · 未答复）**：是否为「框架知识」新增独立 `type=framework`。**按「不新增」结项**。
-- 已决（2026-10-03）：**D-2 选 ③**（接受 37）；U-2 排队、U-3 热力图 30 天/日格、U-4 前置块默认开最多 3 轮无字符上限、U-5 建议不自动写。
-- 已决（2026-10-03 晚）：**「面板」＝底部面板带卡片（`footerPanel.title`）**，召回记录按此落点；若你指的是别的面板，说一声即可挪。
+- 已决（2026-10-03）：**D-2 选 ③**（接受 37）；U-2 排队、U-3 热力图 30 天/日格、U-4 前置块默认开最多 3 轮无字符上限、U-5 建议不自动写；
+  晚：**「面板」＝底部面板带卡片（`footerPanel.title`）**（召回记录按此落点，若指别处说一声即挪）。
 
 ## 5. 未验证 / 暂缓
 
-- 立项书验收 5（全量门禁）：Go 侧三项绿；`make lint` 30 条 / `repolint` 7 条 / 测试失败**全部落在别的会话文件**（本任务改动面 0 条）。
-- **前端全量套件**：`72c88bb2e` 之前 `run-tests.mjs --keep-going` 全量 **401/401**；本次改动后一次全量得 **401/403**（唯二红＝上面那条 `TypeError`），
-  **修复后只单独复跑了那两个套件（7 PASS / 8 PASS），未再跑 403 全量**。
-- **真机 UI 观感：未完成**（`build_mismatch` 需重启 App；dev.117 已装好待启动）。
+- 立项书验收 5（全量门禁）：Go 侧三项绿、`make lint` 30 条 / `repolint` 7 条 / 失败**全在别的会话文件**（本任务 0 条）；前端全量：`72c88bb2e` 前 **401/401**，之后一次 **401/403**（唯二红＝那条 `TypeError`），**修复后只单独复跑那两个套件（7 / 8 PASS），未再跑全量**。
+- **真机 UI 观感：未完成**（`build_mismatch` 需重启 App；dev.118 已装好待启动）；**回顾页会话详情的召回条仍未接名字**（见 §3 ①）。
 - 超出验收判据的留白：第十「后台标签多面板并行」；第八 BA4（按 verdict 触发记忆建议——现有候选机制已满足 U-5 实质）。
 - 第十二 复跑**未建模**外部改动与轨迹变化（只会让残余更高），故 37 是同轨迹上界。
 
-END-UNIT：两处用户点名落点均已改完、验证、提交（`89c58d096`、`72c88bb2e`），并打包装机 dev.117（verifier exit 0，包内 commit `72c88bb2ea30` = HEAD）；
-**唯一剩下的真 blocker = 需你重启 App 才能用眼看新 UI**（清单见 §3）。
+END-UNIT：三处用户点名（输入框档位开关 `89c58d096`、面板召回段 `72c88bb2e`、召回可读性 `e50e02a13`）均已改完、验证、提交，并打包装机 dev.118（verifier exit 0，包内 commit `e50e02a137e5` = HEAD）；
+**唯一的真 blocker = 需你重启 App 才能用眼看新 UI**（清单见 §3 ②）。
