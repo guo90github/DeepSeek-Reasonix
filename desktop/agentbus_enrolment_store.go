@@ -13,11 +13,9 @@ import (
 	"reasonix/internal/fileutil"
 )
 
-// Enrolment lives in the controller, which is memory: a host that restarts — a crash,
-// the OS watchdog restoring it, a version switch — would otherwise leave every session
-// off the board, so the board stops advancing exactly when it was restored (found on a
-// real machine, 2026-10-03). The join is therefore remembered per session path and
-// re-applied when that session's controller is built again.
+// Enrolment lives in the controller, which is memory: a restart — crash, watchdog restore,
+// version switch — would leave every session off the board, so it stops advancing exactly when
+// it was restored (real machine, 2026-10-03). Remembered per session path, re-applied on build.
 
 type agentBusEnrolment struct {
 	Dir         string `json:"dir"`

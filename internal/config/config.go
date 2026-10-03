@@ -51,10 +51,9 @@ type AgentBusConfig struct {
 	// DispatchSlots is this host's ceiling on participants working at once. It is the
 	// machine's ceiling, not one board's, so the account holding it is per host.
 	DispatchSlots int `toml:"dispatch_slots"`
-	// The deliberation bounds (AGENT_BUS §S4). Zero leaves that bound off, and
-	// HearingRoundTTLMinutes in particular is what makes silence countable: with no
-	// window a deliberation never counts anybody absent, so the side that owes an
-	// answer is never woken (AGENT_BUS §11.5.7).
+	// The deliberation bounds (AGENT_BUS §S4). Zero leaves that bound off;
+	// HearingRoundTTLMinutes is what makes silence countable, so with no window the side
+	// that owes an answer is never woken (§11.5.7).
 	HearingRoundTTLMinutes int `toml:"hearing_round_ttl_minutes"`
 	HearingMaxRounds       int `toml:"hearing_max_rounds"`
 	HearingCooldownMinutes int `toml:"hearing_cooldown_minutes"`

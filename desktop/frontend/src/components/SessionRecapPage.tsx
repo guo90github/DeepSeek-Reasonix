@@ -12,24 +12,11 @@ import { RecapRow } from "./RecapRow";
 import { RecapHeatmap } from "./RecapHeatmap";
 import { RecapRecallStrip } from "./RecapRecallStrip";
 import { matchesHeatmapDay } from "../lib/recapHeatmap";
+import { kindKey } from "../lib/recapKinds";
 import type { RecapPreviewView } from "../lib/types";
 import type { MemoryFact, RecallRecordView } from "../generated/desktopContract.generated";
 
 type RecapSort = "newest" | "oldest" | "session";
-
-type RecapKindKey = "history.recapKindFact" | "history.recapKindRootCause" | "history.recapKindRefuted" | "history.recapKindHandoff";
-
-// kindKey names a distilled note's kind; a kind this page does not know is shown
-// as it arrived rather than dropped.
-function kindKey(kind: string): RecapKindKey | null {
-  switch (kind) {
-    case "fact": return "history.recapKindFact";
-    case "root-cause": return "history.recapKindRootCause";
-    case "refuted": return "history.recapKindRefuted";
-    case "handoff": return "history.recapKindHandoff";
-    default: return null;
-  }
-}
 
 // Notes are written by the backend when a session closes; what this page adds is
 // the person's answer to each one — accept, edit-then-accept, or drop — plus the

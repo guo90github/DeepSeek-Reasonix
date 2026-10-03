@@ -52,11 +52,9 @@ func (c *Controller) prepareInboxRun(meta sessioninbox.InboxItemMeta, env sessio
 	if err != nil || block != "" {
 		return nil, block, err
 	}
-	// This is the path an idle session is woken on: a queued item becomes its own
-	// turn. Without the marker the model reads an outside mention as its owner
-	// typing, which is exactly what the steer path already marks against.
-	// A wake is injected minutes after it was sent, so it is rebuilt against the board as
-	// it is now instead of being read as the list it was sent with.
+	// This is the path an idle session is woken on: a queued item becomes its own turn, and the
+	// marker keeps the model from reading an outside mention as its owner typing. A wake is
+	// injected minutes after it was sent, so it is rebuilt against the board as it is now.
 	if rebuilt, ok := c.agentBusWakeInjectionRewrite(context.Background(), meta); ok {
 		submit = rebuilt
 	}

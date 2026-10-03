@@ -17,10 +17,9 @@ func (a *App) buildTabControllerBoot(ctx context.Context, opts boot.Options) (co
 	if err != nil {
 		return nil, err
 	}
-	// A controller joins the board's wake routing the moment it exists, so work parked
-	// while no tab owned it is picked up here instead of waiting for a sweep. A session
-	// that joined before this host started is put back on its board first: the board has
-	// to keep advancing after a crash, a watchdog restore or a version switch.
+	// A controller joins the board's wake routing the moment it exists, so work parked while
+	// no tab owned it is picked up here. A session that joined before this host started goes
+	// back on its board first: the board has to keep advancing after a crash (2026-10-03).
 	a.restoreAgentBusEnrolment(ctrl)
 	a.enrollAgentBus(ctrl)
 	return ctrl, nil

@@ -14,11 +14,9 @@ import (
 // context builder can tell it apart from the work a person queued.
 const unattendedResumeSource = "unattended-resume"
 
-// An interrupted unattended session is asked to carry on, because nothing else does: the
-// Goal, the board and the parked work all sit still until a turn arrives (2026-10-03). What
-// that turn says matters — a bare 继续 tells the model nothing about what it was doing and
-// invites it to improvise, so the host names the contract, the instruction it was on and the
-// work the crash left queued instead.
+// An interrupted unattended session is asked to carry on, because nothing else does: the goal,
+// the board and the parked work all sit still until a turn arrives (2026-10-03). A bare 继续
+// invites improvisation, so the host names the contract, the instruction and the queued work.
 
 // unattendedResumeContext is what the host knows about where a session stopped.
 type unattendedResumeContext struct {

@@ -12,12 +12,9 @@ import (
 	"reasonix/internal/fileutil"
 )
 
-// The desktop's own tab file cannot hold the Goal contract: it is rewritten from the live
-// controller, which reports no goal once the goal is stopped, so every save after a stop
-// erased the contract and an unattended session had nothing to resume (found on a real
-// machine, 2026-10-03). The contract is kept here instead — written the moment the desktop
-// sees it, never rewritten from a stopped goal — so a crash, a stop or a version switch
-// cannot take it away. Dropping it is a deliberate act (see forgetUnattendedGoalContract).
+// The tab file cannot hold the Goal contract: it is rewritten from the live controller, which
+// reports no goal once the goal is stopped, so every save after a stop erased it and an
+// unattended session had nothing to resume (real machine, 2026-10-03). Dropping it is deliberate.
 
 type unattendedGoalContracts struct {
 	SchemaVersion int                                     `json:"schemaVersion"`

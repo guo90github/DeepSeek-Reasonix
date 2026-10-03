@@ -1,9 +1,8 @@
 package agent
 
-// Memory-recall record (docs/50 §2.2): what each turn asked memory for and which
-// facts reached the model. It rides the session sidecar for the review page, and
-// stays content-free apart from each hit's short label: identifiers, numbers, the
-// query's hash and a fact's name/title — a fact's body never appears.
+// Memory-recall record (docs/50 §2.2): what each turn asked memory for and which facts reached
+// the model. It rides the session sidecar for the review page and stays content-free apart from
+// each hit's short label — a fact's body never appears.
 
 // MemoryRecallTurnLimit caps the recorded turns. The record is a review aid, not
 // a ledger; the oldest turns fall off.

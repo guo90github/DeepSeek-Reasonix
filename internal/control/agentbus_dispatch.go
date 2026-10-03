@@ -65,10 +65,9 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 			Verb: board.VerbClaim, Node: node, Actor: claimant,
 			Bounds: boundsForClaim(st, node), Deadline: deadline,
 		}
-		// One dispatch is one attempt, not one intent forever: the derived id covers node,
-		// actor and bounds but never time, so handing the same step out again after its
-		// claim lapsed would collapse onto the first op and never land. The deadline is
-		// what names the attempt.
+		// One dispatch is one attempt, not one intent forever: the derived id covers node, actor
+		// and bounds but never time, so handing the same step out again after its claim lapsed
+		// would collapse onto the first op and never land. The deadline names the attempt.
 		op.ID = fmt.Sprintf("agentbus-dispatch:%s/%s/%d", boardName, node, deadline.UnixNano())
 		if _, err := c.ApplyAgentBusOp(ctx, op); err != nil {
 			return dispatched, err
