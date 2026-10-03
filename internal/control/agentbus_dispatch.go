@@ -15,6 +15,12 @@ import (
 // later writer or tick may reclaim it: long enough for one turn, short enough to recover.
 const agentBusDispatchLease = 30 * time.Minute
 
+// agentBusDispatchTries is how many times auto-dispatch hands out one step. A lapsed lease
+// gets one more try — that is the crash the reclaim exists for — but a step that keeps
+// lapsing will not move by being handed out again: the human screen already flags it
+// (observe reports "no progress recorded N times"), so the loop stops there.
+const agentBusDispatchTries = 2
+
 // AgentBusDispatch gives one named participant the next startable step, takes it out of the
 // queue, and asks the host to deliver that assignment to the participant's own session.
 // Naming the claimant here is what keeps an assignment from being a guess.
@@ -54,10 +60,17 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 	dispatched := 0
 	for _, entry := range taken {
 		node := entry.Entry.Node
-		if _, err := c.ApplyAgentBusOp(ctx, board.Op{
+		deadline := now.Add(agentBusDispatchLease)
+		op := board.Op{
 			Verb: board.VerbClaim, Node: node, Actor: claimant,
-			Bounds: boundsForClaim(st, node), Deadline: now.Add(agentBusDispatchLease),
-		}); err != nil {
+			Bounds: boundsForClaim(st, node), Deadline: deadline,
+		}
+		// One dispatch is one attempt, not one intent forever: the derived id covers node,
+		// actor and bounds but never time, so handing the same step out again after its
+		// claim lapsed would collapse onto the first op and never land. The deadline is
+		// what names the attempt.
+		op.ID = fmt.Sprintf("agentbus-dispatch:%s/%s/%d", boardName, node, deadline.UnixNano())
+		if _, err := c.ApplyAgentBusOp(ctx, op); err != nil {
 			return dispatched, err
 		}
 		if deliver == nil {
@@ -89,6 +102,9 @@ func parkStartableWork(ctx context.Context, queueLog *agentbus.QueueLog, st *boa
 	}
 	for _, target := range agentbus.WakeTargets(agentbus.WakeInput{State: st, Now: now}) {
 		for _, node := range target.Ready {
+			if !dispatchable(st, node) {
+				continue
+			}
 			if _, _, err := queueLog.Enqueue(ctx, agentbus.QueueEntry{
 				Node: node, Subtree: agentbus.SubtreeRoot(st, node), Participant: target.Participant,
 			}, agentbus.QueueLimits{}); err != nil {
@@ -97,6 +113,13 @@ func parkStartableWork(ctx context.Context, queueLog *agentbus.QueueLog, st *boa
 		}
 	}
 	return nil
+}
+
+// dispatchable reports whether auto-dispatch may offer this step at all: work that has
+// spent its retry budget is left to the human signal instead of being handed out forever.
+func dispatchable(st *board.State, node string) bool {
+	n := st.Nodes[node]
+	return n != nil && n.NoProgress < agentBusDispatchTries
 }
 
 // agentBusHeldNodes are the nodes a participant already owns or has asserted: the affinity
