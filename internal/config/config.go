@@ -51,6 +51,16 @@ type AgentBusConfig struct {
 	// DispatchSlots is this host's ceiling on participants working at once. It is the
 	// machine's ceiling, not one board's, so the account holding it is per host.
 	DispatchSlots int `toml:"dispatch_slots"`
+	// The deliberation bounds (AGENT_BUS §S4). Zero leaves that bound off, and
+	// HearingRoundTTLMinutes in particular is what makes silence countable: with no
+	// window a deliberation never counts anybody absent, so the side that owes an
+	// answer is never woken (AGENT_BUS §11.5.7).
+	HearingRoundTTLMinutes int `toml:"hearing_round_ttl_minutes"`
+	HearingMaxRounds       int `toml:"hearing_max_rounds"`
+	HearingCooldownMinutes int `toml:"hearing_cooldown_minutes"`
+	// HearingEscalationQuota is how many equal-weight questions may go to a human before
+	// they close as undecided-by-rule. Zero closes them that way at once.
+	HearingEscalationQuota int `toml:"hearing_escalation_quota"`
 }
 
 // Config is Reasonix's runtime configuration.

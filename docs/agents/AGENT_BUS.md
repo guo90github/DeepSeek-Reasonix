@@ -1079,3 +1079,28 @@ N≈100、节点数百量级时这是几百次访问的过滤，比维护逐参�
 
 **已知边界**：`assert` 建的节点**没有 Title**（标题只由 `require`/`split` 的 `NodeSpec` 带）⇒ 面板"新建根节点"后只显示 id；
 要让标题上人读面，须给 op 增可选 `Title`（**内核 op schema 变更**，须同步 §11.1），属独立一刀，本轮未做。
+
+### 13.12 审议边界旋钮：`RoundTTL` 是"沉默"的唯一来源（2026-10-03，G1 尾落地）
+
+**为什么单列一节**：S4 的审议在**参数缺省时没有时钟** —— `HearingSilent` 第一行就是
+`h == nil || !h.Open || lim.RoundTTL <= 0 ⇒ nil`，而 `RoundTTL` 只能来自 `HearingLimits`。于是
+"未答者被唤醒"（`WakeTarget.Owes`）在**没人设边界**时**永远不会发生**：入口修好了、台阶高度是 0。
+设施此前**没有生产调用方**（`SetAgentBusHearingLimits` 全仓零命中、无 `HearingLimits{...}` 字面量）。
+
+| 旋钮（`[agentbus]`） | 字段 | 关掉什么（0 = 关掉这条边界） |
+|---|---|---|
+| `hearing_round_ttl_minutes` | `HearingRoundTTL` | 一轮等多久才把沉默算作 `no_answer`。**0 = 沉默永不被计数 ⇒ 没人会被唤醒**（本节的由来） |
+| `hearing_max_rounds` | `HearingMaxRounds` | 每名必答者最多被问几轮 |
+| `hearing_cooldown_minutes` | `HearingCooldown` | 收口后多久内不许重开同一议题 |
+| `hearing_escalation_quota` | `EscalationQuota` | 等重议题可升级给人几次，之后按规则收口为 `undecided-by-rule`。**0 = 一次都不升级**（与其它旋钮"0 = 不限"相反，已写进字段注释） |
+
+**接线点（唯一一处，覆盖三条宿主）**：`internal/boot/agentbus_wiring.go` 的 `enrolAgentBusController` —— `boot.Build`
+在 `opts.AgentBusDir != ""` 时调用，因此桌面 / serve / cli 拿到的控制器带着同一份边界；映射是
+`control.AgentBusHearingLimits(cfg.AgentBus)`（分钟 → `time.Duration`）。**缺省时说一句**：`RoundTTL == 0` 时每进程只警告一次
+（`noticeAgentBusHearingWindow`），点名 `hearing_round_ttl_minutes` —— 看板本身显示不出"我的审议没有时钟"。
+
+**证据**：`internal/boot/agentbus_wiring_test.go`（**先红后绿**：设 `hearing_round_ttl_minutes = 1` 且回合已过期 ⇒ 未答者被唤醒
+且 `Owes` 含该节点；不设 ⇒ 唤醒 0 人）、`internal/agentbus/hearing_test.go` 的
+`TestADeliberationWithNoRoundWindowNeverCountsSilence`（同一条审议：无窗口 ⇒ 空；`RoundTTL = 1h` ⇒ 两名必答者都在）、
+`internal/config/agentbus_test.go`（9 个键都落到字段；缺 section = 全 0）、`internal/control` 的
+`TestOperatorKnobsBecomeTheKernelsDeliberationBounds`（分钟不被读成秒）。

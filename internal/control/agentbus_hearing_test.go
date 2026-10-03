@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/agentbus"
 	"reasonix/internal/agentbus/board"
+	"reasonix/internal/config"
 )
 
 func busEvidence(kind, ref string) board.Evidence {
@@ -228,5 +229,22 @@ func TestTheRefuteToVerdictChainRunsWithoutAnyoneClickingAnything(t *testing.T) 
 	hearings, ok := reader.AgentBusHearings(ctx)
 	if !ok || len(hearings) != 1 || hearings[0].Verdict != agentbus.VerdictRefuted {
 		t.Fatalf("replayed hearings = %+v ok=%v, want the same verdict", hearings, ok)
+	}
+}
+
+// The operator's knobs have to arrive as the kernel's bounds, unit and all: a minutes knob
+// read as seconds would make every window 60× shorter than the person asked for.
+func TestOperatorKnobsBecomeTheKernelsDeliberationBounds(t *testing.T) {
+	got := AgentBusHearingLimits(config.AgentBusConfig{
+		HearingRoundTTLMinutes: 30, HearingMaxRounds: 3, HearingCooldownMinutes: 10, HearingEscalationQuota: 1,
+	})
+	want := agentbus.HearingLimits{
+		MaxRounds: 3, RoundTTL: 30 * time.Minute, Cooldown: 10 * time.Minute, EscalationQuota: 1,
+	}
+	if got != want {
+		t.Fatalf("limits = %+v, want %+v", got, want)
+	}
+	if zero := AgentBusHearingLimits(config.AgentBusConfig{}); zero != (agentbus.HearingLimits{}) {
+		t.Fatalf("an unconfigured host = %+v, want every bound off", zero)
 	}
 }

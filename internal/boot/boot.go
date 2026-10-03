@@ -1942,17 +1942,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 	// reviewer. Controllers that want one inject it explicitly; otherwise Goal
 	// uses the deterministic host policy.
 	ctrl := control.New(ctrlOpts)
-	if opts.AgentBusDir != "" {
-		ctrl.SetAgentBus(opts.AgentBusDir, opts.AgentBusID)
-		// A host that serves its own sessions tells the board where they speak from, so
-		// another host can wake them. The desktop passes nothing here (it serves no
-		// session endpoint yet) and is then a wake sender only.
-		if opts.AgentBusHost != "" {
-			if err := ctrl.AgentBusAnnounce(opts.AgentBusHost, opts.AgentBusTokenFile); err != nil {
-				slog.Warn("boot: agentbus announce", "err", err)
-			}
-		}
-	}
+	enrolAgentBusController(ctrl, cfg, opts)
 	bindRecapLane(context.Background(), cfg, ctrl, sink, effectiveResolver, proxySpec)
 	// Bind a private host's children to the controller that owns them: one
 	// controller, one true session. A shared host serves several controllers, so

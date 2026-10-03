@@ -118,6 +118,24 @@ func TestHearingSilenceIsVisibleNotDeleted(t *testing.T) {
 	}
 }
 
+// A deliberation with no round window has no clock at all: silence is never counted, so
+// nobody is ever woken to answer. That is what an operator who set no bounds gets, and it
+// is the state the host has to say out loud (AGENT_BUS §11.5.7).
+func TestADeliberationWithNoRoundWindowNeverCountsSilence(t *testing.T) {
+	st := NewHearingState()
+	if err := ApplyHearing(st, openHearing("n1", []string{"alice", "bob"}, talkBase), HearingLimits{}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	h := st.Hearings["n1"]
+	if silent := HearingSilent(h, talkBase.Add(24*time.Hour), HearingLimits{}); len(silent) != 0 {
+		t.Fatalf("silent = %v, want nobody: with no window the round never lapses", silent)
+	}
+	// The same open deliberation, one bound set: the same moment counts as silence.
+	if silent := HearingSilent(h, talkBase.Add(24*time.Hour), HearingLimits{RoundTTL: time.Hour}); len(silent) != 2 {
+		t.Fatalf("silent = %v, want both required participants once a window is set", silent)
+	}
+}
+
 func TestWeighResponseFollowsEvidenceNotVotes(t *testing.T) {
 	evidence := func(kind, ref string) board.Evidence { return board.Evidence{Kind: kind, Ref: ref} }
 	supported := []board.Evidence{evidence("verification", "go test ./...")}

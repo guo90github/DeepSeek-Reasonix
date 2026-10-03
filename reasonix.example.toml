@@ -59,6 +59,14 @@ compact_ratio       = 0.80  # sole auto trigger; presets 0.70 (active) / 0.80 (r
 # budget_node = 20       # one node's own work
 # budget_turn = 5        # one turn
 # dispatch_slots = 2     # how many participants this host works on at once
+# A contested step is settled by a deliberation (AGENT_BUS §S4). hearing_round_ttl_minutes
+# is what makes silence countable: with it unset a deliberation never counts anybody absent,
+# so the side that owes an answer is never woken. 0 leaves each bound off.
+# hearing_round_ttl_minutes = 30   # how long one round waits before silence counts
+# hearing_max_rounds = 3           # how many times each required participant may be asked
+# hearing_cooldown_minutes = 10    # a closed question may not reopen immediately
+# hearing_escalation_quota = 1     # equal-weight questions a human may be asked before the
+#                                  # rest close as undecided-by-rule (0 = none escalate)
 
 # A provider is a vendor endpoint (one base_url + key) that offers one or more
 # models. Use `models = [...]` to expose several under a single entry — switching

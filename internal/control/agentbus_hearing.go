@@ -9,6 +9,7 @@ import (
 
 	"reasonix/internal/agentbus"
 	"reasonix/internal/agentbus/board"
+	"reasonix/internal/config"
 )
 
 // SetAgentBusHearingLimits sets the deliberation bounds this session's hearings
@@ -18,6 +19,18 @@ func (c *Controller) SetAgentBusHearingLimits(limits agentbus.HearingLimits) {
 	defer c.mu.Unlock()
 	if c.agentBus != nil {
 		c.agentBus.hearingLimits = limits
+	}
+}
+
+// AgentBusHearingLimits maps the operator's deliberation knobs onto the kernel's bounds. Zero
+// stays zero: a host nobody configured deliberates without a clock, which is also why the side
+// that owes an answer is never woken (hearing.go: silence needs a round window).
+func AgentBusHearingLimits(cfg config.AgentBusConfig) agentbus.HearingLimits {
+	return agentbus.HearingLimits{
+		MaxRounds:       cfg.HearingMaxRounds,
+		RoundTTL:        time.Duration(cfg.HearingRoundTTLMinutes) * time.Minute,
+		Cooldown:        time.Duration(cfg.HearingCooldownMinutes) * time.Minute,
+		EscalationQuota: cfg.HearingEscalationQuota,
 	}
 }
 
