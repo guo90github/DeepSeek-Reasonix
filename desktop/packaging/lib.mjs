@@ -1,4 +1,5 @@
-import { closeSync, fstatSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { closeSync, existsSync, fstatSync, openSync, readdirSync, readFileSync, readSync, statSync } from "node:fs";
+import { homedir } from "node:os";
 import { basename, join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -42,6 +43,47 @@ export function parseTarget(spec) {
   const target = TARGET_TABLE[spec];
   if (!target) throw new Error(`unsupported target ${JSON.stringify(spec)}; expected one of ${Object.keys(TARGET_TABLE).join(", ")}`);
   return { ...target, spec, key: `${target.os}-${target.arch}` };
+}
+
+// @electron/get caches the Electron zip under <cache>/<hash of its url>/, but
+// packager's SHASUMS256.txt check re-fetches on every run even when the zip is
+// already there (packager's getElectronZipPath). A flaky network then fails the
+// build for nothing, so packaging prefers the cached zip unless a directory is
+// named explicitly.
+
+/** The cache root @electron/get uses when ELECTRON_CACHE is unset. */
+export function defaultElectronCacheRoot({ env = process.env, platform = process.platform, home = homedir() } = {}) {
+  const configured = (env.ELECTRON_CACHE ?? "").trim();
+  if (configured) return configured;
+  if (platform === "win32") return join(env.LOCALAPPDATA || join(home, "AppData", "Local"), "electron", "Cache");
+  if (platform === "darwin") return join(home, "Library", "Caches", "electron", "Cache");
+  return join(env.XDG_CACHE_HOME || join(home, ".cache"), "electron", "Cache");
+}
+
+/** The zip file names this target needs; darwin/universal merges two builds. */
+export function electronZipNames({ target, electronVersion }) {
+  const arch = target.packagerArch === "universal" ? ["arm64", "x64"] : [target.packagerArch];
+  return arch.map((value) => `electron-v${electronVersion}-${target.packagerPlatform}-${value}.zip`);
+}
+
+/** The cached directory holding every zip this target needs, or undefined. */
+export function findElectronZipDir({ zipNames, cacheRoot = defaultElectronCacheRoot(), exists = existsSync, readdir = readdirSync } = {}) {
+  if (!cacheRoot || !exists(cacheRoot)) return undefined;
+  const hashed = readdir(cacheRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(cacheRoot, entry.name));
+  return [cacheRoot, ...hashed].find((dir) => zipNames.every((name) => exists(join(dir, name))));
+}
+
+/** REASONIX_ELECTRON_ZIP_DIR wins; otherwise the local @electron/get cache. */
+export function resolveElectronZipDir({ target, electronVersion, env = process.env, cacheRoot, ...fs } = {}) {
+  const explicit = (env.REASONIX_ELECTRON_ZIP_DIR ?? "").trim();
+  if (explicit) return explicit;
+  return findElectronZipDir({
+    zipNames: electronZipNames({ target, electronVersion }),
+    cacheRoot: cacheRoot ?? defaultElectronCacheRoot({ env }),
+    ...fs,
+  });
 }
 
 const TAG = /^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$/;

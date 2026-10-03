@@ -18,6 +18,7 @@ import {
   parseTarget,
   PRODUCT,
   readProductIdentity,
+  resolveElectronZipDir,
   runBuildScript,
   sanitizeShellPackageJson,
   signingFileList,
@@ -81,6 +82,11 @@ try {
 
   const icon = { darwin: join(desktop, "build", "darwin", "icon.icns"), win32: join(desktop, "build", "windows", "icon.ico") }[target.packagerPlatform];
   if (icon) require(icon, "application icon");
+  // A local electron zip skips @electron/get's SHASUMS256.txt fetch, which
+  // re-fetches on every run even when the zip is already cached (packager's
+  // getElectronZipPath), so a flaky network fails the build for nothing.
+  // REASONIX_ELECTRON_ZIP_DIR overrides; the default is the local cache.
+  const electronZipDir = resolveElectronZipDir({ target, electronVersion });
   const options = packagerOptions({
     target,
     version,
@@ -89,15 +95,14 @@ try {
     electronVersion,
     extraResources: [join(staging, "app"), join(staging, "icons"), join(staging, "build.json")],
     icon,
-    // A local electron zip skips @electron/get's SHASUMS256.txt fetch, which
-    // bypasses the cache on every run (packager.getElectronZipPath).
-    electronZipDir: (process.env.REASONIX_ELECTRON_ZIP_DIR ?? "").trim() || undefined,
+    electronZipDir,
   });
   options.sanitizePackageJson = [defaultSanitizePackageJson, (pkg) => sanitizeShellPackageJson(pkg, { version, productName: PRODUCT.name })];
   rmSync(options.out, { recursive: true, force: true });
   rmSync(outDir, { recursive: true, force: true });
 
   console.log(`==> packaging ${PRODUCT.name} ${version} for ${target.spec} with Electron ${electronVersion}`);
+  if (electronZipDir) console.log(`==> using the Electron zip in ${electronZipDir} (nothing to download)`);
   const [finalPath] = await packager(options);
   mkdirSync(outDir, { recursive: true });
   const bundle = target.os === "darwin" ? join(outDir, `${PRODUCT.name}.app`) : join(outDir, "app");
