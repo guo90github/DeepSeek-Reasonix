@@ -80,8 +80,10 @@ func TestInboxGateAnswersTheHoldWithoutAWake(t *testing.T) {
 	if queued, _ := held["queued"].(float64); queued != 1 {
 		t.Fatalf("body = %+v, want the waiting line counted", held)
 	}
-	if waited, _ := held["oldestQueuedForMs"].(float64); waited <= 0 {
-		t.Fatalf("body = %+v, want how long the first line has waited", held)
+	// Its value is timing — an enqueue and a read can land in the same millisecond — so what a
+	// room needs from this field is that the answer carries it at all, never that it is > 0.
+	if waited, ok := held["oldestQueuedForMs"].(float64); !ok || waited < 0 {
+		t.Fatalf("body = %+v, want the wait so far reported, not omitted", held)
 	}
 	if reason, _ := held["gateReason"].(string); reason != sessioninbox.GateReasonText(sessioninbox.GatePaused) {
 		t.Fatalf("body = %+v, want the sentence the room relays verbatim", held)

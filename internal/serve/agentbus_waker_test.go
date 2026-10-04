@@ -39,6 +39,12 @@ func TestHostedSessionReceivesAWakeForItsOwnParticipant(t *testing.T) {
 	bob := agentBusSession(t, t.TempDir(), "bob")
 	s := &Server{tags: map[*control.Controller]*sessionTagSink{bob: nil}}
 	s.installAgentBusWaker(bob)
+	// Enqueueing starts an idle session's turn on purpose, so "still in the inbox" races that
+	// dispatch. Holding the queue makes the post-condition this test is actually about — the wake
+	// reached the session and waits there (measured flaky 2/10, 2026-10-05).
+	if err := bob.SetInboxPaused(true); err != nil {
+		t.Fatal(err)
+	}
 
 	target := agentbus.WakeTarget{Participant: "bob", Key: "agentbus-wake:bob:deadbeef", Ready: []string{"schema"}}
 	if err := s.deliverAgentBusWake(context.Background(), target); err != nil {
