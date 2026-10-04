@@ -62,7 +62,11 @@ type Node struct {
 	Requesters []string  `json:"requesters,omitempty"`
 	Deadline   time.Time `json:"deadline,omitzero"`
 	// ClaimedAt is when the current holder claimed it; only meaningful while claimed.
-	ClaimedAt    time.Time       `json:"claimedAt,omitzero"`
+	ClaimedAt time.Time `json:"claimedAt,omitzero"`
+	// LastOpID is the op that last moved this node. Its prefix is the only marker of who wrote
+	// it — op- hand-written, agentbus-dispatch: a host handing work over — and no surface showed
+	// it, so "who is working this" was unreadable from the board (F64/F46, 2026-10-05).
+	LastOpID     string          `json:"lastOpId,omitempty"`
 	Bounds       *Bounds         `json:"bounds,omitempty"`
 	Asserts      []Assertion     `json:"asserts,omitempty"`
 	Refutes      []Refutation    `json:"refutes,omitempty"`
@@ -258,6 +262,20 @@ func requireNode(op Op) error {
 // path share this one implementation, and it reads no clock: every transition it
 // stores is a function of the log alone, so replay cannot drift with read time.
 func applyOp(st *State, op Op) error {
+	if err := applyVerb(st, op); err != nil {
+		return err
+	}
+	// Whichever op moved the node, the board remembers which one it was: its prefix is the only
+	// marker of who wrote it (F64/F46, 2026-10-05). This sits in the shared implementation, so a
+	// cold fold and a cached state agree on it.
+	if n := st.Nodes[op.Node]; n != nil {
+		n.LastOpID = op.ID
+	}
+	return nil
+}
+
+// applyVerb is the transition table itself: one verb, one state change.
+func applyVerb(st *State, op Op) error {
 	if err := validateOpShape(op); err != nil {
 		return err
 	}

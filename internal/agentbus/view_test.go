@@ -183,7 +183,9 @@ func TestViewRespectsTheByteCap(t *testing.T) {
 		ops = append(ops, assertOp(id, "alice"))
 	}
 	st := testState(t, ops...)
-	const cap = 400
+	// 420, not 400: the row carries the op column now (who wrote the last move, F64), so the
+	// same property is asserted against the budget that actually holds a row today.
+	const cap = 420
 	v := BuildView(st, ViewSpec{Board: "b1", Participant: "alice", MaxBytes: cap})
 	if len(v.Lines) == 0 {
 		t.Fatalf("at least one row must fit in %d bytes", cap)

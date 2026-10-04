@@ -48,6 +48,8 @@ type ViewLine struct {
 	Assignee string
 	// Lease is how long the current holder was granted; empty when nobody holds the node.
 	Lease string
+	// LastOp is the op that last moved this node; its prefix names who wrote it (F64, 2026-10-05).
+	LastOp string
 }
 
 // View is one participant's bounded projection of the folded board.
@@ -152,6 +154,22 @@ func (v View) header() string {
 		v.Schema, v.Board, v.Participant)
 }
 
+// opSource names who wrote an op, off the only marker the board keeps in the id itself: op- is
+// a session's own tool, agentbus-dispatch: the host handing work over, sweep- the board's own
+// reclaim (F64/F46, 2026-10-05). The exact id stays in the board's own op log.
+func opSource(id string) string {
+	switch {
+	case strings.HasPrefix(id, "agentbus-dispatch:"):
+		return "dispatch"
+	case strings.HasPrefix(id, "sweep-"):
+		return "sweep"
+	case strings.HasPrefix(id, "op-"):
+		return "hand"
+	default:
+		return "other"
+	}
+}
+
 func renderLine(l ViewLine) string {
 	// Both suffixes are conditional so a row without them stays byte-identical to what it was
 	// before they existed: most rows are unheld, and they are what the byte cap and the prompt
@@ -162,6 +180,9 @@ func renderLine(l ViewLine) string {
 	}
 	if l.Lease != "" {
 		suffix += " lease=" + l.Lease
+	}
+	if l.LastOp != "" {
+		suffix += " op=" + opSource(l.LastOp)
 	}
 	return fmt.Sprintf(
 		"node id=%s state=%s outcome=%s owner=%s deadline=%s startable=%t deps_open=%d evidence=%d refuted=%t no_progress=%d last_seq=%d title=%q%s\n",
@@ -183,6 +204,7 @@ func lineFor(st *board.State, n *board.Node, participant string) ViewLine {
 		LastSeq:    n.LastSeq,
 		Startable:  startableFor(st, n, participant),
 		Assignee:   n.Assignee,
+		LastOp:     n.LastOpID,
 	}
 	if !n.Deadline.IsZero() {
 		line.Deadline = n.Deadline.UTC().Format(time.RFC3339)
