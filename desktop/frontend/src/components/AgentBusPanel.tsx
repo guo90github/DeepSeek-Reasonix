@@ -75,7 +75,18 @@ const KIND_LABEL: Record<string, DictKey> = {
   undecided: "agentbus.kind.undecided",
   budget: "agentbus.kind.budget",
   rate_limited: "agentbus.kind.rateLimited",
+  wake_undelivered: "agentbus.kind.wakeUndelivered",
+  wake_unreachable: "agentbus.kind.wakeUnreachable",
+  node_rate: "agentbus.kind.nodeRate",
+  other: "agentbus.kind.other",
 };
+
+// An unknown kind reads as "other signal", never as a known one: a row about an undelivered
+// wake used to be labelled "under deliberation" because everything unlisted fell back to
+// disputed, which told the reader the opposite of what the row said (2026-10-05).
+function labelKeyOf(kind: string): DictKey {
+  return KIND_LABEL[kind] ?? "agentbus.kind.other";
+}
 
 function severityOf(kind: string): number {
   return SEVERITY[kind] ?? 9;
@@ -183,7 +194,7 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
             .filter((signal) => !signal.subtree)
             .map((signal) => (
               <li key={`${signal.kind}:${signal.detail}`} className="agentbus-panel__signal" data-kind={signal.kind}>
-                <span>{t(KIND_LABEL[signal.kind] ?? "agentbus.kind.disputed")}</span>
+                <span>{t(labelKeyOf(signal.kind))}</span>
                 <span className="agentbus-panel__detail"> {signal.detail}</span>
               </li>
             ))}
@@ -196,7 +207,7 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
             <li key={card.subtree} className="agentbus-panel__card" data-worst={card.worst}>
               <div className="agentbus-panel__title" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
                 <strong>{card.subtree}</strong>
-                <span>{t(KIND_LABEL[card.worst] ?? "agentbus.kind.disputed")}</span>
+                <span>{t(labelKeyOf(card.worst))}</span>
                 <span>
                   {t("agentbus.counts", {
                     atWork: card.atWork,

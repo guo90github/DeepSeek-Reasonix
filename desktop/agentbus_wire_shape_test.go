@@ -26,7 +26,10 @@ func TestAgentBusBriefingCarriesEmptyListsNotNull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	for _, want := range []string{`"cards":[]`, `"signals":[]`} {
+	// The host's own rows — a refused claim, a wake that reached nobody — are process-wide, so an
+	// empty board may still carry one. What this test pins is the shape the panel iterates
+	// (arrays, never null), not how many rows a host has accumulated.
+	for _, want := range []string{`"cards":[]`, `"signals":[`} {
 		if !strings.Contains(string(raw), want) {
 			t.Fatalf("briefing JSON = %s, want %s", raw, want)
 		}

@@ -108,14 +108,14 @@ func rateLimitSignal(byProvider map[string]int64, total int64) (AgentBusSignalVi
 	if total == 0 {
 		return AgentBusSignalView{}, false
 	}
-	detail := fmt.Sprintf("rode out %d rate limit(s) this process", total)
+	detail := fmt.Sprintf("本进程扛过 %d 次限流（429）", total)
 	if len(byProvider) > 0 {
 		lanes := make([]string, 0, len(byProvider))
 		for id, count := range byProvider {
 			lanes = append(lanes, fmt.Sprintf("%s %d", id, count))
 		}
 		sort.Strings(lanes)
-		detail += ": " + strings.Join(lanes, ", ")
+		detail += "：" + strings.Join(lanes, "、")
 	}
 	return AgentBusSignalView{Kind: "rate_limited", Detail: detail}, true
 }
@@ -143,7 +143,7 @@ func budgetRefusalSignal(counts control.BudgetRefusalCounts) (AgentBusSignalView
 	}
 	return AgentBusSignalView{
 		Kind:   "budget",
-		Detail: fmt.Sprintf("a ceiling refused %d claim(s): %s", counts.Total(), strings.Join(named, ", ")),
+		Detail: fmt.Sprintf("有 %d 次认领被上限拒收：%s", counts.Total(), strings.Join(named, "、")),
 	}, true
 }
 
@@ -154,9 +154,9 @@ func wakeFailureSignal(failures control.WakeFailures) (AgentBusSignalView, bool)
 	if failures.Count == 0 {
 		return AgentBusSignalView{}, false
 	}
-	detail := fmt.Sprintf("could not hand a wake to a participant %d time(s) this process", failures.Count)
+	detail := fmt.Sprintf("本进程有 %d 次唤醒没能投给参与者", failures.Count)
 	if failures.Last != "" {
-		detail += ": " + failures.Last
+		detail += "：" + failures.Last
 	}
 	return AgentBusSignalView{Kind: "wake_undelivered", Detail: detail}, true
 }
@@ -168,9 +168,9 @@ func nodeRateSignal(refusals control.NodeRateRefusals) (AgentBusSignalView, bool
 	if refusals.Count == 0 {
 		return AgentBusSignalView{}, false
 	}
-	detail := fmt.Sprintf("the node rate ceiling refused %d move(s) this process", refusals.Count)
+	detail := fmt.Sprintf("本进程有 %d 次节点迁移被速率上限拒收", refusals.Count)
 	if refusals.Last != "" {
-		detail += ": " + refusals.Last
+		detail += "：" + refusals.Last
 	}
 	return AgentBusSignalView{Kind: "node_rate", Detail: detail}, true
 }
@@ -182,7 +182,7 @@ func wakeUnreachableSignal(participants []string) (AgentBusSignalView, bool) {
 	if len(participants) == 0 {
 		return AgentBusSignalView{}, false
 	}
-	detail := fmt.Sprintf("%d participant(s) have work here but no session and no address", len(participants))
-	detail += ": " + strings.Join(participants, ", ")
+	detail := fmt.Sprintf("板上还有 %d 位不在这台宿主的参与者有待办（已离开或从未公告）", len(participants))
+	detail += "：" + strings.Join(participants, "、")
 	return AgentBusSignalView{Kind: "wake_unreachable", Detail: detail}, true
 }
