@@ -97,11 +97,11 @@ func AssessLanding(state *board.State, hearings *HearingState) *Landing {
 			h := hearings.Hearings[node]
 			switch {
 			case h.Open:
-				remember(Blocker{Kind: BlockerDeliberating, Node: node, Detail: "under deliberation"})
+				remember(Blocker{Kind: BlockerDeliberating, Node: node, Detail: hearingDetail("under deliberation", h)})
 			case h.Verdict == VerdictEscalate:
-				remember(Blocker{Kind: BlockerEscalated, Node: node, Detail: "escalated to a human"})
+				remember(Blocker{Kind: BlockerEscalated, Node: node, Detail: hearingDetail("escalated to a human", h)})
 			case h.Verdict == VerdictUndecided:
-				remember(Blocker{Kind: BlockerUndecided, Node: node, Detail: "closed by rule: nobody may call it settled"})
+				remember(Blocker{Kind: BlockerUndecided, Node: node, Detail: hearingDetail("closed by rule: nobody may call it settled", h)})
 			}
 		}
 	}

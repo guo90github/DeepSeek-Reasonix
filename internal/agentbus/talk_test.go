@@ -187,15 +187,18 @@ func TestSilenceClosingIsRecordedNotDerived(t *testing.T) {
 		t.Fatal("no window configured means never lapsed")
 	}
 
-	closeLine, ok := CloseLine(st, "t", talkBase.Add(2*time.Minute))
+	closeLine, ok := CloseLine(st, "t", talkBase.Add(2*time.Minute), limits.SilenceWindow)
 	if !ok {
 		t.Fatal("a lapsed topic must be closable")
 	}
 	if err := ApplyTalk(st, closeLine, limits); err != nil {
 		t.Fatalf("close: %v", err)
 	}
-	if !st.Topics["t"].Closed || st.Topics["t"].CloseReason != CloseSilence {
+	if !st.Topics["t"].Closed || !closedForSilence(st.Topics["t"].CloseReason) {
 		t.Fatalf("topic not closed by silence: %+v", st.Topics["t"])
+	}
+	if !namesSilenceWindow(closeLine.Reason, limits.SilenceWindow) {
+		t.Fatalf("the closure does not name the window it fired on: %q", closeLine.Reason)
 	}
 	if reason, _ := IsTalkReject(ApplyTalk(st, closeLine, limits)); reason != RefuseTopicClosed {
 		t.Fatalf("closing twice = %q, want topic_closed", reason)

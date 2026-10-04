@@ -23,8 +23,15 @@ const agentBusWakeMaxBytes = 2048
 // true, 2026-10-03).
 func AgentBusWakePrompt(target agentbus.WakeTarget) string {
 	if agentbus.IsDispatchKey(target.Key) {
-		return fmt.Sprintf("<agentbus-wake>\nThe board assigned this work to you: %s\nIt is already claimed in your name: do it, then decide it.\nSent when the board assigned it: if that lease has lapsed since, re-read the board before acting.\nWorking on it for longer than the lease? Renew it with the agentbus heartbeat, or the board takes the claim back.\n</agentbus-wake>\n",
-			strings.Join(target.Ready, ", "))
+		work := strings.Join(target.Ready, ", ")
+		// A step somebody has already reported on is not work to do again: the host's claim is
+		// how the verdict reaches a session, so the instruction has to say that (2026-10-05).
+		instruction := "It is already claimed in your name: do it, then decide it."
+		if target.Reports > 0 {
+			instruction = agentBusDispatchVerdictLine(work, target.Reports)
+		}
+		return fmt.Sprintf("<agentbus-wake>\nThe board assigned this work to you: %s\n%s\nSent when the board assigned it: if that lease has lapsed since, re-read the board before acting.\nWorking on it for longer than the lease? Renew it with the agentbus heartbeat, or the board takes the claim back.\n</agentbus-wake>\n",
+			work, instruction)
 	}
 	var b strings.Builder
 	b.WriteString("<agentbus-wake>\n")

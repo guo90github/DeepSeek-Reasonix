@@ -10,7 +10,7 @@ import (
 )
 
 // SchemaVersion identifies the machine view's field order and header shape.
-const SchemaVersion = "agentbus-view/2"
+const SchemaVersion = "agentbus-view/3"
 
 const (
 	defaultMaxLines = 200
@@ -36,13 +36,18 @@ type ViewLine struct {
 	Outcome  board.Outcome
 	Owner    string
 	Deadline string
-	// Startable is Node.Ready: can run now, which a live claim makes false.
+	// Startable is Node.Ready narrowed by the assignment gate, which is the same gate
+	// claim applies; a live claim makes it false too.
 	Startable  bool
 	DepsOpen   int
 	Evidence   int
 	Refuted    bool
 	NoProgress int
 	LastSeq    uint64
+	// Assignee is the participant this step is addressed to; empty means the board pool.
+	Assignee string
+	// Lease is how long the current holder was granted; empty when nobody holds the node.
+	Lease string
 }
 
 // View is one participant's bounded projection of the folded board.
@@ -93,10 +98,10 @@ func BuildView(st *board.State, spec ViewSpec) View {
 			v.Waiting++
 		case neededBy(st, n, mine):
 			v.Needed++
-		default:
+		case !requestsNode(n, spec.Participant):
 			continue
 		}
-		if n.Ready(st) {
+		if startableFor(st, n, spec.Participant) {
 			v.Ready++
 		}
 		if n.LastSeq > spec.Cursor {
@@ -112,7 +117,7 @@ func BuildView(st *board.State, spec ViewSpec) View {
 	const countersLineReserve = 200
 	used := len(v.header()) + countersLineReserve
 	for _, n := range candidates {
-		line := lineFor(st, n)
+		line := lineFor(st, n, spec.Participant)
 		rendered := len(renderLine(line))
 		if len(v.Lines) >= maxLines || used+rendered > maxBytes {
 			v.Truncated++
@@ -148,14 +153,24 @@ func (v View) header() string {
 }
 
 func renderLine(l ViewLine) string {
+	// Both suffixes are conditional so a row without them stays byte-identical to what it was
+	// before they existed: most rows are unheld, and they are what the byte cap and the prompt
+	// cache see (2026-10-05).
+	suffix := ""
+	if l.Assignee != "" {
+		suffix += " assignee=" + l.Assignee
+	}
+	if l.Lease != "" {
+		suffix += " lease=" + l.Lease
+	}
 	return fmt.Sprintf(
-		"node id=%s state=%s outcome=%s owner=%s deadline=%s startable=%t deps_open=%d evidence=%d refuted=%t no_progress=%d last_seq=%d title=%q\n",
+		"node id=%s state=%s outcome=%s owner=%s deadline=%s startable=%t deps_open=%d evidence=%d refuted=%t no_progress=%d last_seq=%d title=%q%s\n",
 		l.ID, l.State, l.Outcome, l.Owner, l.Deadline, l.Startable, l.DepsOpen,
-		l.Evidence, l.Refuted, l.NoProgress, l.LastSeq, l.Title,
+		l.Evidence, l.Refuted, l.NoProgress, l.LastSeq, l.Title, suffix,
 	)
 }
 
-func lineFor(st *board.State, n *board.Node) ViewLine {
+func lineFor(st *board.State, n *board.Node, participant string) ViewLine {
 	line := ViewLine{
 		ID:         n.ID,
 		Title:      truncateRunes(n.Title, maxTitleRunes),
@@ -166,10 +181,17 @@ func lineFor(st *board.State, n *board.Node) ViewLine {
 		Refuted:    len(n.Refutes) > 0,
 		NoProgress: n.NoProgress,
 		LastSeq:    n.LastSeq,
-		Startable:  n.Ready(st),
+		Startable:  startableFor(st, n, participant),
+		Assignee:   n.Assignee,
 	}
 	if !n.Deadline.IsZero() {
 		line.Deadline = n.Deadline.UTC().Format(time.RFC3339)
+	}
+	// The lease length is what tells one way of claiming from another — a hand-written claim
+	// defaults to 900s and the host's dispatch to 1800s — and the row used to carry only the
+	// deadline, so a reader could not tell which it was (F52, 2026-10-05).
+	if n.State == board.StateClaimed && !n.ClaimedAt.IsZero() {
+		line.Lease = n.Deadline.Sub(n.ClaimedAt).Round(time.Second).String()
 	}
 	for _, dep := range n.Deps {
 		d := st.Nodes[dep]
@@ -180,9 +202,22 @@ func lineFor(st *board.State, n *board.Node) ViewLine {
 	return line
 }
 
-// participantNodes are the nodes this participant owns, has asserted on, or was addressed by name
-// (assign). The last one matters because a wake tells the assignee "this is yours" — a view that
+// startableFor reports whether this step can run for this participant: the graph's own
+// readiness, narrowed by the assignment gate claim applies. Reporting Node.Ready alone
+// told a reader a step addressed to somebody else was startable, while claim refused it
+// (2026-10-05).
+func startableFor(st *board.State, n *board.Node, participant string) bool {
+	if n.Assignee != "" && n.Assignee != participant {
+		return false
+	}
+	return n.Ready(st)
+}
+
+// participantNodes are the nodes this participant holds or has asserted on. Being addressed a
+// node (assign) counts as holding it: a wake tells the assignee "this is yours" — a view that
 // then showed nothing would leave the reader with the wake's word and no row behind it.
+// Requesters are not in here: asking for a node is not holding it, so they are visible through
+// requestsNode without inflating the owned count.
 func participantNodes(st *board.State, participant string) map[string]bool {
 	out := map[string]bool{}
 	if participant == "" {
@@ -201,6 +236,23 @@ func participantNodes(st *board.State, participant string) map[string]bool {
 		}
 	}
 	return out
+}
+
+// requestsNode reports whether this participant asked for n: whichever assert, split or
+// require brought it into being, plus every later require that named it. The wake names those
+// same participants ("startable now"), and dropping their rows left a session unable to read
+// anything its own structure had created (measured 2026-10-05: a splitter's view held none of
+// its own children, so it could not read the deps it had just written).
+func requestsNode(n *board.Node, participant string) bool {
+	if participant == "" {
+		return false
+	}
+	for _, requester := range n.Requesters {
+		if requester == participant {
+			return true
+		}
+	}
+	return false
 }
 
 // waitsOnMine reports whether n sits in the reverse closure of my nodes and is

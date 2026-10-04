@@ -63,6 +63,8 @@ type AgentBusConfig struct {
 	// NodeRatePerMinute caps how often one node may move in any one minute: the fourth hard
 	// limit of §S5, and what keeps a node from being rewritten in a loop.
 	NodeRatePerMinute int `toml:"node_rate_per_minute"`
+	// Talk bounds the free-talk surface; see AgentBusTalkConfig for why zero means off.
+	Talk AgentBusTalkConfig `toml:"talk"`
 }
 
 // Config is Reasonix's runtime configuration.

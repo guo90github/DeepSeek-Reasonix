@@ -87,7 +87,7 @@ func (l *TalkLog) CloseLapsed(ctx context.Context, topic string, now time.Time, 
 	if !TopicLapsed(state, topic, now, limits) {
 		return false, nil
 	}
-	line, ok := CloseLine(state, topic, now)
+	line, ok := CloseLine(state, topic, now, limits.SilenceWindow)
 	if !ok {
 		return false, nil
 	}

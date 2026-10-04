@@ -89,6 +89,7 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 			Participant: claimant,
 			Key:         agentbus.DispatchKey(boardName, node),
 			Ready:       []string{node},
+			Reports:     assertionsWithEvidence(st.Nodes[node]),
 		}
 		if err := deliver(ctx, target); err != nil {
 			// Nobody was told, so nobody owns it: give the step back rather than leave it
@@ -119,7 +120,7 @@ func (c *Controller) releaseStalledAssignments(ctx context.Context, actor string
 		if n.Assignee == "" || n.State != board.StateOpen || n.NoProgress < agentBusDispatchTries {
 			continue
 		}
-		if _, err := c.ApplyAgentBusOp(ctx, board.Op{Verb: board.VerbAssign, Node: id, Actor: actor}); err != nil {
+		if _, err := c.ApplyAgentBusOp(ctx, board.Op{Verb: board.VerbUnassign, Node: id, Actor: actor}); err != nil {
 			return err
 		}
 	}

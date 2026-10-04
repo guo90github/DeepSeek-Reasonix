@@ -23,6 +23,7 @@ const (
 	VerbSplit         Verb = "split"
 	VerbRequire       Verb = "require"
 	VerbAssign        Verb = "assign"
+	VerbUnassign      Verb = "unassign"
 	VerbDecide        Verb = "decide"
 	VerbAbandon       Verb = "abandon"
 	VerbRevert        Verb = "revert"

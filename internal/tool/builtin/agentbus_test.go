@@ -211,7 +211,7 @@ func TestAgentBusToolMapsEveryActionToABoardOp(t *testing.T) {
 		{
 			name: "unassign",
 			args: `{"action":"unassign","node":"build"}`,
-			verb: board.VerbAssign, node: "build",
+			verb: board.VerbUnassign, node: "build",
 			check: func(t *testing.T, op board.Op) {
 				if op.Assignee != "" {
 					t.Fatalf("assignee = %q, want the node back in the pool", op.Assignee)
@@ -220,7 +220,7 @@ func TestAgentBusToolMapsEveryActionToABoardOp(t *testing.T) {
 		},
 		{
 			name: "split",
-			args: `{"action":"split","node":"root","children":[{"id":"a","title":"first"},{"id":"b"}]}`,
+			args: `{"action":"split","node":"root","children":[{"id":"a","title":"first"},{"id":"b","title":"second"}]}`,
 			verb: board.VerbSplit, node: "root",
 			check: func(t *testing.T, op board.Op) {
 				if len(op.Children) != 2 || op.Children[0].Title != "first" {

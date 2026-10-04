@@ -165,7 +165,7 @@ func TestTalkLogClosesALapsedTopicOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read: %v", err)
 	}
-	if !state.Topics["t"].Closed || state.Topics["t"].CloseReason != CloseSilence {
+	if !state.Topics["t"].Closed || !closedForSilence(state.Topics["t"].CloseReason) {
 		t.Fatalf("topic = %+v, want closed by silence", state.Topics["t"])
 	}
 	_, err = log.Append(ctx, sayLine("t", "alice", "again", talkBase.Add(4*time.Minute)), limits)

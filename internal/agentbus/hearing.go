@@ -238,6 +238,19 @@ func applyHearingClose(st *HearingState, h *Hearing, node string, rec HearingRec
 	return nil
 }
 
+// hearingDetail names a deliberation in one line, including the rule that closed it: the
+// reason is what tells a quota escalation from an evidence-weight verdict, and it otherwise
+// lives only in hearings.jsonl (2026-10-05).
+func hearingDetail(detail string, h *Hearing) string {
+	if h == nil {
+		return detail
+	}
+	if reason := strings.TrimSpace(h.Reason); reason != "" {
+		return detail + " (" + reason + ")"
+	}
+	return detail
+}
+
 // Round is the current asking round, derived: every required participant
 // answering once completes a round.
 func (h *Hearing) Round() int {

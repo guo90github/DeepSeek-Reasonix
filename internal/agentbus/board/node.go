@@ -59,8 +59,10 @@ type Node struct {
 	Assignee string `json:"assignee,omitempty"`
 	// Requesters are the participants that asked for this node: whichever assert, split
 	// or require created it, plus every later require that named it as a dependency.
-	Requesters   []string        `json:"requesters,omitempty"`
-	Deadline     time.Time       `json:"deadline,omitzero"`
+	Requesters []string  `json:"requesters,omitempty"`
+	Deadline   time.Time `json:"deadline,omitzero"`
+	// ClaimedAt is when the current holder claimed it; only meaningful while claimed.
+	ClaimedAt    time.Time       `json:"claimedAt,omitzero"`
 	Bounds       *Bounds         `json:"bounds,omitempty"`
 	Asserts      []Assertion     `json:"asserts,omitempty"`
 	Refutes      []Refutation    `json:"refutes,omitempty"`
@@ -238,7 +240,7 @@ func validateOpShape(op Op) error {
 		default:
 			return reject(op.Verb, op.Node, ReasonUnknownOutcome)
 		}
-	case VerbRelease, VerbYield, VerbRevert, VerbNoProgress, VerbAssign:
+	case VerbRelease, VerbYield, VerbRevert, VerbNoProgress, VerbAssign, VerbUnassign:
 	default:
 		return reject(op.Verb, op.Node, ReasonUnknownVerb)
 	}
@@ -278,7 +280,7 @@ func applyOp(st *State, op Op) error {
 		return applyCapabilityGap(st, op)
 	case VerbAbandon:
 		return applyAbandon(st, op)
-	case VerbAssign:
+	case VerbAssign, VerbUnassign:
 		return applyAssign(st, op)
 	case VerbDecide:
 		return applyDecide(st, op)
@@ -349,6 +351,7 @@ func applyClaim(st *State, op Op) error {
 	n.State = StateClaimed
 	n.Owner = op.Actor
 	n.Deadline = op.Deadline.UTC()
+	n.ClaimedAt = op.At.UTC()
 	n.Bounds = op.Bounds
 	n.LastSeq = op.Seq
 	return nil
@@ -626,14 +629,20 @@ func applyNoProgress(st *State, op Op) error {
 	return nil
 }
 
-// ReclaimOp builds the system record that reclaims one expired claim.
+// ReclaimOp builds the system record that reclaims one expired claim. The reason names the
+// claim it ended and the lease that claim was granted, because "the holder died" and "the
+// work outlived its own lease" otherwise read identically afterwards (2026-10-05).
 func ReclaimOp(n *Node, now time.Time) Op {
+	held := ""
+	if !n.ClaimedAt.IsZero() {
+		held = " after a " + n.Deadline.Sub(n.ClaimedAt).Round(time.Second).String() + " lease"
+	}
 	return Op{
 		ID:     SweepID(n.ID, n.Deadline),
 		Verb:   VerbNoProgress,
 		Node:   n.ID,
 		Actor:  ActorSystem,
 		At:     now,
-		Reason: fmt.Sprintf("claim by %q expired at %s", n.Owner, n.Deadline.UTC().Format(time.RFC3339)),
+		Reason: fmt.Sprintf("claim by %q expired at %s%s (reclaimed %s)", n.Owner, n.Deadline.UTC().Format(time.RFC3339Nano), held, now.UTC().Format(time.RFC3339Nano)),
 	}
 }

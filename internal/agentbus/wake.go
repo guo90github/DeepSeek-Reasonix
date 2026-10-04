@@ -37,6 +37,10 @@ type WakeTarget struct {
 	// budget: the dispatcher will not hand them out again, so being told is the only way
 	// they move (§13.13).
 	Stalled []string
+	// Reports is how many assertions already stand on the step this wake hands over. Only
+	// the dispatcher fills it, and only when it is handing over a step somebody has already
+	// reported on (2026-10-05).
+	Reports int
 }
 
 // DispatchKeyPrefix marks the wake that hands one assignment to a participant rather

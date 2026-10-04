@@ -63,7 +63,25 @@ func (c *Controller) SetAgentBus(dir, participant string) {
 		c.agentBus = nil
 		return
 	}
-	c.agentBus = &agentBusState{dir: dir, participant: participant, wakeLedger: NewWakeLedger()}
+	// Re-enrolling keeps the watermarks and the bounds the operator set: a fresh state starts
+	// them at zero, and any re-enrolment silently dropped them (F5b, 2026-10-05). Another
+	// board or identity has unrelated sequence numbers, so its watermarks start at the start.
+	cursors := agentBusCursors{}
+	var talk agentbus.TalkLimits
+	var hearing agentbus.HearingLimits
+	var rate board.Limits
+	if prev := c.agentBus; prev != nil {
+		prev.mu.Lock()
+		cursors, talk, hearing, rate = prev.cursors, prev.limits, prev.hearingLimits, prev.nodeRate
+		prev.mu.Unlock()
+		if prev.dir != dir || prev.participant != participant {
+			cursors = agentBusCursors{}
+		}
+	}
+	c.agentBus = &agentBusState{
+		dir: dir, participant: participant, wakeLedger: NewWakeLedger(),
+		cursors: cursors, limits: talk, hearingLimits: hearing, nodeRate: rate,
+	}
 }
 
 // AgentBusEnrolled reports whether a board was set for this session. A session can be

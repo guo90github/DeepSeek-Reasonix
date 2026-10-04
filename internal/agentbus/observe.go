@@ -205,13 +205,13 @@ func (f *observeFolder) deliberations(hearings *HearingState) {
 		switch {
 		case h.Open:
 			c.Disputed++
-			f.signals = append(f.signals, Signal{Kind: SignalDisputed, Subtree: subtree, Node: node, Detail: "under deliberation"})
+			f.signals = append(f.signals, Signal{Kind: SignalDisputed, Subtree: subtree, Node: node, Detail: hearingDetail("under deliberation", h)})
 		case h.Verdict == VerdictEscalate:
-			f.signals = append(f.signals, Signal{Kind: SignalEscalated, Subtree: subtree, Node: node, Detail: "escalated to a human"})
+			f.signals = append(f.signals, Signal{Kind: SignalEscalated, Subtree: subtree, Node: node, Detail: hearingDetail("escalated to a human", h)})
 		case h.Verdict == VerdictUndecided:
 			f.signals = append(f.signals, Signal{
 				Kind: SignalUndecided, Subtree: subtree, Node: node,
-				Detail: "closed by rule: nobody may call it settled",
+				Detail: hearingDetail("closed by rule: nobody may call it settled", h),
 			})
 		}
 	}

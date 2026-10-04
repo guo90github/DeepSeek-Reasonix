@@ -262,8 +262,10 @@ func TopicLapsed(st *TalkState, topic string, now time.Time, lim TalkLimits) boo
 
 // CloseLine builds the record that closes a lapsed topic. Whoever writes next
 // appends it, the same way an expired board lease is reclaimed by its next
-// writer; the idempotency key is the topic plus the line it lapsed from.
-func CloseLine(st *TalkState, topic string, now time.Time) (TalkLine, bool) {
+// writer; the idempotency key is the topic plus the line it lapsed from. The
+// reason carries the silence it measured and the window it was measured against,
+// so a reader can tell which threshold fired (2026-10-05).
+func CloseLine(st *TalkState, topic string, now time.Time, window time.Duration) (TalkLine, bool) {
 	t := st.Topics[topic]
 	if t == nil || t.Closed || t.LastAt.IsZero() {
 		return TalkLine{}, false
@@ -273,7 +275,7 @@ func CloseLine(st *TalkState, topic string, now time.Time) (TalkLine, bool) {
 		Kind:   TalkClose,
 		From:   "system",
 		At:     now,
-		Reason: CloseSilence,
+		Reason: CloseSilence + ": nothing said for " + now.Sub(t.LastAt).Round(time.Second).String() + " (window " + window.String() + ")",
 	}, true
 }
 

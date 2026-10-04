@@ -164,6 +164,9 @@ func (a *App) enrollAgentBus(ctrl control.SessionAPI) {
 	if c, ok := ctrl.(*control.Controller); ok {
 		c.SetAgentBusHearingLimits(control.AgentBusHearingLimits(agentBusConfig()))
 		c.SetAgentBusNodeRate(control.AgentBusNodeRate(agentBusConfig()))
+		// Talk's five bounds are the same story, and until now nothing read them at all: the
+		// setter existed with no caller, so a configured window never fired (2026-10-05).
+		c.SetAgentBusTalkLimits(control.AgentBusTalkLimits(agentBusConfig()))
 	}
 	bus.SetAgentBusWaker(func(ctx context.Context, target agentbus.WakeTarget) error {
 		return a.routeAgentBusWakeOn(ctx, boardDir, target)

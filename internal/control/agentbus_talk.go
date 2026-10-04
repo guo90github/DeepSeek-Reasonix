@@ -98,22 +98,35 @@ func (c *Controller) agentBusTalkBlock() string {
 
 	var body strings.Builder
 	var hidden, lines int
-	var delivered uint64
+	var delivered, droppedFirst uint64
+	used := talkCountersReserve
 	truncated := false
 	for _, name := range names {
 		named, rest := agentbus.Digest(st, name, participant, cursor)
 		hidden += rest
 		for _, line := range named {
-			if line.Seq > delivered {
-				delivered = line.Seq
-			}
 			if lines >= agentBusTalkMaxLines {
 				truncated = true
+				droppedFirst = noteDropped(droppedFirst, line.Seq)
+				continue
+			}
+			text, shortened := talkLineText(line.Text)
+			row := fmt.Sprintf("line seq=%d topic=%s kind=%s from=%s to=%s correlation=%s text=%q\n",
+				line.Seq, line.Topic, line.Kind, line.From, line.To, line.Correlation, text)
+			if used+len(row) > agentBusTalkMaxBytes {
+				truncated = true
+				droppedFirst = noteDropped(droppedFirst, line.Seq)
 				continue
 			}
 			lines++
-			fmt.Fprintf(&body, "line seq=%d topic=%s kind=%s from=%s to=%s correlation=%s text=%q\n",
-				line.Seq, line.Topic, line.Kind, line.From, line.To, line.Correlation, line.Text)
+			used += len(row)
+			if line.Seq > delivered {
+				delivered = line.Seq
+			}
+			if shortened {
+				truncated = true
+			}
+			body.WriteString(row)
 		}
 	}
 	if lines == 0 {
@@ -126,8 +139,46 @@ func (c *Controller) agentBusTalkBlock() string {
 	fmt.Fprintf(&b, "state topics=%d lines=%d delivered_to=%d hidden=%d truncated=%t\n",
 		len(names), lines, delivered, hidden, truncated)
 	b.WriteString(body.String())
+	// A row the cap dropped is not delivered, so the watermark must not pass the first of
+	// them: doing that retired the rest for good (2026-10-05). Cross-topic order can bring an
+	// already-shown row back; repeating one is better than losing one.
+	if droppedFirst > 0 && delivered >= droppedFirst {
+		delivered = droppedFirst - 1
+	}
 	bus.advanceTalk(delivered)
 	return b.String()
+}
+
+// agentBusTalkMaxBytes bounds the block by size: the line cap bounds how many lines arrive and
+// the shortening rule bounds one of them, never the sum, so fifty shortened lines still reached
+// a turn. The counters line's room is reserved on top of it.
+const agentBusTalkMaxBytes = 8 * 1024
+
+// talkCountersReserve is the room the header and the counters line take, mirroring the view's.
+const talkCountersReserve = 200
+
+// noteDropped remembers the first row the block did not carry: the watermark must not pass it,
+// or no later block ever sends the rest (2026-10-05).
+func noteDropped(first, seq uint64) uint64 {
+	if first == 0 || seq < first {
+		return seq
+	}
+	return first
+}
+
+// talkLineHeadRunes is how much of one speech the block carries when the whole of it does not
+// belong in a turn: the line cap bounds how many lines arrive, never how long one is, so a
+// single long message reached the model in full (F7's leftover, 2026-10-05).
+const talkLineHeadRunes = 512
+
+// talkLineText keeps one line's speech to a readable head and names what it left out, so the
+// reader keeps a pointer to the rest instead of a hole the block cannot fill.
+func talkLineText(text string) (string, bool) {
+	runes := []rune(text)
+	if len(runes) <= talkLineHeadRunes {
+		return text, false
+	}
+	return string(runes[:talkLineHeadRunes]) + fmt.Sprintf("… (+%d runes; action=view reads the topic in full)", len(runes)-talkLineHeadRunes), true
 }
 
 func (c *Controller) agentBusTalkSnapshot() (*agentBusState, *agentbus.TalkState, error) {

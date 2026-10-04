@@ -329,6 +329,11 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 		if len(in.Children) == 0 {
 			return board.Op{}, fmt.Errorf("split needs children: at least one {id, title}")
 		}
+		for _, child := range in.Children {
+			if strings.TrimSpace(child.Title) == "" {
+				return board.Op{}, fmt.Errorf("split needs a title on every child, including %q: the title is how the child is found later, and no verb renames a node", strings.TrimSpace(child.ID))
+			}
+		}
 		op.Children = specsOf(in.Children)
 	case "assign":
 		if strings.TrimSpace(in.Assignee) == "" {
@@ -336,10 +341,13 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 		}
 		op.Assignee = strings.TrimSpace(in.Assignee)
 	case "unassign":
-		op.Verb = board.VerbAssign
+		op.Verb = board.VerbUnassign
 	case "require":
 		if in.Dep == nil || strings.TrimSpace(in.Dep.ID) == "" {
 			return board.Op{}, fmt.Errorf("require needs dep: {id, title} the node waits for")
+		}
+		if strings.TrimSpace(in.Dep.Title) == "" {
+			return board.Op{}, fmt.Errorf("require needs a title on the dependency %q: the title is how it is found later, and no verb renames a node", strings.TrimSpace(in.Dep.ID))
 		}
 		op.Dep = &board.NodeSpec{ID: strings.TrimSpace(in.Dep.ID), Title: strings.TrimSpace(in.Dep.Title)}
 	case "revert":
@@ -355,7 +363,7 @@ func (t agentBusBoard) apply(op board.Op) (string, error) {
 	receipt, err := t.port.ApplyBoardOp(context.Background(), op)
 	if err != nil {
 		if reason, rejected := board.IsReject(err); rejected {
-			return fmt.Sprintf("refused (%s): the board did not accept %s on %q — %s", reason, op.Verb, op.Node, rejectHint(reason)), nil
+			return fmt.Sprintf("refused (%s): the board did not accept %s on %q — %s", reason, op.Verb, op.Node, rejectHint(reason, op.Verb)), nil
 		}
 		// A spending ceiling is a refusal too, and this tool's contract says a refusal comes back
 		// as text, not as a failed call. The host keeps its own typed error for the dispatch loop,
@@ -416,10 +424,17 @@ func leaseOf(seconds int) time.Duration {
 
 // rejectHint turns a board refusal into the correction the caller should make. The
 // reasons are the kernel's own closed set; anything new stays unexplained rather than
-// guessed at.
-func rejectHint(reason string) string {
+// guessed at. The verb decides which surface the evidence has to be on: decide checks the
+// node's assertions, abandon its own ref (2026-10-05).
+func rejectHint(reason string, verb board.Verb) string {
 	switch reason {
 	case board.ReasonMissingEvidence:
+		switch verb {
+		case board.VerbDecide:
+			return "this node needs an assert carrying evidence first: decide's own refs are not what the board checks here"
+		case board.VerbAbandon:
+			return "abandon needs a ref of its own — a reason is not evidence: pass evidence with a ref another participant can check"
+		}
 		return "pass evidence with a ref another participant can check"
 	case board.ReasonMissingReason:
 		return "pass a reason that says why"
@@ -429,14 +444,44 @@ func rejectHint(reason string) string {
 		return "claim needs bounds (steps)"
 	case board.ReasonMissingActor:
 		return "this session has no identity on the board yet"
+	case board.ReasonMissingNode:
+		return "name the node this op is about in node"
 	case board.ReasonUnknownNode:
 		return "no node by that id on this board; create it with require, split or assert"
+	case board.ReasonUnknownVerb:
+		return "send one of the board's verbs: assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert"
 	case board.ReasonIllegalTransition:
 		return "another participant's state does not allow this: read action=view first"
 	case board.ReasonNotOwner:
 		return "only the claimer may do this: claim the node first, or ask its owner"
 	case board.ReasonNotAssignee:
 		return "the board addressed this step to someone else: ask for it to be reassigned (assign) or handed back (unassign)"
+	case board.ReasonMissingReproducer:
+		return "decide(done) needs reproducedBy: name the participant that re-ran the evidence"
+	case board.ReasonSelfReproduced:
+		return "reproducedBy must not be someone who asserted on this node: ask another participant to re-run it and record that run"
+	case board.ReasonMissingAbandonRequest:
+		return "decide(abandoned) closes an abandon request that has to exist first: abandon, with evidence"
+	case board.ReasonMissingDependency:
+		return "require needs dep: {id, title} the node waits for"
+	case board.ReasonDuplicateDependency:
+		return "this node already waits for that dependency: read its deps with action=view and pick a different one"
+	case board.ReasonDuplicateNode:
+		return "a split cannot reuse a child id that already exists: read the children it has, then add only the new ones"
+	case board.ReasonCycle:
+		return "that would make the graph depend on itself: pick a dependency that does not lead back here"
+	case board.ReasonDependencyClosed:
+		return "that dependency was abandoned, so it can never become done: this node cannot be unblocked by it — abandon or re-scope this node instead"
+	case board.ReasonUnknownOutcome:
+		return "decide needs an outcome: done, blocked or abandoned"
+	case board.ReasonInvalidOutcomeForState:
+		return "this outcome does not fit the node's state: read action=view first"
+	case board.ReasonDeadlineNotFuture:
+		return "the lease has to end in the future: pass a later deadline"
+	case board.ReasonSystemOnly:
+		return "only the board writes this verb; it reclaims expired claims on its own"
+	case board.ReasonIdempotencyConflict:
+		return "the same op id was already recorded with a different payload: change the move, not just its arguments"
 	case board.ReasonRateLimited:
 		return "not now: this node is moving faster than the host allows — send the same move again once the window passes"
 	default:

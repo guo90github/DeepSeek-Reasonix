@@ -35,19 +35,19 @@ func (c *Controller) agentBusWakeInjectionRewrite(ctx context.Context, meta sess
 		// what the block itself already says it is.
 		return "", false, false
 	}
-	age := agentBusWakeAge(meta, time.Now().UTC())
+	stamp := agentBusWakeStamp(meta, time.Now().UTC())
 	me := bus.participantID(c)
 	if _, node, ok := splitAgentBusDispatchKey(key); ok {
-		text, stale := agentBusDispatchAtInjection(input, node, me, age, key)
+		text, stale := agentBusDispatchAtInjection(input, node, me, stamp, key)
 		return text, stale, true
 	}
 	for _, target := range agentbus.WakeTargets(input) {
 		if target.Participant == me {
-			return agentBusWakeRebuiltNote(age) + AgentBusWakePrompt(target), false, true
+			return agentBusWakeRebuiltNote(stamp) + AgentBusWakePrompt(target), false, true
 		}
 	}
 	// Nothing waits on this session at all: the item has no list left to carry.
-	return agentBusWakeStaleNote(age) + agentBusWakeRefusedBlock("nothing is waiting on you ("+me+") now"), true, true
+	return agentBusWakeStaleNote(stamp) + agentBusWakeRefusedBlock("nothing is waiting on you ("+me+") now"), true, true
 }
 
 // agentBusDispatchAtInjection re-checks one assignment: while the wake waited, its node may
@@ -64,6 +64,9 @@ func agentBusDispatchAtInjection(input agentbus.WakeInput, node, me, age, key st
 	case n.Outcome == board.OutcomeDone:
 		return agentBusWakeStaleNote(age) + agentBusWakeRefusedBlock(node+" is already done"), true
 	case n.Owner == me:
+		if reported := assertionsWithEvidence(n); reported > 0 {
+			return agentBusWakeRebuiltNote(age) + agentBusDispatchVerdictBlock(node, reported), false
+		}
 		return agentBusWakeRebuiltNote(age) + AgentBusWakePrompt(agentbus.WakeTarget{
 			Participant: me, Key: key, Ready: []string{node},
 		}), false
@@ -89,21 +92,23 @@ func splitAgentBusDispatchKey(key string) (string, string, bool) {
 	return boardName, node, true
 }
 
-// agentBusWakeAge names how long the wake waited, so a reader can weigh a list it cannot
-// see the age of: the marker line is where that already lives for other wake kinds.
-func agentBusWakeAge(meta sessioninbox.InboxItemMeta, now time.Time) string {
+// agentBusWakeStamp names how long the wake waited and when it was made, so a reader can
+// weigh a list it cannot see the age of. A relative age alone cannot be checked against
+// anything: on the real machine the header said only "queued 0s ago", so nobody could tell
+// when it had been generated (2026-10-05).
+func agentBusWakeStamp(meta sessioninbox.InboxItemMeta, now time.Time) string {
 	if meta.CreatedAt.IsZero() {
-		return "an unknown time"
+		return "queued an unknown time ago"
 	}
-	return now.Sub(meta.CreatedAt).Round(time.Second).String()
+	return "queued " + now.Sub(meta.CreatedAt).Round(time.Second).String() + " ago (at " + meta.CreatedAt.UTC().Format(time.RFC3339) + ")"
 }
 
-func agentBusWakeRebuiltNote(age string) string {
-	return "[agentbus wake queued " + age + " ago; rebuilt against the board as it is now]\n"
+func agentBusWakeRebuiltNote(stamp string) string {
+	return "[agentbus wake " + stamp + "; rebuilt against the board as it is now]\n"
 }
 
-func agentBusWakeStaleNote(age string) string {
-	return "[agentbus wake queued " + age + " ago; its list no longer holds]\n"
+func agentBusWakeStaleNote(stamp string) string {
+	return "[agentbus wake " + stamp + "; its list no longer holds]\n"
 }
 
 func agentBusWakeRefusedBlock(reason string) string {
