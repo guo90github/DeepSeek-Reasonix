@@ -10,7 +10,7 @@ import (
 )
 
 // SchemaVersion identifies the machine view's field order and header shape.
-const SchemaVersion = "agentbus-view/3"
+const SchemaVersion = "agentbus-view/4"
 
 const (
 	defaultMaxLines = 200
@@ -184,8 +184,10 @@ func renderLine(l ViewLine) string {
 	if l.LastOp != "" {
 		suffix += " op=" + opSource(l.LastOp)
 	}
+	// asserts=, not evidence=: the number counts assertions on the node, and calling a count
+	// "evidence" made a probe with twenty empty assertions read as well-evidenced (F45, 2026-10-05).
 	return fmt.Sprintf(
-		"node id=%s state=%s outcome=%s owner=%s deadline=%s startable=%t deps_open=%d evidence=%d refuted=%t no_progress=%d last_seq=%d title=%q%s\n",
+		"node id=%s state=%s outcome=%s owner=%s deadline=%s startable=%t deps_open=%d asserts=%d refuted=%t no_progress=%d last_seq=%d title=%q%s\n",
 		l.ID, l.State, l.Outcome, l.Owner, l.Deadline, l.Startable, l.DepsOpen,
 		l.Evidence, l.Refuted, l.NoProgress, l.LastSeq, l.Title, suffix,
 	)

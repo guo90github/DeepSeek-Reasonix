@@ -72,7 +72,10 @@ func TestAgentBusTurnBlockCarriesOnlyMyViewAndAdvancesTheCursor(t *testing.T) {
 	if strings.Contains(first, "node id=theirs") {
 		t.Fatalf("another participant's node leaked into my turn:\n%s", first)
 	}
-	if !strings.Contains(first, "schema=agentbus-view/2") {
+	// The header carries the schema it was rendered with. This pins the shape, not a revision:
+	// the kernel bumps that revision whenever it renames a column, and a literal here goes stale
+	// silently (exactly what happened when evidence= became asserts=, F45, 2026-10-05).
+	if !strings.Contains(first, "schema=agentbus-view/") {
 		t.Fatalf("the block must carry the schema header:\n%s", first)
 	}
 
