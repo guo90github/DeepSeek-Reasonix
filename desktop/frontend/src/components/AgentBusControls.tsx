@@ -147,6 +147,7 @@ export function AgentBusControls({ apply, onApplied }: {
             <input
               aria-label={t(`agentbus.controls.field.${field}` as "agentbus.controls.field.node")}
               inputMode={field === "steps" ? "numeric" : undefined}
+              placeholder={t(`agentbus.controls.placeholder.${field}` as "agentbus.controls.placeholder.node")}
               value={fields[field]}
               onChange={(event) => set(field)(event.target.value)}
             />
