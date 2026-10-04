@@ -391,6 +391,9 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 		if strings.TrimSpace(in.Assignee) == "" {
 			return board.Op{}, fmt.Errorf("assign needs assignee: the participant this node is addressed to; use unassign to return it to the pool")
 		}
+		if err := t.checkAssigneeOnBoard(in.Assignee); err != nil {
+			return board.Op{}, err
+		}
 		op.Assignee = strings.TrimSpace(in.Assignee)
 	case "unassign":
 		op.Verb = board.VerbUnassign
