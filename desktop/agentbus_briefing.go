@@ -89,6 +89,9 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 	if signal, failed := wakeFailureSignal(control.AgentBusWakeFailures()); failed {
 		view.Signals = append(view.Signals, signal)
 	}
+	if signal, throttled := nodeRateSignal(control.AgentBusNodeRateRefusals()); throttled {
+		view.Signals = append(view.Signals, signal)
+	}
 	if signal, throttled := rateLimitSignal(provider.RateLimitRetriesByProvider(), provider.RateLimitRetries()); throttled {
 		view.Signals = append(view.Signals, signal)
 	}
@@ -153,4 +156,18 @@ func wakeFailureSignal(failures control.WakeFailures) (AgentBusSignalView, bool)
 		detail += ": " + failures.Last
 	}
 	return AgentBusSignalView{Kind: "wake_undelivered", Detail: detail}, true
+}
+
+// nodeRateSignal turns moves the board's own rate ceiling turned down into one row. A refused
+// move lands nothing, so nothing else on the board shows it: without this row the brake is
+// invisible (G3).
+func nodeRateSignal(refusals control.NodeRateRefusals) (AgentBusSignalView, bool) {
+	if refusals.Count == 0 {
+		return AgentBusSignalView{}, false
+	}
+	detail := fmt.Sprintf("the node rate ceiling refused %d move(s) this process", refusals.Count)
+	if refusals.Last != "" {
+		detail += ": " + refusals.Last
+	}
+	return AgentBusSignalView{Kind: "node_rate", Detail: detail}, true
 }

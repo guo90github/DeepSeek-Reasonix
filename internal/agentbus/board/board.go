@@ -15,6 +15,8 @@ import (
 const (
 	defaultLockWait = 5 * time.Second
 	maxSweepPerCall = 256
+	// nodeRateWindow is the window the ceiling names: one node, per minute.
+	nodeRateWindow = time.Minute
 )
 
 // Board is one coordination scope's op log. It owns no memory state: every
@@ -28,6 +30,15 @@ type Board struct {
 	// serialized by the board file lock, and readers never touch it.
 	cache      *State
 	cachedSize int64
+	// limits is the operator's allowance for writes; zero leaves every bound off.
+	limits Limits
+}
+
+// Limits bound what one writer may do to one node. The zero value leaves every bound off:
+// the kernel invents no ceilings on the operator's behalf.
+type Limits struct {
+	// NodeRatePerMinute caps how often one node may move within one nodeRateWindow.
+	NodeRatePerMinute int
 }
 
 // Receipt is what a caller learns about a write.
@@ -38,8 +49,9 @@ type Receipt struct {
 }
 
 // Open prepares a board directory. The caller supplies the directory (S1 does
-// not resolve state home), and the log is created lazily on first write.
-func Open(dir string) (*Board, error) {
+// not resolve state home), and the log is created lazily on first write. At most
+// one Limits may be passed; a second one is ignored.
+func Open(dir string, lims ...Limits) (*Board, error) {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {
 		return nil, fmt.Errorf("board: empty directory")
@@ -51,11 +63,15 @@ func Open(dir string) (*Board, error) {
 	if err := ensureDir(abs); err != nil {
 		return nil, err
 	}
-	return &Board{
+	b := &Board{
 		dir:      abs,
 		logPath:  filepath.Join(abs, logFileName),
 		lockPath: filepath.Join(abs, lockFileName),
-	}, nil
+	}
+	if len(lims) > 0 {
+		b.limits = lims[0]
+	}
+	return b, nil
 }
 
 // Dir is the directory this board reads and writes.
@@ -140,6 +156,9 @@ func (b *Board) Apply(ctx context.Context, op Op) (Receipt, error) {
 	if err := validateFreshness(op, now); err != nil {
 		return Receipt{}, err
 	}
+	if err := b.validateNodeRate(op); err != nil {
+		return Receipt{}, err
+	}
 	op.Seq = st.Seq + 1
 	if err := applyOp(st, op); err != nil {
 		return Receipt{}, err
@@ -169,6 +188,34 @@ func validateFreshness(op Op, now time.Time) error {
 		if !op.Deadline.After(now) {
 			return reject(op.Verb, op.Node, ReasonDeadlineNotFuture)
 		}
+	}
+	return nil
+}
+
+// validateNodeRate refuses an op that moves its node more often than the operator allows.
+// It is a write-time rule measured off the log's own timestamps, so a replay never re-judges
+// it. A heartbeat renews a lease and a system reclamation is not the writer moving the node,
+// so neither counts — throttling a renewal would lapse the very lease the cluster leans on.
+func (b *Board) validateNodeRate(op Op) error {
+	if b.limits.NodeRatePerMinute <= 0 || op.Node == "" || op.Verb == VerbHeartbeat {
+		return nil
+	}
+	previous, err := readLog(b.logPath)
+	if err != nil {
+		return err
+	}
+	cutoff := op.At.Add(-nodeRateWindow)
+	moved := 0
+	for _, prev := range previous.Ops {
+		if prev.Node != op.Node || prev.Verb == VerbHeartbeat || prev.Actor == ActorSystem {
+			continue
+		}
+		if !prev.At.Before(cutoff) {
+			moved++
+		}
+	}
+	if moved >= b.limits.NodeRatePerMinute {
+		return reject(op.Verb, op.Node, ReasonRateLimited)
 	}
 	return nil
 }

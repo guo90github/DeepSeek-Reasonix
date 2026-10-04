@@ -25,6 +25,8 @@ type agentBusState struct {
 	limits      agentbus.TalkLimits
 	// hearingLimits bound this session's deliberations; zero leaves them off.
 	hearingLimits agentbus.HearingLimits
+	// nodeRate bounds how often one node may move; zero leaves the ceiling off.
+	nodeRate board.Limits
 	// observeLimits tune how much the human first screen carries; zero uses defaults.
 	observeLimits agentbus.ObserveLimits
 	// waker is the host's routing for ready-work wakes; nil means wake nobody.
@@ -166,7 +168,7 @@ func (c *Controller) ApplyAgentBusOp(ctx context.Context, op board.Op) (board.Re
 	if bus == nil {
 		return board.Receipt{}, errAgentBusUnwired
 	}
-	brd, err := board.Open(bus.dir)
+	brd, err := board.Open(bus.dir, bus.nodeRateLimits())
 	if err != nil {
 		return board.Receipt{}, err
 	}
@@ -182,6 +184,11 @@ func (c *Controller) ApplyAgentBusOp(ctx context.Context, op board.Op) (board.Re
 	}
 	receipt, err := brd.Apply(ctx, op)
 	if err != nil {
+		// A rate refusal moves nothing and leaves no record, so the host's own count is the
+		// only sign the ceiling is biting (G3).
+		if reason, isReject := board.IsReject(err); isReject && reason == board.ReasonRateLimited {
+			noteNodeRateRefusal(op.Node)
+		}
 		return receipt, err
 	}
 	// An accepted step settles against the board and subtree allowances — the levels

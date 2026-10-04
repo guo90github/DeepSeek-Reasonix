@@ -60,6 +60,9 @@ type AgentBusConfig struct {
 	// HearingEscalationQuota is how many equal-weight questions may go to a human before
 	// they close as undecided-by-rule. Zero closes them that way at once.
 	HearingEscalationQuota int `toml:"hearing_escalation_quota"`
+	// NodeRatePerMinute caps how often one node may move in any one minute: the fourth hard
+	// limit of §S5, and what keeps a node from being rewritten in a loop.
+	NodeRatePerMinute int `toml:"node_rate_per_minute"`
 }
 
 // Config is Reasonix's runtime configuration.

@@ -128,3 +128,24 @@ func TestWakeFailureSignalNamesWhoCouldNotBeReached(t *testing.T) {
 		}
 	}
 }
+
+// A move the board's own rate ceiling turned down lands nothing, so the panel is the only place
+// a person can see that the ceiling is biting. Its row must not be confused with the provider
+// 429 row, which already owns the kind "rate_limited".
+func TestNodeRateSignalNamesTheCeilingThatRefused(t *testing.T) {
+	if _, throttled := nodeRateSignal(control.NodeRateRefusals{}); throttled {
+		t.Fatal("a host whose ceiling refused nothing must add no row")
+	}
+	signal, throttled := nodeRateSignal(control.NodeRateRefusals{Count: 3, Last: "build"})
+	if !throttled {
+		t.Fatal("a refused move must reach the panel")
+	}
+	if signal.Kind != "node_rate" {
+		t.Fatalf("kind = %q, want the board's own rate row rather than the provider's", signal.Kind)
+	}
+	for _, want := range []string{"3", "build"} {
+		if !strings.Contains(signal.Detail, want) {
+			t.Fatalf("detail = %q, want it to name %q", signal.Detail, want)
+		}
+	}
+}

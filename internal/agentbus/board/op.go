@@ -166,6 +166,9 @@ const (
 	ReasonSystemOnly             = "system_only"
 	ReasonDependencyClosed       = "dependency_closed"
 	ReasonIdempotencyConflict    = "idempotency_conflict"
+	// ReasonRateLimited is the tier AGENT_BUS §S5 names for "not now, come back":
+	// the node is moving faster than the operator allows.
+	ReasonRateLimited = "rate_limited"
 )
 
 func reject(verb Verb, node, reason string) error {

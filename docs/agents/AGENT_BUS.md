@@ -1265,7 +1265,7 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 | 地址簿 TTL 与撤回 | 过期并档是**设计**；退列**会撤回**（桌面关停 + serve 离场），残留只有硬杀 | `b9eff6b4a`/`b885dd61c` |
 | 跨机时钟 | **写者本地钟权威**；偏差后果是回收早晚、不是错结论；容忍度 ≪ 租约量级 | `75a30c00a` |
 | 板日志增长 | 无压缩、**只追加**；"读是 O(n)"仓里已有基准与 **T4-8** 靶子 | `9a4f11712` |
-| **待你定调 ①** | 速率/限流**层次错位**（文档"节点迁移"vs 实现"话题发言 + 听证冷却"）与收敛优先级**无单一实现点**：改文档还是补实现（涉及 S4 拍板项） | 本节两段 + 交接区"两条待论证"代价评估 |
+| **定调 ① 已决（2026-10-05：补实现）** | 速率/限流：**节点级迁移上限已补实现**（内核写侧守卫 + 旋钮 + 面板 `node_rate` 行）⇒ 文档不再"比代码说得多"；仍存的一半是 S4 ⑥ 的"连续 `refute` 触发冷却"（现实现是"关闭后冷却"）。收敛优先级**仍无单一实现点** | 本节"速率/限流面"与"第二例" + `internal/agentbus/board/rate_test.go` / `internal/boot/agentbus_node_rate_test.go` |
 | **待你定调 ②** | 板日志**无压缩 + 读 O(n)** 的跨任务累积：属长期运行边界，最小方向 = 载入跳过已折叠前缀 | 同上 |
 
 
@@ -1402,16 +1402,23 @@ starting new work, never undo the work that was accepted"（`internal/control/ag
 board 或子树超限（`budget.go:148-167`），失败时只 `slog.Warn`（`:162`）—— 而"停止新活"由**同一上限在下一次 `Charge` 上自然生效**，
 所以这条 log-only 既不丢语义也不留缺口（前两类失败是防御路径，后两类是设计选择）。
 
-**速率/限流面：代码里有，但**不是**文档描述的那一层（2026-10-04 核实，文档比代码说得多 ⇒ 记着，不擅自改语义）**
+**速率/限流面：节点级迁移上限已补实现（2026-10-05 落地；此前是"文档比代码说得多"）**
 
 | 文档怎么声称 | 代码里实际有什么 |
 |---|---|
-| §13.7 前的"**每节点每分钟状态迁移上限**"（`:55`、`:59` 的四条硬上限、`:227`、S4 验收 ⑥"速率上限生效"） | **没有**节点状态迁移的速率闸门：`internal/agentbus` 里没有任何针对 op/迁移的窗口或计数 |
+| §13.7 前的"**每节点每分钟状态迁移上限**"（`:55`、`:59` 的四条硬上限、`:227`、S4 验收 ⑥"速率上限生效"） | **有（本轮补齐）**：内核写侧守卫 `(*Board).validateNodeRate`（`internal/agentbus/board/board.go`）——同一节点在一个 `nodeRateWindow`（1 分钟）内的迁移数 ≥ `Limits.NodeRatePerMinute` ⇒ 拒收 `rate_limited`；窗口只读**日志自带时间戳** ⇒ 重放不重判；`heartbeat`（续租）与 `actor=system` 的回收**不计入**；**零值 = 关**（内核不替使用者发明天花板） |
 | "**主动限流**"、拒绝档 `rate_limited`（`:327`） | 有，但在 **talk 层**：`internal/agentbus/talk.go:235-245` 的 `rateLimited` 按 `lim.RateWindow`/`RateMax` 对**每话题的 talk 行**做滑动窗口，超限返回 `RefuseRate = "rate_limited"`（`talk.go:123`）；判定只读**日志自带的时间戳** ⇒ 重放同结论 |
 | "连续 `refute` 触发**冷却**"（S4 验收 ⑥、`:55`） | 有，但语义是"**关闭后**的冷却"：`RefuseHearingCooldown = "hearing_cooldown"` + `Limits.Cooldown`（`hearing.go:60-61,177-180`，同样按日志时间戳），由 `HearingCooldownMinutes` 配置注入（`control/agentbus_hearing.go:32`）——限制的是**重新开启**已关闭的问题，不是"连续 refute" |
 
-⇒ 两处**不是**"没有闸门"（talk 与听证两侧都有、且都重放安全），而是**论述层次与实现层次错位**：文档写"节点状态迁移"，实现落在"话题发言"与"听证冷却"。
-**处置（本轮不动）**：这属于 S4 那条**用户拍板过的验收项**（⑥），改写它等于调低验收线 ⇒ 留给下一刀在"**收紧文档措辞**"与"**补一层节点级迁移速率闸门**"之间做选择（两项都要先行论证，别悄悄改语义）。
+⇒ 三层现在**各就各位**：节点迁移在**内核写侧**（本轮补上），话题发言在 talk 层，听证冷却是裁决层 —— 文档与实现不再错位。
+**处置（2026-10-05 已执行）**：走的是"**补一层节点级迁移速率闸门**"这条；另一条"收紧文档措辞"未采用，所以 **S4 验收 ⑥ 的原文一字未动**（这正是补实现的目的）。
+旋钮 `[agentbus] node_rate_per_minute`（0 = 关，窗口固定 1 分钟），接线沿用 §13.12 的 `internal/boot/agentbus_wiring.go` → `control.AgentBusNodeRate`。
+**可见性（G3）**：拒收由 `control.AgentBusNodeRateRefusals()` 计数、经 `desktop/agentbus_briefing.go` 的 `nodeRateSignal`
+（kind **`node_rate`**，刻意不与 provider 429 那条已有的 `rate_limited` 混行）进面板。
+**证据**：`internal/agentbus/board/rate_test.go`（六条：越限／窗口／heartbeat 豁免／零值／分节点／拒收不留痕且重放一致）、
+`internal/control/agentbus_rate_test.go`（typed 透传 + 计数 + 映射）、`internal/boot/agentbus_node_rate_test.go`（真装配：设旋钮 ⇒ 第二动在工具面被拒且文案说 "not now"；不设 ⇒ 不拒）、
+`desktop/agentbus_briefing_test.go` 的 `TestNodeRateSignalNamesTheCeilingThatRefused`。
+**未做（如实）**：S4 验收 ⑥ 的另半句"**连续 `refute` 触发冷却**"仍只有"关闭后冷却"那一实现（见上表第三行），本轮不动语义。
 **同族新缺陷的判据**：只有在"宿主机算出了一个状态、而**没有任何可见面**能让操作者看到它，且它**不会自愈**"时，才构成这一类问题。
 
 **另一处已核实（2026-10-04）：地址簿 TTL 与两种投递失败的可见性。**
