@@ -14,7 +14,7 @@ import (
 	"reasonix/internal/installlayout"
 )
 
-func TestWatchdogOnlyRestoresAFreshUnattendedCrash(t *testing.T) {
+func TestWatchdogRestoresAHostThatDiedWithoutClearingItsMarker(t *testing.T) {
 	now := time.Now()
 	fresh := now.Add(-2 * time.Minute)
 	stale := now.Add(-48 * time.Hour)
@@ -26,9 +26,12 @@ func TestWatchdogOnlyRestoresAFreshUnattendedCrash(t *testing.T) {
 		want    bool
 	}{
 		{"clean exit leaves nothing to restore", hostStateOutcome{}, fresh, "/v/desktop.exe", false},
-		{"an attended marker is not restored", hostStateOutcome{Seen: true, Dead: true, Unattended: false}, fresh, "/v/desktop.exe", false},
+		// 这一条是本轮的要害：替手机去够一台已经不在了的桌面端时，那次运行是不是"无人值守"
+		// 无关紧要 —— 印记还在就说明它没干净退出过。
+		{"an attended crash is restored too", hostStateOutcome{Seen: true, Dead: true, Unattended: false}, fresh, "/v/desktop.exe", true},
 		{"a live host is left alone", hostStateOutcome{Seen: true, Dead: false, Unattended: true}, fresh, "/v/desktop.exe", false},
 		{"a crashed unattended host is restored", hostStateOutcome{Seen: true, Dead: true, Unattended: true}, fresh, "/v/desktop.exe", true},
+		{"a crash loop is left to its window", hostStateOutcome{Seen: true, Dead: true, UncleanStreak: hostCrashStreakLimit}, fresh, "/v/desktop.exe", false},
 		{"an old crash is not resurrected", hostStateOutcome{Seen: true, Dead: true, Unattended: true}, stale, "/v/desktop.exe", false},
 		{"no binary means nothing to launch", hostStateOutcome{Seen: true, Dead: true, Unattended: true}, fresh, "  ", false},
 	}
@@ -124,24 +127,51 @@ func TestWatchdogEnvNeverReachesTheChild(t *testing.T) {
 	}
 }
 
-func TestWatchdogPolicyDefaultsToOnWithThePolicy(t *testing.T) {
-	on, off := true, false
+// The entry's own policy: on unless someone opted out. `enabled` deliberately does not
+// enter into it — that field is the login item's, and a machine whose switch is off must
+// still get the entry that brings a dead host back, without also getting login autostart.
+func TestWatchdogEntryIsWantedUnlessOptedOut(t *testing.T) {
 	cases := []struct {
 		name   string
 		policy watchdogPolicy
 		want   bool
 	}{
-		{"enabled without an opinion", watchdogPolicy{Enabled: true}, true},
-		{"explicitly on", watchdogPolicy{Enabled: true, Watchdog: &on}, true},
-		{"opted out", watchdogPolicy{Enabled: true, Watchdog: &off}, false},
-		{"policy disabled", watchdogPolicy{Enabled: false, Watchdog: &on}, false},
+		{"no policy file at all", watchdogPolicy{}, true},
+		{"the switch is off", watchdogPolicy{Enabled: false}, true},
+		{"the switch is on", watchdogPolicy{Enabled: true}, true},
+		{"opted out", watchdogPolicy{Enabled: true, OptOut: true}, false},
+		{"opted out while the switch is off", watchdogPolicy{Enabled: false, OptOut: true}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := watchdogPolicyEnabled(tc.policy); got != tc.want {
-				t.Fatalf("enabled = %v, want %v", got, tc.want)
+			if got := watchdogEntryWanted(tc.policy); got != tc.want {
+				t.Fatalf("entryWanted = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// A policy file written by the old behaviour — where turning the unattended switch off
+// recorded `"watchdog":false` — must not read as an opt-out. It meant "I am not running
+// unattended", not "leave my scheduler alone", and treating it as the latter would
+// silently switch off the very entry that brings a dead host back (2026-10-05).
+func TestLegacyPolicyFileDoesNotCountAsAnOptOut(t *testing.T) {
+	harness := t.TempDir()
+	t.Setenv("REASONIX_HOME", harness)
+	t.Setenv("REASONIX_STATE_HOME", harness)
+	if got := config.MemoryUserDir(); got != harness {
+		t.Fatalf("the harness home must be the state directory: %q != %q", got, harness)
+	}
+	body := `{"schemaVersion":1,"enabled":false,"watchdog":false}`
+	if err := os.WriteFile(watchdogPolicyPath(), []byte(body), 0o600); err != nil {
+		t.Fatalf("seed the legacy policy: %v", err)
+	}
+	policy := readWatchdogPolicy()
+	if watchdogPolicyOptedOut(policy) {
+		t.Fatalf("a legacy watchdog:false must not opt out, got %+v", policy)
+	}
+	if !watchdogEntryWanted(policy) {
+		t.Fatalf("the entry must still be wanted, got %+v", policy)
 	}
 }
 
@@ -283,80 +313,86 @@ func TestWatchdogStatusEntryPointIsWhatTheScriptRuns(t *testing.T) {
 	}
 }
 
-func TestWatchdogFollowsTheMasterSwitchBothWays(t *testing.T) {
+// The OS entry's job is now "bring a host that died back up", which a phone needs
+// whether or not anyone runs unattended — so it no longer follows that switch
+// (2026-10-05). This pins the new contract: the entry is registered even with the
+// switch off, and only an explicit opt-out takes it away for good.
+func TestWatchdogEntryIsRegisteredWhateverTheUnattendedSwitchSays(t *testing.T) {
 	if !watchdogSupportedPlatform() {
 		t.Skip("this platform has no OS entry to register")
 	}
 	calls, home := watchdogTestHarness(t)
 
-	if err := syncWatchdogWithUnattended(true); err != nil {
-		t.Fatalf("turning the switch on must register the watchdog: %v", err)
+	// A start with the switch OFF still registers: that is the case a dead host has to
+	// come back from, and the switch has no say in it. It must not write `enabled` on the
+	// way — that field belongs to the login item, and writing it here would turn on login
+	// autostart for a machine whose switch is off, which the login item's own contract
+	// forbids ("nothing here registers itself on a machine that never asked").
+	writeHeartbeatSwitch(t, home, false)
+	applyWatchdogPolicyOnStart()
+	if !calls.created || !watchdogEntryWanted(readWatchdogPolicy()) {
+		t.Fatal("a start with the switch off must still register the entry")
 	}
-	if policy := readWatchdogPolicy(); !watchdogPolicyEnabled(policy) {
-		t.Fatalf("the switch on must leave an enabled policy, got %+v", policy)
-	}
-	if !calls.created {
-		t.Fatal("the switch on must register the OS entry")
+	if policy := readWatchdogPolicy(); policy.Enabled {
+		t.Fatalf("converging the entry must not touch the login item's enabled, got %+v", policy)
 	}
 	if _, err := os.Stat(watchdogScriptPath()); err != nil {
-		t.Fatalf("the switch on must publish the desktop file: %v", err)
+		t.Fatalf("a registered entry needs its published script: %v", err)
 	}
 	if !strings.HasPrefix(watchdogScriptPath(), home) {
 		t.Fatalf("the desktop file must live in the harness home, got %s", watchdogScriptPath())
 	}
 
+	// Flipping the switch on converges it again — idempotent, and it does not touch the
+	// opt-out either way.
+	writeHeartbeatSwitch(t, home, true)
 	calls.created = false
-	if err := syncWatchdogWithUnattended(false); err != nil {
-		t.Fatalf("turning the switch off must remove the entry: %v", err)
+	applyWatchdogPolicyOnStart()
+	if !calls.created {
+		t.Fatal("a start with the switch on must keep the entry registered")
 	}
-	if policy := readWatchdogPolicy(); watchdogPolicyEnabled(policy) {
-		t.Fatalf("the switch off must leave a disabled policy, got %+v", policy)
+
+	// Only an explicit opt-out takes it away.
+	calls.deleted = false
+	if _, err := setWatchdogOptOut(true); err != nil {
+		t.Fatalf("an explicit disable must take the entry away: %v", err)
 	}
-	if !calls.deleted {
-		t.Fatal("the switch off must unregister the OS entry")
+	if !calls.deleted || watchdogEntryWanted(readWatchdogPolicy()) {
+		t.Fatal("opting out must leave a disabled policy and no entry")
 	}
 	if _, err := os.Stat(watchdogScriptPath()); !os.IsNotExist(err) {
-		t.Fatalf("the switch off must remove the desktop file, got %v", err)
+		t.Fatalf("opting out must remove the published script, got %v", err)
+	}
+	calls.created = false
+	applyWatchdogPolicyOnStart()
+	if calls.created {
+		t.Fatal("a start must not re-register an entry the person explicitly disabled")
+	}
+
+	// Enabling clears the opt-out and puts the entry back.
+	if _, err := setWatchdogOptOut(false); err != nil {
+		t.Fatalf("clearing the opt-out must work: %v", err)
+	}
+	if !calls.created || !watchdogEntryWanted(readWatchdogPolicy()) {
+		t.Fatal("clearing the opt-out must put the entry back")
 	}
 }
 
 func TestWatchdogSyncSkipsWithoutAnInstallToWatch(t *testing.T) {
 	t.Setenv("REASONIX_DEV", "")
 	if watchdogSyncSkipReason("") == "" || watchdogSyncSkipReason("   ") == "" {
-		t.Fatal("no versioned install must keep the switch away from the OS entry")
+		t.Fatal("no versioned install must keep the entry off the machine's scheduler")
 	}
 	if !watchdogSupportedPlatform() {
 		return
 	}
 	root := t.TempDir()
 	if reason := watchdogSyncSkipReason(root); reason != "" {
-		t.Fatalf("a versioned install must let the switch own the entry, got %q", reason)
+		t.Fatalf("a versioned install must let the entry be registered, got %q", reason)
 	}
 	t.Setenv("REASONIX_DEV", "1")
 	if watchdogSyncSkipReason(root) == "" {
 		t.Fatal("a dev run must never touch the machine's scheduler")
-	}
-}
-
-func TestWatchdogEntryFollowsTheSwitchOnStart(t *testing.T) {
-	if !watchdogSupportedPlatform() {
-		t.Skip("this platform has no OS entry to register")
-	}
-	calls, home := watchdogTestHarness(t)
-
-	// A switch that is on while the stored policy is off converges at start.
-	writeHeartbeatSwitch(t, home, true)
-	applyWatchdogPolicyOnStart()
-	if !calls.created || !watchdogPolicyEnabled(readWatchdogPolicy()) {
-		t.Fatal("a start with the switch on must register the entry")
-	}
-
-	// And one that is off while the policy is on is taken away again.
-	writeHeartbeatSwitch(t, home, false)
-	calls.created, calls.deleted = false, false
-	applyWatchdogPolicyOnStart()
-	if !calls.deleted || watchdogPolicyEnabled(readWatchdogPolicy()) {
-		t.Fatal("a start with the switch off must take the entry away")
 	}
 }
 
@@ -374,7 +410,7 @@ func TestWatchdogRefusalIsReportedNotSwallowed(t *testing.T) {
 	}
 	calls, _ := watchdogTestHarness(t)
 	calls.fail = true
-	if err := syncWatchdogWithUnattended(true); err == nil {
+	if err := syncWatchdogEntry(true); err == nil {
 		t.Fatal("a refused registration must be reported to the caller")
 	}
 }
@@ -387,7 +423,7 @@ func TestWatchdogRegistrationSetsTheConditionsThatMakeItRun(t *testing.T) {
 		t.Skip("this platform has no OS entry to register")
 	}
 	calls, _ := watchdogTestHarness(t)
-	if err := syncWatchdogWithUnattended(true); err != nil {
+	if err := syncWatchdogEntry(true); err != nil {
 		t.Fatalf("register the watchdog: %v", err)
 	}
 	registration := calls.registrationCommand()
@@ -439,7 +475,7 @@ func TestWatchdogRegistrationRunsTheScriptItPublishes(t *testing.T) {
 		t.Skip("this platform has no OS entry to register")
 	}
 	calls, _ := watchdogTestHarness(t)
-	if err := syncWatchdogWithUnattended(true); err != nil {
+	if err := syncWatchdogEntry(true); err != nil {
 		t.Fatalf("register the watchdog: %v", err)
 	}
 	script := watchdogScriptPath()
@@ -569,7 +605,7 @@ func TestWatchdogLastRunFallsBackToTheInspectionLog(t *testing.T) {
 	if _, ok := watchdogLastLogTime(); ok {
 		t.Fatal("an absent log means nothing ran, not a made-up time")
 	}
-	writeWatchdogLogLine("skip", "the marker does not ask for unattended", "marker: seen=true")
+	writeWatchdogLogLine("skip", "no marker: the last run exited cleanly or never started", "marker: seen=false")
 	body, err := os.ReadFile(watchdogLogPath())
 	if err != nil {
 		t.Fatalf("read the inspection log: %v", err)

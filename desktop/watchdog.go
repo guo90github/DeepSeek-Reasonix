@@ -1,6 +1,6 @@
 // Desktop watchdog — the pre-shell mode an OS scheduler runs to bring the app
-// back after a crash, restoring only what the launch marker says should be
-// running and is not, so a deliberate quit is never undone.
+// back after a crash: it restores a host that died **without clearing its launch
+// marker**, so a deliberate quit is never undone.
 
 package main
 
@@ -30,17 +30,26 @@ type watchdogDecision struct {
 	Reason string
 }
 
-// watchdogDecide is the whole policy: restart only a fresh, unattended run whose
-// process is gone.
+// watchdogDecide is the whole policy: restart a fresh run whose marker says it
+// never finished — whatever the unattended switch says.
+//
+// The gate is **the marker, not the switch** (2026-10-05). It used to require an
+// unattended run, so a host that died while the operator was driving it by hand
+// — the ordinary case for someone reaching for the phone — stayed down until
+// they walked over to that machine. What still keeps a deliberate quit
+// respected is that a clean exit *removes* the marker: then there is nothing to
+// restore, and the switch decides nothing either way.
 func watchdogDecide(outcome hostStateOutcome, startedAt, now time.Time, exe string) watchdogDecision {
 	if !outcome.Seen {
 		return watchdogDecision{Reason: "no marker: the last run exited cleanly or never started"}
 	}
-	if !outcome.Unattended {
-		return watchdogDecision{Reason: "the marker does not ask for unattended"}
-	}
 	if !outcome.Dead {
 		return watchdogDecision{Reason: "the recorded host is still running"}
+	}
+	if outcome.UncleanStreak >= hostCrashStreakLimit {
+		// A crash loop is not cured by relaunching faster: let the window pass so
+		// the next attempt starts a fresh streak instead of feeding the loop.
+		return watchdogDecision{Reason: "the previous attempts kept dying; letting the crash window pass"}
 	}
 	if !startedAt.IsZero() && now.Sub(startedAt) > watchdogFreshWindow {
 		return watchdogDecision{Reason: "the crash is older than the freshness window"}
@@ -48,7 +57,7 @@ func watchdogDecide(outcome hostStateOutcome, startedAt, now time.Time, exe stri
 	if strings.TrimSpace(exe) == "" {
 		return watchdogDecision{Reason: "no active desktop binary to launch"}
 	}
-	return watchdogDecision{Launch: true, Exe: exe, Reason: "restoring an unattended host that is gone"}
+	return watchdogDecision{Launch: true, Exe: exe, Reason: "restoring a host that died without clearing its marker"}
 }
 
 // watchdogDecideNow gathers what watchdogDecide needs: the marker, its start
@@ -67,11 +76,12 @@ func watchdogDecideNow() watchdogDecision {
 }
 
 // watchdogMarkerSummary states what the marker says at this tick. Every skip reason turns
-// on these three fields, so recording them separates "the marker was never written" from
-// "the marker says attended now" without a re-run.
+// on these fields, so recording them separates "the marker was never written" from "the
+// marker is here and its host is gone" without a re-run.
 func watchdogMarkerSummary() string {
 	outcome := hostStateBeforeLaunch()
-	return fmt.Sprintf("marker: seen=%t unattended=%t dead=%t pid=%d", outcome.Seen, outcome.Unattended, outcome.Dead, outcome.PID)
+	return fmt.Sprintf("marker: seen=%t unattended=%t dead=%t streak=%d pid=%d",
+		outcome.Seen, outcome.Unattended, outcome.Dead, outcome.UncleanStreak, outcome.PID)
 }
 
 func hasWatchdogFlag(args []string) bool {
@@ -118,8 +128,9 @@ func maybeRunDesktopWatchdog(args []string) (bool, int) {
 	}
 	switch mode {
 	case watchdogEnableFlag, watchdogDisableFlag:
-		enabled := mode == watchdogEnableFlag
-		if _, err := setWatchdogEnabled(enabled); err != nil {
+		// Disabling is an explicit opt-out and takes the entry away; enabling clears it
+		// and puts the entry back. Nothing else turns the entry off — see convergeWatchdogEntry.
+		if _, err := setWatchdogOptOut(mode == watchdogDisableFlag); err != nil {
 			fmt.Fprintf(os.Stderr, "reasonix-desktop: %v\n", err)
 			fmt.Print(watchdogStatusText())
 			return true, 1
@@ -133,7 +144,7 @@ func maybeRunDesktopWatchdog(args []string) (bool, int) {
 	decision := watchdogDecideNow()
 	if !decision.Launch {
 		slog.Debug("desktop watchdog: nothing to do", "reason", decision.Reason)
-		// The reason alone cannot tell "no marker" from "a marker that says attended", and a
+		// The reason alone cannot tell "no marker" from "a marker whose host is gone", and a
 		// marker that changed after its launch hid once behind exactly that gap: record what
 		// the marker says at this tick (2026-10-03).
 		writeWatchdogLogLine("skip", decision.Reason, watchdogMarkerSummary())
@@ -175,7 +186,10 @@ func watchdogStatusText() string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "OS watchdog: %s\n", state)
-	fmt.Fprintf(&b, "policy: enabled=%v watchdog=%v\n", policy.Enabled, policy.Watchdog == nil || *policy.Watchdog)
+	fmt.Fprintf(&b, "policy: enabled=%v optedOut=%v\n", policy.Enabled, watchdogPolicyOptedOut(policy))
+	// How long a dead host can stay down is the contract the phone lives with, so the
+	// tick is readable here instead of only inside the registered task.
+	fmt.Fprintf(&b, "every: %dm\n", watchdogIntervalMinutes)
 	fmt.Fprintf(&b, "platform: %s\n", runtime.GOOS)
 	// "registered" alone cannot tell a working entry from an inert one, which is how
 	// a task Windows never triggered read as healthy (2026-10-02/03).

@@ -695,10 +695,10 @@ func (a *App) HeartbeatSaveConfig(update HeartbeatConfigUpdate) (HeartbeatConfig
 	}
 	view = withHeartbeatRuntimeFacts(view)
 	if update.Unattended != nil {
-		// The switch owns the OS entry too, so turning unattended on needs no
-		// second command. It takes effect on the next launch, so the entry is
-		// pre-written now; a refusal must never fail the switch itself.
-		_ = syncWatchdogWithUnattended(*update.Unattended)
+		// The OS entry no longer follows this switch (2026-10-05): it exists to bring a host
+		// that died back up, which is wanted either way. Flipping the switch only converges it
+		// (and never overrides an explicit --watchdog-disable).
+		convergeWatchdogEntry()
 		if *update.Unattended && !view.AgentBusBudget {
 			// Nobody is watching an unattended run, so the one moment the operator can
 			// be told it has no brake is the moment they turn it on (2026-10-03).

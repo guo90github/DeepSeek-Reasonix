@@ -20,11 +20,12 @@ lives in `desktop/` (host, Electron shell, frontend); the kernel
 - With the switch on, unattended care does **not** depend on a `goal`: the contract
   only says whether there is a Goal to steer. Gate clearing, the spent-window handoff
   and the version switch apply to **every** task.
-- The switch also owns the **OS watchdog entry** (§10): turning it on registers the
-  watchdog, turning it off unregisters it and removes the desktop file. The entry is
-  written at once but, like the switch, protects the **next** launch — the marker
-  carries the launch-time value, so that is the run a crash would restore. A refused
-  registration is logged, never fails the switch write.
+- The switch still owns the **login item** (the same policy file's `enabled`), and it no
+  longer owns the **OS watchdog entry** (§10): that entry's job became "bring a host that
+  died back up", which a phone wants whether or not anyone runs unattended, so it is
+  registered whenever an install exists and only `--watchdog-disable` opts out. Keeping
+  the two apart is deliberate — writing the entry's state into `enabled` would turn on
+  login autostart for a machine that never asked for it.
 - The switch also reports whether an unattended run has a **brake**: with none of the
   `[agentbus]` budget levels set (see `reasonix.example.toml`), it labels itself
   "on (no budget)" and the host logs the same. No default ceiling is invented for the
@@ -215,27 +216,35 @@ A process that is gone cannot restart itself, so this layer needs an OS resident
 watchdog is a **pre-shell mode** of the host binary, called on a schedule:
 
 ```bash
-reasonix-desktop.exe --watchdog          # the scheduler calls this every 5 minutes
-reasonix-desktop.exe --watchdog-status   # policy / registered / when it last ran / entry point
-reasonix-desktop.exe --watchdog-enable   # write the policy and register at once
-reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desktop file
+reasonix-desktop.exe --watchdog          # the scheduler calls this every minute
+reasonix-desktop.exe --watchdog-status   # policy / registered / when it last ran / entry point / every
+reasonix-desktop.exe --watchdog-enable   # clear the opt-out and register at once
+reasonix-desktop.exe --watchdog-disable  # record the opt-out, unregister, remove the desktop file
 ```
 
-- **Driver: the master switch owns this entry.** Turning the switch on registers the
-  watchdog and writes the desktop file; turning it off unregisters the task and removes
-  the file, so nobody has to remember a second command. The four commands above remain
-  for inspection and for a manual override, and every start realigns the entry with the
-  stored switch (a switch written by an older host, or a hand-edited policy, converges).
-  A host that is not a versioned install (a dev run) never touches the OS entry.
-- **One criterion**: a marker exists ∧ `unattended=true` ∧ its process is gone ∧ the
-  crash is under 24 hours old → launch the active version's inner desktop binary. A
-  clean exit removes the marker, so a deliberate quit is never undone.
-- **Registration**: a Windows scheduled task `ReasonixDesktopWatchdog` (every 5
-  minutes), or `~/Library/LaunchAgents/io.reasonix.desktop.watchdog.plist` (RunAtLoad
-  + StartInterval 300). Both point at **that script only, never at a version**.
-- **Policy**: `<home>/desktop-autostart.json` (`enabled` + `watchdog`, defaulting to the
-  policy's `enabled`) is the switch's **mirror**, and it also drives the Electron login
-  item — so turning the switch on turns the login item on with it, and off takes both away.
+- **Driver: the entry has a switch of its own; the master switch does not own it**
+  (2026-10-05). The entry exists so that a host that died comes back — which a phone
+  reaching for that host needs whether or not anyone runs unattended — so it is
+  registered whenever a versioned install exists, every start converges it (a switch
+  written by an older host, or a hand-edited policy, lands here), and **only
+  `--watchdog-disable` turns it off** (it writes `optOut`). The four commands above remain
+  for inspection and manual override. A host that is not a versioned install (a dev run)
+  never touches the OS entry.
+- **One criterion**: a marker exists ∧ its process is gone ∧ the crash is under 24 hours
+  old ∧ it is not a crash loop → launch the active version's inner desktop binary. There
+  is **no `unattended` term**: whether that run was attended has no say. A clean exit
+  removes the marker, so a deliberate quit is never undone. A crash loop (3 or more inside
+  the window) is left to its window instead of being fed.
+- **Registration**: a Windows scheduled task `ReasonixDesktopWatchdog` (every **1**
+  minute), or `~/Library/LaunchAgents/io.reasonix.desktop.watchdog.plist` (RunAtLoad +
+  StartInterval **60**). Both point at **that script only, never at a version**. This tick
+  is the upper bound on "host died → host is back" (tightened from 5 minutes), and
+  therefore what a phone waiting to reconnect can promise.
+- **Policy**: `<home>/desktop-autostart.json`: `enabled` is the **login item** (the
+  Electron login item, which only starts at login) and the master switch's mirror, and it
+  **no longer drives the OS entry**; `optOut` is the OS entry's own switch. They are kept
+  apart deliberately — writing the entry's state into `enabled` would turn on login
+  autostart for a machine that never asked for it.
 - **The one management file**: `<state home>\watchdog\watchdog.cmd` (on Windows,
   `%APPDATA%\reasonix\watchdog\watchdog.cmd`) — the watchdog's
   visible twin: run it by hand, read it, or delete it. It makes **no version decision**:
@@ -261,8 +270,10 @@ reasonix-desktop.exe --watchdog-disable  # write it, unregister, remove the desk
 - macOS uses a LaunchAgent **sweep** (RunAtLoad + StartInterval), not `KeepAlive`; an
   Electron main crash that exhausts the relaunch budget parks on the failure page
   (deliberate — never loop) and the next sweep brings it back.
-- The panel does not display the master switch's current value yet. The watchdog has no
-  toggle of its own: the master switch drives it (§10), and the CLI stays for inspection.
+- The panel does not display the master switch's current value yet. The watchdog **has a
+  switch of its own**: `optOut` (`--watchdog-disable` / `--watchdog-enable`); the master
+  switch owns the login item and no longer drives it (§10), and the CLI stays for
+  inspection.
   Neither the watchdog nor the panel shows why a registration was refused — that lands in
   `<home>/desktop-watchdog.log` and the host log.
 - Neither full chain has been accepted on a real machine yet: neither kill the

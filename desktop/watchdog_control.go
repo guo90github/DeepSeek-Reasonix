@@ -32,9 +32,13 @@ var watchdogPlatformRunner = func(name string, args ...string) ([]byte, error) {
 type watchdogPolicy struct {
 	SchemaVersion int  `json:"schemaVersion,omitempty"`
 	Enabled       bool `json:"enabled"`
-	// Watchdog defaults to on whenever the policy is enabled; false opts out
-	// while keeping the login item.
-	Watchdog *bool `json:"watchdog,omitempty"`
+	// OptOut records an explicit "leave this machine's scheduler alone" — written only by
+	// `--watchdog-disable`. It is the one thing that keeps the OS entry off: the entry used
+	// to follow the unattended switch, which unregistered it on every machine that did not
+	// run unattended — exactly the machines whose dead host a phone now wants back
+	// (2026-10-05). The old `watchdog` field is gone: a legacy `watchdog:false` came from
+	// that switch, so reading it as an opt-out would silently disable the new behaviour.
+	OptOut bool `json:"optOut,omitempty"`
 }
 
 func watchdogPolicyPath() string {
@@ -45,8 +49,14 @@ func watchdogPolicyPath() string {
 	return filepath.Join(root, "desktop-autostart.json")
 }
 
-func watchdogPolicyEnabled(policy watchdogPolicy) bool {
-	return policy.Enabled && (policy.Watchdog == nil || *policy.Watchdog)
+// watchdogEntryWanted is the **OS entry's** own policy: on unless someone explicitly
+// opted out. It deliberately ignores `Enabled`, which is a different signal — that field
+// is the login item's (the master switch's mirror, read by the Electron shell in
+// `autostart.ts`), and the entry no longer follows it (2026-10-05). Keeping the two
+// apart is what stops a phone-facing wake entry from also turning on login autostart for
+// a machine that never asked.
+func watchdogEntryWanted(policy watchdogPolicy) bool {
+	return !policy.OptOut
 }
 
 func readWatchdogPolicy() watchdogPolicy {
@@ -127,8 +137,11 @@ func watchdogSupportedPlatform() bool {
 }
 
 // watchdogIntervalMinutes is how often the scheduler runs the watchdog, and therefore
-// the upper bound on how long an unattended host can stay down.
-const watchdogIntervalMinutes = 5
+// the upper bound on how long a host that died can stay down. It was 5 while only
+// unattended runs were restored; a phone reaching for a dead desktop makes the wait the
+// whole experience, so the tick is one minute (2026-10-05). Each tick is a process that
+// reads one small JSON file and exits, so the tighter cadence costs nothing measurable.
+const watchdogIntervalMinutes = 1
 
 // watchdogRegisterCommand is the Windows registration as one PowerShell command. The
 // settings are the point of it: with Windows' defaults the task inherits "do not start
@@ -255,7 +268,7 @@ func watchdogStatusView() WatchdogStatusView {
 	policy := readWatchdogPolicy()
 	view := WatchdogStatusView{
 		Supported:  watchdogSupportedPlatform(),
-		Policy:     watchdogPolicyEnabled(policy),
+		Policy:     watchdogEntryWanted(policy),
 		Platform:   runtime.GOOS,
 		EntryPoint: watchdogEntryPoint(),
 	}
@@ -328,11 +341,11 @@ func (a *App) SetWatchdogEnabled(enabled bool) (WatchdogStatusView, error) {
 }
 
 // setWatchdogEnabled is the one implementation behind the CLI, the UI binding and
-// the desktop directory, so all three can never disagree.
+// the desktop directory, so all three can never disagree. It applies the entry; it
+// does not decide whether the person opted out — that is setWatchdogOptOut's job.
 func setWatchdogEnabled(enabled bool) (WatchdogStatusView, error) {
 	policy := readWatchdogPolicy()
 	policy.Enabled = enabled
-	policy.Watchdog = &enabled
 	if err := writeWatchdogPolicy(policy); err != nil {
 		view := watchdogStatusView()
 		view.LastError = err.Error()
@@ -357,28 +370,65 @@ func setWatchdogEnabled(enabled bool) (WatchdogStatusView, error) {
 	return view, nil
 }
 
-// applyWatchdogPolicyOnStart aligns the OS entry with the master switch on every
-// start, so the entry follows the one gate a person touches: a switch written by
-// an older host, or a policy edited by hand, converges here, and a version switch
-// cannot leave the scheduler pointing at nothing.
+// applyWatchdogPolicyOnStart converges the OS entry on every start: a switch written
+// by an older host, a hand-edited policy, or a version switch that would otherwise
+// leave the scheduler pointing at nothing.
 func applyWatchdogPolicyOnStart() {
-	unattended, known := unattendedSwitchOnDisk()
-	if !known {
-		return
-	}
-	if watchdogPolicyEnabled(readWatchdogPolicy()) != unattended {
-		_ = syncWatchdogWithUnattended(unattended)
-		return
-	}
-	if unattended {
-		refreshWatchdogEntry()
-	}
+	convergeWatchdogEntry()
 }
 
-// unattendedSwitchOnDisk reads the master switch straight from the config file,
-// which is all this needs: it runs before the engine exists, and the switch is
-// the configured value, not the crash-degraded one. known=false (unreadable or
-// invalid config) leaves the OS entry exactly as it is.
+// convergeWatchdogEntry is the single place that decides the entry's state, so every
+// caller (start, the unattended switch) agrees instead of each owning a piece of it.
+//
+// It no longer follows the unattended switch (2026-10-05): the entry's job became
+// "bring a host that died back up", which a phone reaching for that host needs
+// whether or not anyone turned unattended on — and following the switch meant the
+// entry was *unregistered* in the common case (nobody runs unattended), leaving
+// nothing to do the waking. The switch still gates unattended driving in-app; an
+// explicit `--watchdog-disable` is the only thing that keeps the entry off.
+func convergeWatchdogEntry() {
+	if !watchdogEntryWanted(readWatchdogPolicy()) {
+		return
+	}
+	// Register/re-register and republish the script — and **write no policy**. `enabled`
+	// belongs to the login item, so writing it here would turn on login autostart for every
+	// machine with an install, which the login item's own contract forbids ("nothing here
+	// registers itself on a machine that never asked").
+	refreshWatchdogEntry()
+}
+
+// watchdogPolicyOptedOut reports an explicit "leave this machine's scheduler alone".
+// It is the only thing that keeps the entry off, so a person who wants no OS entry
+// cannot have one re-registered underneath them at every start.
+func watchdogPolicyOptedOut(policy watchdogPolicy) bool {
+	return policy.OptOut
+}
+
+// setWatchdogOptOut is the management entry point behind `--watchdog-disable` and
+// `--watchdog-enable`: disabling records the opt-out *and* takes the entry away,
+// enabling clears it and puts the entry back. It goes through syncWatchdogEntry (not
+// the policy writer) so the login item's `enabled` is left exactly as the master switch
+// set it.
+func setWatchdogOptOut(optOut bool) (WatchdogStatusView, error) {
+	policy := readWatchdogPolicy()
+	policy.OptOut = optOut
+	if err := writeWatchdogPolicy(policy); err != nil {
+		view := watchdogStatusView()
+		view.LastError = err.Error()
+		return view, err
+	}
+	if err := syncWatchdogEntry(!optOut); err != nil {
+		view := watchdogStatusView()
+		view.LastError = err.Error()
+		return view, err
+	}
+	return watchdogStatusView(), nil
+}
+
+// unattendedSwitchOnDisk reads the master switch straight from the config file, which is
+// what the in-app driving decision needs: it runs before the engine exists, and the switch
+// is the configured value, not the crash-degraded one. known=false (unreadable or invalid
+// config) leaves the driving decision exactly as it is.
 func unattendedSwitchOnDisk() (bool, bool) {
 	root := config.MemoryUserDir()
 	if root == "" {
@@ -397,20 +447,19 @@ func unattendedSwitchOnDisk() (bool, bool) {
 	return cfg.Unattended, true
 }
 
-// syncWatchdogWithUnattended makes the master switch the only command a person
-// has to remember: turning unattended on registers the OS entry, turning it off
-// takes it away. Best effort by design — an OS that refuses the registration
-// must not fail the switch itself, so the failure is logged instead.
-func syncWatchdogWithUnattended(unattended bool) error {
+// syncWatchdogEntry registers or removes the OS entry that restores a host which
+// died. Best effort by design — an OS that refuses the registration must not fail
+// whatever asked for it, so the failure is logged instead.
+func syncWatchdogEntry(enabled bool) error {
 	if reason := watchdogSyncSkipReason(portableInstallRoot()); reason != "" {
-		slog.Debug("desktop watchdog: not following the unattended switch", "reason", reason)
+		slog.Debug("desktop watchdog: not touching the OS entry", "reason", reason)
 		return nil
 	}
-	if _, err := setWatchdogEnabled(unattended); err != nil {
-		slog.Warn("desktop watchdog: the unattended switch could not apply it", "unattended", unattended, "err", err)
+	if _, err := setWatchdogEnabled(enabled); err != nil {
+		slog.Warn("desktop watchdog: the OS entry could not be applied", "enabled", enabled, "err", err)
 		return err
 	}
-	slog.Info("desktop watchdog: followed the unattended switch", "unattended", unattended)
+	slog.Info("desktop watchdog: OS entry applied", "enabled", enabled)
 	return nil
 }
 
