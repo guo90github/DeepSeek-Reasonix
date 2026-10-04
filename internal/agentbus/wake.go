@@ -61,6 +61,14 @@ func IsDispatchKey(key string) bool {
 	return strings.HasPrefix(key, DispatchKeyPrefix)
 }
 
+// VerifyKey names the wake that hands over the same node as a verification: the step already
+// carries readings, so the act is checking them rather than running the work again. It keeps the
+// dispatch prefix — it is still one assignment — but a distinct key, so the ledger cannot swallow
+// it as "already told about this node" (F15, 2026-10-05).
+func VerifyKey(board, node string) string {
+	return DispatchKey(board, node) + "/verify"
+}
+
 // NoRouteError reports that a wake target has no route on this host: no session here speaks as the
 // participant and the board's address book does not own it. It is deliberately not a plain error:
 // a board outlives the sessions that wrote to it, so a target nobody can reach is stale work,

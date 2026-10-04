@@ -106,6 +106,9 @@ const AgentBusWakeSource = "agentbus"
 // put the XML in front of a person.
 func AgentBusWakeLine(target agentbus.WakeTarget) string {
 	if agentbus.IsDispatchKey(target.Key) {
+		if target.Reports > 0 {
+			return "已指派给你（复核）：" + strings.Join(target.Ready, ", ")
+		}
 		return "已指派给你：" + strings.Join(target.Ready, ", ")
 	}
 	var b strings.Builder

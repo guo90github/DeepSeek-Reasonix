@@ -67,14 +67,23 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 	for _, entry := range taken {
 		node := entry.Entry.Node
 		deadline := now.Add(agentBusDispatchLease)
+		reports := assertionsWithEvidence(st.Nodes[node])
 		op := board.Op{
 			Verb: board.VerbClaim, Node: node, Actor: claimant,
 			Bounds: boundsForClaim(st, node), Deadline: deadline,
 		}
+		intent := ""
+		if reports > 0 {
+			// Read the step to check its readings, not to run it again: the intent rides in the op
+			// itself, because a later reader has nothing else to tell doing from checking
+			// (F15/F46, 2026-10-05).
+			intent = "verify/"
+			op.Reason = fmt.Sprintf("verify: %d assertion(s) with evidence are already on this node", reports)
+		}
 		// One dispatch is one attempt, not one intent forever: the derived id covers node, actor
 		// and bounds but never time, so handing the same step out again after its claim lapsed
 		// would collapse onto the first op and never land. The deadline names the attempt.
-		op.ID = fmt.Sprintf("agentbus-dispatch:%s/%s/%d", boardName, node, deadline.UnixNano())
+		op.ID = fmt.Sprintf("agentbus-dispatch:%s/%s/%s%d", boardName, node, intent, deadline.UnixNano())
 		if _, err := c.ApplyAgentBusOp(ctx, op); err != nil {
 			// The ceiling stands for this step, and this is the one place that both tried it and
 			// knows who it was handed to, so the memo's key matches the loop's skip for ever.
@@ -87,9 +96,9 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 		}
 		target := agentbus.WakeTarget{
 			Participant: claimant,
-			Key:         agentbus.DispatchKey(boardName, node),
+			Key:         dispatchWakeKey(boardName, node, reports > 0),
 			Ready:       []string{node},
-			Reports:     assertionsWithEvidence(st.Nodes[node]),
+			Reports:     reports,
 		}
 		if err := deliver(ctx, target); err != nil {
 			// Nobody was told, so nobody owns it: give the step back rather than leave it
