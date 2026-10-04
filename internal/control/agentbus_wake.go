@@ -149,6 +149,9 @@ func (c *Controller) AgentBusTick(ctx context.Context) int {
 	// re-derived at read time, so with no writer a quiet topic stays open and keeps naming an
 	// addressee with nothing left to answer (measured: five asks kept waking nobody a day later).
 	c.closeLapsedAgentBusTalk(ctx)
+	// Presence renews here too: a record nobody rewrites goes stale, and a stale participant
+	// drops out of the roster its peers read (2026-10-05).
+	c.refreshAgentBusPresence(ctx, time.Now().UTC())
 	return c.WakeAgentBus(ctx)
 }
 

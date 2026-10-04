@@ -45,6 +45,9 @@ func (t agentBusBoard) readParticipants() (string, error) {
 		if ref.Role != "" {
 			fmt.Fprintf(&b, " role=%s", ref.Role)
 		}
+		if ref.Busy != "" {
+			fmt.Fprintf(&b, " busy=%s", ref.Busy)
+		}
 		if !ref.At.IsZero() {
 			fmt.Fprintf(&b, " announced=%s", ref.At.UTC().Format(time.RFC3339))
 		}

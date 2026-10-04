@@ -32,9 +32,13 @@ type ParticipantRef struct {
 	// The declared dimensions: what this participant is and what it speaks as, so a reader does
 	// not have to guess from an opaque id (F48, 2026-10-05). Role stays empty until a host
 	// declares one: the kernel has no vocabulary for it and invents none.
-	Workspace string    `json:"workspace,omitempty"`
-	Model     string    `json:"model,omitempty"`
-	Role      string    `json:"role,omitempty"`
+	Workspace string `json:"workspace,omitempty"`
+	Model     string `json:"model,omitempty"`
+	Role      string `json:"role,omitempty"`
+	// Busy is this participant's own answer to "what is it doing": empty when idle. That fact
+	// lived only in each session's private inbox, so no other session could read it
+	// (F57, 2026-10-05).
+	Busy      string    `json:"busy,omitempty"`
 	Withdrawn bool      `json:"withdrawn,omitempty"`
 	At        time.Time `json:"at,omitempty"`
 }

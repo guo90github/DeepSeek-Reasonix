@@ -21,8 +21,12 @@ type agentBusState struct {
 	mu          sync.Mutex
 	dir         string
 	participant string
-	cursors     agentBusCursors
-	limits      agentbus.TalkLimits
+	// announced is the last announcement this session made, kept so a refresh can re-send the
+	// same address and declared facts: re-announcing with an empty host would erase the endpoint
+	// a serving host published (2026-10-05).
+	announced agentbus.ParticipantRef
+	cursors   agentBusCursors
+	limits    agentbus.TalkLimits
 	// hearingLimits bound this session's deliberations; zero leaves them off.
 	hearingLimits agentbus.HearingLimits
 	// nodeRate bounds how often one node may move; zero leaves the ceiling off.
@@ -107,7 +111,7 @@ func (c *Controller) AgentBusAnnounce(host, tokenFile string) error {
 	if err != nil {
 		return err
 	}
-	_, err = directory.Announce(context.Background(), agentbus.ParticipantRef{
+	announced, err := directory.Announce(context.Background(), agentbus.ParticipantRef{
 		Participant: state.participantID(c),
 		Host:        strings.TrimSpace(host),
 		SessionPath: c.SessionPath(),
@@ -116,9 +120,18 @@ func (c *Controller) AgentBusAnnounce(host, tokenFile string) error {
 		// hand work to off these, and an opaque id answers nothing (F48, 2026-10-05).
 		Workspace: c.WorkspaceRoot(),
 		Model:     c.ModelRef(),
+		Busy:      c.busyReport(),
 		At:        time.Now().UTC(),
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	// Remember what went out: the tick re-sends this ref, so a refresh cannot drop the endpoint
+	// a serving host published (2026-10-05).
+	state.mu.Lock()
+	state.announced = announced
+	state.mu.Unlock()
+	return nil
 }
 
 // AgentBusWithdraw retires this session's address: a session that left the board must
