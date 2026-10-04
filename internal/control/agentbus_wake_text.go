@@ -7,6 +7,11 @@ import (
 	"reasonix/internal/agentbus"
 )
 
+// agentBusWakeMaxBytes bounds one wake block: a wake is a pointer to work, not a digest of the
+// board, and a board with hundreds of nodes would otherwise put the whole board in the prompt
+// (measured 2026-10-04: 11 wake blocks, 4.8 KB, on one busy session).
+const agentBusWakeMaxBytes = 2048
+
 // AgentBusWakePrompt renders the block a woken session reads.
 //
 // It lives here, not in a frontend, because the wake is *rendered* where it is enqueued and
@@ -24,14 +29,29 @@ func AgentBusWakePrompt(target agentbus.WakeTarget) string {
 	var b strings.Builder
 	b.WriteString("<agentbus-wake>\n")
 	b.WriteString("The board woke you: it has work only you can move right now.\n")
-	b.WriteString("Sent when the board last changed; read the board before acting on this list.\n")
+	b.WriteString(wakeGuidanceLine(target))
 	writeWakeList := func(label string, items []string) {
 		if len(items) == 0 {
 			return
 		}
 		b.WriteString(label)
 		b.WriteString(": ")
-		b.WriteString(strings.Join(items, ", "))
+		shown := 0
+		for i, item := range items {
+			if b.Len()+len(item)+2 > agentBusWakeMaxBytes {
+				break
+			}
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			b.WriteString(item)
+			shown++
+		}
+		// A cut list says what it cut and where the rest is: a silently shortened list reads
+		// like the whole answer, and the reader then believes work does not exist.
+		if shown < len(items) {
+			fmt.Fprintf(&b, " …and %d more (action=view)", len(items)-shown)
+		}
 		b.WriteString("\n")
 	}
 	writeWakeList("startable now", target.Ready)
@@ -44,6 +64,27 @@ func AgentBusWakePrompt(target agentbus.WakeTarget) string {
 	writeWakeList(fmt.Sprintf("steps that stopped moving (handed out %d times with no progress): take one, replan it, or say why it cannot move", agentBusDispatchTries), target.Stalled)
 	b.WriteString("</agentbus-wake>\n")
 	return b.String()
+}
+
+// wakeGuidanceLine names the surface the lists above actually live on: a question and a
+// deliberation are talk-side and never become board rows, so telling their addressee to read the
+// board sends it looking for a row that is not there (measured 2026-10-04).
+func wakeGuidanceLine(target agentbus.WakeTarget) string {
+	const boardGuidance = "Sent when the board last changed; read the board before acting on this list.\n"
+	if len(target.Ready)+len(target.Assigned)+len(target.Waiting)+len(target.Stalled) > 0 {
+		return boardGuidance
+	}
+	asks, owes := len(target.Asks) > 0, len(target.Owes) > 0
+	switch {
+	case asks && owes:
+		return "Sent when the board last changed; neither list above is a board row — answer the question with the agent_bus tool (action=answer, correlation=…), the deliberation you owe with action=hearing_answer, node=….\n"
+	case asks:
+		return "Sent when the board last changed; what is listed above is a question, not a board row — answer it with the agent_bus tool (action=answer, correlation=…).\n"
+	case owes:
+		return "Sent when the board last changed; what is listed above is a deliberation, not a board row — answer it with the agent_bus tool (action=hearing_answer, node=…).\n"
+	default:
+		return boardGuidance
+	}
 }
 
 // AgentBusWakeSource is the source a wake's inbox item carries. It names the producer, so a

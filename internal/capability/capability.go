@@ -39,14 +39,17 @@ const (
 )
 
 type Entry struct {
-	ID               string
-	Kind             Kind
-	Name             string
-	Description      string
-	Source           string
-	Status           Status
-	ReadOnly         bool
-	Destructive      bool
+	ID          string
+	Kind        Kind
+	Name        string
+	Description string
+	Source      string
+	Status      Status
+	ReadOnly    bool
+	Destructive bool
+	// Capabilities names the optional interfaces a tool satisfies (ImageTool, SnipHinter, …), so
+	// the catalogue can say what a tool can do without re-probing its type.
+	Capabilities     []string
 	Cost             string
 	AutoUse          AutoUse
 	Triggers         []string
@@ -123,13 +126,14 @@ func ToolEntries(tools []tool.ContractEntry) []Entry {
 	out := make([]Entry, 0, len(tools))
 	for _, t := range tools {
 		e := Entry{
-			ID:          "tool:" + t.Name,
-			Kind:        KindTool,
-			Name:        t.Name,
-			Description: strings.TrimSpace(t.Description),
-			Status:      StatusReady,
-			ReadOnly:    t.ReadOnly,
-			ToolName:    t.Name,
+			ID:           "tool:" + t.Name,
+			Kind:         KindTool,
+			Name:         t.Name,
+			Description:  strings.TrimSpace(t.Description),
+			Status:       StatusReady,
+			ReadOnly:     t.ReadOnly,
+			Capabilities: t.Capabilities,
+			ToolName:     t.Name,
 		}
 		if server, raw, ok := tool.SplitMCPName(t.Name); ok {
 			e.ID = "mcp-tool:" + server + "/" + raw

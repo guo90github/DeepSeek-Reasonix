@@ -109,6 +109,10 @@ func (t *UseCapabilityTool) inspect(_ context.Context, id string) (string, error
 		"auto_start":   e.AutoStart,
 		"network_call": false,
 	}
+	// The capability names ride along so inspect answers the same question list does (I3/I4).
+	if len(e.Capabilities) > 0 {
+		payload["capabilities"] = e.Capabilities
+	}
 	if strings.HasPrefix(id, "skill:") {
 		if contract, ok := t.capabilityArgumentContract(id); ok {
 			payload["input_schema"] = contract.Schema

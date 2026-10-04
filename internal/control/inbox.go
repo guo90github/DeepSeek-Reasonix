@@ -784,16 +784,3 @@ func (c *Controller) tryEnqueueAndSteerForTurn(turnID string, req InboxRequest) 
 	}
 	return steered, nil
 }
-
-// TryEnqueueFollowup durably queues a follow-up and may dispatch if idle.
-func (c *Controller) TryEnqueueFollowup(req InboxRequest) (sessioninbox.InboxReceipt, error) {
-	req.Intent = sessioninbox.IntentFollowup
-	rec, err := c.EnqueueInbox(req)
-	if err != nil {
-		return rec, err
-	}
-	if !c.Running() {
-		c.maybeDispatchInbox()
-	}
-	return c.withDispatchGate(rec), nil
-}

@@ -102,4 +102,15 @@ func TestUseCapabilityListSummarizesMCPWithoutExpandingCachedDirectories(t *test
 	if err != nil || !strings.Contains(disabledInspect, "disabled") || strings.Contains(disabledInspect, "catalog-bloat-sentinel") {
 		t.Fatalf("disabled inspect exposed a non-actionable cached directory: %v\n%s", err, disabledInspect)
 	}
+
+	// I3/I4: inspecting one tool answers the same question the list does — what can it do? The
+	// image channel is the case a session cannot guess from a description (2026-10-05).
+	reg.Add(&fakeImageTool{text: "shot"})
+	inspectedTool, err := frontend.Execute(context.Background(), json.RawMessage(`{"action":"inspect","capability_id":"tool:shot"}`))
+	if err != nil {
+		t.Fatalf("inspect a registered tool: %v\n%s", err, inspectedTool)
+	}
+	if !strings.Contains(inspectedTool, "ImageTool") {
+		t.Fatalf("inspect did not name the tool's capabilities: %s", inspectedTool)
+	}
 }

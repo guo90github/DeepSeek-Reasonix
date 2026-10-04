@@ -158,6 +158,13 @@ func (a *App) enrollAgentBus(ctrl control.SessionAPI) {
 	boardDir := bus.AgentBusDir()
 	bus.SetAgentBusWakeLedger(agentBusWakeLedger)
 	bus.SetAgentBusLedger(hostAgentBusBudget())
+	// The operator's deliberation bounds and node-rate ceiling ride the same second reading
+	// path as the budget above: the boot wiring that applies them returns early for a host
+	// with no announcement address, which is every desktop session (measured 2026-10-05).
+	if c, ok := ctrl.(*control.Controller); ok {
+		c.SetAgentBusHearingLimits(control.AgentBusHearingLimits(agentBusConfig()))
+		c.SetAgentBusNodeRate(control.AgentBusNodeRate(agentBusConfig()))
+	}
 	bus.SetAgentBusWaker(func(ctx context.Context, target agentbus.WakeTarget) error {
 		return a.routeAgentBusWakeOn(ctx, boardDir, target)
 	})

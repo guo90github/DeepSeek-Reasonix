@@ -44,9 +44,15 @@ func (b *agentBusState) chargeClaim(op board.Op) error {
 		amount = int64(op.Bounds.Steps)
 	}
 	if _, err := ledger.Charge(agentbus.ChargeRequest{
-		Board: boardName, Node: op.Node, Amount: amount,
+		// The turn allowance is the claimant's own: keyed by the board alone it was one bucket
+		// every participant drained, so one busy session refused everybody's next claim for the
+		// rest of the process (measured 2026-10-05: two claims filled it to 60/60).
+		Board: boardName, Node: op.Node, Turn: op.Actor, Amount: amount,
 	}); err != nil {
 		recordBudgetRefusal(err, ledger, boardName, op.Node)
+		// The ceiling stands for this step, so the dispatch loop stops offering it: the next
+		// tick would otherwise repeat the same refusal and the same two log lines.
+		b.noteRefusedStep(op.Actor, op.Node)
 		return err
 	}
 	return nil

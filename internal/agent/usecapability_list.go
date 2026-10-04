@@ -25,12 +25,13 @@ type listServerInfo struct {
 // key stays compatible with restricted subagent list filtering.
 func (t *UseCapabilityTool) listCapabilities() (string, error) {
 	type capInfo struct {
-		ID          string `json:"id"`
-		Kind        string `json:"kind"`
-		Name        string `json:"name"`
-		Status      string `json:"status,omitempty"`
-		ReadOnly    bool   `json:"read_only,omitempty"`
-		Description string `json:"description,omitempty"`
+		ID           string   `json:"id"`
+		Kind         string   `json:"kind"`
+		Name         string   `json:"name"`
+		Status       string   `json:"status,omitempty"`
+		ReadOnly     bool     `json:"read_only,omitempty"`
+		Capabilities []string `json:"capabilities,omitempty"`
+		Description  string   `json:"description,omitempty"`
 	}
 	var caps []capInfo
 	if t.currentToolResultTarget() != nil {
@@ -58,12 +59,13 @@ func (t *UseCapabilityTool) listCapabilities() (string, error) {
 				continue
 			}
 			caps = append(caps, capInfo{
-				ID:          e.ID,
-				Kind:        string(e.Kind),
-				Name:        e.Name,
-				Status:      string(e.Status),
-				ReadOnly:    e.ReadOnly,
-				Description: e.Description,
+				ID:           e.ID,
+				Kind:         string(e.Kind),
+				Name:         e.Name,
+				Status:       string(e.Status),
+				ReadOnly:     e.ReadOnly,
+				Capabilities: e.Capabilities,
+				Description:  e.Description,
 			})
 		}
 	}

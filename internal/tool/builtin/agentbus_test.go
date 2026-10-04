@@ -279,6 +279,8 @@ func TestAgentBusToolNamesWhatAnIncompleteCallIsMissing(t *testing.T) {
 		{"split without children", `{"action":"split","node":"root"}`, "children"},
 		{"require without dep", `{"action":"require","node":"build"}`, "dep"},
 		{"assign without assignee", `{"action":"assign","node":"build"}`, "assign needs assignee"},
+		{"evidence item without a ref", `{"action":"assert","node":"build","evidence":[{"kind":"test","ref":"  "}]}`, "evidence[0]"},
+		{"hearing answer with an empty evidence ref", `{"action":"hearing_answer","node":"design","text":"my side","evidence":[{"ref":""}]}`, "evidence[0]"},
 		{"unknown action", `{"action":"approve","node":"build"}`, "unknown action"},
 		{"no action", `{}`, "action is required"},
 	}

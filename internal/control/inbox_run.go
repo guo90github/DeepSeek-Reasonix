@@ -55,7 +55,12 @@ func (c *Controller) prepareInboxRun(meta sessioninbox.InboxItemMeta, env sessio
 	// This is the path an idle session is woken on: a queued item becomes its own turn, and the
 	// marker keeps the model from reading an outside mention as its owner typing. A wake is
 	// injected minutes after it was sent, so it is rebuilt against the board as it is now.
-	if rebuilt, ok := c.agentBusWakeInjectionRewrite(context.Background(), meta); ok {
+	if rebuilt, stale, ok := c.agentBusWakeInjectionRewrite(context.Background(), meta); ok {
+		if stale {
+			// Nothing to say: a wake whose list is gone must not cost a turn either (2026-10-05:
+			// one transcript carried three identical "no longer holds" blocks).
+			return func(context.Context) error { return nil }, "", nil
+		}
 		submit = rebuilt
 	}
 	submit = markInboxGuidance(meta, submit)

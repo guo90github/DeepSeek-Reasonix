@@ -66,3 +66,56 @@ func TestAgentBusWakePromptRendersEmptyListsAsABlock(t *testing.T) {
 		t.Fatalf("block = %q, want it wrapped and closed", empty)
 	}
 }
+
+// A question and a deliberation are both talk-side: neither becomes a board row, so a block that
+// sends its reader to the board leaves it looking for a row that is not there — the woken
+// session's own view was empty while its wake named the correlation (2026-10-04).
+func TestAgentBusWakePromptSendsTalkSideWorkToTheTalkSurface(t *testing.T) {
+	cases := []struct {
+		name   string
+		target agentbus.WakeTarget
+		want   []string
+		absent []string
+	}{
+		{
+			name:   "only a question",
+			target: agentbus.WakeTarget{Participant: "bob", Key: "k", Asks: []string{"ask-1234"}},
+			want:   []string{"questions addressed to you: ask-1234", "action=answer", "correlation="},
+			absent: []string{"read the board before acting", "hearing_answer"},
+		},
+		{
+			name:   "only an owed deliberation",
+			target: agentbus.WakeTarget{Participant: "bob", Key: "k", Owes: []string{"schema"}},
+			want:   []string{"deliberations you owe an answer about: schema", "action=hearing_answer", "node="},
+			absent: []string{"read the board before acting", "action=answer"},
+		},
+		{
+			name: "a question and a deliberation",
+			target: agentbus.WakeTarget{Participant: "bob", Key: "k",
+				Asks: []string{"ask-1234"}, Owes: []string{"schema"}},
+			want:   []string{"action=answer", "correlation=", "action=hearing_answer", "node="},
+			absent: []string{"read the board before acting"},
+		},
+		{
+			name: "board work alongside a question",
+			target: agentbus.WakeTarget{Participant: "bob", Key: "k",
+				Ready: []string{"schema"}, Asks: []string{"ask-1234"}},
+			want: []string{"read the board before acting", "startable now: schema"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rendered := AgentBusWakePrompt(tc.target)
+			for _, want := range tc.want {
+				if !strings.Contains(rendered, want) {
+					t.Fatalf("block = %q, want %q", rendered, want)
+				}
+			}
+			for _, absent := range tc.absent {
+				if strings.Contains(rendered, absent) {
+					t.Fatalf("block = %q, want no %q", rendered, absent)
+				}
+			}
+		})
+	}
+}

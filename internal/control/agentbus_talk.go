@@ -174,6 +174,35 @@ func (c *Controller) appendTalk(ctx context.Context, line agentbus.TalkLine) (ag
 	return log.Append(ctx, line, bus.limits)
 }
 
+// closeLapsedAgentBusTalk records the silence closure for every topic that has gone quiet. It is
+// the tick's share of talk, and it runs before wakes are computed for the reason the lease
+// reclaim does: a closure changes what the wake face names.
+func (c *Controller) closeLapsedAgentBusTalk(ctx context.Context) {
+	bus, st, err := c.agentBusTalkSnapshot()
+	if err != nil {
+		return
+	}
+	names := st.TopicNames()
+	if len(names) == 0 {
+		return
+	}
+	log, err := agentbus.OpenTalkLog(bus.dir)
+	if err != nil {
+		return
+	}
+	now := time.Now().UTC()
+	for _, name := range names {
+		closed, err := log.CloseLapsed(ctx, name, now, bus.limits)
+		if err != nil {
+			slog.Warn("controller: close lapsed agentbus topic", "topic", name, "err", err)
+			continue
+		}
+		if closed {
+			slog.Debug("controller: closed lapsed agentbus topic on tick", "topic", name)
+		}
+	}
+}
+
 // talkCorrelation derives a chain id from what was asked, never from when: a
 // retried question rejoins its own chain instead of opening a second one.
 func talkCorrelation(participant, topic, to, text string) string {

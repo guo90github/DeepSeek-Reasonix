@@ -145,6 +145,10 @@ func (c *Controller) AgentBusTick(ctx context.Context) int {
 			slog.Warn("controller: agentbus reclaim on tick", "board", bus.dir, "err", err)
 		}
 	}
+	// Talk lapses on the same tick, for the same reason: the closure is a record, not something
+	// re-derived at read time, so with no writer a quiet topic stays open and keeps naming an
+	// addressee with nothing left to answer (measured: five asks kept waking nobody a day later).
+	c.closeLapsedAgentBusTalk(ctx)
 	return c.WakeAgentBus(ctx)
 }
 

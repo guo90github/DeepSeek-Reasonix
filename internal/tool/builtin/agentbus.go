@@ -65,7 +65,7 @@ func (agentBusBoard) Name() string { return "agent_bus" }
 func (agentBusBoard) Description() string {
 	return "Shared blackboard for multi-agent work: record what must be true, claim a step before working on it, and let a step be done only with evidence someone else can re-run. One board is shared by every participant, so a node's state — not this conversation — is the source of truth. " +
 		"action=view lists the nodes addressed to you; use it before claiming. " +
-		"claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason. assign addresses a step to one participant, and only that participant may take it; unassign hands it back to the pool. " +
+		"claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason — refute also undoes a done step: the node goes back to contested for a verdict. assign addresses a step to one participant, and only that participant may take it; unassign hands it back to the pool. decide(done) needs an evidenced assert someone else can check plus a reproducer who is not its author; abandon only requests it (an evidenced abandon, then decide(abandoned)); and a blocked step is one you decided against, not one still waiting on a dependency. decide is not ownership-checked: any enrolled participant may close a step out, so close only what its evidence and a reproducer can back. " +
 		"A refuted result with nobody to settle it stalls the work: hearing_open starts a deliberation on that node (required= names who must answer; empty means its owner and everyone who refuted it), hearing_answer records your side, hearing_settle records the verdict, and a refuted assertion blocks the node. " +
 		"A refusal comes back as a reason (illegal transition, missing evidence, unknown node): read it and fix the op instead of retrying it unchanged."
 }
@@ -145,6 +145,13 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	action := strings.ToLower(strings.TrimSpace(in.Action))
 	if action == "" {
 		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle")
+	}
+	// An item with no ref is dropped by the board, whose refusal then reads "missing_evidence" —
+	// as if no evidence had been given at all. Name the empty item instead (2026-10-05).
+	for i, item := range in.Evidence {
+		if strings.TrimSpace(item.Ref) == "" {
+			return "", fmt.Errorf("evidence[%d] has no ref: every evidence item needs the ref that lets another participant check it", i)
+		}
 	}
 	if action == "view" {
 		return t.readBoard()
@@ -349,6 +356,12 @@ func (t agentBusBoard) apply(op board.Op) (string, error) {
 	if err != nil {
 		if reason, rejected := board.IsReject(err); rejected {
 			return fmt.Sprintf("refused (%s): the board did not accept %s on %q — %s", reason, op.Verb, op.Node, rejectHint(reason)), nil
+		}
+		// A spending ceiling is a refusal too, and this tool's contract says a refusal comes back
+		// as text, not as a failed call. The host keeps its own typed error for the dispatch loop,
+		// which is why the conversion lives here at the tool boundary (2026-10-05).
+		if reason, refused := agentbus.IsBudgetReject(err); refused {
+			return fmt.Sprintf("refused (%s): the spending ceiling turned %s on %q down — the board spent the allowance this step was measured against", reason, op.Verb, op.Node), nil
 		}
 		return "", err
 	}

@@ -37,6 +37,9 @@ type agentBusState struct {
 	// ledger is the host's spending account; nil means nothing is charged at all.
 	// Ceilings belong to the machine, so a host shares one account across controllers.
 	ledger *agentbus.Ledger
+	// dispatchRefusals remembers steps a ceiling refused, so the dispatch loop stops offering
+	// them: re-parking a refused step every tick turned one refusal into a per-tick log pair.
+	dispatchRefusals *dispatchRefusalMemo
 }
 
 // agentBusCursors are this participant's "delivered up to" watermarks, one per

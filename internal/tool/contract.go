@@ -10,12 +10,15 @@ import (
 	"reasonix/internal/provider"
 )
 
-// ContractEntry is the provider-visible contract for a tool schema snapshot.
+// ContractEntry is the provider-visible contract for a tool schema snapshot. Capabilities names
+// the optional interfaces the tool satisfies, so a catalogue can say what a tool can do without
+// every consumer re-probing the type itself.
 type ContractEntry struct {
-	Name        string
-	Description string
-	ReadOnly    bool
-	Schema      json.RawMessage
+	Name         string
+	Description  string
+	ReadOnly     bool
+	Schema       json.RawMessage
+	Capabilities []string
 }
 
 // BuiltinContractEntries returns a stable snapshot of compile-time built-ins.
@@ -33,10 +36,11 @@ func contractEntriesFromTools(tools []Tool, canonical map[string]json.RawMessage
 			}
 		}
 		entries = append(entries, ContractEntry{
-			Name:        t.Name(),
-			Description: strings.TrimSpace(t.Description()),
-			ReadOnly:    t.ReadOnly(),
-			Schema:      schema,
+			Name:         t.Name(),
+			Description:  strings.TrimSpace(t.Description()),
+			ReadOnly:     t.ReadOnly(),
+			Schema:       schema,
+			Capabilities: CapabilityNames(t),
 		})
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })

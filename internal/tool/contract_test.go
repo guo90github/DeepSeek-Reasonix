@@ -88,3 +88,57 @@ func TestEveryBuiltinDeclaresSnipStance(t *testing.T) {
 		}
 	}
 }
+
+// declaredCapabilities is what each built-in says it can do. The snip stance above already has to
+// be declared rather than defaulted; this is that rule for the other optional interfaces, so a tool
+// that gains (or loses) one fails here until its author writes it down (I5, 2026-10-05). No built-in
+// declares an MCP* capability: those belong to the MCP adapter's own tools. Rows follow
+// tool.CapabilityNames' probe order, which is the order the comparison reads.
+var declaredCapabilities = map[string][]string{
+	"agent_bus":     {},
+	"bash":          {"SnipHinter"},
+	"bash_output":   {"ContextualTool"},
+	"code_index":    {},
+	"complete_step": {"ContextualTool", "PlanModeClassifier"},
+	"compress":      {"PlanModeClassifier"},
+	"delete_range":  {"Previewer"},
+	"delete_symbol": {"Previewer"},
+	"edit_file":     {"Previewer"},
+	"glob":          {"SnipHinter"},
+	"grep":          {"SnipHinter"},
+	"kill_shell":    {"ContextualTool"},
+	"ls":            {"SnipHinter"},
+	"move_file":     {},
+	"multi_edit":    {"Previewer"},
+	"notebook_edit": {"Previewer"},
+	"read_file":     {"SnipHinter"},
+	"todo_write":    {},
+	"update_goal":   {"ContextualTool", "PlanModeClassifier"},
+	"view_image":    {"ImageTool"}, // the only built-in with an image channel
+	"wait":          {"ContextualTool"},
+	"web_fetch":     {"SnipHinter"},
+	"write_file":    {"Previewer"},
+}
+
+func TestEveryBuiltinDeclaresItsCapabilities(t *testing.T) {
+	carried := map[string][]string{}
+	for _, e := range tool.BuiltinContractEntries() {
+		carried[e.Name] = e.Capabilities
+	}
+	for _, b := range tool.Builtins() {
+		actual := tool.CapabilityNames(b)
+		declared, ok := declaredCapabilities[b.Name()]
+		if !ok {
+			t.Errorf("%s declares no capability set: add %q: {%s} to declaredCapabilities", b.Name(), b.Name(), strings.Join(actual, ", "))
+			continue
+		}
+		if strings.Join(actual, ",") != strings.Join(declared, ",") {
+			t.Errorf("%s capabilities = %v, but the table declares %v", b.Name(), actual, declared)
+		}
+		// The contract entry carries the same answer: catalogues are built from it, so a capability
+		// that only appeared in this test would still be invisible everywhere else.
+		if strings.Join(carried[b.Name()], ",") != strings.Join(actual, ",") {
+			t.Errorf("%s: contract entry carries %v, the tool answers %v", b.Name(), carried[b.Name()], actual)
+		}
+	}
+}

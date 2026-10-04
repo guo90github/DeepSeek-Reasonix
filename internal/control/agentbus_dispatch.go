@@ -43,7 +43,7 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 	if err := c.releaseStalledAssignments(ctx, bus.participantID(c), st); err != nil {
 		return 0, err
 	}
-	if err := parkStartableWork(ctx, queueLog, st, now); err != nil {
+	if err := bus.dispatchStartableWork(ctx, queueLog, st, now); err != nil {
 		return 0, err
 	}
 	ledger, boardName := bus.budget()
@@ -76,6 +76,9 @@ func (c *Controller) AgentBusDispatch(ctx context.Context, claimant string, deli
 		// would collapse onto the first op and never land. The deadline names the attempt.
 		op.ID = fmt.Sprintf("agentbus-dispatch:%s/%s/%d", boardName, node, deadline.UnixNano())
 		if _, err := c.ApplyAgentBusOp(ctx, op); err != nil {
+			// The ceiling stands for this step, and this is the one place that both tried it and
+			// knows who it was handed to, so the memo's key matches the loop's skip for ever.
+			bus.noteRefusedStep(claimant, node)
 			return dispatched, err
 		}
 		if deliver == nil {
@@ -145,30 +148,6 @@ func releaseIdleSlots(ledger *agentbus.Ledger, st *board.State) {
 			ledger.ReleaseSlot(holder)
 		}
 	}
-}
-
-// parkStartableWork records startable work nobody has taken in the queue. An entry is not
-// a promise to start now: it is the host's "waiting for a slot" list, and it is also what
-// the human briefing counts as parked.
-func parkStartableWork(ctx context.Context, queueLog *agentbus.QueueLog, st *board.State, now time.Time) error {
-	if st == nil {
-		return nil
-	}
-	for _, target := range agentbus.WakeTargets(agentbus.WakeInput{State: st, Now: now}) {
-		// Addressed work parks like pooled work: the queue is what the take rule reads,
-		// whichever group named the node.
-		for _, node := range append(append([]string(nil), target.Ready...), target.Assigned...) {
-			if !dispatchable(st, node) {
-				continue
-			}
-			if _, _, err := queueLog.Enqueue(ctx, agentbus.QueueEntry{
-				Node: node, Subtree: agentbus.SubtreeRoot(st, node), Participant: target.Participant,
-			}, agentbus.QueueLimits{}); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // dispatchable reports whether auto-dispatch may offer this step at all: work that has

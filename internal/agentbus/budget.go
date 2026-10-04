@@ -36,7 +36,9 @@ const (
 
 // ChargeRequest identifies what is being paid for. Work is charged at the node and
 // turn levels; only an accepted outcome reaches the board and subtree levels, so
-// doing the work never spends the total allowance.
+// doing the work never spends the total allowance. Turn names whose allowance pays:
+// the host passes the claimant, so the ceiling is per participant rather than one
+// bucket every session on the host drains together.
 type ChargeRequest struct {
 	Board   string
 	Subtree string

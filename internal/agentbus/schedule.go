@@ -42,21 +42,32 @@ func Take(ctx context.Context, log *QueueLog, ledger *Ledger, st *board.State, c
 	return taken, nil
 }
 
-// takeableFor drops parked work the board addressed to somebody else: an assignment is a
-// promise to one participant, so taking it in another name is the mis-delivery the wake
-// routing exists to prevent. No board, or no assignee, leaves the entry in the pool.
+// takeableFor drops parked work the board addressed to somebody else (a mis-delivery to take it
+// in another name) and work the board has already finished: a settled node is not waiting for a
+// slot, and taking it only made the queue churn (2026-10-04: one done node re-claimed every 30s).
 func takeableFor(st *board.State, entries []QueueEntry, claimant string) []QueueEntry {
 	if st == nil {
 		return entries
 	}
 	out := make([]QueueEntry, 0, len(entries))
 	for _, entry := range entries {
-		if n := st.Nodes[entry.Node]; n != nil && n.Assignee != "" && n.Assignee != claimant {
-			continue
+		if n := st.Nodes[entry.Node]; n != nil {
+			if nodeSettled(n.State) {
+				continue
+			}
+			if n.Assignee != "" && n.Assignee != claimant {
+				continue
+			}
 		}
 		out = append(out, entry)
 	}
 	return out
+}
+
+// nodeSettled reports whether the board has finished with a node, and so filled the slot the queue
+// held for it. Refute can pull either state back to contested, and the parker re-enqueues then.
+func nodeSettled(state board.NodeState) bool {
+	return state == board.StateDone || state == board.StateAbandoned
 }
 
 // TakeRanked takes with advice: the same slot rule and the same queue, but the batch

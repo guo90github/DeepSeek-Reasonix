@@ -53,7 +53,7 @@ func TestInjectedWakeIsRebuiltAgainstTheBoardAsItIsNow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rebuilt, ok := me.agentBusWakeInjectionRewrite(ctx, meta)
+	rebuilt, _, ok := me.agentBusWakeInjectionRewrite(ctx, meta)
 	if !ok {
 		t.Fatal("an agentbus wake must be rewritten at injection")
 	}
@@ -89,9 +89,12 @@ func TestInjectedAssignmentForWorkThatIsNoLongerYoursIsRefused(t *testing.T) {
 		CreatedAt: time.Now().UTC().Add(-90 * time.Second),
 	}
 
-	rebuilt, ok := me.agentBusWakeInjectionRewrite(ctx, meta)
+	rebuilt, stale, ok := me.agentBusWakeInjectionRewrite(ctx, meta)
 	if !ok {
 		t.Fatal("an assignment is rewritten at injection too")
+	}
+	if !stale {
+		t.Fatalf("injected assignment = %q, want it reported stale so no turn is spent on it", rebuilt)
 	}
 	if !strings.Contains(rebuilt, "held by alice") {
 		t.Fatalf("injected assignment = %q, want it refused with who holds the node now", rebuilt)
@@ -105,9 +108,29 @@ func TestInjectedAssignmentForWorkThatIsNoLongerYoursIsRefused(t *testing.T) {
 // second place that can edit what a person typed.
 func TestInjectedNonWakeItemIsLeftAlone(t *testing.T) {
 	me := newAgentBusTalkController(t, t.TempDir(), "bob")
-	if _, ok := me.agentBusWakeInjectionRewrite(context.Background(), sessioninbox.InboxItemMeta{
+	if _, _, ok := me.agentBusWakeInjectionRewrite(context.Background(), sessioninbox.InboxItemMeta{
 		ID: "typed", Intent: sessioninbox.IntentFollowup, Idempotency: "typed-1",
 	}); ok {
 		t.Fatal("a queued item that is not a wake must not be rewritten")
+	}
+}
+
+// A wake whose whole list is gone is reported stale, which is what lets the caller consume the
+// item without spending a turn on a block that only says so (2026-10-05: one transcript carried
+// three identical "no longer holds" blocks, each as its own turn).
+func TestAWakeWithNothingWaitingIsReportedStale(t *testing.T) {
+	me := newAgentBusTalkController(t, t.TempDir(), "bob")
+	text, stale, ok := me.agentBusWakeInjectionRewrite(context.Background(), sessioninbox.InboxItemMeta{
+		ID: "wake-3", Source: "agentbus", Idempotency: "agentbus-wake:default/bob/nothing",
+		CreatedAt: time.Now().UTC().Add(-2 * time.Minute),
+	})
+	if !ok {
+		t.Fatal("a generic wake is rewritten at injection")
+	}
+	if !stale {
+		t.Fatalf("wake = %q, want it reported stale when nothing waits on bob", text)
+	}
+	if !strings.Contains(text, "nothing is waiting on you") {
+		t.Fatalf("wake = %q, want the refusal that names who is idle", text)
 	}
 }
