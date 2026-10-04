@@ -4,11 +4,12 @@
 // — what it recorded, or why it refused and what to change — because a panel that
 // decided for itself would be a second, silently different board (AGENT_BUS §13.8).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useT } from "../lib/i18n";
 import type { AgentBusApplyArgs, AgentBusChildArg } from "../generated/desktopContract.generated";
 
-type Action = "assert" | "require" | "split" | "claim" | "decide" | "refute" | "release";
+export type AgentBusAction = "assert" | "require" | "split" | "claim" | "decide" | "refute" | "release";
+type Action = AgentBusAction;
 type Field = "node" | "reason" | "ref" | "depID" | "depTitle" | "children" | "steps" | "outcome" | "reproducedBy";
 
 const ACTIONS: Action[] = ["assert", "require", "split", "claim", "decide", "refute", "release"];
@@ -85,17 +86,26 @@ const EMPTY_FIELDS: Record<Field, string> = {
   reproducedBy: "",
 };
 
-export function AgentBusControls({ apply, onApplied }: {
+export function AgentBusControls({ apply, onApplied, prefill }: {
   /** Injected so the form can be tested without the host. */
   apply: (args: AgentBusApplyArgs) => Promise<string>;
   /** Called after a write so the section refetches what the board now says. */
   onApplied?: () => void;
+  /** A node (and verb) picked on the board: the form fills in what the human already pointed at, so
+   * nobody has to copy an id by hand. A new object each time is what re-triggers the fill. */
+  prefill?: { action?: Action; node: string };
 }) {
   const t = useT();
   const [action, setAction] = useState<Action>("assert");
   const [fields, setFields] = useState<Record<Field, string>>(EMPTY_FIELDS);
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!prefill) return;
+    if (prefill.action) setAction(prefill.action);
+    if (prefill.node) setFields((current) => ({ ...current, node: prefill.node }));
+  }, [prefill]);
 
   const set = (field: Field) => (value: string) => setFields((current) => ({ ...current, [field]: value }));
 

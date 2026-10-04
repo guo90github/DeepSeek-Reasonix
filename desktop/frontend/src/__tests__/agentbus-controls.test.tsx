@@ -155,5 +155,37 @@ await act(async () => {
   second.unmount();
 });
 
+// Pointing at a node on the board fills the form in: the human picks "claim" on a card and the verb
+// and the node are already there, with nothing copied by hand (2026-10-05).
+const prefilled = dom.window.document.createElement("div");
+dom.window.document.body.appendChild(prefilled);
+const prefilledRoot = createRoot(prefilled);
+await act(async () => {
+  prefilledRoot.render(
+    React.createElement(LocaleProvider, null,
+      React.createElement(AgentBusControls, {
+        apply: async () => "recorded",
+        prefill: { action: "claim", node: "ab-old-decision" },
+      })),
+  );
+});
+const prefilledNode = Array.from(prefilled.querySelectorAll("input")).find(
+  (input) => ["Step", "步骤"].includes(input.getAttribute("aria-label") ?? ""),
+) as HTMLInputElement | undefined;
+ok(
+  prefilledNode !== undefined && prefilledNode.value === "ab-old-decision",
+  "a node picked on the board arrives in the form's step field",
+);
+const prefilledVerb = prefilled.querySelector(
+  "select[aria-label='Action'], select[aria-label='动作']",
+) as HTMLSelectElement | null;
+ok(
+  prefilledVerb !== null && prefilledVerb.value === "claim",
+  "and the verb picked with it is already chosen",
+);
+await act(async () => {
+  prefilledRoot.unmount();
+});
+
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

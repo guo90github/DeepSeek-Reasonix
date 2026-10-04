@@ -7,7 +7,7 @@
 import { useEffect, useState } from "react";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
-import { AgentBusControls } from "./AgentBusControls";
+import { AgentBusControls, type AgentBusAction } from "./AgentBusControls";
 import { AgentBusPanel, type AgentBusBriefingView, type AgentBusNodeDetailView } from "./AgentBusPanel";
 import type { AgentBusApplyArgs } from "../generated/desktopContract.generated";
 
@@ -64,6 +64,8 @@ export function WorkspaceAgentBusSection({ onOpenNode, refreshKey, load, loadDet
   const [busy, setBusy] = useState(false);
   // The board's answer to a retire request: it says what it dropped, or why it refused.
   const [retired, setRetired] = useState("");
+  // What the human pointed at on the board, handed to the form below so nothing is retyped.
+  const [prefill, setPrefill] = useState<{ action?: AgentBusAction; node: string }>();
 
   async function readBriefing() {
     setBriefing({ kind: "loading" });
@@ -176,20 +178,29 @@ export function WorkspaceAgentBusSection({ onOpenNode, refreshKey, load, loadDet
       .catch((err: unknown) => setRetired(String(err)))
       .then(() => readBriefing());
   };
+  // Pointing at a node on the board fills the form in: the human should never have to copy an id
+  // out of a card and retype it (2026-10-05).
+  const onVerb = (verb: string, node: string) => {
+    setPrefill({ action: verb as AgentBusAction, node });
+  };
   return (
     <>
       <AgentBusPanel
         view={briefing.view}
         enrol={leaveButton}
         notice={retired || trouble || boardNotice}
-        onOpenNode={(node) => void openNode(node)}
+        onOpenNode={(node) => {
+          setPrefill({ node });
+          void openNode(node);
+        }}
         detail={detail.kind === "ready" ? detail.view : null}
         detailNotice={notice}
         onCloseDetail={() => setDetail({ kind: "idle" })}
         onRetire={onRetire}
+        onVerb={onVerb}
       />
       {/* The human acts on the board too, through the same verbs the model uses. */}
-      <AgentBusControls apply={applyAction} onApplied={() => void readBriefing()} />
+      <AgentBusControls apply={applyAction} onApplied={() => void readBriefing()} prefill={prefill} />
     </>
   );
 }

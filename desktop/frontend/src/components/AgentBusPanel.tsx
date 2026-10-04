@@ -148,7 +148,7 @@ function Head({ who, enrol }: { who: string; enrol?: ReactNode }) {
   );
 }
 
-export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseDetail, enrol, notice, onRetire }: {
+export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseDetail, enrol, notice, onRetire, onVerb }: {
   /** The board's first screen; null means this session is not on a board yet. */
   view?: AgentBusBriefingView | null;
   /** Opens a node; the host decides what opening means (fetch, navigate, both). */
@@ -164,6 +164,8 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
   notice?: string;
   /** Drops one leftover subtree; the host runs the board's own two-step protocol. */
   onRetire?: (subtree: string) => void;
+  /** A verb the human picked on a node: the form fills in the verb and the node. */
+  onVerb?: (action: string, node: string) => void;
 }) {
   const t = useT();
   const who = (view?.participant ?? "") || t("agentbus.unwired");
@@ -222,6 +224,15 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
                 <span>{signal.node}</span>
               )}
               <span className="agentbus-panel__detail">{signal.detail}</span>
+              {onVerb && signal.node ? (
+                <span className="agentbus-panel__quick">
+                  {(["claim", "decide", "refute"] as const).map((verb) => (
+                    <button key={verb} type="button" onClick={() => onVerb(verb, signal.node)}>
+                      {t(`agentbus.quick.${verb}` as "agentbus.quick.claim")}
+                    </button>
+                  ))}
+                </span>
+              ) : null}
             </li>
           ))}
         </ul>

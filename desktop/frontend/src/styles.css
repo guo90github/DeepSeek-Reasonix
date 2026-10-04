@@ -40184,7 +40184,8 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   margin-top: 0;
 }
 
-.agentbus-panel__signal button {
+/* The node link itself; the quick verbs sit inside a span, so they are not caught here. */
+.agentbus-panel__signal > button {
   padding: 0;
   font: inherit;
   color: var(--accent);
@@ -40192,6 +40193,30 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   border: 0;
   text-decoration: underline;
   cursor: pointer;
+}
+
+/* Pointing at a verb on the row hands the form below the verb and the node: nobody retypes an id. */
+.agentbus-panel__quick {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.agentbus-panel__quick button {
+  padding: 0 6px;
+  font: inherit;
+  font-size: 0.9em;
+  color: var(--text-2);
+  white-space: nowrap;
+  background: transparent;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.agentbus-panel__quick button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 .agentbus-panel__detail {

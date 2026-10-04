@@ -244,5 +244,37 @@ ok(
   "the card's state reads as a chip rather than as loose text",
 );
 
+// Acting on a step happens where it is read: each node row offers the verbs a person most wants, and
+// they hand the verb plus the node to the form instead of making anyone copy an id (2026-10-05).
+const withNode = {
+  participant: "alice",
+  cards: [{ subtree: "build", nodes: 2, atWork: 0, parked: 0, done: 1, worst: "stalled", signals: 1, orphans: 0, stalled: 1, disputed: 0 }],
+  signals: [{ kind: "stalled", subtree: "build", node: "build-step", detail: "no progress recorded 2 times" }],
+  hidden: 0,
+  hiddenCards: 0,
+  healthySubtrees: 0,
+};
+const verbsHtml = renderToStaticMarkup(
+  <LocaleProvider>
+    <AgentBusPanel view={withNode} onVerb={() => {}} />
+  </LocaleProvider>,
+);
+ok(verbsHtml.indexOf("agentbus-panel__quick") !== -1, "a node row offers the verbs a person needs");
+ok(
+  ["Claim", "认领", "認領"].some((label) => verbsHtml.includes(label)) &&
+    ["Deliver", "交付"].some((label) => verbsHtml.includes(label)) &&
+    ["Challenge", "质疑", "質疑"].some((label) => verbsHtml.includes(label)),
+  "the three verbs are named on the row",
+);
+const noVerbsHtml = renderToStaticMarkup(
+  <LocaleProvider>
+    <AgentBusPanel view={withNode} />
+  </LocaleProvider>,
+);
+ok(
+  noVerbsHtml.indexOf("agentbus-panel__quick") === -1,
+  "and a host that offers no verbs draws no buttons",
+);
+
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);
