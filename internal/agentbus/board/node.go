@@ -91,7 +91,7 @@ func noteRequester(n *Node, actor string) {
 }
 
 // Ready reports the derived readiness predicate: the node may start once every
-// dependency is done and no verdict blocks it. A split container becomes ready
+// dependency is settled and no verdict blocks it. A split container becomes ready
 // again when its children finish, because assembling them is its own work.
 func (n *Node) Ready(st *State) bool {
 	if n.Outcome == OutcomeBlocked {
@@ -103,12 +103,19 @@ func (n *Node) Ready(st *State) bool {
 		return false
 	}
 	for _, dep := range n.Deps {
-		d := st.Nodes[dep]
-		if d == nil || d.State != StateDone {
+		if !DepSettled(st.Nodes[dep]) {
 			return false
 		}
 	}
 	return true
+}
+
+// DepSettled reports whether a dependency stopped being something to wait for: done, or given
+// up on. An abandoned dependency counts, because a child that was given up on can never become
+// done, and reading that as "still waiting" pinned its container for ever — the by-product
+// terminal state the board was missing (F22, 2026-10-05).
+func DepSettled(d *Node) bool {
+	return d != nil && (d.State == StateDone || d.State == StateAbandoned)
 }
 
 // claimable reports whether a node may be taken: a fresh node, a waiting node

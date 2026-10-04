@@ -218,8 +218,7 @@ func lineFor(st *board.State, n *board.Node, participant string) ViewLine {
 		line.Lease = n.Deadline.Sub(n.ClaimedAt).Round(time.Second).String()
 	}
 	for _, dep := range n.Deps {
-		d := st.Nodes[dep]
-		if d == nil || d.State != board.StateDone {
+		if !board.DepSettled(st.Nodes[dep]) {
 			line.DepsOpen++
 		}
 	}
