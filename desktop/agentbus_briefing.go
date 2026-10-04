@@ -94,7 +94,19 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 	if signal, failed := wakeFailureSignal(control.AgentBusWakeFailures()); failed {
 		view.Signals = append(view.Signals, signal)
 	}
-	if signal, unreachable := wakeUnreachableSignal(a.agentBusUnreachableWithWork(bus.AgentBusDir())); unreachable {
+	// The unreachable row has to agree with what the panel calls attention: name a participant only
+	// when the board is showing work their absence blocks. Retiring that work empties the row, and
+	// unowned startable steps never put anyone in it (anyone here may take those).
+	interesting := make([]string, 0, len(view.Cards)+len(view.Signals))
+	for _, card := range view.Cards {
+		interesting = append(interesting, card.Subtree)
+	}
+	for _, signal := range view.Signals {
+		if signal.Node != "" {
+			interesting = append(interesting, signal.Node)
+		}
+	}
+	if signal, unreachable := wakeUnreachableSignal(a.agentBusUnreachableAmong(bus.AgentBusDir(), interesting)); unreachable {
 		view.Signals = append(view.Signals, signal)
 	}
 	if signal, throttled := nodeRateSignal(control.AgentBusNodeRateRefusals()); throttled {

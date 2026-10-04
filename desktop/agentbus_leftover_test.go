@@ -140,9 +140,19 @@ func TestTheUnreachableRowFollowsTheBoardAndNotTheProcess(t *testing.T) {
 		}
 		return ""
 	}
+	// A step nobody has claimed and anybody here may take is not this participant's outstanding
+	// work: naming them would contradict the panel's own "nothing needs you".
+	if idle := rowFor(); idle != "" {
+		t.Fatalf("row = %q, want nobody named while the step is just startable", idle)
+	}
+	// Make it attention-worthy — and let every party to it be a departed session.
+	writeAs(t, ctrl, board.Op{
+		Verb: board.VerbRefute, Node: "ghost-open-work", Actor: "skeptic-ghost",
+		Reason: "cannot check it",
+	})
 	before := rowFor()
 	if !strings.Contains(before, "ghost") {
-		t.Fatalf("row = %q, want the departed participant named while their step is open", before)
+		t.Fatalf("row = %q, want the departed participants named while their step is disputed", before)
 	}
 	if _, err := app.AgentBusRetireSubtree(AgentBusRetireArgs{Subtree: "ghost-open-work"}); err != nil {
 		t.Fatalf("retire: %v", err)

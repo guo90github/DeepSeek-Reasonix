@@ -111,7 +111,7 @@ await act(async () => {
     input.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
   };
   set(byLabel("Step", "步骤"), "build");
-  set(byLabel("Evidence (command, path, URL)", "证据（命令、路径、URL）"), "go test ./...");
+  set(byLabel("Evidence", "证据"), "go test ./...");
 });
 await act(async () => {
   container.querySelector("form")?.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));

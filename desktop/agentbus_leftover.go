@@ -116,13 +116,14 @@ func (a *App) markLeftoverCards(boardDir string, cards []AgentBusCardView) {
 	}
 }
 
-// agentBusUnreachableWithWork names the participants that still have work on this board and cannot
-// be reached from this host. The board is the only source, so retiring that work makes the row go
-// away — a process-lifetime record of "we once could not reach them" would keep naming sessions
-// that are gone and whose steps are closed (2026-10-05).
-func (a *App) agentBusUnreachableWithWork(boardDir string) []string {
+// agentBusUnreachableAmong names the participants behind the given nodes — the ones the panel is
+// showing as work to act on — that this host cannot reach. It deliberately does NOT count every
+// open step: unowned startable work is takeable by anyone here, so naming its departed author would
+// contradict the panel's own "nothing needs you" line. The board is the only source, which is also
+// why retiring that work makes the row go away (2026-10-05).
+func (a *App) agentBusUnreachableAmong(boardDir string, nodes []string) []string {
 	boardDir = strings.TrimSpace(boardDir)
-	if boardDir == "" {
+	if boardDir == "" || len(nodes) == 0 {
 		return nil
 	}
 	brd, err := board.Open(boardDir)
@@ -133,20 +134,15 @@ func (a *App) agentBusUnreachableWithWork(boardDir string) []string {
 	if err != nil {
 		return nil
 	}
+	bySubtree := boardParticipantsOffline(state)
 	involved := map[string]bool{}
-	for _, n := range state.Nodes {
-		if n == nil || n.State == board.StateDone || n.State == board.StateAbandoned {
+	for _, node := range nodes {
+		node = strings.TrimSpace(node)
+		if node == "" {
 			continue
 		}
-		for _, actor := range []string{n.Owner, n.Assignee} {
-			if actor = strings.TrimSpace(actor); actor != "" {
-				involved[actor] = true
-			}
-		}
-		for _, requester := range n.Requesters {
-			if requester = strings.TrimSpace(requester); requester != "" {
-				involved[requester] = true
-			}
+		for participant := range bySubtree[agentbus.SubtreeRoot(state, node)] {
+			involved[participant] = true
 		}
 	}
 	out := make([]string, 0, len(involved))

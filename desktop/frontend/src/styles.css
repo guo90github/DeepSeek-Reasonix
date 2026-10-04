@@ -40061,6 +40061,7 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   padding: 2px 8px;
   color: var(--text);
   font-size: var(--text-xs);
+  white-space: nowrap;
   background: transparent;
   border: 1px solid var(--border-soft);
   border-radius: 6px;
