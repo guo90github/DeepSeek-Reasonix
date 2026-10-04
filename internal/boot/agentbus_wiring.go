@@ -17,6 +17,9 @@ func enrolAgentBusController(ctrl *control.Controller, cfg *config.Config, opts 
 		return
 	}
 	ctrl.SetAgentBus(opts.AgentBusDir, opts.AgentBusID)
+	// What this host calls the sessions it runs, so a reader of the roster can see what a
+	// participant is for. The words are the operator's; an unset one leaves the column off.
+	ctrl.SetAgentBusRole(cfg.AgentBus.Identity.Role)
 	// A deliberation is only woken once its round window lapses, so a host with no window
 	// never wakes the side that owes an answer (AGENT_BUS §11.5.7).
 	limits := control.AgentBusHearingLimits(cfg.AgentBus)

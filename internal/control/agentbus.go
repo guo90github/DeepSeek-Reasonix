@@ -31,6 +31,9 @@ type agentBusState struct {
 	hearingLimits agentbus.HearingLimits
 	// nodeRate bounds how often one node may move; zero leaves the ceiling off.
 	nodeRate board.Limits
+	// role is what this host calls the sessions it runs, so a reader of the roster can see
+	// what a participant is for; empty leaves that column off (2026-10-05).
+	role string
 	// observeLimits tune how much the human first screen carries; zero uses defaults.
 	observeLimits agentbus.ObserveLimits
 	// waker is the host's routing for ready-work wakes; nil means wake nobody.
@@ -74,9 +77,10 @@ func (c *Controller) SetAgentBus(dir, participant string) {
 	var talk agentbus.TalkLimits
 	var hearing agentbus.HearingLimits
 	var rate board.Limits
+	var role string
 	if prev := c.agentBus; prev != nil {
 		prev.mu.Lock()
-		cursors, talk, hearing, rate = prev.cursors, prev.limits, prev.hearingLimits, prev.nodeRate
+		cursors, talk, hearing, rate, role = prev.cursors, prev.limits, prev.hearingLimits, prev.nodeRate, prev.role
 		prev.mu.Unlock()
 		if prev.dir != dir || prev.participant != participant {
 			cursors = agentBusCursors{}
@@ -84,7 +88,7 @@ func (c *Controller) SetAgentBus(dir, participant string) {
 	}
 	c.agentBus = &agentBusState{
 		dir: dir, participant: participant, wakeLedger: NewWakeLedger(),
-		cursors: cursors, limits: talk, hearingLimits: hearing, nodeRate: rate,
+		cursors: cursors, limits: talk, hearingLimits: hearing, nodeRate: rate, role: role,
 	}
 }
 
@@ -111,6 +115,9 @@ func (c *Controller) AgentBusAnnounce(host, tokenFile string) error {
 	if err != nil {
 		return err
 	}
+	state.mu.Lock()
+	role := state.role
+	state.mu.Unlock()
 	announced, err := directory.Announce(context.Background(), agentbus.ParticipantRef{
 		Participant: state.participantID(c),
 		Host:        strings.TrimSpace(host),
@@ -121,6 +128,7 @@ func (c *Controller) AgentBusAnnounce(host, tokenFile string) error {
 		Workspace: c.WorkspaceRoot(),
 		Model:     c.ModelRef(),
 		Busy:      c.busyReport(),
+		Role:      role,
 		At:        time.Now().UTC(),
 	})
 	if err != nil {

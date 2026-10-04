@@ -167,6 +167,9 @@ func (a *App) enrollAgentBus(ctrl control.SessionAPI) {
 		// Talk's five bounds are the same story, and until now nothing read them at all: the
 		// setter existed with no caller, so a configured window never fired (2026-10-05).
 		c.SetAgentBusTalkLimits(control.AgentBusTalkLimits(agentBusConfig()))
+		// The same reading path carries what this host calls its sessions: the roster renders a
+		// role column, and nothing but an operator's word was ever going to fill it.
+		c.SetAgentBusRole(agentBusConfig().Identity.Role)
 		// A desktop session answers no endpoint, but it is still on this board: announcing with
 		// no host puts it on the roster as present, where until now only its departure appeared.
 		if err := c.AgentBusAnnounce("", ""); err != nil {
