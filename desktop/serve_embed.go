@@ -124,6 +124,7 @@ func (a *App) attachEmbeddedServeHooks(srv *serve.Server) {
 	srv.SetSessionLister(a.listSessionsForRemote)
 	srv.SetProjectLister(a.listProjectsForRemote)
 	srv.SetProjectCreator(a.createProjectForRemote)
+	srv.SetGitLogReader(a.gitLogForRemote)
 	srv.SetSubmitDelegate(a.submitRemoteInput)
 	// The session-aware form: a wake that names a session lands in that tab.
 	srv.SetSubmitDelegateFor(a.submitRemoteInputFor)

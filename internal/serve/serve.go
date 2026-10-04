@@ -119,6 +119,10 @@ type Server struct {
 	// projectCreator registers a new project for /new-project. Only a host with
 	// a window can: a standalone serve cannot move its workspace root.
 	projectCreator func(NewProjectRequest) (NewProjectResult, error)
+	// gitLogReader answers /git-log from an embedded host's git reader: a
+	// remote client has no filesystem of its own, so a standalone serve can
+	// read no workspace and reports none.
+	gitLogReader func(root string) ([]GitCommit, error)
 	// submitDelegate routes /submit through an embedded host's composer path.
 	submitDelegate func(input string) error
 	// submitDelegateFor is the session-aware form: a wake addresses the session
@@ -645,6 +649,7 @@ func (s *Server) handler() http.Handler {
 	s.registerRuntimeRecoveryRoutes(mux)
 	mux.HandleFunc("GET /sessions", s.sessions)
 	mux.HandleFunc("GET /projects", s.projects)
+	mux.HandleFunc("GET /git-log", s.gitLog)
 	mux.HandleFunc("GET /ownership", s.ownership)
 	mux.HandleFunc("POST /handoff", s.handoff)
 	mux.HandleFunc("POST /external/frames", s.externalFrames)

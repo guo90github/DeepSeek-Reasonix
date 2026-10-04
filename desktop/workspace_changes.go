@@ -631,7 +631,13 @@ func (a *App) WorkspaceGitHistory(tabID string, path string) ([]GitCommitView, e
 	if err != nil {
 		return nil, err
 	}
+	return gitHistoryAt(base, path)
+}
 
+// gitHistoryAt is the reader behind both the desktop history panel and the
+// remote /git-log surface: one implementation, so the phone and the window
+// cannot disagree about which commits a workspace has.
+func gitHistoryAt(base string, path string) ([]GitCommitView, error) {
 	args := []string{"-C", base, "log", "--pretty=format:%H%x00%an%x00%ad%x00%s", "-z", "-n", "100"}
 	if path != "" {
 		args = append(args, "--", path)
