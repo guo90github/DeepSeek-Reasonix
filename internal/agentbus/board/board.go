@@ -30,6 +30,9 @@ type Board struct {
 	// serialized by the board file lock, and readers never touch it.
 	cache      *State
 	cachedSize int64
+	// checkpointed is how many ops the snapshot on disk already covers, so a writer only pays
+	// for a new one when it would shorten the next cold read.
+	checkpointed int
 	// limits is the operator's allowance for writes; zero leaves every bound off.
 	limits Limits
 }
@@ -79,7 +82,8 @@ func (b *Board) Dir() string { return b.dir }
 
 // foldedState returns the state this handle folds to, reusing the state folded last
 // when the file has not grown behind its back, so a write and a read cost a stat
-// instead of a full read and fold (T4-8).
+// instead of a full read and fold (T4-8). A cold handle starts from the snapshot when one is
+// there, which is why a read no longer folds the whole log.
 func (b *Board) foldedState() (*State, error) {
 	info, err := os.Stat(b.logPath)
 	if err != nil {
@@ -91,6 +95,10 @@ func (b *Board) foldedState() (*State, error) {
 	if b.cache != nil && b.cachedSize == info.Size() {
 		return b.cache, nil
 	}
+	if st, size, covered, ok := b.loadCheckpoint(); ok {
+		b.cache, b.cachedSize, b.checkpointed = st, size, covered
+		return st, nil
+	}
 	read, err := readLog(b.logPath)
 	if err != nil {
 		return nil, err
@@ -99,6 +107,7 @@ func (b *Board) foldedState() (*State, error) {
 	st.Truncated = read.Truncated
 	st.Skipped = read.Skipped
 	b.cache, b.cachedSize = st, info.Size()
+	b.checkpointed = 0
 	return st, nil
 }
 
@@ -173,6 +182,13 @@ func (b *Board) Apply(ctx context.Context, op Op) (Receipt, error) {
 		return Receipt{}, err
 	}
 	b.keepCache(st)
+	// The snapshot is an optimization and the op is already committed, so a snapshot that could
+	// not be taken must not turn a landed write into a failure: the next cold read folds more.
+	if st.Applied-b.checkpointed >= checkpointEvery {
+		if err := b.writeCheckpoint(st); err == nil {
+			b.checkpointed = st.Applied
+		}
+	}
 	return Receipt{Seq: op.Seq, State: nodeState(st, op.Node)}, nil
 }
 

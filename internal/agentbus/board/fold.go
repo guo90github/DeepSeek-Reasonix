@@ -24,7 +24,15 @@ func NewState() *State {
 // any moment and in any process. Time-derived predicates (expiry, readiness) are
 // computed by the caller from the folded nodes.
 func Fold(ops []Op) *State {
-	st := NewState()
+	return foldFrom(NewState(), ops)
+}
+
+// foldFrom replays ops into an existing folded state, so a checkpoint can be extended instead of
+// rebuilt. It is Fold with a starting point, and the ordering rules are the same.
+func foldFrom(st *State, ops []Op) *State {
+	if st == nil {
+		st = NewState()
+	}
 	for _, op := range ops {
 		if _, dup := st.OpIDs[op.ID]; dup {
 			st.advanceSeq(op.Seq)

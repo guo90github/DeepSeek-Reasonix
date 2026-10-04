@@ -111,3 +111,50 @@ func TestEnsureDirRefusesASymlink(t *testing.T) {
 		t.Fatalf("fresh dir: %v", err)
 	}
 }
+
+// ReadFrom is how a reader skips a prefix it has already folded, so it must apply exactly the
+// rules ReadAll does to whatever it is handed from the offset onwards.
+func TestReadFromDecodesOnlyWhatComesAfterTheOffset(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "log.jsonl")
+	first := `{"seq":1,"text":"prefix"}` + "\n"
+	if err := os.WriteFile(path, []byte(first), 0o600); err != nil {
+		t.Fatalf("write prefix: %v", err)
+	}
+	for i := 2; i <= 4; i++ {
+		if err := Append(path, record{Seq: uint64(i), Text: "tail"}); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+	read, err := ReadFrom[record](path, int64(len(first)))
+	if err != nil {
+		t.Fatalf("read from: %v", err)
+	}
+	if len(read.Items) != 3 || read.Items[0].Seq != 2 || read.Items[2].Seq != 4 {
+		t.Fatalf("read = %+v, want the three records after the offset", read.Items)
+	}
+	if read.Skipped != 0 || read.Truncated != 0 {
+		t.Fatalf("read = %+v, want nothing lost", read)
+	}
+	if _, err := ReadFrom[record](path, -1); err == nil {
+		t.Fatal("a negative offset must be refused")
+	}
+}
+
+func TestReadFromCountsWhatTheTailGivesUp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "log.jsonl")
+	prefix := `{"seq":1,"text":"prefix"}` + "\n"
+	body := prefix + `{"seq":2,"text":"ok"}` + "\n" + `{"seq":` + "\n" + `{"seq":4,"te`
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	read, err := ReadFrom[record](path, int64(len(prefix)))
+	if err != nil {
+		t.Fatalf("read from: %v", err)
+	}
+	if len(read.Items) != 1 || read.Items[0].Seq != 2 {
+		t.Fatalf("items = %+v, want only the intact tail record", read.Items)
+	}
+	if read.Skipped != 1 || read.Truncated != 1 {
+		t.Fatalf("read = %+v, want one corrupt line and one torn tail counted", read)
+	}
+}

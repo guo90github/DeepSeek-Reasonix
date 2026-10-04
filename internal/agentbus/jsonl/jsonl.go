@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 )
@@ -32,16 +33,51 @@ type Read[T any] struct {
 
 // ReadAll decodes every complete line of path. A missing file is an empty log.
 func ReadAll[T any](path string) (Read[T], error) {
-	var out Read[T]
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return out, nil
+			return Read[T]{}, nil
 		}
-		return out, fmt.Errorf("jsonl: read %s: %w", path, err)
+		return Read[T]{}, fmt.Errorf("jsonl: read %s: %w", path, err)
 	}
+	return decode[T](data), nil
+}
+
+// ReadFrom decodes the complete lines that begin at offset, which is how a reader skips a prefix
+// it has already folded. A log is append-only, so an offset taken at a line boundary stays valid
+// as the file grows; proving that boundary belongs to the caller (see board's checkpoint). The
+// line rules are ReadAll's: a partial trailing line and a corrupt line are counted, never parsed.
+func ReadFrom[T any](path string, offset int64) (Read[T], error) {
+	if offset < 0 {
+		return Read[T]{}, fmt.Errorf("jsonl: negative offset for %s", path)
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return Read[T]{}, nil
+		}
+		return Read[T]{}, fmt.Errorf("jsonl: read %s: %w", path, err)
+	}
+	defer f.Close()
+	if offset > 0 {
+		if _, err := f.Seek(offset, io.SeekStart); err != nil {
+			return Read[T]{}, fmt.Errorf("jsonl: seek %s: %w", path, err)
+		}
+	}
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return Read[T]{}, fmt.Errorf("jsonl: read tail of %s: %w", path, err)
+	}
+	return decode[T](data), nil
+}
+
+// decode turns one buffer of lines into records, counting what it could not use: a trailing
+// partial line is an uncommitted write, and a corrupt line is a damaged record. Neither is
+// allowed to hide, and neither is allowed to break a read.
+func decode[T any](data []byte) Read[T] {
+	var out Read[T]
 	if len(data) == 0 {
-		return out, nil
+		return out
 	}
 	lines := bytes.Split(data, []byte("\n"))
 	if tail := lines[len(lines)-1]; len(tail) > 0 {
@@ -61,7 +97,7 @@ func ReadAll[T any](path string) (Read[T], error) {
 		}
 		out.Items = append(out.Items, item)
 	}
-	return out, nil
+	return out
 }
 
 // Append writes one record as a single line and syncs it. A torn line can only
