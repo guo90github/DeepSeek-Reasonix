@@ -36,6 +36,15 @@ func (t agentBusBoard) readParticipants() (string, error) {
 		if ref.Host != "" {
 			fmt.Fprintf(&b, " host=%s", ref.Host)
 		}
+		if ref.Model != "" {
+			fmt.Fprintf(&b, " model=%s", ref.Model)
+		}
+		if ref.Workspace != "" {
+			fmt.Fprintf(&b, " workspace=%s", ref.Workspace)
+		}
+		if ref.Role != "" {
+			fmt.Fprintf(&b, " role=%s", ref.Role)
+		}
 		if !ref.At.IsZero() {
 			fmt.Fprintf(&b, " announced=%s", ref.At.UTC().Format(time.RFC3339))
 		}

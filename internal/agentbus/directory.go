@@ -25,12 +25,18 @@ const (
 // A wake names a participant, so routing one across processes needs this address
 // (AGENT_BUS §13.3, second gap).
 type ParticipantRef struct {
-	Participant string    `json:"participant"`
-	Host        string    `json:"host,omitempty"`
-	SessionPath string    `json:"sessionPath,omitempty"`
-	TokenFile   string    `json:"tokenFile,omitempty"`
-	Withdrawn   bool      `json:"withdrawn,omitempty"`
-	At          time.Time `json:"at,omitempty"`
+	Participant string `json:"participant"`
+	Host        string `json:"host,omitempty"`
+	SessionPath string `json:"sessionPath,omitempty"`
+	TokenFile   string `json:"tokenFile,omitempty"`
+	// The declared dimensions: what this participant is and what it speaks as, so a reader does
+	// not have to guess from an opaque id (F48, 2026-10-05). Role stays empty until a host
+	// declares one: the kernel has no vocabulary for it and invents none.
+	Workspace string    `json:"workspace,omitempty"`
+	Model     string    `json:"model,omitempty"`
+	Role      string    `json:"role,omitempty"`
+	Withdrawn bool      `json:"withdrawn,omitempty"`
+	At        time.Time `json:"at,omitempty"`
 }
 
 // ParticipantTTL is how long an announcement stays live.

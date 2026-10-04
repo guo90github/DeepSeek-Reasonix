@@ -112,7 +112,11 @@ func (c *Controller) AgentBusAnnounce(host, tokenFile string) error {
 		Host:        strings.TrimSpace(host),
 		SessionPath: c.SessionPath(),
 		TokenFile:   strings.TrimSpace(tokenFile),
-		At:          time.Now().UTC(),
+		// What this session is and what it speaks as, self-reported: a reader decides who to
+		// hand work to off these, and an opaque id answers nothing (F48, 2026-10-05).
+		Workspace: c.WorkspaceRoot(),
+		Model:     c.ModelRef(),
+		At:        time.Now().UTC(),
 	})
 	return err
 }
