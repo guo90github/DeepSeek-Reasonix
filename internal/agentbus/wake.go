@@ -3,6 +3,8 @@ package agentbus
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"slices"
 	"sort"
 	"strings"
@@ -53,6 +55,26 @@ func DispatchKey(board, node string) string {
 // participant's name.
 func IsDispatchKey(key string) bool {
 	return strings.HasPrefix(key, DispatchKeyPrefix)
+}
+
+// NoRouteError reports that a wake target has no route on this host: no session here speaks as the
+// participant and the board's address book does not own it. It is deliberately not a plain error:
+// a board outlives the sessions that wrote to it, so a target nobody can reach is stale work,
+// not a delivery that failed — and the sender has to tell those apart to avoid retrying forever.
+type NoRouteError struct{ Participant string }
+
+func (e *NoRouteError) Error() string {
+	return fmt.Sprintf("agentbus: no session and no announced address owns participant %q", e.Participant)
+}
+
+// NoRoute builds the refusal a host returns when it has no route to a participant. Refusing is the
+// rule (never guess, never degrade, never broadcast); it only has to be distinguishable.
+func NoRoute(participant string) error { return &NoRouteError{Participant: participant} }
+
+// IsNoRoute reports whether err is that refusal.
+func IsNoRoute(err error) bool {
+	var noRoute *NoRouteError
+	return errors.As(err, &noRoute)
 }
 
 // WakeInput is everything a wake decision reads: the folded board for who asked for what,

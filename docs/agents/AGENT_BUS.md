@@ -1302,10 +1302,36 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 |---|---|---|---|
 | **槽位拒绝**（满槽把活停在队列） | `AgentBusBudgetRefusals()`（`internal/control/agentbus_budget.go`） | `AgentBusBriefing` 的拒绝行 → `AgentBusPanel` 的 host-signals | 曾有"计了没人画"：用例没断言 `slots`（`11768809a` 补） |
 | **唤醒投递失败** | `AgentBusWakeFailures()`（`internal/control/agentbus_wake.go`） | `wakeFailureSignal` → 同上（`Kind: "wake_undelivered"`） | 曾只 `slog.Warn`（`d2081d750` 补） |
+| **唤醒目标不在这儿**（板上留着的已下线参与者） | `AgentBusWakeUnreachable()`（**集合**，不是计数） | `wakeUnreachableSignal` → 同上（`Kind: "wake_unreachable"`） | **2026-10-05 真机查实并修**：见本节末"板外会话 vs 板内目标" |
 | **无人值守没在驱动**（崩溃降级） | `HeartbeatConfigView.unattendedDriving/unattendedHold`（`desktop/heartbeat.go`） | 开关标签与提示（`unattendedPresentation`） | 曾只有一行日志、界面仍说"会持续推进"（`af5ade4f9` 补） |
 | **OS 看门狗没生效** | `App.WatchdogStatus()`（`desktop/watchdog_control.go`：读数与用例一直都有） | 同上（`watchdogHold` + 三语文案） | 曾**没有任何组件读它**（`b9d2e038b` 补） |
 | **限流**（429 被扛过） | `RateLimitRetries*` | `rateLimitSignal` → 同上 | 一直齐（分道计数与"未点名"都有用例） |
 | **子树卡被裁掉** | `briefing.Hidden` / `HiddenCards` | 面板"还有 N 个子树 / M 条信号" | 一直齐（host 与前端各有用例） |
+
+**板外会话 vs 板内目标：唤醒面不认地址簿（2026-10-05 真机查实并修）**
+
+真机现象（dev.130，桌面日志 14:50–14:51）：宿主**每 30 秒 × 每个已加入的 tab**，对**四个早已不在的参与者**
+（`bob`、两个**已撤回**会话、一个**从未公告**的会话）各喊一次，全部被拒：
+`desktop: no tab and no address owns agentbus participant "…"`；两分钟 40 行、永不停。
+
+- **不是投递到了错会话**：路由按 participant **精确匹配**（`desktop/agentbus_waker.go` 的 `agentBusWakeRecipient`
+  找 `AgentBusParticipant()` 相同的 tab，两个 tab 同参与者直接报错；找不到才查地址簿）⇒ **拒绝**，不猜、不退化、不广播 ✓。
+- **真正的缺陷是"下线只做了一半"**：`AgentBusWithdraw` 把参与者从**地址簿**撤了（桌面关停 `desktop/agentbus_shutdown.go:20`、
+  serve 离场 `internal/serve/multisession.go:236`；加入/退出都被记住 —— `desktop/agentbus_enrol.go` 的 `opt-out`，
+  用户点一次加入即清除），但**唤醒面读的是板**（`WakeTargets` 从折叠态派生"谁在等活"），而板比会话活得久
+  ⇒ 已下线的参与者**仍是唤醒目标**；control 又把"没有路由"当成**投递失败** ⇒ 记一笔、**释放 key**、下一拍重试
+  ⇒ 永续噪声 + 面板 `wake_undelivered` 无界增长。
+- **修法（不掩盖真刹车）**：内核加 typed 拒绝 `agentbus.NoRoute(participant)`（`internal/agentbus/wake.go`），
+  两条宿主的"查不到"分支返回它（`desktop/agentbus_waker.go`、`internal/serve/agentbus_waker.go`）；control 据此
+  **不释放 key**（同一工作集不再每拍重试）、**不计入 `WakeFailures`**（没人会来不是刹车），改记进
+  `AgentBusWakeUnreachable()` —— 一个**集合**（按参与者去重、条数有界），经 `wakeUnreachableSignal` 进面板。
+  **投递真失败（对端拒连、令牌没了）照旧计数并重试**，那才是"看不见的刹车"要防的东西。
+- **代价（如实）**：同一工作集下，一个"当时不在"的参与者**回来后不会立刻被这条唤醒叫醒**（key 已被认下）——
+  但板上的活仍在**派发**路径里（`AgentBusDispatch` 按槽位把可开工的交给空闲会话），且它自己的 `view` 就列出属于它的活。
+- **仍未做**：`ParticipantTTL` 仍 30 分钟（硬杀残留的窗口）；`default` 板跨任务累积、无归档，是这次噪声的**背景条件**，
+  不是这条修复的目标（见上面"板日志的增长与压缩"）。
+- 用例：`internal/control/agentbus_wake_unreachable_test.go`（同一块板上"已离开"与"暂时够不到"两种目标：前者只试一次、
+  不计失败、进集合；后者照旧计数并重试）、`desktop/agentbus_wake_unreachable_test.go`。
 
 **判为"自愈"、不是刹车的两处**（查实时一并核实，留在这里是因为它们长得像）
 

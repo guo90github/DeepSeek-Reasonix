@@ -89,6 +89,9 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 	if signal, failed := wakeFailureSignal(control.AgentBusWakeFailures()); failed {
 		view.Signals = append(view.Signals, signal)
 	}
+	if signal, unreachable := wakeUnreachableSignal(control.AgentBusWakeUnreachable()); unreachable {
+		view.Signals = append(view.Signals, signal)
+	}
 	if signal, throttled := nodeRateSignal(control.AgentBusNodeRateRefusals()); throttled {
 		view.Signals = append(view.Signals, signal)
 	}
@@ -170,4 +173,16 @@ func nodeRateSignal(refusals control.NodeRateRefusals) (AgentBusSignalView, bool
 		detail += ": " + refusals.Last
 	}
 	return AgentBusSignalView{Kind: "node_rate", Detail: detail}, true
+}
+
+// wakeUnreachableSignal turns wakes with nowhere to go into one row. It is deliberately not the
+// failure row: those participants are not failing to receive, they are not here at all — a board
+// outlives the sessions that wrote to it — and this is the row that would otherwise repeat.
+func wakeUnreachableSignal(participants []string) (AgentBusSignalView, bool) {
+	if len(participants) == 0 {
+		return AgentBusSignalView{}, false
+	}
+	detail := fmt.Sprintf("%d participant(s) have work here but no session and no address", len(participants))
+	detail += ": " + strings.Join(participants, ", ")
+	return AgentBusSignalView{Kind: "wake_unreachable", Detail: detail}, true
 }

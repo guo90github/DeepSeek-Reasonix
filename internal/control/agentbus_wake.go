@@ -3,6 +3,8 @@ package control
 import (
 	"context"
 	"log/slog"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,11 +63,53 @@ func noteWakeFailure(participant string, err error) {
 // and this row is read in a panel line rather than a log.
 const maxWakeFailureDetail = 160
 
+// wakeUnreachable is the set of participants this host has work for but no route to: nobody here
+// speaks as them and the address book does not own them. It is a set rather than a counter on
+// purpose — a board outlives many sessions, and a counter would grow without bound while saying
+// nothing about who is missing. Kept apart from WakeFailures because nothing failed to be
+// delivered: those participants are not here at all.
+var wakeUnreachable = struct {
+	mu           sync.Mutex
+	participants map[string]struct{}
+}{participants: map[string]struct{}{}}
+
+// AgentBusWakeUnreachable reports, sorted, the participants this process cannot reach.
+func AgentBusWakeUnreachable() []string {
+	wakeUnreachable.mu.Lock()
+	defer wakeUnreachable.mu.Unlock()
+	out := make([]string, 0, len(wakeUnreachable.participants))
+	for participant := range wakeUnreachable.participants {
+		out = append(out, participant)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// noteWakeUnreachable records one participant once and logs it once: the point is that a departed
+// session is reported at all, not that it is reported every 30 seconds.
+func noteWakeUnreachable(participant string) {
+	participant = strings.TrimSpace(participant)
+	if participant == "" {
+		return
+	}
+	wakeUnreachable.mu.Lock()
+	defer wakeUnreachable.mu.Unlock()
+	if _, seen := wakeUnreachable.participants[participant]; seen {
+		return
+	}
+	wakeUnreachable.participants[participant] = struct{}{}
+	slog.Warn("controller: agentbus wake target has no route on this host", "participant", participant,
+		"unreachable", len(wakeUnreachable.participants))
+}
+
 // WakeAgentBus wakes the participants who have work waiting on them and reports
 // how many were woken. The wake is keyed by the work, not by the clock, so an
 // unchanged board wakes nobody however often a host ticks; a new work set wakes
 // exactly once. A failed wake releases its key so the next tick retries it, and is
-// recorded against the participant it could not reach.
+// recorded against the participant it could not reach. A target with no route at all — nobody
+// here speaks as it and no announced address owns it — is not a failed delivery: its key stays
+// claimed, so an unchanged work set is not retried every tick (which is what a board full of
+// departed sessions would otherwise do forever), and it is recorded as unreachable work.
 func (c *Controller) WakeAgentBus(ctx context.Context) int {
 	bus, input, err := c.agentBusWakeSnapshot(ctx)
 	if err != nil {
@@ -87,6 +131,10 @@ func (c *Controller) WakeAgentBus(ctx context.Context) int {
 			continue
 		}
 		if err := waker(ctx, target); err != nil {
+			if agentbus.IsNoRoute(err) {
+				noteWakeUnreachable(target.Participant)
+				continue
+			}
 			slog.Warn("controller: agentbus wake", "participant", target.Participant, "err", err)
 			noteWakeFailure(target.Participant, err)
 			bus.releaseWake(target.Participant, target.Key)

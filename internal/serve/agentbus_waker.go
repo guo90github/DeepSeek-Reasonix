@@ -56,7 +56,7 @@ func enqueueAgentBusWake(ctrl *control.Controller, target agentbus.WakeTarget) e
 func (s *Server) deliverAgentBusWakeRemotely(ctx context.Context, target agentbus.WakeTarget) error {
 	boardDir := strings.TrimSpace(s.buildOptions.AgentBusDir)
 	if boardDir == "" {
-		return fmt.Errorf("serve: no session here speaks as agentbus participant %q, and this host has no board to look up an address in", target.Participant)
+		return agentbus.NoRoute(target.Participant)
 	}
 	directory, err := agentbus.OpenParticipantDirectory(boardDir)
 	if err != nil {
@@ -67,7 +67,7 @@ func (s *Server) deliverAgentBusWakeRemotely(ctx context.Context, target agentbu
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("serve: no session here speaks as agentbus participant %q, and no address owns it", target.Participant)
+		return agentbus.NoRoute(target.Participant)
 	}
 	token, err := agentbus.ReadAnnouncedToken(ref.TokenFile)
 	if err != nil {

@@ -185,7 +185,7 @@ func (a *App) routeAgentBusWakeOn(ctx context.Context, boardDir string, target a
 // refusal, never a drop: a wake nobody receives must be visible to its sender.
 func (a *App) deliverAgentBusWakeRemotely(ctx context.Context, boardDir string, target agentbus.WakeTarget) error {
 	if strings.TrimSpace(boardDir) == "" {
-		return fmt.Errorf("desktop: no board to route the wake for %q", target.Participant)
+		return agentbus.NoRoute(target.Participant)
 	}
 	directory, err := agentbus.OpenParticipantDirectory(boardDir)
 	if err != nil {
@@ -196,7 +196,7 @@ func (a *App) deliverAgentBusWakeRemotely(ctx context.Context, boardDir string, 
 		return err
 	}
 	if !ok {
-		return fmt.Errorf("desktop: no tab and no address owns agentbus participant %q", target.Participant)
+		return agentbus.NoRoute(target.Participant)
 	}
 	token, err := readAgentBusToken(ref.TokenFile)
 	if err != nil {
