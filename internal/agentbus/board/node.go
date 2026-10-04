@@ -436,6 +436,9 @@ func applySplit(st *State, op Op) error {
 		noteRequester(created, op.Actor)
 		n.Deps = append(n.Deps, child.ID)
 	}
+	// The splitter asked for this container too. Without this the one session that wrote the
+	// structure could not see it in its own view, only the children it created (F19, 2026-10-05).
+	noteRequester(n, op.Actor)
 	n.State = StateBlocked
 	n.LastSeq = op.Seq
 	return nil
@@ -470,6 +473,9 @@ func applyRequire(st *State, op Op) error {
 		created.LastSeq = op.Seq
 	}
 	noteRequester(st.Nodes[depID], op.Actor)
+	// The node that now waits on it is the author's too: a require changes two nodes, and only
+	// one of them used to name who asked (F19, 2026-10-05).
+	noteRequester(n, op.Actor)
 	n.Deps = append(n.Deps, depID)
 	n.State = StateBlocked
 	n.LastSeq = op.Seq

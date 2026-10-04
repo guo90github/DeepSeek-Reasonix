@@ -19,7 +19,10 @@ func TestRequestersComeFromTheOpThatCreatedTheNode(t *testing.T) {
 		node string
 		want []string
 	}{
-		{"design", []string{"planner"}},  // asserted by the planner; nobody asked for it as a step
+		// Everyone who wrote structure on the node names it, in the order they asked: the
+		// planner asserted it, the browser added a dependency to it, the splitter split it
+		// (F19, 2026-10-05).
+		{"design", []string{"planner", "browser", "splitter"}},
 		{"schema", []string{"browser"}},  // created by that require: browser wants it done
 		{"part-a", []string{"splitter"}}, // created by the split
 		{"part-b", []string{"splitter"}}, //

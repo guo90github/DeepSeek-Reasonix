@@ -95,8 +95,15 @@ func TestViewHidesSettledWaiters(t *testing.T) {
 		doneOp("settled", "judge", "checker"),
 	)
 	v := BuildView(st, ViewSpec{Board: "b1", Participant: "alice"})
-	if hasID(v, "settled") {
-		t.Fatalf("a settled dependent is no longer waiting on me: %v", nodeIDs(v))
+	// A settled node is not work waiting on alice: that half stays hidden.
+	if v.Waiting != 0 {
+		t.Fatalf("a settled dependent counts as waiting on me: %d", v.Waiting)
+	}
+	// It is still structure alice wrote, so the row remains: visibility follows authorship, and
+	// the requester column is what makes a structure author able to read back what it touched
+	// (F19, 2026-10-05).
+	if !hasID(v, "settled") {
+		t.Fatalf("a node alice wrote structure on vanished from her view: %v", nodeIDs(v))
 	}
 }
 
