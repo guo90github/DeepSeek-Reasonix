@@ -119,6 +119,16 @@ func (p agentBusPanelPort) ApplyBoardOp(ctx context.Context, op board.Op) (board
 	return p.bus.ApplyAgentBusOp(ctx, op)
 }
 
+// The panel reads the roster and the pool through the same control calls the model's tool gets,
+// so a person and a model cannot see different boards (F48/F49/F53, 2026-10-05).
+func (p agentBusPanelPort) BoardParticipants() ([]agentbus.ParticipantRef, error) {
+	return p.bus.AgentBusParticipants()
+}
+
+func (p agentBusPanelPort) BoardPool() ([]agentbus.PoolEntry, error) {
+	return p.bus.AgentBusPool(time.Now().UTC())
+}
+
 func (p agentBusPanelPort) AskBoard(ctx context.Context, topic, to, text string) (string, error) {
 	return p.bus.AgentBusAsk(ctx, topic, to, text)
 }

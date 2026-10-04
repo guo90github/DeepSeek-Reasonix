@@ -326,6 +326,10 @@ type AgentBusControl interface {
 	AgentBusDispatch(ctx context.Context, claimant string, deliver func(context.Context, agentbus.WakeTarget) error) (int, error)
 	// AgentBusBriefing folds the board, queue and deliberations for the first screen.
 	AgentBusBriefing(now time.Time) (agentbus.Briefing, bool)
+	// AgentBusParticipants lists who is on this board now; AgentBusPool lists the steps
+	// anybody could pick up. A host reads both through the same port the model's tool uses.
+	AgentBusParticipants() ([]agentbus.ParticipantRef, error)
+	AgentBusPool(now time.Time) ([]agentbus.PoolEntry, error)
 	// AgentBusNodeDetail reads one board node, including who authorized it (§13.8).
 	AgentBusNodeDetail(node string) (agentbus.NodeDetail, bool)
 	// AgentBusView renders the delta this participant is allowed to see, for a host
