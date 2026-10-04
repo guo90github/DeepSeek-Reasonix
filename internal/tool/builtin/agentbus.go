@@ -301,14 +301,20 @@ func (t agentBusBoard) readBoard() (string, error) {
 	head := fmt.Sprintf("board %s as %s\n", boardName(boardDir), participant)
 	body := strings.TrimSpace(view.Render())
 	if body == "" {
-		return head + "nothing on this board is addressed to you right now" + t.peerNote(participant), nil
+		return head + "nothing on this board is addressed to you right now" + t.hereNote(participant), nil
 	}
-	return head + body + t.peerNote(participant), nil
+	return head + body + t.hereNote(participant), nil
 }
 
-// peerNote points at the roster when somebody else is on the board: a session had no way to
-// learn that peers exist at all (wakes carry work, never company), so the read it already makes
-// is where the pointer belongs (F53, 2026-10-05). An unreadable roster contributes nothing.
+// hereNote points at the company and at the work nobody holds: a session could learn neither
+// from a wake (wakes carry work, never company) nor from the roster (only a caller that already
+// knew to ask could read it), so the read it already makes is where the pointers belong
+// (F53/F40, 2026-10-05). An unreadable roster or board contributes nothing.
+func (t agentBusBoard) hereNote(participant string) string {
+	return t.peerNote(participant) + t.poolNote()
+}
+
+// peerNote is the roster half of hereNote.
 func (t agentBusBoard) peerNote(participant string) string {
 	refs, err := t.port.BoardParticipants()
 	if err != nil {
@@ -324,6 +330,19 @@ func (t agentBusBoard) peerNote(participant string) string {
 		return ""
 	}
 	return fmt.Sprintf("\n%d other session(s) on this board (action=participants lists them)", others)
+}
+
+// poolNote is the work half of hereNote: the steps anybody could pick up, so that "there is
+// something to take" is discoverable from a view rather than only from knowing to ask.
+func (t agentBusBoard) poolNote() string {
+	entries, err := t.port.BoardPool()
+	if err != nil {
+		return ""
+	}
+	if len(entries) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("\n%d step(s) in the pool (action=pool lists them)", len(entries))
 }
 
 func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, error) {
