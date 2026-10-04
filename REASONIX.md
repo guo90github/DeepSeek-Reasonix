@@ -40,7 +40,9 @@ A panel is not done when its structure is right: "the data is on screen" and "it
 product" are different bars, and the second one is the bar. State is a chip coloured by severity,
 never loose text; forms align on a grid (`minmax(4.5em, 7em) 1fr`) with muted labels; selects and
 inputs are styled explicitly — a browser default control is never acceptable — and an empty one
-carries an example placeholder; long node ids wrap (`overflow-wrap: anywhere`) while small buttons
+carries an example placeholder; a native select never gets a transparent background and its
+`option`s are coloured explicitly (Chromium draws the popup itself and falls back to the light
+scheme otherwise); long node ids wrap (`overflow-wrap: anywhere`) while small buttons
 stay `nowrap`; counts get their own muted line; folding shows a count; the primary action carries
 visual weight (`:hover`, `[disabled]`). Before adding any readout, check it against the readouts
 already on screen — a row that contradicts another one is a bug. Verify with the one touched

@@ -40272,7 +40272,9 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
 }
 
 /* The verb carries the whole meaning of the form, so the picker reads as one control rather than
-   as the browser's default select: it sits opposite the title, at the same size as the fields. */
+   as the browser's default select: it sits opposite the title, at the same size as the fields.
+   The background is stated rather than transparent: a transparent select makes Chromium fall back
+   to a light popup on a dark theme, which is the white list with washed-out labels (2026-10-05). */
 .agentbus-controls__head select {
   flex: 0 1 auto;
   min-width: 0;
@@ -40281,10 +40283,17 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   padding: 2px 6px;
   font: inherit;
   color: var(--text);
-  background: transparent;
+  background: var(--surface-2);
   border: 1px solid var(--border-soft);
   border-radius: 6px;
   cursor: pointer;
+}
+
+/* The popup is drawn by the browser, so its rows are styled here too — otherwise the options keep
+   the inherited light text on whatever background the browser picks. */
+.agentbus-controls select option {
+  color: var(--text);
+  background: var(--surface-2);
 }
 
 .agentbus-controls__field {
@@ -40307,7 +40316,7 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   padding: 3px 8px;
   font: inherit;
   color: var(--text);
-  background: transparent;
+  background: var(--surface-2);
   border: 1px solid var(--border-soft);
   border-radius: 6px;
 }
