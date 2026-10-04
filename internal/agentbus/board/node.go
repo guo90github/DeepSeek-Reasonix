@@ -215,7 +215,7 @@ func validateOpShape(op Op) error {
 		if op.Deadline.IsZero() {
 			return reject(op.Verb, op.Node, ReasonMissingDeadline)
 		}
-	case VerbCapabilityGap:
+	case VerbCapabilityGap, VerbWaive:
 		if strings.TrimSpace(op.Reason) == "" {
 			return reject(op.Verb, op.Node, ReasonMissingReason)
 		}
@@ -305,6 +305,8 @@ func applyVerb(st *State, op Op) error {
 		return applyCapabilityGap(st, op)
 	case VerbAbandon:
 		return applyAbandon(st, op)
+	case VerbWaive:
+		return applyWaive(st, op)
 	case VerbAssign, VerbUnassign:
 		return applyAssign(st, op)
 	case VerbDecide:

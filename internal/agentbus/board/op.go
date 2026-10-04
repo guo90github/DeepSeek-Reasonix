@@ -14,18 +14,20 @@ import (
 type Verb string
 
 const (
-	VerbAssert        Verb = "assert"
-	VerbRefute        Verb = "refute"
-	VerbClaim         Verb = "claim"
-	VerbHeartbeat     Verb = "heartbeat"
-	VerbRelease       Verb = "release"
-	VerbYield         Verb = "yield"
-	VerbSplit         Verb = "split"
-	VerbRequire       Verb = "require"
-	VerbAssign        Verb = "assign"
-	VerbUnassign      Verb = "unassign"
-	VerbDecide        Verb = "decide"
-	VerbAbandon       Verb = "abandon"
+	VerbAssert    Verb = "assert"
+	VerbRefute    Verb = "refute"
+	VerbClaim     Verb = "claim"
+	VerbHeartbeat Verb = "heartbeat"
+	VerbRelease   Verb = "release"
+	VerbYield     Verb = "yield"
+	VerbSplit     Verb = "split"
+	VerbRequire   Verb = "require"
+	VerbAssign    Verb = "assign"
+	VerbUnassign  Verb = "unassign"
+	VerbDecide    Verb = "decide"
+	VerbAbandon   Verb = "abandon"
+	// VerbWaive closes a node that never had a verifiable artifact to deliver.
+	VerbWaive         Verb = "waive"
 	VerbRevert        Verb = "revert"
 	VerbCapabilityGap Verb = "capability_gap"
 	VerbNoProgress    Verb = "no_progress"
@@ -41,6 +43,9 @@ const (
 	OutcomeDone      Outcome = "done"
 	OutcomeBlocked   Outcome = "blocked"
 	OutcomeAbandoned Outcome = "abandoned"
+	// OutcomeByproduct marks a node closed by waive: settled like an abandonment, but with no
+	// artifact behind it and no failure claimed.
+	OutcomeByproduct Outcome = "byproduct"
 )
 
 // Evidence is one re-checkable pointer backing an assert or an abandon request.
@@ -170,6 +175,9 @@ const (
 	// ReasonRateLimited is the tier AGENT_BUS §S5 names for "not now, come back":
 	// the node is moving faster than the operator allows.
 	ReasonRateLimited = "rate_limited"
+	// ReasonArtifactPresent refuses a waive on a node that already carries something
+	// re-checkable: closing that as a by-product would throw a real reading away (F86).
+	ReasonArtifactPresent = "artifact_present"
 )
 
 func reject(verb Verb, node, reason string) error {

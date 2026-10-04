@@ -194,6 +194,12 @@ func TestAgentBusToolMapsEveryActionToABoardOp(t *testing.T) {
 		},
 		{name: "heartbeat", args: `{"action":"heartbeat","node":"build","leaseSeconds":120}`, verb: board.VerbHeartbeat, node: "build"},
 		{name: "release", args: `{"action":"release","node":"build"}`, verb: board.VerbRelease, node: "build"},
+		{name: "waive", args: `{"action":"waive","node":"probe","reason":"nothing to deliver"}`, verb: board.VerbWaive, node: "probe",
+			check: func(t *testing.T, op board.Op) {
+				if op.Reason != "nothing to deliver" {
+					t.Fatalf("reason = %q, want the call's reason: a waive carries no evidence", op.Reason)
+				}
+			}},
 		{
 			name: "decide",
 			args: `{"action":"decide","node":"build","outcome":"done","reproducedBy":"bob","evidence":[{"ref":"ci/run/42"}]}`,

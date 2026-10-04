@@ -71,8 +71,8 @@ func (agentBusBoard) Name() string { return "agent_bus" }
 
 func (agentBusBoard) Description() string {
 	return "Shared blackboard for multi-agent work: record what must be true, claim a step before working on it, and let a step be done only with evidence someone else can re-run. One board is shared by every participant, so a node's state — not this conversation — is the source of truth. " +
-		"action=view lists the nodes addressed to you; use it before claiming. " +
-		"claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason — refute also undoes a done step: the node goes back to contested for a verdict. assign addresses a step to one participant, and only that participant may take it; unassign hands it back to the pool. decide(done) needs an evidenced assert someone else can check plus a reproducer who is not its author; abandon only requests it (an evidenced abandon, then decide(abandoned)); and a blocked step is one you decided against, not one still waiting on a dependency. decide is not ownership-checked: any enrolled participant may close a step out, so close only what its evidence and a reproducer can back. " +
+		"action=view lists the nodes addressed to you; use it before claiming, and it points at action=participants (who is on this board now) and action=pool (the steps nobody holds and nobody waits on). " +
+		"claim requires a deadline and bounds (steps), assert/abandon require evidence, and waive is the third exit: a by-product that never had an artifact needs only a reason. refute and capability_gap require a reason — refute also undoes a done step: the node goes back to contested for a verdict. assign addresses a step to one participant, and only that participant may take it; unassign hands it back to the pool. decide(done) needs an evidenced assert someone else can check plus a reproducer who is not its author; abandon only requests it (an evidenced abandon, then decide(abandoned)); and a blocked step is one you decided against, not one still waiting on a dependency. decide is not ownership-checked: any enrolled participant may close a step out, so close only what its evidence and a reproducer can back. " +
 		"A refuted result with nobody to settle it stalls the work: hearing_open starts a deliberation on that node (required= names who must answer; empty means its owner and everyone who refuted it), hearing_answer records your side, hearing_settle records the verdict, and a refuted assertion blocks the node. " +
 		"A refusal comes back as a reason (illegal transition, missing evidence, unknown node): read it and fix the op instead of retrying it unchanged."
 }
@@ -81,7 +81,7 @@ func (agentBusBoard) Schema() json.RawMessage {
 	return json.RawMessage(`{
 "type":"object",
 "properties":{
-  "action":{"type":"string","enum":["view","assert","claim","heartbeat","release","decide","refute","split","require","assign","unassign","capability_gap","abandon","revert","ask","answer","hearing_open","hearing_answer","hearing_settle"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new; pass reason to state the claim in one line). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. assign: address the node to one participant (set assignee=), who is then the only one that may take it. unassign: hand the node back to the pool. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=). hearing_open: start a deliberation on a contested node (required= names who must answer; empty means its owner and everyone who refuted it). hearing_answer: record your side of the deliberation (text, optional evidence — an answer that brings nothing checkable weighs nothing). hearing_settle: weigh the deliberation and record the verdict; a refuted assertion blocks the node."},
+  "action":{"type":"string","enum":["view","participants","pool","assert","claim","heartbeat","release","decide","refute","split","require","assign","unassign","capability_gap","abandon","waive","revert","ask","answer","hearing_open","hearing_answer","hearing_settle"],"description":"view: read the board as this session is allowed to see it. assert: record something verifiable about a node (creates it if new; pass reason to state the claim in one line). claim: take a step before working on it. release: give it back. decide: the step's outcome (done requires evidence and a reproducer who is not the worker). refute: challenge a result with a reason. split: replace a node with child nodes. require: add a dependency the node waits for. assign: address the node to one participant (set assignee=), who is then the only one that may take it. unassign: hand the node back to the pool. capability_gap: stop and name the capability you lack. abandon: ask for the node to be dropped (needs evidence). revert: undo a done node (its done dependents go stale). ask: put a bounded question to one participant (set to=; it reaches them, it is not a broadcast). answer: answer a question addressed to you (set correlation=). hearing_open: start a deliberation on a contested node (required= names who must answer; empty means its owner and everyone who refuted it). hearing_answer: record your side of the deliberation (text, optional evidence — an answer that brings nothing checkable weighs nothing). hearing_settle: weigh the deliberation and record the verdict; a refuted assertion blocks the node."},
   "node":{"type":"string","description":"Node id. Required for every action except view and split."},
   "title":{"type":"string","description":"Human-readable title; names the node the action creates (require/split children, or the node an assert lays down)."},
   "reason":{"type":"string","description":"Why: assert stores it as the assertion's summary; required by refute, capability_gap and abandon (for capability_gap: what you need, what you tried, why it did not work)."},
@@ -151,7 +151,7 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	}
 	action := strings.ToLower(strings.TrimSpace(in.Action))
 	if action == "" {
-		return "", fmt.Errorf("action is required: one of view, participants, pool, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle")
+		return "", fmt.Errorf("action is required: one of view, participants, pool, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, waive, revert, ask, answer, hearing_open, hearing_answer, hearing_settle")
 	}
 	// An item with no ref is dropped by the board, whose refusal then reads "missing_evidence" —
 	// as if no evidence had been given at all. Name the empty item instead (2026-10-05).
@@ -377,6 +377,13 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 	case "refute", "capability_gap", "abandon":
 		op.Reason = strings.TrimSpace(in.Reason)
 		op.Evidence = evidenceOf(in.Evidence)
+	case "waive":
+		// The third exit: a by-product has no artifact to point at, so the reason is the whole
+		// record — and demanding evidence here is what left such steps open for ever (F86).
+		if strings.TrimSpace(in.Reason) == "" {
+			return board.Op{}, fmt.Errorf("waive needs reason: why does this need no artifact? nothing re-checkable rides with a waive, so the reason is all a reader gets")
+		}
+		op.Reason = strings.TrimSpace(in.Reason)
 	case "split":
 		if len(in.Children) == 0 {
 			return board.Op{}, fmt.Errorf("split needs children: at least one {id, title}")
@@ -504,7 +511,7 @@ func rejectHint(reason string, verb board.Verb) string {
 	case board.ReasonUnknownNode:
 		return "no node by that id on this board; create it with require, split or assert"
 	case board.ReasonUnknownVerb:
-		return "send one of the board's verbs: assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert"
+		return "send one of the board's verbs: assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, waive, revert"
 	case board.ReasonIllegalTransition:
 		return "another participant's state does not allow this: read action=view first"
 	case board.ReasonNotOwner:
@@ -525,6 +532,8 @@ func rejectHint(reason string, verb board.Verb) string {
 		return "a split cannot reuse a child id that already exists: read the children it has, then add only the new ones"
 	case board.ReasonCycle:
 		return "that would make the graph depend on itself: pick a dependency that does not lead back here"
+	case board.ReasonArtifactPresent:
+		return "this node already carries a re-checkable reading, so it is not a by-product: decide it (done, with a reproducer who is not its author) or abandon it with evidence"
 	case board.ReasonDependencyClosed:
 		return "that dependency was abandoned, so it can never become done: this node cannot be unblocked by it — abandon or re-scope this node instead"
 	case board.ReasonUnknownOutcome:
