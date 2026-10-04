@@ -295,9 +295,29 @@ func (t agentBusBoard) readBoard() (string, error) {
 	head := fmt.Sprintf("board %s as %s\n", boardName(boardDir), participant)
 	body := strings.TrimSpace(view.Render())
 	if body == "" {
-		return head + "nothing on this board is addressed to you right now", nil
+		return head + "nothing on this board is addressed to you right now" + t.peerNote(participant), nil
 	}
-	return head + body, nil
+	return head + body + t.peerNote(participant), nil
+}
+
+// peerNote points at the roster when somebody else is on the board: a session had no way to
+// learn that peers exist at all (wakes carry work, never company), so the read it already makes
+// is where the pointer belongs (F53, 2026-10-05). An unreadable roster contributes nothing.
+func (t agentBusBoard) peerNote(participant string) string {
+	refs, err := t.port.BoardParticipants()
+	if err != nil {
+		return ""
+	}
+	others := 0
+	for _, ref := range refs {
+		if ref.Participant != "" && ref.Participant != participant {
+			others++
+		}
+	}
+	if others == 0 {
+		return ""
+	}
+	return fmt.Sprintf("\n%d other session(s) on this board (action=participants lists them)", others)
 }
 
 func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, error) {
