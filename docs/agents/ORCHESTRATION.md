@@ -142,6 +142,13 @@
   ① **A 那一回合本身就是被唤醒起来的**（B 的两条 ask 由唤醒块点名；`[agentbus wake queued 4m2s ago; rebuilt against
   the board as it is now]`）⇒ "空闲会话被唤醒后自己起一回合"成立；② 因为 `g7-block` 已是 `done`，
   `assert` 再补一条证据被kernel 拒（`illegal_transition`）⇒ 复跑证据只能引用进交付物的 `decide`。
+  **修复后的包（dev.132 = `7ece3a4418e5`）上又重跑了一对（`g7b-*`），判据是新节点名**：A 指派后 B 报回的**认领前 view**是
+  `owned=2 waiting=1` + `g7b-block state=open startable=true` + 等它的 `g7b-drill deps_open=1`（对照上一轮同位置的
+  `owned=0 waiting=0` + 零行）⇒ **`4f059052c` 在真机上成立**；B 的结论是"这次是**先看到 view 里的行**才知道要干什么"。
+  板 `seq 257` claim → `258` assert（4 条证据）→ `259` decide(done)；A 独立重跑 B 给的复跑者
+  （`go test -count=1 -run 'TestTheViewShowsWorkAddressedToMe' ./internal/agentbus/` ⇒ ok 0.021s）后 `decide g7b-drill done`（`seq 260`）。
+  **一处仍未收的边界**：两轮的 `reproducedBy` 写的都是**可复跑命令**而非另一位参与者 —— 内核只校验"reproducedBy ≠ actor"，
+  不校验真有第二个人跑过；要收紧得让复跑者自己落一条 op。
 - **不在 v1，因此不是 G7 的验收项**：**第二台机器**上的会话（那才需要共享盘/同步目录做跨机寻址与令牌；
   `AGENT_BUS.md` §集群规模 写明 v1 单机，协议只保留"地址＋令牌可换目标"）。
   **2026-10-05 更正**：本节此前把这一跳写成 G7 的"必须真机"项 —— 那是把**跨会话**误读成**跨机**；按用户口径，
