@@ -126,6 +126,16 @@
 - **已验（同机、真实进程，2026-10-02，T5-4 节）**：第 3 步里"**会话 A 把唤醒投给同机的会话 B**" —— 同一台机器上的两个真
   `serve` 宿主：alice 的 tick → bob 的 `POST /inbox/items` 202 → 唤醒在 bob 自家会话里成 `role=user` 回合。
   桌面多 tab 那一形态由**宿主内路由**承担（`desktop/agentbus_waker.go` 按 participant 找 tab，且不唤醒自己）。
+- **已验（同一个宿主、两个桌面会话，2026-10-05 首次真机；G7 的目标形态）**：用户在 dev.130 上开了两个 tab 并加入默认板。
+  会话 A（participant `20261004-060209.690079400-…`）写下 `assert g7-drill` → `require g7-drill dep=g7-block` →
+  `assign g7-block assignee=20261004-064657.426824700-…`（板上 `seq 247/248/249`）。**会话 B 自己动了起来**：
+  它的 session 文件里出现唤醒回合、其后是 B 自己的 `agent_bus action=view` 与读板动作（"the agentbus wake says
+  there's work: g7-block addressed to me"），**全程没有人给它打字**。⇒ 同机跨会话那一跳成立。
+  **同一次真机抓到并当场修掉一个读面缺口**：B 的 `view` 是空的（`owned=0 waiting=0 needed=0`）—— 视图三组都不认
+  "被指派给我的节点"，而唤醒词告诉它"这块归你"；修法 = `participantNodes` 把 `assignee` 也算作"我的"
+  （`internal/agentbus/view.go`，用例 `internal/agentbus/view_assignee_test.go`）。
+  **仍未完成的那半（如实）**：B 在 dev.130 上（该 exe 不含上面的视图修复）没有认领那块，板停在 `seq 249`；
+  待下一个包含该修复的包再走一遍第 3–5 步，判据 = 板上出现 `claim`/`decide` 且 `actor == B`。
 - **不在 v1，因此不是 G7 的验收项**：**第二台机器**上的会话（那才需要共享盘/同步目录做跨机寻址与令牌；
   `AGENT_BUS.md` §集群规模 写明 v1 单机，协议只保留"地址＋令牌可换目标"）。
   **2026-10-05 更正**：本节此前把这一跳写成 G7 的"必须真机"项 —— 那是把**跨会话**误读成**跨机**；按用户口径，

@@ -180,14 +180,16 @@ func lineFor(st *board.State, n *board.Node) ViewLine {
 	return line
 }
 
-// participantNodes are the nodes this participant owns or has asserted on.
+// participantNodes are the nodes this participant owns, has asserted on, or was addressed by name
+// (assign). The last one matters because a wake tells the assignee "this is yours" — a view that
+// then showed nothing would leave the reader with the wake's word and no row behind it.
 func participantNodes(st *board.State, participant string) map[string]bool {
 	out := map[string]bool{}
 	if participant == "" {
 		return out
 	}
 	for id, n := range st.Nodes {
-		if n.Owner == participant {
+		if n.Owner == participant || n.Assignee == participant {
 			out[id] = true
 			continue
 		}
