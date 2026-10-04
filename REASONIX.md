@@ -34,6 +34,18 @@ agent. It is the Reasonix analog of Claude Code's CLAUDE.md.
   (`agent.perTurnState` is the pattern), which costs one field and removes the
   whole product.
 
+## UI rendering (panels, cards, forms)
+
+A panel is not done when its structure is right: "the data is on screen" and "it looks like a
+product" are different bars, and the second one is the bar. State is a chip coloured by severity,
+never loose text; forms align on a grid (`minmax(4.5em, 7em) 1fr`) with muted labels; selects and
+inputs are styled explicitly — a browser default control is never acceptable — and an empty one
+carries an example placeholder; long node ids wrap (`overflow-wrap: anywhere`) while small buttons
+stay `nowrap`; counts get their own muted line; folding shows a count; the primary action carries
+visual weight (`:hover`, `[disabled]`). Before adding any readout, check it against the readouts
+already on screen — a row that contradicts another one is a bug. Verify with the one touched
+frontend suite (`tsx src/__tests__/<file>.tsx`) plus an assertion on the rendering itself.
+
 ## Comments
 
 Default is none — the code is the truth. Write one only when the **why** is
