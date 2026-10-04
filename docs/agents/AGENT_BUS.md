@@ -1304,7 +1304,7 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
 |---|---|---|---|
 | **槽位拒绝**（满槽把活停在队列） | `AgentBusBudgetRefusals()`（`internal/control/agentbus_budget.go`） | `AgentBusBriefing` 的拒绝行 → `AgentBusPanel` 的 host-signals | 曾有"计了没人画"：用例没断言 `slots`（`11768809a` 补） |
 | **唤醒投递失败** | `AgentBusWakeFailures()`（`internal/control/agentbus_wake.go`） | `wakeFailureSignal` → 同上（`Kind: "wake_undelivered"`） | 曾只 `slog.Warn`（`d2081d750` 补） |
-| **唤醒目标不在这儿**（板上留着的已下线参与者） | `AgentBusWakeUnreachable()`（**集合**，不是计数） | `wakeUnreachableSignal` → 同上（`Kind: "wake_unreachable"`） | **2026-10-05 真机查实并修**：见本节末"板外会话 vs 板内目标" |
+| **唤醒目标不在这儿**（板上留着的已下线参与者） | **按当前板现算**：`agentBusUnreachableWithWork`（宿主，`desktop/agentbus_leftover.go`）——"还有未结步骤、且这台宿主联系不到"的参与者 | `wakeUnreachableSignal` → 同上（`Kind: "wake_unreachable"`） | **2026-10-05 真机查实并修**：见本节末"板外会话 vs 板内目标"。**同日再改**：这一行原先读的是 control 里那个**进程级**集合 ⇒ 旧账退掉后仍列着人（真机截图所见）；改成一律**跟着当前板算**，退掉旧账即消失（用例 `TestTheUnreachableRowFollowsTheBoardAndNotTheProcess`），进程级集合只留作"每个参与者只记一次日志"的去重 |
 | **无人值守没在驱动**（崩溃降级） | `HeartbeatConfigView.unattendedDriving/unattendedHold`（`desktop/heartbeat.go`） | 开关标签与提示（`unattendedPresentation`） | 曾只有一行日志、界面仍说"会持续推进"（`af5ade4f9` 补） |
 | **OS 看门狗没生效** | `App.WatchdogStatus()`（`desktop/watchdog_control.go`：读数与用例一直都有） | 同上（`watchdogHold` + 三语文案） | 曾**没有任何组件读它**（`b9d2e038b` 补） |
 | **限流**（429 被扛过） | `RateLimitRetries*` | `rateLimitSignal` → 同上 | 一直齐（分道计数与"未点名"都有用例） |
@@ -1325,8 +1325,9 @@ T9-4 要证的是"**杀掉进程 → 看门狗把树拉回来 → 板子接着�
   ⇒ 永续噪声 + 面板 `wake_undelivered` 无界增长。
 - **修法（不掩盖真刹车）**：内核加 typed 拒绝 `agentbus.NoRoute(participant)`（`internal/agentbus/wake.go`），
   两条宿主的"查不到"分支返回它（`desktop/agentbus_waker.go`、`internal/serve/agentbus_waker.go`）；control 据此
-  **不释放 key**（同一工作集不再每拍重试）、**不计入 `WakeFailures`**（没人会来不是刹车），改记进
-  `AgentBusWakeUnreachable()` —— 一个**集合**（按参与者去重、条数有界），经 `wakeUnreachableSignal` 进面板。
+  **不释放 key**（同一工作集不再每拍重试）、**不计入 `WakeFailures`**（没人会来不是刹车）；**面板那一行另有出处** ——
+  宿主按**当前板**现算"还有未结步骤、且这台宿主联系不到"的参与者（`desktop.agentBusUnreachableWithWork`），
+  所以**退掉旧账那一行就消失**；control 里那个进程级集合只用于"每个参与者只记一次日志"的去重，不再出屏（同日的二次修正）。
   **投递真失败（对端拒连、令牌没了）照旧计数并重试**，那才是"看不见的刹车"要防的东西。
 - **代价（如实）**：同一工作集下，一个"当时不在"的参与者**回来后不会立刻被这条唤醒叫醒**（key 已被认下）——
   但板上的活仍在**派发**路径里（`AgentBusDispatch` 按槽位把可开工的交给空闲会话），且它自己的 `view` 就列出属于它的活。

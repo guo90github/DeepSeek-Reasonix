@@ -94,7 +94,7 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 	if signal, failed := wakeFailureSignal(control.AgentBusWakeFailures()); failed {
 		view.Signals = append(view.Signals, signal)
 	}
-	if signal, unreachable := wakeUnreachableSignal(control.AgentBusWakeUnreachable()); unreachable {
+	if signal, unreachable := wakeUnreachableSignal(a.agentBusUnreachableWithWork(bus.AgentBusDir())); unreachable {
 		view.Signals = append(view.Signals, signal)
 	}
 	if signal, throttled := nodeRateSignal(control.AgentBusNodeRateRefusals()); throttled {

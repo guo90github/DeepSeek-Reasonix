@@ -114,3 +114,40 @@ func TestRetiringALeftoverSubtreeAbandonsItsSteps(t *testing.T) {
 		t.Fatalf("ops = %+v with %d of mine, want an abandon and a decision per node, both as the human", verbs, mine)
 	}
 }
+
+// The unreachable row is a statement about the board as it is now, so it has to disappear when the
+// work it was talking about is retired — a process-lifetime record would keep naming a session whose
+// steps are closed, and a row that never clears is not a reading (2026-10-05).
+func TestTheUnreachableRowFollowsTheBoardAndNotTheProcess(t *testing.T) {
+	app, ctrl, _ := agentBusEnrolApp(t)
+	if _, err := app.AgentBusJoin(); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	writeAs(t, ctrl, board.Op{
+		Verb: board.VerbAssert, Node: "ghost-open-work", Actor: "ghost",
+		Evidence: []board.Evidence{{Kind: "test", Ref: "leftover"}},
+	})
+	rowFor := func() string {
+		t.Helper()
+		view, err := app.AgentBusBriefing()
+		if err != nil {
+			t.Fatalf("briefing: %v", err)
+		}
+		for _, signal := range view.Signals {
+			if signal.Kind == "wake_unreachable" {
+				return signal.Detail
+			}
+		}
+		return ""
+	}
+	before := rowFor()
+	if !strings.Contains(before, "ghost") {
+		t.Fatalf("row = %q, want the departed participant named while their step is open", before)
+	}
+	if _, err := app.AgentBusRetireSubtree(AgentBusRetireArgs{Subtree: "ghost-open-work"}); err != nil {
+		t.Fatalf("retire: %v", err)
+	}
+	if after := rowFor(); after != "" {
+		t.Fatalf("row = %q, want no unreachable row once that work is retired", after)
+	}
+}

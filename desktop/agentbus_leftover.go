@@ -116,6 +116,49 @@ func (a *App) markLeftoverCards(boardDir string, cards []AgentBusCardView) {
 	}
 }
 
+// agentBusUnreachableWithWork names the participants that still have work on this board and cannot
+// be reached from this host. The board is the only source, so retiring that work makes the row go
+// away — a process-lifetime record of "we once could not reach them" would keep naming sessions
+// that are gone and whose steps are closed (2026-10-05).
+func (a *App) agentBusUnreachableWithWork(boardDir string) []string {
+	boardDir = strings.TrimSpace(boardDir)
+	if boardDir == "" {
+		return nil
+	}
+	brd, err := board.Open(boardDir)
+	if err != nil {
+		return nil
+	}
+	state, err := brd.Snapshot(context.Background(), time.Now().UTC())
+	if err != nil {
+		return nil
+	}
+	involved := map[string]bool{}
+	for _, n := range state.Nodes {
+		if n == nil || n.State == board.StateDone || n.State == board.StateAbandoned {
+			continue
+		}
+		for _, actor := range []string{n.Owner, n.Assignee} {
+			if actor = strings.TrimSpace(actor); actor != "" {
+				involved[actor] = true
+			}
+		}
+		for _, requester := range n.Requesters {
+			if requester = strings.TrimSpace(requester); requester != "" {
+				involved[requester] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(involved))
+	for participant := range involved {
+		if !a.agentBusCanReach(boardDir, participant) {
+			out = append(out, participant)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
 // AgentBusRetireArgs names the subtree the human wants cleared.
 type AgentBusRetireArgs struct {
 	Subtree string `json:"subtree"`

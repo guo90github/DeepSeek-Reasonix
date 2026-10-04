@@ -58,14 +58,4 @@ func TestAWakeWithNoRouteIsNotADeliveryFailureAndIsNotRetried(t *testing.T) {
 	if failedAttempts < 3 {
 		t.Fatalf("a real delivery failure was not retried: %d attempts", failedAttempts)
 	}
-
-	seen := 0
-	for _, participant := range AgentBusWakeUnreachable() {
-		if participant == gone {
-			seen++
-		}
-	}
-	if seen != 1 {
-		t.Fatalf("unreachable participants = %v, want %q listed once", AgentBusWakeUnreachable(), gone)
-	}
 }

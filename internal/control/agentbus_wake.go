@@ -3,7 +3,6 @@ package control
 import (
 	"context"
 	"log/slog"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -63,27 +62,14 @@ func noteWakeFailure(participant string, err error) {
 // and this row is read in a panel line rather than a log.
 const maxWakeFailureDetail = 160
 
-// wakeUnreachable is the set of participants this host has work for but no route to: nobody here
-// speaks as them and the address book does not own them. It is a set rather than a counter on
-// purpose — a board outlives many sessions, and a counter would grow without bound while saying
-// nothing about who is missing. Kept apart from WakeFailures because nothing failed to be
-// delivered: those participants are not here at all.
+// wakeUnreachable remembers the participants this process already found no route to, so each one is
+// logged once instead of every 30 seconds. It is deliberately NOT what the panel reports: a board
+// outlives the sessions that wrote to it, and a process-lifetime set would keep naming them after
+// their work is gone. The panel's row is computed from the board (desktop.agentBusUnreachableWithWork).
 var wakeUnreachable = struct {
 	mu           sync.Mutex
 	participants map[string]struct{}
 }{participants: map[string]struct{}{}}
-
-// AgentBusWakeUnreachable reports, sorted, the participants this process cannot reach.
-func AgentBusWakeUnreachable() []string {
-	wakeUnreachable.mu.Lock()
-	defer wakeUnreachable.mu.Unlock()
-	out := make([]string, 0, len(wakeUnreachable.participants))
-	for participant := range wakeUnreachable.participants {
-		out = append(out, participant)
-	}
-	sort.Strings(out)
-	return out
-}
 
 // noteWakeUnreachable records one participant once and logs it once: the point is that a departed
 // session is reported at all, not that it is reported every 30 seconds.
