@@ -107,7 +107,7 @@ func (c *Controller) WakeAgentBus(ctx context.Context) int {
 	}
 	me := bus.participantID(c)
 	woken := 0
-	for _, target := range agentbus.WakeTargets(input) {
+	for _, target := range withPoolNotice(agentbus.WakeTargets(input), input.State, c.agentBusWakePoolAudience()) {
 		// Waking ourselves is pointless: this session's next turn already carries
 		// its own work.
 		if target.Participant == "" || target.Participant == me {

@@ -41,6 +41,10 @@ type WakeTarget struct {
 	// the dispatcher fills it, and only when it is handing over a step somebody has already
 	// reported on (2026-10-05).
 	Reports int
+	// Pool are steps nobody holds and nobody waits on. No derivation on the board points at
+	// them — they have no requester and no assignee — so a host that wants them broadcast has
+	// to say so here, and the wake key then covers the pool it named (F53/F40, 2026-10-05).
+	Pool []string
 }
 
 // DispatchKeyPrefix marks the wake that hands one assignment to a participant rather

@@ -69,6 +69,11 @@ func AgentBusWakePrompt(target agentbus.WakeTarget) string {
 	// The host already stopped handing these out, so the line has to say why: without the
 	// reason it reads like any other "startable" line (G5).
 	writeWakeList(fmt.Sprintf("steps that stopped moving (handed out %d times with no progress): take one, replan it, or say why it cannot move", agentBusDispatchTries), target.Stalled)
+	// The pool is the one list here the board never addressed to this session, so its cut points
+	// at action=pool: the view shows what is yours, and these steps are nobody's (F53).
+	if len(target.Pool) > 0 {
+		fmt.Fprintf(&b, "nobody holds these and nobody is waiting on them: %s — take one with action=claim, or read action=pool for the whole list\n", strings.Join(target.Pool, ", "))
+	}
 	b.WriteString("</agentbus-wake>\n")
 	return b.String()
 }
@@ -80,6 +85,9 @@ func wakeGuidanceLine(target agentbus.WakeTarget) string {
 	const boardGuidance = "Sent when the board last changed; read the board before acting on this list.\n"
 	if len(target.Ready)+len(target.Assigned)+len(target.Waiting)+len(target.Stalled) > 0 {
 		return boardGuidance
+	}
+	if len(target.Pool) > 0 {
+		return "Sent when the board last changed; the pool above is work nobody holds — claim one with the agent_bus tool (action=claim, node=…), or list them all with action=pool.\n"
 	}
 	asks, owes := len(target.Asks) > 0, len(target.Owes) > 0
 	switch {
@@ -128,5 +136,8 @@ func AgentBusWakeLine(target agentbus.WakeTarget) string {
 	appendList("questions for you", target.Asks)
 	appendList("deliberations you owe", target.Owes)
 	appendList(fmt.Sprintf("stopped moving (handed out %d times)", agentBusDispatchTries), target.Stalled)
+	// The pool is the one list here the board never addressed to this session: say whose it is
+	// not, or it reads like work handed to the reader (F53, 2026-10-05).
+	appendList("nobody holds these (the pool)", target.Pool)
 	return b.String()
 }
