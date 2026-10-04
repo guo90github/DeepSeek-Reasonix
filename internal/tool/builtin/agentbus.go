@@ -31,6 +31,10 @@ type BoardPort interface {
 	BoardIdentity() (participant, boardDir string, err error)
 	BoardView(now time.Time) (agentbus.View, error)
 	ApplyBoardOp(ctx context.Context, op board.Op) (board.Receipt, error)
+	// BoardParticipants lists who is on this board now: the roster is the host's address
+	// book, kept beside the board file, and a session that announced itself with no
+	// endpoint still belongs on it — that is how a desktop session is visible at all.
+	BoardParticipants() ([]agentbus.ParticipantRef, error)
 	// AskBoard puts a bounded question to one participant; AnswerBoard answers one that
 	// was addressed here. Both write to the board this session is enrolled on.
 	AskBoard(ctx context.Context, topic, to, text string) (string, error)
@@ -144,7 +148,7 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	}
 	action := strings.ToLower(strings.TrimSpace(in.Action))
 	if action == "" {
-		return "", fmt.Errorf("action is required: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle")
+		return "", fmt.Errorf("action is required: one of view, participants, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle")
 	}
 	// An item with no ref is dropped by the board, whose refusal then reads "missing_evidence" —
 	// as if no evidence had been given at all. Name the empty item instead (2026-10-05).
@@ -155,6 +159,9 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	}
 	if action == "view" {
 		return t.readBoard()
+	}
+	if action == "participants" {
+		return t.readParticipants()
 	}
 	if action == "ask" || action == "answer" {
 		return t.talk(action, in)

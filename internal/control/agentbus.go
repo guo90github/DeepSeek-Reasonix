@@ -131,6 +131,21 @@ func (c *Controller) AgentBusWithdraw() error {
 	return directory.Withdraw(context.Background(), state.participantID(c))
 }
 
+// AgentBusParticipants lists who is on this board now: the roster folds the address book to
+// the newest announcement per participant and drops the withdrawn and the stale. Reading it is
+// what lets a session see who it is working beside (F48/F49, 2026-10-05).
+func (c *Controller) AgentBusParticipants() ([]agentbus.ParticipantRef, error) {
+	state, err := c.agentBusForTalk()
+	if err != nil {
+		return nil, err
+	}
+	directory, err := agentbus.OpenParticipantDirectory(state.dir)
+	if err != nil {
+		return nil, err
+	}
+	return directory.All()
+}
+
 // AgentBusView peeks at this participant's view without advancing the cursor.
 // Frontends and diagnostics read it; the turn path consumes deltas instead. A turn
 // that already carried the delta leaves nothing new to show, so a participant that

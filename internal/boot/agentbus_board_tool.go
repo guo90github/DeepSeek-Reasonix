@@ -111,3 +111,13 @@ func (p boardToolPort) BoardIdentity() (string, string, error) {
 	}
 	return c.AgentBusParticipant(), c.AgentBusDir(), nil
 }
+
+// BoardParticipants reads the board's roster: the controller owns the address book kept
+// beside the board file, so the tool asks for it rather than opening that file itself.
+func (p boardToolPort) BoardParticipants() ([]agentbus.ParticipantRef, error) {
+	c, err := p.controller()
+	if err != nil {
+		return nil, err
+	}
+	return c.AgentBusParticipants()
+}

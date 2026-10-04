@@ -25,6 +25,7 @@ type fakeBoardPort struct {
 	hearing     []string
 	hearingRec  agentbus.HearingRecord
 	hearingErr  error
+	roster      []agentbus.ParticipantRef
 }
 
 func (f *fakeBoardPort) ApplyBoardOp(_ context.Context, op board.Op) (board.Receipt, error) {
@@ -36,6 +37,9 @@ func (f *fakeBoardPort) ApplyBoardOp(_ context.Context, op board.Op) (board.Rece
 }
 
 func (f *fakeBoardPort) BoardView(time.Time) (agentbus.View, error) { return f.view, nil }
+
+// The roster seam: whatever the host answered is what the tool renders.
+func (f *fakeBoardPort) BoardParticipants() ([]agentbus.ParticipantRef, error) { return f.roster, nil }
 
 func (f *fakeBoardPort) BoardIdentity() (string, string, error) {
 	if f.identityErr != nil {
