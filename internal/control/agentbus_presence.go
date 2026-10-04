@@ -8,14 +8,17 @@ import (
 	"reasonix/internal/agentbus"
 )
 
-// busyReport is this session's own answer to "what is it doing". Until this existed, only the
-// session's private inbox said "running", and the board its peers read said nothing
-// (F57, 2026-10-05).
+// busyReport is this session's own answer to "what is it doing, and for how long": a peer reads
+// it to decide whether to wait or take the step itself. Until this existed only the session's
+// private inbox said "running", and the board its peers read said nothing (F57, 2026-10-05).
 func (c *Controller) busyReport() string {
-	if c.Running() {
-		return "running a turn"
+	if !c.Running() {
+		return ""
 	}
-	return ""
+	if started := c.inFlightTurnStartedAt(); !started.IsZero() {
+		return "running a turn since " + started.UTC().Format(time.RFC3339)
+	}
+	return "running a turn"
 }
 
 // refreshAgentBusPresence keeps this session on the roster without rewriting the address book
