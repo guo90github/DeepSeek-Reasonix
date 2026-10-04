@@ -40080,15 +40080,107 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   color: var(--text-2);
 }
 
+.agentbus-panel__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .agentbus-panel__card {
-  padding: 6px 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+}
+
+.agentbus-panel__title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+/* A node id is long and unbreakable by nature; let it fold instead of pushing the row wide. */
+.agentbus-panel__card-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.agentbus-panel__card-counts {
+  margin: 2px 0 0;
+  color: var(--text-2);
+}
+
+.agentbus-panel__chip {
+  padding: 0 6px;
+  font-size: 0.85em;
+  line-height: 1.5;
+  color: var(--text-2);
+  white-space: nowrap;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+}
+
+.agentbus-panel__chip--orphan,
+.agentbus-panel__chip--stalled,
+.agentbus-panel__chip--wake_unreachable,
+.agentbus-panel__chip--wake_undelivered {
+  color: var(--warn);
+  border-color: var(--warn);
+}
+
+.agentbus-panel__chip--disputed,
+.agentbus-panel__chip--escalated,
+.agentbus-panel__chip--undecided,
+.agentbus-panel__chip--node_rate,
+.agentbus-panel__chip--rate_limited,
+.agentbus-panel__chip--budget {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.agentbus-panel__card-action {
+  padding: 1px 8px;
+  margin-left: auto;
+  font: inherit;
+  font-size: 0.9em;
+  color: var(--text-2);
+  white-space: nowrap;
+  background: transparent;
   border: 1px solid var(--border-soft);
   border-radius: 6px;
+  cursor: pointer;
+}
+
+.agentbus-panel__card-action:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.agentbus-panel__leftover > summary {
+  padding: 2px 0;
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.agentbus-panel__leftover[open] > summary {
+  margin-bottom: 6px;
 }
 
 .agentbus-panel__card[data-worst="orphan"],
 .agentbus-panel__card[data-worst="stalled"] {
   border-color: var(--warn);
+}
+
+.agentbus-panel__signal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  margin-top: 4px;
+}
+
+.agentbus-panel__host-signals .agentbus-panel__signal {
+  margin-top: 0;
 }
 
 .agentbus-panel__signal button {
@@ -40103,6 +40195,7 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
 
 .agentbus-panel__detail {
   color: var(--text-2);
+  overflow-wrap: anywhere;
 }
 
 .agentbus-panel__node {

@@ -186,23 +186,31 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
     const signals = (view?.signals ?? []).filter((signal) => signal.subtree === card.subtree);
     return (
       <li key={card.subtree} className="agentbus-panel__card" data-worst={card.worst} data-leftover={leftoverCard || undefined}>
-        <div className="agentbus-panel__title" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-          <strong>{card.subtree}</strong>
-          <span>{t(labelKeyOf(card.worst))}</span>
-          <span>
-            {t("agentbus.counts", {
-              atWork: card.atWork,
-              parked: card.parked,
-              done: card.done,
-              n: card.nodes,
-            })}
+        <div className="agentbus-panel__title">
+          <span className="agentbus-panel__card-name" title={card.subtree}>
+            {card.subtree}
           </span>
+          <span className={`agentbus-panel__chip agentbus-panel__chip--${card.worst}`}>{t(labelKeyOf(card.worst))}</span>
           {leftoverCard && onRetire ? (
-            <button type="button" onClick={() => onRetire(card.subtree)}>
+            <button
+              type="button"
+              className="agentbus-panel__card-action"
+              title={t("agentbus.leftover.retire.hint")}
+              aria-label={t("agentbus.leftover.retire.hint")}
+              onClick={() => onRetire(card.subtree)}
+            >
               {t("agentbus.leftover.retire")}
             </button>
           ) : null}
         </div>
+        <p className="agentbus-panel__card-counts">
+          {t("agentbus.counts", {
+            atWork: card.atWork,
+            parked: card.parked,
+            done: card.done,
+            n: card.nodes,
+          })}
+        </p>
         <ul className="agentbus-panel__signals" style={{ listStyle: "none", margin: 0, padding: 0 }}>
           {signals.map((signal) => (
             <li key={`${signal.kind}:${signal.node}`} className="agentbus-panel__signal" data-kind={signal.kind}>
@@ -213,7 +221,7 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
               ) : (
                 <span>{signal.node}</span>
               )}
-              <span className="agentbus-panel__detail"> {signal.detail}</span>
+              <span className="agentbus-panel__detail">{signal.detail}</span>
             </li>
           ))}
         </ul>
@@ -243,8 +251,8 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
             .filter((signal) => !signal.subtree)
             .map((signal) => (
               <li key={`${signal.kind}:${signal.detail}`} className="agentbus-panel__signal" data-kind={signal.kind}>
-                <span>{t(labelKeyOf(signal.kind))}</span>
-                <span className="agentbus-panel__detail"> {signal.detail}</span>
+                <span className={`agentbus-panel__chip agentbus-panel__chip--${signal.kind}`}>{t(labelKeyOf(signal.kind))}</span>
+                <span className="agentbus-panel__detail">{signal.detail}</span>
               </li>
             ))}
         </ul>

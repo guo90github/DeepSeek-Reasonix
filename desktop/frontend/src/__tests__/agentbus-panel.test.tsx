@@ -236,8 +236,12 @@ ok(
   "a card whose participants are here stays on the first screen",
 );
 ok(
-  leftoverHtml.indexOf("Retire this leftover") !== -1 || leftoverHtml.indexOf("退掉这批旧账") !== -1,
+  leftoverHtml.indexOf("agentbus-panel__card-action") !== -1,
   "a leftover card offers to retire it in one click",
+);
+ok(
+  leftoverHtml.indexOf("agentbus-panel__chip") !== -1,
+  "the card's state reads as a chip rather than as loose text",
 );
 
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
