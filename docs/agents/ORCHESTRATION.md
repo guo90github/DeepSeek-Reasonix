@@ -133,9 +133,15 @@
   there's work: g7-block addressed to me"），**全程没有人给它打字**。⇒ 同机跨会话那一跳成立。
   **同一次真机抓到并当场修掉一个读面缺口**：B 的 `view` 是空的（`owned=0 waiting=0 needed=0`）—— 视图三组都不认
   "被指派给我的节点"，而唤醒词告诉它"这块归你"；修法 = `participantNodes` 把 `assignee` 也算作"我的"
-  （`internal/agentbus/view.go`，用例 `internal/agentbus/view_assignee_test.go`）。
-  **仍未完成的那半（如实）**：B 在 dev.130 上（该 exe 不含上面的视图修复）没有认领那块，板停在 `seq 249`；
-  待下一个包含该修复的包再走一遍第 3–5 步，判据 = 板上出现 `claim`/`decide` 且 `actor == B`。
+  （`internal/agentbus/view.go`，用例 `internal/agentbus/view_assignee_test.go`）。B 侧留了两帧原文，值得照抄：
+  帧 1（被 assign 未 claim）`owned=0 waiting=0 needed=0` —— 修前的现场；帧 2（`g7-block` done 之后）
+  `owned=1 waiting=1 ready=1` + `node id=g7-drill … startable=true deps_open=0`。
+  **第 3–5 步也已由同一对会话走完（`seq 250`–`253`）**：B `claim` → `assert`（带证据）→ `decide(done)`（`reproducedBy` =
+  `go test -count=1 -run 'HandedAnAssignedBlock' ./internal/boot/`），B 通过板上 `ask` 把复跑与收口交给 A；**A 独立重跑该命令
+  ⇒ ok 0.592s**，随即 `decide g7-drill done`（`seq 253`，证据引用该次重跑）⇒ 交付物 `state=done`。两处如实边界：
+  ① **A 那一回合本身就是被唤醒起来的**（B 的两条 ask 由唤醒块点名；`[agentbus wake queued 4m2s ago; rebuilt against
+  the board as it is now]`）⇒ "空闲会话被唤醒后自己起一回合"成立；② 因为 `g7-block` 已是 `done`，
+  `assert` 再补一条证据被kernel 拒（`illegal_transition`）⇒ 复跑证据只能引用进交付物的 `decide`。
 - **不在 v1，因此不是 G7 的验收项**：**第二台机器**上的会话（那才需要共享盘/同步目录做跨机寻址与令牌；
   `AGENT_BUS.md` §集群规模 写明 v1 单机，协议只保留"地址＋令牌可换目标"）。
   **2026-10-05 更正**：本节此前把这一跳写成 G7 的"必须真机"项 —— 那是把**跨会话**误读成**跨机**；按用户口径，
@@ -152,6 +158,10 @@
 - **用命名约定承载语义**（`Title` 前缀当"验收节点"）：§13.10 选项 C 已被否——核不上、易漂。
 - **`abandon` 当"取消"用**：它要求证据，且**有意不向下游传播**（依赖被放弃 ≠ 下游已完成被推翻，T9-2）。
 - **只领走现成的步**：那是作业派发器（"杀掉编排者还能往前走"只在有人能**继续写图**时成立）。
+- **只读 `state` 就当结论**（2026-10-05 真机）：`state` 是**日志派生**字段 —— 上一次写它的 op 留下的事实；而 `startable` /
+  `deps_open` 是每轮**现算**的谓词。依赖刚落地、还没有新 op 光顾的节点会同时显示 `state=blocked` 与
+  `startable=true deps_open=0`（演练里的 `g7-drill` 正是如此），只读 `state` 会把"已解阻"读成"还在等"。
+  判断"能不能开工"看 `startable`，别读 `state`。
 
 ## 7. 与内核的对应（自查表）
 
