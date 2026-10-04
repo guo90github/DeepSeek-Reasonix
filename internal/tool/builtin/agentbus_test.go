@@ -41,6 +41,9 @@ func (f *fakeBoardPort) BoardView(time.Time) (agentbus.View, error) { return f.v
 // The roster seam: whatever the host answered is what the tool renders.
 func (f *fakeBoardPort) BoardParticipants() ([]agentbus.ParticipantRef, error) { return f.roster, nil }
 
+// The pool seam: this fake has no pool, and a test that needs one derives its own port from it.
+func (f *fakeBoardPort) BoardPool() ([]agentbus.PoolEntry, error) { return nil, nil }
+
 func (f *fakeBoardPort) BoardIdentity() (string, string, error) {
 	if f.identityErr != nil {
 		return "", "", f.identityErr

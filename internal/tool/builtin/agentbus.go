@@ -35,6 +35,9 @@ type BoardPort interface {
 	// book, kept beside the board file, and a session that announced itself with no
 	// endpoint still belongs on it — that is how a desktop session is visible at all.
 	BoardParticipants() ([]agentbus.ParticipantRef, error)
+	// BoardPool lists the steps anybody could pick up. Nothing broadcasts them, so a session
+	// that wants to help has to be able to ask (F53/F40, 2026-10-05).
+	BoardPool() ([]agentbus.PoolEntry, error)
 	// AskBoard puts a bounded question to one participant; AnswerBoard answers one that
 	// was addressed here. Both write to the board this session is enrolled on.
 	AskBoard(ctx context.Context, topic, to, text string) (string, error)
@@ -148,7 +151,7 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	}
 	action := strings.ToLower(strings.TrimSpace(in.Action))
 	if action == "" {
-		return "", fmt.Errorf("action is required: one of view, participants, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle")
+		return "", fmt.Errorf("action is required: one of view, participants, pool, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle")
 	}
 	// An item with no ref is dropped by the board, whose refusal then reads "missing_evidence" —
 	// as if no evidence had been given at all. Name the empty item instead (2026-10-05).
@@ -162,6 +165,9 @@ func (t agentBusBoard) Execute(_ context.Context, args json.RawMessage) (string,
 	}
 	if action == "participants" {
 		return t.readParticipants()
+	}
+	if action == "pool" {
+		return t.readPool()
 	}
 	if action == "ask" || action == "answer" {
 		return t.talk(action, in)
@@ -379,7 +385,7 @@ func (t agentBusBoard) opFor(action, actor string, in agentBusArgs) (board.Op, e
 		op.Dep = &board.NodeSpec{ID: strings.TrimSpace(in.Dep.ID), Title: strings.TrimSpace(in.Dep.Title)}
 	case "revert":
 	default:
-		return board.Op{}, fmt.Errorf("unknown action %q: one of view, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle", action)
+		return board.Op{}, fmt.Errorf("unknown action %q: one of view, participants, pool, assert, claim, heartbeat, release, decide, refute, split, require, assign, unassign, capability_gap, abandon, revert, ask, answer, hearing_open, hearing_answer, hearing_settle", action)
 	}
 	return op, nil
 }

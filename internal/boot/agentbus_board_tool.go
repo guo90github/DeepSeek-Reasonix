@@ -121,3 +121,13 @@ func (p boardToolPort) BoardParticipants() ([]agentbus.ParticipantRef, error) {
 	}
 	return c.AgentBusParticipants()
 }
+
+// BoardPool reads the board's common pool: the controller owns the folded board, so the tool
+// asks for the projection rather than folding the log itself.
+func (p boardToolPort) BoardPool() ([]agentbus.PoolEntry, error) {
+	c, err := p.controller()
+	if err != nil {
+		return nil, err
+	}
+	return c.AgentBusPool(time.Now().UTC())
+}
