@@ -1,7 +1,7 @@
 [
   {
     "Name": "agent_bus",
-    "Description": "Shared blackboard for multi-agent work: record what must be true, claim a step before working on it, and let a step be done only with evidence someone else can re-run. One board is shared by every participant, so a node's state — not this conversation — is the source of truth. action=view lists the nodes addressed to you; use it before claiming. claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason. assign addresses a step to one participant, and only that participant may take it; unassign hands it back to the pool. A refuted result with nobody to settle it stalls the work: hearing_open starts a deliberation on that node (required= names who must answer; empty means its owner and everyone who refuted it), hearing_answer records your side, hearing_settle records the verdict, and a refuted assertion blocks the node. A refusal comes back as a reason (illegal transition, missing evidence, unknown node): read it and fix the op instead of retrying it unchanged.",
+    "Description": "Shared blackboard for multi-agent work: record what must be true, claim a step before working on it, and let a step be done only with evidence someone else can re-run. One board is shared by every participant, so a node's state — not this conversation — is the source of truth. action=view lists the nodes addressed to you; use it before claiming. claim requires a deadline and bounds (steps), assert/abandon require evidence, refute and capability_gap require a reason — refute also undoes a done step: the node goes back to contested for a verdict. assign addresses a step to one participant, and only that participant may take it; unassign hands it back to the pool. decide(done) needs an evidenced assert someone else can check plus a reproducer who is not its author; abandon only requests it (an evidenced abandon, then decide(abandoned)); and a blocked step is one you decided against, not one still waiting on a dependency. decide is not ownership-checked: any enrolled participant may close a step out, so close only what its evidence and a reproducer can back. A refuted result with nobody to settle it stalls the work: hearing_open starts a deliberation on that node (required= names who must answer; empty means its owner and everyone who refuted it), hearing_answer records your side, hearing_settle records the verdict, and a refuted assertion blocks the node. A refusal comes back as a reason (illegal transition, missing evidence, unknown node): read it and fix the op instead of retrying it unchanged.",
     "ReadOnly": false,
     "Schema": {
       "properties": {
@@ -160,7 +160,8 @@
         "action"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": null
   },
   {
     "Name": "ask",
@@ -231,7 +232,8 @@
         "questions"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": null
   },
   {
     "Name": "bash",
@@ -267,7 +269,10 @@
         "command"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "SnipHinter"
+    ]
   },
   {
     "Name": "bash_output",
@@ -288,7 +293,10 @@
         "job_id"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "ContextualTool"
+    ]
   },
   {
     "Name": "complete_step",
@@ -376,7 +384,11 @@
         "result"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "ContextualTool",
+      "PlanModeClassifier"
+    ]
   },
   {
     "Name": "compress",
@@ -410,7 +422,10 @@
         "direction"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "PlanModeClassifier"
+    ]
   },
   {
     "Name": "edit_file",
@@ -441,7 +456,10 @@
         "path"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "Previewer"
+    ]
   },
   {
     "Name": "kill_shell",
@@ -458,7 +476,10 @@
         "job_id"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "ContextualTool"
+    ]
   },
   {
     "Name": "read_file",
@@ -498,7 +519,10 @@
         "path"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "SnipHinter"
+    ]
   },
   {
     "Name": "todo_write",
@@ -553,7 +577,8 @@
         "todos"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": null
   },
   {
     "Name": "update_goal",
@@ -610,7 +635,11 @@
         "status"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "ContextualTool",
+      "PlanModeClassifier"
+    ]
   },
   {
     "Name": "use_capability",
@@ -658,7 +687,10 @@
         "action"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "BatchClassifier"
+    ]
   },
   {
     "Name": "view_image",
@@ -675,7 +707,10 @@
         "path"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "ImageTool"
+    ]
   },
   {
     "Name": "wait",
@@ -697,7 +732,10 @@
         }
       },
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "ContextualTool"
+    ]
   },
   {
     "Name": "write_file",
@@ -723,6 +761,9 @@
         "path"
       ],
       "type": "object"
-    }
+    },
+    "Capabilities": [
+      "Previewer"
+    ]
   }
 ]
