@@ -38,15 +38,67 @@ type AgentBusSignalView struct {
 	Detail  string `json:"detail"`
 }
 
+// AgentBusMemberView is one session taking part from this host: the panel's roster, so a reader can
+// see who is actually here instead of counting the departed names a board still carries.
+type AgentBusMemberView struct {
+	Participant string `json:"participant"`
+	Label       string `json:"label"`
+	Self        bool   `json:"self"`
+}
+
 // AgentBusBriefingView is the collaboration surface's first screen: only the
 // subtrees that need attention, with honest counts of what did not fit.
 type AgentBusBriefingView struct {
 	Participant     string               `json:"participant"`
+	Members         []AgentBusMemberView `json:"members"`
 	Cards           []AgentBusCardView   `json:"cards"`
 	Signals         []AgentBusSignalView `json:"signals"`
 	Hidden          int                  `json:"hidden"`
 	HiddenCards     int                  `json:"hiddenCards"`
 	HealthySubtrees int                  `json:"healthySubtrees"`
+}
+
+// agentBusMembers lists the sessions this host speaks as. It is host-scoped on purpose: who exists
+// elsewhere is the board's and the address book's question, and this line answers the one a reader
+// asks first — "who is here with me" (2026-10-05).
+func (a *App) agentBusMembers(self string) []AgentBusMemberView {
+	a.mu.RLock()
+	tabs := make([]*WorkspaceTab, 0, len(a.tabs))
+	for _, tab := range a.tabs {
+		tabs = append(tabs, tab)
+	}
+	a.mu.RUnlock()
+	out := make([]AgentBusMemberView, 0, len(tabs))
+	seen := map[string]bool{}
+	for _, tab := range tabs {
+		if tab == nil || tab.Ctrl == nil {
+			continue
+		}
+		bus, ok := tab.Ctrl.(control.AgentBusControl)
+		if !ok {
+			continue
+		}
+		participant := strings.TrimSpace(bus.AgentBusParticipant())
+		if participant == "" || seen[participant] {
+			continue
+		}
+		seen[participant] = true
+		label := strings.TrimSpace(tab.TopicTitle)
+		if label == "" {
+			label = strings.TrimSpace(tab.Label)
+		}
+		out = append(out, AgentBusMemberView{Participant: participant, Label: label, Self: participant == self})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Self != out[j].Self {
+			return out[i].Self
+		}
+		if out[i].Label != out[j].Label {
+			return out[i].Label < out[j].Label
+		}
+		return out[i].Participant < out[j].Participant
+	})
+	return out
 }
 
 // AgentBusBriefing is the panel's read: it folds the active session's board, queue
@@ -67,6 +119,7 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 	}
 	view := AgentBusBriefingView{
 		Participant: bus.AgentBusParticipant(),
+		Members:     a.agentBusMembers(bus.AgentBusParticipant()),
 		// Empty, not nil: a Go nil slice marshals to null, and the panel iterates
 		// these lists, so a board nobody has written to must still send arrays.
 		Cards:           make([]AgentBusCardView, 0, len(briefing.Cards)),

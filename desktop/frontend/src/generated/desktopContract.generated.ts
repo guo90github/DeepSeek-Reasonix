@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:a9db95545110b5683ba33fc4a51cde2c97879a46915b358d5301e8456a8c888b";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:872dd99baee0fc3eed108e8b5f64b0a26cf57d55b72f8abe2b8fe925a3621ddb";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -1552,6 +1552,7 @@ export interface AgentBusAuthorizationView {
 
 export interface AgentBusBriefingView {
   participant: string;
+  members: AgentBusMemberView[];
   cards: AgentBusCardView[];
   signals: AgentBusSignalView[];
   hidden: number;
@@ -1576,6 +1577,12 @@ export interface AgentBusCardView {
 export interface AgentBusChildArg {
   id: string;
   title: string;
+}
+
+export interface AgentBusMemberView {
+  participant: string;
+  label: string;
+  self: boolean;
 }
 
 export interface AgentBusNodeDetailView {

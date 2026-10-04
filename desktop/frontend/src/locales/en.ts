@@ -3991,6 +3991,8 @@ export const en = {
   "settings.shellAsync.fast": "Fastest",
   "agentbus.title": "Collaboration",
   "agentbus.participant": "as {who}",
+  "agentbus.members": "sessions here: {n}",
+  "agentbus.members.you": "{label} (you)",
   "agentbus.unwired": "not on a board",
   "agentbus.counts": "{atWork} at work, {parked} parked, {done}/{n} done",
   "agentbus.clear": "Nothing needs attention in {n} subtrees",

@@ -3989,6 +3989,8 @@ export const zhTW: Record<DictKey, string> = {
   "settings.shellAsync.fast": "極速",
   "agentbus.title": "協作",
   "agentbus.participant": "身分 {who}",
+  "agentbus.members": "這台宿主上的成員 {n}",
+  "agentbus.members.you": "{label}（你）",
   "agentbus.unwired": "未入列",
   "agentbus.counts": "{atWork} 在跑，{parked} 排隊，{done}/{n} 已完成",
   "agentbus.clear": "{n} 個子樹都沒有需要處理的事",

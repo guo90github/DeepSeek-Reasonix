@@ -21297,6 +21297,16 @@
           }
         },
         {
+          "name": "members",
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.AgentBusMemberView"
+            },
+            "kind": "array"
+          }
+        },
+        {
           "name": "cards",
           "type": {
             "elem": {
@@ -21418,6 +21428,28 @@
           "name": "title",
           "type": {
             "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.AgentBusMemberView": {
+      "fields": [
+        {
+          "name": "participant",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "label",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "self",
+          "type": {
+            "kind": "boolean"
           }
         }
       ]

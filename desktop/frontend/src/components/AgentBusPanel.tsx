@@ -27,8 +27,18 @@ export type AgentBusSignalView = {
   detail: string;
 };
 
+export type AgentBusMemberView = {
+  participant: string;
+  /** The session's own display name, which is what a reader recognises. */
+  label: string;
+  /** This is the session reading the panel. */
+  self: boolean;
+};
+
 export type AgentBusBriefingView = {
   participant: string;
+  /** Who is here with me: the sessions this host speaks as (2026-10-05). */
+  members?: AgentBusMemberView[] | null;
   // Null is possible on the wire: Go marshals a nil slice as null. The panel treats
   // that as an empty board rather than crashing on it.
   cards: AgentBusCardView[] | null;
@@ -168,6 +178,8 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
   onVerb?: (action: string, node: string) => void;
 }) {
   const t = useT();
+  // Who is here with me, as this host knows it; a host that sends nothing draws no roster.
+  const members = view?.members ?? [];
   const who = (view?.participant ?? "") || t("agentbus.unwired");
   // A host that sends null instead of [] must not take the app down: the board simply
   // reads as empty (that regression already shipped once, in v0.0.0-dev.101).
@@ -252,6 +264,19 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
   return (
     <section className="agentbus-panel" aria-label={t("agentbus.title")}>
       <Head who={who} enrol={enrol} />
+      {members.length > 0 ? (
+        <p className="agentbus-panel__members">
+          <span className="agentbus-panel__detail">{t("agentbus.members", { n: members.length })}</span>
+          {members.map((member) => {
+            const name = member.label || member.participant;
+            return (
+              <span key={member.participant} className="agentbus-panel__chip" title={member.participant}>
+                {member.self ? t("agentbus.members.you", { label: name }) : name}
+              </span>
+            );
+          })}
+        </p>
+      ) : null}
       {notice ? <p className="agentbus-panel__notice">{notice}</p> : null}
       {cards.length === 0 ? (
         <p className="agentbus-panel__clear">{t("agentbus.clear", { n: view.healthySubtrees })}</p>

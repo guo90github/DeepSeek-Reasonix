@@ -40081,6 +40081,15 @@ html[data-dock-launcher="full"] .app:not(.app--creation) .layout:not(.layout--wo
   color: var(--text-2);
 }
 
+/* Who is here with me: the sessions this host speaks as, so nobody counts departed names instead. */
+.agentbus-panel__members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin: 0;
+}
+
 .agentbus-panel__cards {
   display: flex;
   flex-direction: column;

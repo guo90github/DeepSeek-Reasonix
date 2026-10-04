@@ -276,5 +276,38 @@ ok(
   "and a host that offers no verbs draws no buttons",
 );
 
+// Who is here with me, as chips: the roster answers the question the departed names cannot, and the
+// reading session is marked as such (2026-10-05).
+const rosterHtml = renderToStaticMarkup(
+  <LocaleProvider>
+    <AgentBusPanel
+      view={{
+        ...emptyBoard,
+        members: [
+          { participant: "p-self", label: "本会话", self: true },
+          { participant: "p-peer", label: "另一个会话", self: false },
+        ],
+      }}
+    />
+  </LocaleProvider>,
+);
+ok(rosterHtml.indexOf("agentbus-panel__members") !== -1, "the panel says who is here with me");
+ok(
+  rosterHtml.includes("本会话") && rosterHtml.includes("另一个会话"),
+  "the roster names each session the way it shows itself",
+);
+ok(
+  rosterHtml.includes("（你）") || rosterHtml.includes("(you)"),
+  "and marks the session doing the reading",
+);
+ok(
+  renderToStaticMarkup(
+    <LocaleProvider>
+      <AgentBusPanel view={emptyBoard} />
+    </LocaleProvider>,
+  ).indexOf("agentbus-panel__members") === -1,
+  "a host that sends no roster draws no roster line",
+);
+
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);
