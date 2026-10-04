@@ -4006,6 +4006,8 @@ export const en = {
   "agentbus.kind.wakeUnreachable": "participant left this host",
   "agentbus.kind.nodeRate": "refused by the node rate ceiling",
   "agentbus.kind.other": "other signal",
+  "agentbus.leftover.summary": "Leftover work from participants who left ({n})",
+  "agentbus.leftover.retire": "Retire this leftover",
   "agentbus.unavailable": "Collaboration data is unavailable for this session",
   "agentbus.join": "Join a board",
   "agentbus.leave": "Leave the board",

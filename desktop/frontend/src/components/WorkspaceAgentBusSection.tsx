@@ -36,7 +36,7 @@ type DetailState =
   | { kind: "unavailable"; node: string }
   | { kind: "ready"; view: AgentBusNodeDetailView };
 
-export function WorkspaceAgentBusSection({ onOpenNode, refreshKey, load, loadDetail, loadStatus, join, leave, apply, onEnrolmentChange }: {
+export function WorkspaceAgentBusSection({ onOpenNode, refreshKey, load, loadDetail, loadStatus, join, leave, apply, retire, onEnrolmentChange }: {
   /** Opens a node; called in addition to showing the step here, for a host that navigates. */
   onOpenNode?: (node: string) => void;
   /** Changes to refetch, e.g. when the active session or its turn changes. */
@@ -51,6 +51,8 @@ export function WorkspaceAgentBusSection({ onOpenNode, refreshKey, load, loadDet
   leave?: () => Promise<AgentBusStatusView>;
   /** Injected for the same reason: the human's board actions. */
   apply?: (args: AgentBusApplyArgs) => Promise<string>;
+  /** Injected for the same reason: dropping one leftover subtree (the host runs both steps). */
+  retire?: (subtree: string) => Promise<string>;
   /** Joining here changes what any other entry shows, so it is told. */
   onEnrolmentChange?: () => void;
 }) {
@@ -60,6 +62,8 @@ export function WorkspaceAgentBusSection({ onOpenNode, refreshKey, load, loadDet
   const [detail, setDetail] = useState<DetailState>({ kind: "idle" });
   const [trouble, setTrouble] = useState("");
   const [busy, setBusy] = useState(false);
+  // The board's answer to a retire request: it says what it dropped, or why it refused.
+  const [retired, setRetired] = useState("");
 
   async function readBriefing() {
     setBriefing({ kind: "loading" });
@@ -165,16 +169,24 @@ export function WorkspaceAgentBusSection({ onOpenNode, refreshKey, load, loadDet
         ? t("agentbus.detail.unavailable", { node: detail.node })
         : "";
   const applyAction = apply ?? ((args: AgentBusApplyArgs) => app.AgentBusApply(args));
+  const retireAction = retire ?? ((subtree: string) => app.AgentBusRetireSubtree({ subtree }));
+  const onRetire = (subtree: string) => {
+    void retireAction(subtree)
+      .then((answer) => setRetired(answer))
+      .catch((err: unknown) => setRetired(String(err)))
+      .then(() => readBriefing());
+  };
   return (
     <>
       <AgentBusPanel
         view={briefing.view}
         enrol={leaveButton}
-        notice={trouble || boardNotice}
+        notice={retired || trouble || boardNotice}
         onOpenNode={(node) => void openNode(node)}
         detail={detail.kind === "ready" ? detail.view : null}
         detailNotice={notice}
         onCloseDetail={() => setDetail({ kind: "idle" })}
+        onRetire={onRetire}
       />
       {/* The human acts on the board too, through the same verbs the model uses. */}
       <AgentBusControls apply={applyAction} onApplied={() => void readBriefing()} />

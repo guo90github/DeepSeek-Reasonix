@@ -16,6 +16,8 @@ export type AgentBusCardView = {
   orphans: number;
   stalled: number;
   disputed: number;
+  /** Nobody who asked for this subtree can be reached from this host: history, not work. */
+  leftover?: boolean;
 };
 
 export type AgentBusSignalView = {
@@ -146,7 +148,7 @@ function Head({ who, enrol }: { who: string; enrol?: ReactNode }) {
   );
 }
 
-export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseDetail, enrol, notice }: {
+export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseDetail, enrol, notice, onRetire }: {
   /** The board's first screen; null means this session is not on a board yet. */
   view?: AgentBusBriefingView | null;
   /** Opens a node; the host decides what opening means (fetch, navigate, both). */
@@ -160,6 +162,8 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
   enrol?: ReactNode;
   /** One line about the section's own state — joining, pending identity, a failure. */
   notice?: string;
+  /** Drops one leftover subtree; the host runs the board's own two-step protocol. */
+  onRetire?: (subtree: string) => void;
 }) {
   const t = useT();
   const who = (view?.participant ?? "") || t("agentbus.unwired");
@@ -171,6 +175,51 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
     if (left.signals !== right.signals) return right.signals - left.signals;
     return left.subtree.localeCompare(right.subtree);
   }) : [];
+  // Leftover work is history, not a call to act: its participants are not on this host at all, so
+  // it folds away by default and stays countable by hand (2026-10-05).
+  const live = cards.filter((card) => !card.leftover);
+  const leftover = cards.filter((card) => card.leftover);
+
+  // One card, drawn the same way in either list. A leftover card additionally offers to retire it:
+  // the host runs the board's own two-step protocol (abandon, then the decision), never a side door.
+  const cardRow = (card: AgentBusCardView, leftoverCard = false) => {
+    const signals = (view?.signals ?? []).filter((signal) => signal.subtree === card.subtree);
+    return (
+      <li key={card.subtree} className="agentbus-panel__card" data-worst={card.worst} data-leftover={leftoverCard || undefined}>
+        <div className="agentbus-panel__title" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+          <strong>{card.subtree}</strong>
+          <span>{t(labelKeyOf(card.worst))}</span>
+          <span>
+            {t("agentbus.counts", {
+              atWork: card.atWork,
+              parked: card.parked,
+              done: card.done,
+              n: card.nodes,
+            })}
+          </span>
+          {leftoverCard && onRetire ? (
+            <button type="button" onClick={() => onRetire(card.subtree)}>
+              {t("agentbus.leftover.retire")}
+            </button>
+          ) : null}
+        </div>
+        <ul className="agentbus-panel__signals" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {signals.map((signal) => (
+            <li key={`${signal.kind}:${signal.node}`} className="agentbus-panel__signal" data-kind={signal.kind}>
+              {onOpenNode ? (
+                <button type="button" onClick={() => onOpenNode(signal.node)}>
+                  {signal.node}
+                </button>
+              ) : (
+                <span>{signal.node}</span>
+              )}
+              <span className="agentbus-panel__detail"> {signal.detail}</span>
+            </li>
+          ))}
+        </ul>
+      </li>
+    );
+  };
 
   if (!view) {
     return (
@@ -201,40 +250,16 @@ export function AgentBusPanel({ view, onOpenNode, detail, detailNotice, onCloseD
         </ul>
       ) : null}
       <ul className="agentbus-panel__cards" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-        {cards.map((card) => {
-          const signals = (view.signals ?? []).filter((signal) => signal.subtree === card.subtree);
-          return (
-            <li key={card.subtree} className="agentbus-panel__card" data-worst={card.worst}>
-              <div className="agentbus-panel__title" style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
-                <strong>{card.subtree}</strong>
-                <span>{t(labelKeyOf(card.worst))}</span>
-                <span>
-                  {t("agentbus.counts", {
-                    atWork: card.atWork,
-                    parked: card.parked,
-                    done: card.done,
-                    n: card.nodes,
-                  })}
-                </span>
-              </div>
-              <ul className="agentbus-panel__signals" style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                {signals.map((signal) => (
-                  <li key={`${signal.kind}:${signal.node}`} className="agentbus-panel__signal" data-kind={signal.kind}>
-                    {onOpenNode ? (
-                      <button type="button" onClick={() => onOpenNode(signal.node)}>
-                        {signal.node}
-                      </button>
-                    ) : (
-                      <span>{signal.node}</span>
-                    )}
-                    <span className="agentbus-panel__detail"> {signal.detail}</span>
-                  </li>
-                ))}
-              </ul>
-            </li>
-          );
-        })}
+        {live.map((card) => cardRow(card))}
       </ul>
+      {leftover.length > 0 ? (
+        <details className="agentbus-panel__leftover" data-leftover={leftover.length}>
+          <summary>{t("agentbus.leftover.summary", { n: leftover.length })}</summary>
+          <ul className="agentbus-panel__cards" style={{ listStyle: "none", margin: 0, padding: 0 }}>
+            {leftover.map((card) => cardRow(card, true))}
+          </ul>
+        </details>
+      ) : null}
       {detail ? (
         <AgentBusNodeDetail detail={detail} onClose={onCloseDetail} />
       ) : detailNotice ? (

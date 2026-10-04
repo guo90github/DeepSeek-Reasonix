@@ -4009,6 +4009,8 @@ export const zh: Record<DictKey, string> = {
   "agentbus.kind.wakeUnreachable": "成员已不在本机",
   "agentbus.kind.nodeRate": "被速率上限拒绝",
   "agentbus.kind.other": "其他信号",
+  "agentbus.leftover.summary": "已离开参与者的旧账（{n}）",
+  "agentbus.leftover.retire": "退掉这批旧账",
   "agentbus.unavailable": "这个会话取不到协作数据",
   "agentbus.join": "加入看板",
   "agentbus.leave": "离开看板",

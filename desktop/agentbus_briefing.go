@@ -23,6 +23,10 @@ type AgentBusCardView struct {
 	Orphans  int    `json:"orphans"`
 	Stalled  int    `json:"stalled"`
 	Disputed int    `json:"disputed"`
+	// Leftover marks a subtree whose participants this host cannot reach at all: a board outlives
+	// the sessions that wrote to it, so those rows are history rather than a call to act. The
+	// panel folds them away by default and can retire them on request (2026-10-05).
+	Leftover bool `json:"leftover"`
 }
 
 // AgentBusSignalView is one drill-in row behind a card. Node is the address the
@@ -78,6 +82,7 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 			Orphans: card.Orphans, Stalled: card.Stalled, Disputed: card.Disputed,
 		})
 	}
+	a.markLeftoverCards(bus.AgentBusDir(), view.Cards)
 	for _, signal := range briefing.Signals {
 		view.Signals = append(view.Signals, AgentBusSignalView{
 			Kind: string(signal.Kind), Subtree: signal.Subtree, Node: signal.Node, Detail: signal.Detail,

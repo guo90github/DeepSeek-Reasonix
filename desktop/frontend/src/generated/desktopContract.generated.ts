@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:a6d261177aaf43b18a668c3b82ba3073ad3eebf97fa38d5a1156a90e51faa066";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:a9db95545110b5683ba33fc4a51cde2c97879a46915b358d5301e8456a8c888b";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -35,6 +35,7 @@ export const DESKTOP_COMMANDS = [
   "AgentBusJoin",
   "AgentBusLeave",
   "AgentBusNodeDetail",
+  "AgentBusRetireSubtree",
   "AgentBusStatus",
   "AnswerMCPInteractionForTab",
   "AnswerMCPInteractionForTurn",
@@ -1569,6 +1570,7 @@ export interface AgentBusCardView {
   orphans: number;
   stalled: number;
   disputed: number;
+  leftover: boolean;
 }
 
 export interface AgentBusChildArg {
@@ -1593,6 +1595,10 @@ export interface AgentBusNodeDetailView {
 export interface AgentBusRefutationView {
   actor: string;
   reason: string;
+}
+
+export interface AgentBusRetireArgs {
+  subtree: string;
 }
 
 export interface AgentBusSignalView {
@@ -4681,6 +4687,7 @@ export interface GeneratedDesktopCommands {
   AgentBusJoin(): Promise<AgentBusStatusView>;
   AgentBusLeave(): Promise<AgentBusStatusView>;
   AgentBusNodeDetail(arg0: string): Promise<AgentBusNodeDetailView>;
+  AgentBusRetireSubtree(arg0: AgentBusRetireArgs): Promise<string>;
   AgentBusStatus(): Promise<AgentBusStatusView>;
   AnswerMCPInteractionForTab(arg0: string, arg1: string, arg2: string, arg3: Record<string, unknown>): Promise<void>;
   AnswerMCPInteractionForTurn(arg0: string, arg1: string, arg2: string, arg3: string, arg4: string, arg5: Record<string, unknown>): Promise<void>;

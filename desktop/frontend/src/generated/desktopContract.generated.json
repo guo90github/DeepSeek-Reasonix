@@ -776,6 +776,32 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/agentbus_leftover.go",
+      "name": "AgentBusRetireSubtree",
+      "owner": "App.AgentBusRetireSubtree",
+      "params": [
+        {
+          "kind": "object",
+          "ref": "main.AgentBusRetireArgs"
+        }
+      ],
+      "result": {
+        "kind": "string"
+      },
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "args"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.AgentBusRetireSubtree"
+      },
+      "sources": [
+        "desktop/agentbus_leftover.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/agentbus_enrol.go",
       "name": "AgentBusStatus",
       "owner": "App.AgentBusStatus",
@@ -21371,6 +21397,12 @@
           "type": {
             "kind": "integer"
           }
+        },
+        {
+          "name": "leftover",
+          "type": {
+            "kind": "boolean"
+          }
         }
       ]
     },
@@ -21481,6 +21513,16 @@
         },
         {
           "name": "reason",
+          "type": {
+            "kind": "string"
+          }
+        }
+      ]
+    },
+    "main.AgentBusRetireArgs": {
+      "fields": [
+        {
+          "name": "subtree",
           "type": {
             "kind": "string"
           }

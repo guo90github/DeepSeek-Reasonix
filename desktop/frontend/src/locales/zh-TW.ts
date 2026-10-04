@@ -4004,6 +4004,8 @@ export const zhTW: Record<DictKey, string> = {
   "agentbus.kind.wakeUnreachable": "成員已不在本機",
   "agentbus.kind.nodeRate": "被速率上限拒絕",
   "agentbus.kind.other": "其他信號",
+  "agentbus.leftover.summary": "已離開參與者的舊帳（{n}）",
+  "agentbus.leftover.retire": "退掉這批舊帳",
   "agentbus.unavailable": "這個會話取不到協作資料",
   "agentbus.join": "加入看板",
   "agentbus.leave": "離開看板",

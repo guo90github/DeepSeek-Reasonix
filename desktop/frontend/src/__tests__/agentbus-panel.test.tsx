@@ -207,5 +207,38 @@ ok(
   "a step that could not be read says so instead of drawing an empty one",
 );
 
+// Leftover work is history, not a call to act: it folds away by default, stays countable by hand,
+// and a leftover card offers to retire it — which the panel hands back to the host (2026-10-05).
+const leftoverBoard: AgentBusBriefingView = {
+  participant: "alice",
+  cards: [
+    { subtree: "ab-old-decision", nodes: 2, atWork: 0, parked: 0, done: 1, worst: "stalled", signals: 1, orphans: 0, stalled: 1, disputed: 0, leftover: true },
+    { subtree: "live-work", nodes: 1, atWork: 0, parked: 0, done: 0, worst: "disputed", signals: 1, orphans: 0, stalled: 0, disputed: 1 },
+  ],
+  signals: [],
+  hidden: 0,
+  hiddenCards: 0,
+  healthySubtrees: 0,
+};
+const leftoverHtml = renderToStaticMarkup(
+  <LocaleProvider>
+    <AgentBusPanel view={leftoverBoard} onRetire={() => {}} />
+  </LocaleProvider>,
+);
+const detailsAt = leftoverHtml.indexOf("<details");
+ok(detailsAt !== -1, "the leftover work is folded into a details block");
+ok(
+  detailsAt !== -1 && detailsAt < leftoverHtml.indexOf("ab-old-decision"),
+  "the leftover card sits inside that block rather than on the first screen",
+);
+ok(
+  leftoverHtml.indexOf("live-work") !== -1 && (detailsAt === -1 || leftoverHtml.indexOf("live-work") < detailsAt),
+  "a card whose participants are here stays on the first screen",
+);
+ok(
+  leftoverHtml.indexOf("Retire this leftover") !== -1 || leftoverHtml.indexOf("退掉这批旧账") !== -1,
+  "a leftover card offers to retire it in one click",
+);
+
 process.stdout.write(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);
