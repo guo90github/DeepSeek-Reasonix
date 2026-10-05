@@ -695,10 +695,10 @@ func (a *App) HeartbeatSaveConfig(update HeartbeatConfigUpdate) (HeartbeatConfig
 	}
 	view = withHeartbeatRuntimeFacts(view)
 	if update.Unattended != nil {
-		// The OS entry no longer follows this switch (2026-10-05): it exists to bring a host
-		// that died back up, which is wanted either way. Flipping the switch only converges it
-		// (and never overrides an explicit --watchdog-disable).
-		convergeWatchdogEntry()
+		// 总开关仍然持有**登录项**（同一份策略文件的 `enabled`），但不再持有 OS 条目（2026-10-05）：
+		// 条目的职责是"把死掉的宿主拉回来"，开关开不开都要它在。两半在这里一起收敛，谁也不覆盖
+		// 谁的显式选择（`--watchdog-disable` 的 optOut 不会被这里翻回去）。
+		convergeAutostartAndEntry()
 		if *update.Unattended && !view.AgentBusBudget {
 			// Nobody is watching an unattended run, so the one moment the operator can
 			// be told it has no brake is the moment they turn it on (2026-10-03).

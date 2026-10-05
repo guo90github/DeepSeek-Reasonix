@@ -228,8 +228,10 @@ reasonix-desktop.exe --watchdog-disable  # record the opt-out, unregister, remov
   registered whenever a versioned install exists, every start converges it (a switch
   written by an older host, or a hand-edited policy, lands here), and **only
   `--watchdog-disable` turns it off** (it writes `optOut`). The four commands above remain
-  for inspection and manual override. A host that is not a versioned install (a dev run)
-  never touches the OS entry.
+  for inspection and manual override — and the desktop's tab strip carries a **crash recovery**
+  switch right next to the unattended one, which flips exactly this entry (it records the
+  opt-out, so the choice survives the next start). A host that is not a versioned install
+  (a dev run) never touches the OS entry.
 - **One criterion**: a marker exists ∧ its process is gone ∧ the crash is under 24 hours
   old ∧ it is not a crash loop → launch the active version's inner desktop binary. There
   is **no `unattended` term**: whether that run was attended has no say. A clean exit

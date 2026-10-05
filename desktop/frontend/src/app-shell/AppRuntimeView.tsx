@@ -44,6 +44,7 @@ import { buildComposerSurface, buildDecisionFooterSurface, buildFooterTodo, buil
 const WindowsWindowControls = lazy(() => import("./WindowsWindowControls").then((module) => ({ default: module.WindowsWindowControls })));
 const DockLauncher = lazy(() => import("../components/DockLauncher").then((module) => ({ default: module.DockLauncher })));
 const UnattendedToggle = lazy(() => import("../custom/features/heartbeat/UnattendedToggle").then((module) => ({ default: module.UnattendedToggle })));
+const WatchdogToggle = lazy(() => import("../custom/features/heartbeat/WatchdogToggle").then((module) => ({ default: module.WatchdogToggle })));
 
 const WORKSPACE_RESIZER_WIDTH = 8;
 const SHOW_CONTEXT_DOCK = true;
@@ -355,6 +356,7 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
                 unattendedToggle={(
                   <Suspense fallback={null}>
                     <UnattendedToggle />
+                    <WatchdogToggle />
                   </Suspense>
                 )}
                 sessionAudit={(

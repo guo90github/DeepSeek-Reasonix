@@ -334,23 +334,23 @@ func watchdogLastLogTime() (time.Time, bool) {
 	return time.Time{}, false
 }
 
-// SetWatchdogEnabled writes the policy and applies it at once, so the switch
-// never waits for a restart. It returns the resulting status.
+// SetWatchdogEnabled is the desktop's toggle for the OS entry — the one the tab strip's
+// crash-recovery switch calls: ON clears the opt-out and registers, OFF records the opt-out
+// and takes the entry away. It must route through the opt-out, not the policy writer: the
+// entry is (re)registered by convergence on every start, so a toggle that only unregistered
+// would come back on its own at the next launch.
 func (a *App) SetWatchdogEnabled(enabled bool) (WatchdogStatusView, error) {
-	return setWatchdogEnabled(enabled)
+	return setWatchdogOptOut(!enabled)
 }
 
-// setWatchdogEnabled is the one implementation behind the CLI, the UI binding and
-// the desktop directory, so all three can never disagree. It applies the entry; it
-// does not decide whether the person opted out — that is setWatchdogOptOut's job.
-func setWatchdogEnabled(enabled bool) (WatchdogStatusView, error) {
-	policy := readWatchdogPolicy()
-	policy.Enabled = enabled
-	if err := writeWatchdogPolicy(policy); err != nil {
-		view := watchdogStatusView()
-		view.LastError = err.Error()
-		return view, err
-	}
+// applyWatchdogEntry is the one place that applies the OS entry, so the CLI, the UI binding
+// and the desktop directory can never disagree. It does not decide whether the person opted
+// out — that is setWatchdogOptOut's job — and it does not publish the login item either.
+//
+// **It writes no policy.** `enabled` (the login item's field) belongs to the master switch, and
+// the entry's own state is `optOut`: a crash-recovery toggle that wrote `enabled` would silently
+// turn login autostart on — which is exactly what the split exists to prevent (2026-10-05).
+func applyWatchdogEntry(enabled bool) (WatchdogStatusView, error) {
 	registered, err := applyWatchdogRegistration(enabled)
 	if enabled {
 		if err := writeWatchdogScript(); err != nil {
@@ -366,34 +366,49 @@ func setWatchdogEnabled(enabled bool) (WatchdogStatusView, error) {
 		return view, err
 	}
 	view.Registered = registered
-	slog.Info("desktop watchdog: policy applied", "enabled", enabled, "registered", registered)
+	slog.Info("desktop watchdog: entry applied", "enabled", enabled, "registered", registered)
 	return view, nil
+}
+
+// setLoginItemPolicy records what the Electron shell reads for the **login item**
+// (`autostart.ts`): the master switch's mirror, and nothing else. It must not touch the OS
+// entry — that is `optOut`'s business.
+func setLoginItemPolicy(enabled bool) error {
+	policy := readWatchdogPolicy()
+	policy.Enabled = enabled
+	return writeWatchdogPolicy(policy)
 }
 
 // applyWatchdogPolicyOnStart converges the OS entry on every start: a switch written
 // by an older host, a hand-edited policy, or a version switch that would otherwise
 // leave the scheduler pointing at nothing.
 func applyWatchdogPolicyOnStart() {
+	convergeAutostartAndEntry()
+}
+
+// convergeAutostartAndEntry is what both the start path and the unattended switch call, so
+// the two halves can never disagree about which of them last wrote what:
+//
+//   - the **login item** (`enabled`, read by the Electron shell) still follows the master
+//     switch — that was the switch's job before and stays its job;
+//   - the **OS entry** (`optOut`) does not, because its job became "bring a host that died
+//     back up", which a phone needs whether or not anyone turned unattended on. Following the
+//     switch used to *unregister* it in the common case (nobody runs unattended), leaving
+//     nothing to do the waking.
+func convergeAutostartAndEntry() {
+	if on, known := unattendedSwitchOnDisk(); known {
+		if err := setLoginItemPolicy(on); err != nil {
+			slog.Warn("desktop watchdog: could not record the login item policy", "enabled", on, "err", err)
+		}
+	}
 	convergeWatchdogEntry()
 }
 
-// convergeWatchdogEntry is the single place that decides the entry's state, so every
-// caller (start, the unattended switch) agrees instead of each owning a piece of it.
-//
-// It no longer follows the unattended switch (2026-10-05): the entry's job became
-// "bring a host that died back up", which a phone reaching for that host needs
-// whether or not anyone turned unattended on — and following the switch meant the
-// entry was *unregistered* in the common case (nobody runs unattended), leaving
-// nothing to do the waking. The switch still gates unattended driving in-app; an
-// explicit `--watchdog-disable` is the only thing that keeps the entry off.
+// convergeWatchdogEntry decides the OS entry's state on its own terms.
 func convergeWatchdogEntry() {
 	if !watchdogEntryWanted(readWatchdogPolicy()) {
 		return
 	}
-	// Register/re-register and republish the script — and **write no policy**. `enabled`
-	// belongs to the login item, so writing it here would turn on login autostart for every
-	// machine with an install, which the login item's own contract forbids ("nothing here
-	// registers itself on a machine that never asked").
 	refreshWatchdogEntry()
 }
 
@@ -455,7 +470,7 @@ func syncWatchdogEntry(enabled bool) error {
 		slog.Debug("desktop watchdog: not touching the OS entry", "reason", reason)
 		return nil
 	}
-	if _, err := setWatchdogEnabled(enabled); err != nil {
+	if _, err := applyWatchdogEntry(enabled); err != nil {
 		slog.Warn("desktop watchdog: the OS entry could not be applied", "enabled", enabled, "err", err)
 		return err
 	}

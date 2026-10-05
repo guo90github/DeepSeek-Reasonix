@@ -82,6 +82,12 @@ export const heartbeatFeatureEn = {
   "heartbeat.goalPlaceholder": "Optional. With unattended driving on, this text is installed as the session's goal and drives continuation between ticks; a placeholder here is worse than leaving it empty (empty = every tick just runs the prompt).",
   "heartbeat.viewFlat": "Flat list",
   "heartbeat.viewGrouped": "Group by project",
+  "heartbeat.watchdog": "Crash recovery",
+  "heartbeat.watchdogHeldHint": "On, but crash recovery is not in effect: {reason}",
+  "heartbeat.watchdogOff": "Off",
+  "heartbeat.watchdogOffHint": "While this is off, nothing brings the host back after a crash — a phone then has no way to reach it.",
+  "heartbeat.watchdogOn": "On",
+  "heartbeat.watchdogOnHint": "A host that dies is brought back by this machine's scheduler within a minute.",
 } as const;
 
 export type HeartbeatFeatureKey = keyof typeof heartbeatFeatureEn;
@@ -172,6 +178,12 @@ const heartbeatFeatureZh = {
   "heartbeat.goalPlaceholder": "可选。无人值守打开时，这段文字会被安装成会话的 Goal，并在两次 tick 之间驱动续轮；填占位符比留空更糟（留空＝每个 tick 只跑提示词）。",
   "heartbeat.viewFlat": "纯列表",
   "heartbeat.viewGrouped": "按项目分组",
+  "heartbeat.watchdog": "崩溃恢复",
+  "heartbeat.watchdogHeldHint": "已开启，但崩溃恢复没有生效：{reason}",
+  "heartbeat.watchdogOff": "已停用",
+  "heartbeat.watchdogOffHint": "停用期间宿主崩溃后没人把它拉回来——手机也就够不到那台机器。",
+  "heartbeat.watchdogOn": "已开启",
+  "heartbeat.watchdogOnHint": "宿主挂掉/被强杀/断电后，这台机器的计划任务会在一分钟内把它拉回来。",
 } satisfies Record<HeartbeatFeatureKey, string>;
 
 const heartbeatFeatureZhTW = {
@@ -255,6 +267,12 @@ const heartbeatFeatureZhTW = {
   "heartbeat.goalPlaceholder": "可選。無人值守開啟時，這段文字會被安裝成會話的 Goal，並在兩次 tick 之間驅動續輪；填佔位符比留空更糟（留空＝每個 tick 只跑提示詞）。",
   "heartbeat.viewFlat": "純列表",
   "heartbeat.viewGrouped": "按專案分組",
+  "heartbeat.watchdog": "崩潰復原",
+  "heartbeat.watchdogHeldHint": "已開啟，但崩潰復原沒有生效：{reason}",
+  "heartbeat.watchdogOff": "已停用",
+  "heartbeat.watchdogOffHint": "停用期間宿主崩潰後沒人把它拉回來——手機也就夠不到那台機器。",
+  "heartbeat.watchdogOn": "已開啟",
+  "heartbeat.watchdogOnHint": "宿主掛掉/被強殺/斷電後，這台機器的排程會在一分鐘內把它拉回來。",
 } satisfies Record<HeartbeatFeatureKey, string>;
 
 export const heartbeatFeatureKeys = Object.keys(heartbeatFeatureEn) as HeartbeatFeatureKey[];

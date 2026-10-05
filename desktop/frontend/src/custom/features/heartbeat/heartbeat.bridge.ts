@@ -124,14 +124,32 @@ export function heartbeatGenerateID(): Promise<string> {
 
 /** The OS watchdog entry is what brings a dead host back: report it next to the switch. */
 export function heartbeatWatchdogStatus(): Promise<UnattendedWatchdogState | null> {
-	return app.WatchdogStatus().then(
-		(view) => ({
-			supported: view.supported,
-			registered: view.registered === true,
-			lastError: view.lastError || "",
-			note: view.note || "",
-			lastRunAt: view.lastRunAt || "",
-		}),
-		() => null,
-	);
+	return app.WatchdogStatus().then(watchdogState, () => null);
+}
+
+/**
+ * Flip the OS entry itself. It is its **own** switch — the master switch owns the login
+ * item, not this — so the host records an explicit opt-out, which is also what makes the
+ * choice survive the next start instead of being re-registered by convergence.
+ */
+export function heartbeatWatchdogSet(on: boolean): Promise<UnattendedWatchdogState | null> {
+	return app.SetWatchdogEnabled(on).then(watchdogState, () => null);
+}
+
+function watchdogState(view: {
+	supported: boolean;
+	policy: boolean;
+	registered: boolean;
+	lastError?: string;
+	note?: string;
+	lastRunAt?: string;
+}): UnattendedWatchdogState {
+	return {
+		supported: view.supported,
+		policy: view.policy === true,
+		registered: view.registered === true,
+		lastError: view.lastError || "",
+		note: view.note || "",
+		lastRunAt: view.lastRunAt || "",
+	};
 }

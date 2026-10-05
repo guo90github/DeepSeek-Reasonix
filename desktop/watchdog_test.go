@@ -378,6 +378,41 @@ func TestWatchdogEntryIsRegisteredWhateverTheUnattendedSwitchSays(t *testing.T) 
 	}
 }
 
+// 桌面端那枚开关就是条目自己的开关：关掉必须**记住**（写 optOut），否则下次启动的收敛会把条目
+// 重新登记回来——界面上就表现成"关了自己又开"。
+func TestDesktopToggleIsTheEntrysOwnSwitch(t *testing.T) {
+	if !watchdogSupportedPlatform() {
+		t.Skip("this platform has no OS entry to register")
+	}
+	calls, _ := watchdogTestHarness(t)
+	app := &App{}
+
+	if _, err := app.SetWatchdogEnabled(true); err != nil {
+		t.Fatalf("turning crash recovery on must apply: %v", err)
+	}
+	if !watchdogEntryWanted(readWatchdogPolicy()) || !calls.created {
+		t.Fatal("turning it on must clear the opt-out and register")
+	}
+	// 失败的那条路：这一枚开关只碰条目，绝不碰登录项那个 enabled。
+	if policy := readWatchdogPolicy(); policy.Enabled {
+		t.Fatalf("the watchdog switch must not touch the login item's enabled, got %+v", policy)
+	}
+
+	calls.created = false
+	if _, err := app.SetWatchdogEnabled(false); err != nil {
+		t.Fatalf("turning crash recovery off must apply: %v", err)
+	}
+	if watchdogEntryWanted(readWatchdogPolicy()) {
+		t.Fatal("turning it off must record the opt-out")
+	}
+	// 关键：记下了 optOut，所以下一次启动的收敛不会把它拉回来。
+	calls.created = false
+	convergeWatchdogEntry()
+	if calls.created {
+		t.Fatal("a start must not re-register an entry this switch turned off")
+	}
+}
+
 func TestWatchdogSyncSkipsWithoutAnInstallToWatch(t *testing.T) {
 	t.Setenv("REASONIX_DEV", "")
 	if watchdogSyncSkipReason("") == "" || watchdogSyncSkipReason("   ") == "" {

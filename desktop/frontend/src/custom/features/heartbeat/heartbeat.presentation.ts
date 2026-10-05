@@ -6,6 +6,8 @@ import { heartbeatNextRunAt as calendarHeartbeatNextRunAt, parseCalendarSchedule
 // 别处看不见的状态（宿主侧同时会写一条日志，见 desktop/heartbeat.go）。
 export interface UnattendedWatchdogState {
   supported?: boolean;
+  /** 看门狗**自己的**开关（opt-out 的反面）：与总开关无关，见 docs/UNATTENDED.md §10。 */
+  policy?: boolean;
   registered: boolean;
   lastError?: string;
   note?: string;
@@ -22,6 +24,21 @@ export function watchdogHold(state: UnattendedWatchdogState | null | undefined):
   if (state.lastError) return state.lastError;
   if (!state.registered) return state.note || "the OS entry is not registered";
   return "";
+}
+
+// 与总开关并列的那一枚开关的呈现：on = 这条 OS 条目"想要"（没被显式退出）。关掉它的代价
+// 必须写在提示里 —— 宿主崩溃后没人拉它回来，手机也就够不到那台机器；这不该留给用户猜。
+export function watchdogTogglePresentation(state: UnattendedWatchdogState | null | undefined): {
+  on: boolean;
+  stateKey: HeartbeatTranslationKey;
+  hintKey: HeartbeatTranslationKey;
+  hintParams?: Record<string, string>;
+} {
+  const on = !!state && state.policy !== false;
+  if (!on) return { on, stateKey: "heartbeat.watchdogOff", hintKey: "heartbeat.watchdogOffHint" };
+  const why = watchdogHold(state);
+  if (why) return { on, stateKey: "heartbeat.watchdogOn", hintKey: "heartbeat.watchdogHeldHint", hintParams: { reason: why } };
+  return { on, stateKey: "heartbeat.watchdogOn", hintKey: "heartbeat.watchdogOnHint" };
 }
 
 export function unattendedPresentation(state: { on: boolean; budgeted: boolean; driving?: boolean; hold?: string; watchdog?: UnattendedWatchdogState | null }): {
