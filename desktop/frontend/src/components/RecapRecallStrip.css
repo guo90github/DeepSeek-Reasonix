@@ -91,3 +91,16 @@
   color: var(--fg-dim);
   opacity: 0.9;
 }
+
+/* The ask a turn recalled for: bounded and dim, so a long question cannot push the
+   fingerprint rows around. */
+.recap-recall__query {
+  display: inline-block;
+  max-width: 42ch;
+  overflow: hidden;
+  color: var(--fg-dim);
+  opacity: 0.85;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}

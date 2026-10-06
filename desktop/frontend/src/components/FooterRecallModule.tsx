@@ -146,6 +146,7 @@ export function FooterRecallModule({ tabId }: FooterPanelModuleProps) {
     }
     const turnLabel = t("history.recallStripTurn", { turn: String(turn.turnSeq) });
     const notes = [
+    turn.queryExcerpt ? `「${turn.queryExcerpt}」` : "",
       turn.omitted !== undefined && turn.omitted > 0 ? t("history.recallStripOmitted", { n: String(turn.omitted) }) : "",
       turn.suppressed !== undefined && turn.suppressed !== "" ? t("history.recallStripSuppressed", { reason: turn.suppressed }) : "",
     ].filter((part) => part !== "");

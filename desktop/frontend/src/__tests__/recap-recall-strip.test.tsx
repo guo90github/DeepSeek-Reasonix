@@ -93,7 +93,9 @@ await renderStrip(record);
 const head = host?.querySelector<HTMLButtonElement>(".recap-recall__head");
 ok(head !== null, "the strip offers a fold control");
 ok(head?.getAttribute("aria-expanded") === "false", "it starts folded");
+
 const summary = head?.textContent ?? "";
+
 // The record's own tri-state: mem-b carries no injected field, which is an
 // unrecorded decision — counting it as dropped is the bug this pins.
 ok(
@@ -143,6 +145,19 @@ const css = readFileSync("src/components/RecapRecallStrip.css", "utf8").replace(
 for (const retired of ["--fg-muted", "--bg-elev-1", "--hover", "--border-strong", "--shadow"]) {
   ok(!css.includes(retired), `the strip stylesheet avoids the retired token ${retired}`);
 }
+
+// A polluted turn has to be traceable to the ask it recalled for.
+await renderStrip({
+  ...record,
+  turns: (record.turns ?? []).map((turn) => ({ ...turn, queryExcerpt: "把支付部署到绿色集群" })),
+});
+// The turn rows only exist once the strip is open.
+const queryHead = host?.querySelector<HTMLButtonElement>(".recap-recall__head");
+await act(async () => {
+  queryHead?.click();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+});
+ok((host?.textContent ?? "").includes("把支付部署到绿色集群"), "a turn shows the ask it recalled for");
 
 process.stdout.write(`\nrecap recall strip: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

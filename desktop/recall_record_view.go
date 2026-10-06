@@ -23,11 +23,13 @@ type RecallTurnView struct {
 	TurnSeq   int    `json:"turnSeq"`
 	QueryHash string `json:"queryHash,omitempty"`
 	// SnapshotDigest is the session-context fingerprint the turn ran against.
-	SnapshotDigest string          `json:"snapshotDigest,omitempty"`
-	UsedChars      int             `json:"usedChars,omitempty"`
-	Omitted        int             `json:"omitted,omitempty"`
-	Suppressed     string          `json:"suppressed,omitempty"`
-	Hits           []RecallHitView `json:"hits,omitempty"`
+	SnapshotDigest string `json:"snapshotDigest,omitempty"`
+	// QueryExcerpt is the ask this turn recalled for, one line at most.
+	QueryExcerpt string          `json:"queryExcerpt,omitempty"`
+	UsedChars    int             `json:"usedChars,omitempty"`
+	Omitted      int             `json:"omitted,omitempty"`
+	Suppressed   string          `json:"suppressed,omitempty"`
+	Hits         []RecallHitView `json:"hits,omitempty"`
 }
 
 // RecallHitView is one fact's fingerprint in a turn; Injected separates the facts
@@ -100,8 +102,9 @@ func recallRecordView(meta agent.BranchMeta, path string) RecallRecordView {
 	view := RecallRecordView{SessionPath: path, DroppedTurns: meta.MemoryRecallDropped}
 	for _, turn := range meta.MemoryRecall {
 		out := RecallTurnView{
-			TurnSeq: turn.TurnSeq, QueryHash: turn.QueryHash, UsedChars: turn.UsedChars,
-			Omitted: turn.Omitted, Suppressed: turn.Suppressed, SnapshotDigest: turn.SnapshotDigest,
+			TurnSeq: turn.TurnSeq, QueryHash: turn.QueryHash, QueryExcerpt: turn.QueryExcerpt,
+			UsedChars: turn.UsedChars,
+			Omitted:   turn.Omitted, Suppressed: turn.Suppressed, SnapshotDigest: turn.SnapshotDigest,
 		}
 		for _, hit := range turn.Hits {
 			out.Hits = append(out.Hits, RecallHitView{

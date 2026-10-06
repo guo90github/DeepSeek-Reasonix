@@ -89,6 +89,7 @@ export function RecapRecallStrip({
             <div key={`turn:${turn.turnSeq}`} className="recap-recall__turn">
               <div className="recap-recall__turn-head">
                 {t("history.recallStripTurn", { turn: String(turn.turnSeq) })}
+                {turn.queryExcerpt ? <span className="recap-recall__query">「{turn.queryExcerpt}」</span> : null}
                 {turn.omitted !== undefined && turn.omitted > 0
                   ? ` · ${t("history.recallStripOmitted", { n: String(turn.omitted) })}`
                   : ""}
