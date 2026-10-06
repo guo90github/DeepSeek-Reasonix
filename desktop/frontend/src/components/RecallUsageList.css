@@ -1,0 +1,46 @@
+/* 第十六 全局级: one row per fact memory actually used in this workspace. Read-only
+   history, so it borrows the panel's row vocabulary and adds no colour of its own
+   except the one warn chip that marks a superseded revision. */
+
+.mem-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.mem-usage__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.mem-usage__label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fg);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mem-usage__meta {
+  flex: 0 0 auto;
+  color: var(--fg-dim);
+  opacity: 0.9;
+}
+
+/* The chip vocabulary is global; only its warn variant is coloured here, so the
+   panel's own colours stay untouched. */
+.mem-usage .chip {
+  flex: 0 0 auto;
+  height: auto;
+  padding: 0 6px;
+  font-size: 11px;
+}
+
+.mem-usage .chip--warn {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+}

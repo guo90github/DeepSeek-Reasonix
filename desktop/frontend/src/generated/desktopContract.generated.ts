@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:b9947a2f064ac3e37d56b6ac1745820781be68fe6a6ff6e60ceb0909bc9fa7ba";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:7504da8be716459fddbc96defe4a1d604153bbda45b083bd9a52ef168b83caea";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -330,6 +330,7 @@ export const DESKTOP_COMMANDS = [
   "RebuildTaskCatalog",
   "RecallRecordForSession",
   "RecallRecordForTab",
+  "RecallUsageForTab",
   "ReclaimRemoteTabSession",
   "ReconcileRecoveryVersions",
   "ReconnectMCPServer",
@@ -3179,6 +3180,29 @@ export interface RecallTurnView {
   hits?: RecallHitView[];
 }
 
+export interface RecallUsage {
+  available: boolean;
+  sessions?: number;
+  facts?: RecallUsageFact[];
+  truncated?: boolean;
+}
+
+export interface RecallUsageFact {
+  id: string;
+  name?: string;
+  description?: string;
+  uses: number;
+  injected: number;
+  dropped: number;
+  unrecorded?: number;
+  lastTurnSeq?: number;
+  lastSession?: string;
+  usedRevision?: number;
+  currentRevision?: number;
+  superseded?: boolean;
+  live: boolean;
+}
+
 export interface RecapOpenItemView {
   id: string;
   body: string;
@@ -5003,6 +5027,7 @@ export interface GeneratedDesktopCommands {
   RebuildTaskCatalog(): Promise<void>;
   RecallRecordForSession(arg0: string): Promise<RecallRecordView>;
   RecallRecordForTab(arg0: string): Promise<RecallRecordView>;
+  RecallUsageForTab(arg0: string): Promise<RecallUsage>;
   ReclaimRemoteTabSession(arg0: string): Promise<void>;
   ReconcileRecoveryVersions(arg0: ProjectTopicKey): Promise<void>;
   ReconnectMCPServer(arg0: string): Promise<void>;

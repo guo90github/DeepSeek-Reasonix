@@ -8506,6 +8506,31 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/recall_usage.go",
+      "name": "RecallUsageForTab",
+      "owner": "App.RecallUsageForTab",
+      "params": [
+        {
+          "kind": "string"
+        }
+      ],
+      "result": {
+        "kind": "object",
+        "ref": "main.RecallUsage"
+      },
+      "scope": {
+        "inputs": [
+          "tabID"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.RecallUsageForTab"
+      },
+      "sources": [
+        "desktop/recall_usage.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/remote_tab.go",
       "name": "ReclaimRemoteTabSession",
       "owner": "App.ReclaimRemoteTabSession",
@@ -30085,6 +30110,131 @@
               "ref": "main.RecallHitView"
             },
             "kind": "array"
+          }
+        }
+      ]
+    },
+    "main.RecallUsage": {
+      "fields": [
+        {
+          "name": "available",
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "sessions",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "facts",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.RecallUsageFact"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "truncated",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        }
+      ]
+    },
+    "main.RecallUsageFact": {
+      "fields": [
+        {
+          "name": "id",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "name",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "description",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "uses",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "injected",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "dropped",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "unrecorded",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "lastTurnSeq",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "lastSession",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "usedRevision",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "currentRevision",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "superseded",
+          "optional": true,
+          "type": {
+            "kind": "boolean"
+          }
+        },
+        {
+          "name": "live",
+          "type": {
+            "kind": "boolean"
           }
         }
       ]

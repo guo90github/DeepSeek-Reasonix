@@ -4573,6 +4573,20 @@
       ]
     }
   },
+  "RecallUsageForTab": {
+    "domain": "desktop/recall_usage.go",
+    "owner": "App.RecallUsageForTab",
+    "sources": [
+      "desktop/recall_usage.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.RecallUsageForTab",
+      "inputs": [
+        "tabID"
+      ]
+    }
+  },
   "ReclaimRemoteTabSession": {
     "domain": "desktop/remote_tab.go",
     "owner": "App.ReclaimRemoteTabSession",

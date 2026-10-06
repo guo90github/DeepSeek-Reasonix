@@ -1,7 +1,7 @@
 import { makeMockModelSettingsBindings, type ModelSettingsBindings } from "./modelSettingsBridge";
 import { mockProviderTemplate, mockPreset, mockBundlePreset, mockKimiAPIModels, mockLongCatModels, mockTokenRhythmModels, mockTokenRhythmModelOverrides, mockMiMoV25Models, mockMiniMaxModels, mockGLMAPIModels, mockGLMCodingModels, mockGLMAnthropicModels, mockQwenAPIModels, mockQwenPlanModels, mockQwenPlanVisionModels, mockStepFunModels, mockOpenCodeGoModels, mockNovitaModels, mockGMIModels, mockVercelModels, mockOllamaCloudModels } from "./mockProviderTemplates";
 // The Electron host and the browser mock share this React-to-Go contract.
-import type { DesktopCommandName, RecallRecordView } from "../generated/desktopContract.generated";
+import type { DesktopCommandName, RecallRecordView, RecallUsage } from "../generated/desktopContract.generated";
 import type { InvocationRequest } from "./invocationDisplay";
 import type { FollowupBindings } from "./pendingFollowup";
 import { addBreadcrumb } from "./breadcrumbs";
@@ -589,6 +589,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   Memory(): Promise<MemoryView>;
   RecallRecordForTab(tabID: string): Promise<RecallRecordView>;
   RecallRecordForSession(sessionPath: string): Promise<RecallRecordView>;
+  RecallUsageForTab(tabID: string): Promise<RecallUsage>;
   MemorySuggestions(): Promise<MemorySuggestionsView>;
   AcceptMemorySuggestion(suggestion: MemorySuggestion): Promise<string>;
   AcceptSkillSuggestion(suggestion: SkillSuggestion): Promise<string>;
@@ -4465,6 +4466,9 @@ function makeMockApp(): AppBindings {
       return { available: false };
     },
     async RecallRecordForSession(_sessionPath: string) {
+      return { available: false };
+    },
+    async RecallUsageForTab(_tabID: string) {
       return { available: false };
     },
     async MemoryRevisions(_ref: string) {

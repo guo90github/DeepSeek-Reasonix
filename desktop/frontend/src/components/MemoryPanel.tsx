@@ -8,6 +8,7 @@ import { AnchoredPopover } from "./AnchoredPopover";
 import { ResizableDrawer } from "./ResizableDrawer";
 import { Tooltip } from "./Tooltip";
 import { ModalCloseButton } from "./ModalCloseButton";
+import { RecallUsageList } from "./RecallUsageList";
 import { RecapRecallStrip } from "./RecapRecallStrip";
 import {
   archiveKey,
@@ -1528,6 +1529,9 @@ export function MemorySettingsPage() {
 						<span>{t("memory.recallBudget", { used: view.lastRecall.usedChars, budget: view.lastRecall.charBudget, omitted: view.lastRecall.omitted })}</span>
 					</div>
 				</div>
+				{/* 第十六 全局级 (docs/50 §2.2): the same record aggregated by fact across
+				    this workspace's sessions, so a superseded conclusion surfaces here. */}
+				{effectiveTabId && <RecallUsageList tabId={effectiveTabId} />}
 				{/* 第十六: the turn-by-turn record (which facts reached the model, which
 				    were dropped, which skill ran) in the panel the requirement names. */}
 				{effectiveTabId && <RecapRecallStrip load={() => app.RecallRecordForTab(effectiveTabId)} facts={facts} />}
