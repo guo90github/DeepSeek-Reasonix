@@ -109,5 +109,23 @@ const failing = await render(async () => {
 });
 ok(failing.text === "", "a failed read renders nothing rather than an error");
 
+
+// 第十六 全局级: the other half of the record — a query that keeps being asked.
+const withQueries = await render(async () => ({
+  available: true,
+  sessions: 2,
+  facts: [{ id: "mem-a", name: "a-fact", uses: 3, injected: 0, dropped: 3, live: true }],
+  queries: [
+    { hash: "aaaa11111111", turns: 3, sessions: 2, injected: 0, dropped: 3, facts: ["mem-a"] },
+    { hash: "bbbb22222222", turns: 4, sessions: 1, injected: 4, dropped: 0, facts: ["mem-b"] },
+  ],
+}));
+ok(withQueries.text.includes("重复提问"), "a repeated query gets its own section");
+ok(withQueries.text.includes("aaaa1111"), "a query row leads with its hash");
+ok(withQueries.text.includes("问过 3 次 · 跨 2 个会话"), "a query row counts turns and sessions");
+ok(
+  withQueries.html.split("chip--warn").length - 1 === 1,
+  "only the query that never injected carries the warn chip",
+);
 process.stdout.write(`\nrecall usage list: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

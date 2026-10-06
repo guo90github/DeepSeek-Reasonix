@@ -75,3 +75,47 @@ func TestRecallUsageWithoutRecordsIsUnavailable(t *testing.T) {
 		t.Fatalf("view = %+v, want a session without records to contribute nothing", view)
 	}
 }
+
+// docs/50 §2.2 全局级: a query that keeps being asked is the other half of the
+// record — the same question recalling the same fact and never injecting it says
+// the fact's own words do not match how the question is asked.
+func TestRecallUsageReportsRepeatedQueries(t *testing.T) {
+	dir := t.TempDir()
+	newer := filepath.Join(dir, "newer.jsonl")
+	older := filepath.Join(dir, "older.jsonl")
+	once := filepath.Join(dir, "once.jsonl")
+	writeTurn := func(path, hash string, turnSeq int, injected bool) {
+		t.Helper()
+		if err := agent.UpdateBranchMeta(path, false, func(meta *agent.BranchMeta) error {
+			agent.AppendMemoryRecallTurn(meta, agent.MemoryRecallTurn{
+				TurnSeq: turnSeq, QueryHash: hash,
+				Hits: []agent.MemoryRecallTurnHit{{ID: "mem-a", Revision: 1, Injected: recallInjectedPtr(injected)}},
+			})
+			return nil
+		}); err != nil {
+			t.Fatalf("UpdateBranchMeta %s: %v", path, err)
+		}
+	}
+	writeTurn(older, "aaaa1111", 4, false)
+	writeTurn(newer, "aaaa1111", 2, false)
+	writeTurn(newer, "aaaa1111", 9, false) // the same session asks again later
+	writeTurn(once, "bbbb2222", 5, true)
+
+	view := recallUsageForSessions([]SessionMeta{{Path: newer}, {Path: older}, {Path: once}}, nil)
+	if len(view.Queries) != 1 {
+		t.Fatalf("queries = %+v, want only the repeated query reported", view.Queries)
+	}
+	query := view.Queries[0]
+	if query.Hash != "aaaa1111" || query.Turns != 3 || query.Sessions != 2 {
+		t.Fatalf("query = %+v, want three turns across two sessions", query)
+	}
+	if query.Dropped != 3 || query.Injected != 0 {
+		t.Fatalf("query = %+v, want every hit dropped", query)
+	}
+	if query.LastTurnSeq != 9 || query.LastSession != newer {
+		t.Fatalf("query = %+v, want the latest turn of the newest session", query)
+	}
+	if len(query.Facts) != 1 || query.Facts[0] != "mem-a" {
+		t.Fatalf("query = %+v, want the fact it kept matching", query)
+	}
+}

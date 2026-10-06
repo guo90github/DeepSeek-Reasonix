@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:7504da8be716459fddbc96defe4a1d604153bbda45b083bd9a52ef168b83caea";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:b1b05c782d5a42ea6c8c3d166c0cecf37a051d24503c46eb3ffe6f9d92f140b0";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3162,6 +3162,18 @@ export interface RecallHitView {
   injected?: boolean | null;
 }
 
+export interface RecallQueryUsage {
+  hash: string;
+  turns: number;
+  sessions: number;
+  injected: number;
+  dropped: number;
+  unrecorded?: number;
+  lastTurnSeq?: number;
+  lastSession?: string;
+  facts?: string[];
+}
+
 export interface RecallRecordView {
   available: boolean;
   sessionPath?: string;
@@ -3184,6 +3196,7 @@ export interface RecallUsage {
   available: boolean;
   sessions?: number;
   facts?: RecallUsageFact[];
+  queries?: RecallQueryUsage[];
   truncated?: boolean;
 }
 

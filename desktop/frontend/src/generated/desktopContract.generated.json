@@ -30012,6 +30012,71 @@
         }
       ]
     },
+    "main.RecallQueryUsage": {
+      "fields": [
+        {
+          "name": "hash",
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "turns",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "sessions",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "injected",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "dropped",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "unrecorded",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "lastTurnSeq",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "lastSession",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "facts",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "string"
+            },
+            "kind": "array"
+          }
+        }
+      ]
+    },
     "main.RecallRecordView": {
       "fields": [
         {
@@ -30136,6 +30201,17 @@
             "elem": {
               "kind": "object",
               "ref": "main.RecallUsageFact"
+            },
+            "kind": "array"
+          }
+        },
+        {
+          "name": "queries",
+          "optional": true,
+          "type": {
+            "elem": {
+              "kind": "object",
+              "ref": "main.RecallQueryUsage"
             },
             "kind": "array"
           }
