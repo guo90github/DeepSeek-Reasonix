@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { MemoryFact, RecallRecordView } from "../generated/desktopContract.generated";
 import { useT } from "../lib/i18n";
-import { buildRecallLabels } from "../lib/recallLabels";
+import {  countRecallHitStates, recallHitState, recallHitStateKey,buildRecallLabels } from "../lib/recallLabels";
 import "./RecapRecallStrip.css";
 
 /**
@@ -58,19 +58,19 @@ export function RecapRecallStrip({
   if (record === null || record.available !== true) return null;
   const turns = record.turns ?? [];
   const skills = record.skills ?? [];
-  let injected = 0;
-  let dropped = 0;
-  for (const turn of turns) {
-    for (const hit of turn.hits ?? []) {
-      if (hit.injected === true) injected += 1;
-      else dropped += 1;
-    }
-  }
-  const summary = t("history.recallStripSummary", {
-    injected: String(injected),
-    dropped: String(dropped),
+  const counts = countRecallHitStates(turns);
+  const trimmed = record.droppedTurns ?? 0;
+  let summary = t("history.recallStripSummary", {
+    injected: String(counts.injected),
+    dropped: String(counts.dropped),
     skills: String(skills.length),
   });
+  if (counts.unrecorded > 0) {
+    summary += ` · ${t("history.recallStripUnrecordedCount", { n: String(counts.unrecorded) })}`;
+  }
+  if (trimmed > 0) {
+    summary += ` · ${t("history.recallStripTrimmed", { n: String(trimmed) })}`;
+  }
 
   return (
     <div className="recap-recall">
@@ -113,9 +113,7 @@ export function RecapRecallStrip({
                       {hit.id}
                     </span>
                     <span className="recap-recall__meta">
-                      {`r${hit.revision ?? 1} · ${(hit.score ?? 0).toFixed(2)} · ${t(
-                        hit.injected === true ? "history.recallStripInjected" : "history.recallStripDropped",
-                      )}`}
+                      {`r${hit.revision ?? 1} · ${(hit.score ?? 0).toFixed(2)} · ${t(recallHitStateKey(recallHitState(hit)))}`}
                     </span>
                   </div>
                 );

@@ -29934,6 +29934,27 @@
           }
         },
         {
+          "name": "scope",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "type",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "freshness",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "revision",
           "optional": true,
           "type": {
@@ -29951,7 +29972,10 @@
           "name": "injected",
           "optional": true,
           "type": {
-            "kind": "boolean"
+            "elem": {
+              "kind": "boolean"
+            },
+            "kind": "nullable"
           }
         }
       ]
@@ -29969,6 +29993,13 @@
           "optional": true,
           "type": {
             "kind": "string"
+          }
+        },
+        {
+          "name": "droppedTurns",
+          "optional": true,
+          "type": {
+            "kind": "integer"
           }
         },
         {
@@ -30005,6 +30036,13 @@
         },
         {
           "name": "queryHash",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
+          "name": "snapshotDigest",
           "optional": true,
           "type": {
             "kind": "string"

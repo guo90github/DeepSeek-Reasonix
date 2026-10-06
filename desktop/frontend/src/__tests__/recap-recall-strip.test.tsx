@@ -94,8 +94,12 @@ const head = host?.querySelector<HTMLButtonElement>(".recap-recall__head");
 ok(head !== null, "the strip offers a fold control");
 ok(head?.getAttribute("aria-expanded") === "false", "it starts folded");
 const summary = head?.textContent ?? "";
-ok(summary.includes("3") && summary.includes("1") && summary.includes("2"),
-  `the folded line counts 3 injected, 1 dropped and 2 skills: ${summary}`);
+// The record's own tri-state: mem-b carries no injected field, which is an
+// unrecorded decision — counting it as dropped is the bug this pins.
+ok(
+  summary.includes("召回 3 条") && summary.includes("被挤掉 0 条") && summary.includes("另有 1 条未记录"),
+  `the folded line separates a recorded drop from an unrecorded decision: ${summary}`,
+);
 ok(host?.querySelector(".recap-recall__body") === null, "a folded strip lists no fingerprints");
 ok((host?.textContent ?? "").includes(SENTINEL) === false, "the folded view carries no body text");
 
@@ -108,6 +112,13 @@ const body = host?.querySelector(".recap-recall__body");
 ok(body !== null, "the expanded strip lists the record");
 const fingerprints = [...(host?.querySelectorAll(".recap-recall__fingerprint") ?? [])].map((node) => node.textContent ?? "");
 ok(["mem-a", "mem-b", "mem-c", "mem-d"].every((id) => fingerprints.includes(id)), "every hit is listed by id");
+const unrecordedRow = Array.from(host?.querySelectorAll(".recap-recall__hit") ?? []).find((row) =>
+  (row.textContent ?? "").includes("mem-b"),
+);
+ok(
+  (unrecordedRow?.textContent ?? "").includes("未记录"),
+  "the row for an unrecorded decision says so instead of reading as dropped",
+);
 ok(fingerprints.includes("hot") && fingerprints.includes("warm"), "every skill is listed by name");
 const meta = [...(host?.querySelectorAll(".recap-recall__meta") ?? [])].map((node) => node.textContent ?? "").join(" | ");
 ok(meta.includes("r2") && meta.includes("0.90"), "a hit shows its revision and score");

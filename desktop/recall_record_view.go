@@ -11,20 +11,23 @@ import (
 // It carries each hit's id, counters, digests and short label — never a fact's
 // body — so the review page can render it without a live controller.
 type RecallRecordView struct {
-	Available   bool             `json:"available"`
-	SessionPath string           `json:"sessionPath,omitempty"`
-	Turns       []RecallTurnView `json:"turns,omitempty"`
-	Skills      []SkillUseView   `json:"skills,omitempty"`
+	Available    bool             `json:"available"`
+	SessionPath  string           `json:"sessionPath,omitempty"`
+	DroppedTurns int              `json:"droppedTurns,omitempty"`
+	Turns        []RecallTurnView `json:"turns,omitempty"`
+	Skills       []SkillUseView   `json:"skills,omitempty"`
 }
 
 // RecallTurnView is one turn's recall decision.
 type RecallTurnView struct {
-	TurnSeq    int             `json:"turnSeq"`
-	QueryHash  string          `json:"queryHash,omitempty"`
-	UsedChars  int             `json:"usedChars,omitempty"`
-	Omitted    int             `json:"omitted,omitempty"`
-	Suppressed string          `json:"suppressed,omitempty"`
-	Hits       []RecallHitView `json:"hits,omitempty"`
+	TurnSeq   int    `json:"turnSeq"`
+	QueryHash string `json:"queryHash,omitempty"`
+	// SnapshotDigest is the session-context fingerprint the turn ran against.
+	SnapshotDigest string          `json:"snapshotDigest,omitempty"`
+	UsedChars      int             `json:"usedChars,omitempty"`
+	Omitted        int             `json:"omitted,omitempty"`
+	Suppressed     string          `json:"suppressed,omitempty"`
+	Hits           []RecallHitView `json:"hits,omitempty"`
 }
 
 // RecallHitView is one fact's fingerprint in a turn; Injected separates the facts
@@ -32,12 +35,15 @@ type RecallTurnView struct {
 // short label so a reader can tell the ids apart. Records written before the label
 // existed carry neither, so the page falls back to the id.
 type RecallHitView struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name,omitempty"`
-	Title    string  `json:"title,omitempty"`
-	Revision int     `json:"revision,omitempty"`
-	Score    float64 `json:"score,omitempty"`
-	Injected bool    `json:"injected,omitempty"`
+	ID        string  `json:"id"`
+	Name      string  `json:"name,omitempty"`
+	Title     string  `json:"title,omitempty"`
+	Scope     string  `json:"scope,omitempty"`
+	Type      string  `json:"type,omitempty"`
+	Freshness string  `json:"freshness,omitempty"`
+	Revision  int     `json:"revision,omitempty"`
+	Score     float64 `json:"score,omitempty"`
+	Injected  *bool   `json:"injected,omitempty"`
 }
 
 // SkillUseView is one skill invocation's fingerprint.
@@ -89,15 +95,16 @@ func (a *App) recallRecordForSessionPath(path string) RecallRecordView {
 
 // recallRecordView converts one session's sidecar records for the review page.
 func recallRecordView(meta agent.BranchMeta, path string) RecallRecordView {
-	view := RecallRecordView{SessionPath: path}
+	view := RecallRecordView{SessionPath: path, DroppedTurns: meta.MemoryRecallDropped}
 	for _, turn := range meta.MemoryRecall {
 		out := RecallTurnView{
 			TurnSeq: turn.TurnSeq, QueryHash: turn.QueryHash, UsedChars: turn.UsedChars,
-			Omitted: turn.Omitted, Suppressed: turn.Suppressed,
+			Omitted: turn.Omitted, Suppressed: turn.Suppressed, SnapshotDigest: turn.SnapshotDigest,
 		}
 		for _, hit := range turn.Hits {
 			out.Hits = append(out.Hits, RecallHitView{
 				ID: hit.ID, Name: hit.Name, Title: hit.Title,
+				Scope: hit.Scope, Type: hit.Type, Freshness: hit.Freshness,
 				Revision: hit.Revision, Score: hit.Score, Injected: hit.Injected,
 			})
 		}

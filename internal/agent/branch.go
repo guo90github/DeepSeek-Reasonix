@@ -55,13 +55,15 @@ type BranchMeta struct {
 	VersionState         SessionVersionState `json:"version_state,omitempty"`
 	ParentConversationID string              `json:"parent_conversation_id,omitempty"`
 	MemoryRecall         []MemoryRecallTurn  `json:"memory_recall,omitempty"`
-	SkillUse             []SkillUseRecord    `json:"skill_use,omitempty"`
-	TurnOutcome          []TurnOutcome       `json:"turn_outcome,omitempty"`
-	ParentVersionID      string              `json:"parent_version_id,omitempty"`
-	BaseRevision         int64               `json:"base_revision,omitempty"`
-	DiskRevision         int64               `json:"disk_revision,omitempty"`
-	RecoveryReason       string              `json:"recovery_reason,omitempty"`
-	RecoveryDigest       string              `json:"recovery_digest,omitempty"`
+	// MemoryRecallDropped counts turns trimmed off the front of MemoryRecall.
+	MemoryRecallDropped int              `json:"memory_recall_dropped,omitempty"`
+	SkillUse            []SkillUseRecord `json:"skill_use,omitempty"`
+	TurnOutcome         []TurnOutcome    `json:"turn_outcome,omitempty"`
+	ParentVersionID     string           `json:"parent_version_id,omitempty"`
+	BaseRevision        int64            `json:"base_revision,omitempty"`
+	DiskRevision        int64            `json:"disk_revision,omitempty"`
+	RecoveryReason      string           `json:"recovery_reason,omitempty"`
+	RecoveryDigest      string           `json:"recovery_digest,omitempty"`
 	// RecoveryDepth is 1 for new stable recovery branches. Older nested
 	// files may still carry a larger historical value.
 	RecoveryDepth int `json:"recovery_depth,omitempty"`

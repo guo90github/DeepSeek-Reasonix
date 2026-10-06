@@ -15,6 +15,9 @@ func TestAppendMemoryRecallTurnCapsAndReplaces(t *testing.T) {
 	if meta.MemoryRecall[0].TurnSeq != 6 {
 		t.Fatalf("oldest kept turn = %d, want the oldest five dropped", meta.MemoryRecall[0].TurnSeq)
 	}
+	if meta.MemoryRecallDropped != 5 {
+		t.Fatalf("dropped count = %d, want the five trimmed turns counted", meta.MemoryRecallDropped)
+	}
 
 	last := meta.MemoryRecall[len(meta.MemoryRecall)-1].TurnSeq
 	AppendMemoryRecallTurn(meta, MemoryRecallTurn{TurnSeq: last, UsedChars: 5, Suppressed: "first"})

@@ -13,7 +13,7 @@ import { ChevronDown } from "lucide-react";
 import type { MemoryFact, RecallRecordView } from "../generated/desktopContract.generated";
 import { app } from "../lib/bridge";
 import { useT } from "../lib/i18n";
-import { buildRecallLabels } from "../lib/recallLabels";
+import { buildRecallLabels, countRecallHitStates, recallHitState, recallHitStateKey } from "../lib/recallLabels";
 import { FooterPanelSection, type FooterPanelModuleProps } from "./FooterPanel";
 import { PanelRowButton, type PanelDetail } from "./FooterPanelDetail";
 
@@ -112,7 +112,7 @@ export function FooterRecallModule({ tabId }: FooterPanelModuleProps) {
       turnSeq: turn.turnSeq,
       label,
       fingerprint: label === hit.id ? null : hit.id,
-      state: t(hit.injected === true ? "history.recallStripInjected" : "history.recallStripDropped"),
+      state: t(recallHitStateKey(recallHitState(hit))),
       detail: {
         title: label,
         meta: [
@@ -120,7 +120,7 @@ export function FooterRecallModule({ tabId }: FooterPanelModuleProps) {
           hit.id,
           `r${hit.revision ?? 1}`,
           (hit.score ?? 0).toFixed(2),
-          t(hit.injected === true ? "history.recallStripInjected" : "history.recallStripDropped"),
+          t(recallHitStateKey(recallHitState(hit))),
           ...(liveBody === "" ? [] : [t("footerPanel.recallLiveFact")]),
         ],
         body: liveBody === "" ? hit.id : liveBody,
@@ -131,12 +131,17 @@ export function FooterRecallModule({ tabId }: FooterPanelModuleProps) {
   };
 
   const rows: RecallRow[] = [];
-  let injected = 0;
-  let dropped = 0;
+  const counts = countRecallHitStates(record.turns ?? []);
+  const trimmed = record.droppedTurns ?? 0;
+  let summary = t("history.recallStripSummary", {
+    injected: String(counts.injected),
+    dropped: String(counts.dropped),
+    skills: String((record.skills ?? []).length),
+  });
+  if (counts.unrecorded > 0) summary += ` · ${t("history.recallStripUnrecordedCount", { n: String(counts.unrecorded) })}`;
+  if (trimmed > 0) summary += ` · ${t("history.recallStripTrimmed", { n: String(trimmed) })}`;
   for (const turn of record.turns ?? []) {
     for (const hit of turn.hits ?? []) {
-      if (hit.injected === true) injected += 1;
-      else dropped += 1;
       rows.push(hitRow(turn, hit));
     }
     const turnLabel = t("history.recallStripTurn", { turn: String(turn.turnSeq) });
@@ -173,13 +178,7 @@ export function FooterRecallModule({ tabId }: FooterPanelModuleProps) {
     <FooterPanelSection title="memory.activity">
       <div className="footer-recall">
         <div className="footer-panel__bar">
-          <span>
-            {t("history.recallStripSummary", {
-              injected: String(injected),
-              dropped: String(dropped),
-              skills: String(skills.length),
-            })}
-          </span>
+          <span>{summary}</span>
         </div>
         <ul className="footer-recall__list">
           {shown.map((row) =>

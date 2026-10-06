@@ -11,6 +11,7 @@ import (
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
 	"reasonix/internal/memory"
+	"reasonix/internal/sessioncontext"
 )
 
 // B1b (docs/50 §六): a remember call that cannot be auto-written must say why in
@@ -116,7 +117,10 @@ func TestRecallAuditCarriesTurnAndInjected(t *testing.T) {
 func TestRecallTurnLandsOnTheSessionSidecar(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "recall.jsonl")
-	c := New(Options{SessionDir: dir, SessionPath: path, Sink: event.Discard})
+	// A real turn always carries session-context sections, so seed one: the record
+	// must fingerprint a non-empty snapshot rather than pass vacuously.
+	c := New(Options{SessionDir: dir, SessionPath: path, Sink: event.Discard,
+		SessionContextStatic: sessioncontext.Sections{Environment: "os=windows"}})
 
 	c.recordMemoryRecallTurn(memory.RecallResult{
 		Query: "release branch", TurnSeq: 3, UsedChars: 40,
@@ -125,7 +129,10 @@ func TestRecallTurnLandsOnTheSessionSidecar(t *testing.T) {
 	// A second recall inside the same turn replaces the entry rather than adding one.
 	c.recordMemoryRecallTurn(memory.RecallResult{
 		Query: "release branch", TurnSeq: 3, UsedChars: 55, Suppressed: "budget",
-		Dropped: []memory.RecallHit{{Memory: memory.Memory{ID: "mem-c", Revision: 1}, Score: 0.3}},
+		Dropped: []memory.RecallHit{{
+			Memory: memory.Memory{ID: "mem-c", Revision: 1, Scope: memory.FactScopeProject, Type: memory.TypeProject},
+			Score:  0.3, Freshness: "stale",
+		}},
 	})
 
 	meta, ok, err := agent.LoadBranchMeta(path)
@@ -139,8 +146,14 @@ func TestRecallTurnLandsOnTheSessionSidecar(t *testing.T) {
 	if !ok || turn.TurnSeq != 3 || turn.UsedChars != 55 || turn.Suppressed != "budget" {
 		t.Fatalf("turn = %+v, want the later decision for turn 3", turn)
 	}
-	if len(turn.Hits) != 1 || turn.Hits[0].ID != "mem-c" || turn.Hits[0].Injected {
-		t.Fatalf("hits = %+v, want the dropped fingerprint only", turn.Hits)
+	if len(turn.Hits) != 1 || turn.Hits[0].ID != "mem-c" || turn.Hits[0].Injected == nil || *turn.Hits[0].Injected {
+		t.Fatalf("hits = %+v, want the dropped fingerprint marked not injected", turn.Hits)
+	}
+	if hit := turn.Hits[0]; hit.Scope != "project" || hit.Type != "project" || hit.Freshness != "stale" {
+		t.Fatalf("hit state = %+v, want the fact's own scope/type/freshness recorded", hit)
+	}
+	if turn.SnapshotDigest == "" {
+		t.Fatal("a recorded turn must carry the session-context digest it ran against")
 	}
 	if turn.QueryHash == "" || strings.Contains(turn.QueryHash, "release") {
 		t.Fatalf("query hash = %q, want a content-free hash", turn.QueryHash)

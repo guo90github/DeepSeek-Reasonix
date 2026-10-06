@@ -13,12 +13,14 @@ import (
 func TestRecallRecordViewCarriesFingerprintsOnly(t *testing.T) {
 	meta := agent.BranchMeta{
 		MemoryRecall: []agent.MemoryRecallTurn{{
-			TurnSeq: 4, QueryHash: "9f9f9f9f9f9f9f9f", UsedChars: 210, Omitted: 1,
+			TurnSeq: 4, QueryHash: "9f9f9f9f9f9f9f9f", UsedChars: 210, Omitted: 1, SnapshotDigest: "sha256:abc",
 			Hits: []agent.MemoryRecallTurnHit{
-				{ID: "mem-a", Revision: 2, Score: 0.9, Injected: true},
-				{ID: "mem-b", Revision: 1, Score: 0.4},
+				{ID: "mem-a", Revision: 2, Score: 0.9, Injected: recallInjectedPtr(true), Scope: "project", Type: "project", Freshness: "stale"},
+				{ID: "mem-b", Revision: 1, Score: 0.4, Injected: recallInjectedPtr(false)},
+				{ID: "mem-c", Revision: 1, Score: 0.2},
 			},
 		}},
+		MemoryRecallDropped: 7,
 		SkillUse: []agent.SkillUseRecord{{
 			TurnSeq: 4, Name: "hot", ContentHash: "abcdef0123456789", CatalogDigest: "0123456789abcdef",
 		}},
@@ -31,11 +33,27 @@ func TestRecallRecordViewCarriesFingerprintsOnly(t *testing.T) {
 	if len(view.Turns) != 1 || view.Turns[0].TurnSeq != 4 || view.Turns[0].UsedChars != 210 || view.Turns[0].Omitted != 1 {
 		t.Fatalf("turns = %+v, want the turn decision", view.Turns)
 	}
-	if len(view.Turns[0].Hits) != 2 {
-		t.Fatalf("hits = %+v, want served and dropped fingerprints", view.Turns[0].Hits)
+	if len(view.Turns[0].Hits) != 3 {
+		t.Fatalf("hits = %+v, want served, dropped and unrecorded fingerprints", view.Turns[0].Hits)
 	}
-	if !view.Turns[0].Hits[0].Injected || view.Turns[0].Hits[1].Injected {
-		t.Fatalf("hits = %+v, want injected separated from dropped", view.Turns[0].Hits)
+	hits := view.Turns[0].Hits
+	if hits[0].Injected == nil || !*hits[0].Injected {
+		t.Fatalf("hits = %+v, want the served fact marked injected", hits)
+	}
+	if hits[1].Injected == nil || *hits[1].Injected {
+		t.Fatalf("hits = %+v, want the dropped fact marked not injected", hits)
+	}
+	if hits[2].Injected != nil {
+		t.Fatalf("hits = %+v, want an unrecorded decision to stay unknown", hits)
+	}
+	if view.DroppedTurns != 7 {
+		t.Fatalf("droppedTurns = %d, want the trimmed turns reported", view.DroppedTurns)
+	}
+	if hits[0].Scope != "project" || hits[0].Type != "project" || hits[0].Freshness != "stale" {
+		t.Fatalf("hits = %+v, want the fact's scope/type/freshness carried through", hits[0])
+	}
+	if view.Turns[0].SnapshotDigest != "sha256:abc" {
+		t.Fatalf("snapshotDigest = %q, want the turn's context fingerprint", view.Turns[0].SnapshotDigest)
 	}
 	if len(view.Skills) != 1 || view.Skills[0].Name != "hot" || view.Skills[0].ContentHash == "" {
 		t.Fatalf("skills = %+v, want the invocation fingerprint", view.Skills)
@@ -78,7 +96,7 @@ func TestRecallRecordForSessionReadsTheSidecar(t *testing.T) {
 	path := filepath.Join(dir, "recall-view.jsonl")
 	if err := agent.UpdateBranchMeta(path, false, func(meta *agent.BranchMeta) error {
 		agent.AppendMemoryRecallTurn(meta, agent.MemoryRecallTurn{
-			TurnSeq: 6, Hits: []agent.MemoryRecallTurnHit{{ID: "mem-z", Revision: 1, Score: 0.5, Injected: true}},
+			TurnSeq: 6, Hits: []agent.MemoryRecallTurnHit{{ID: "mem-z", Revision: 1, Score: 0.5, Injected: recallInjectedPtr(true)}},
 		})
 		agent.AppendSkillUse(meta, agent.SkillUseRecord{TurnSeq: 6, Name: "hot", ContentHash: "abc", CatalogDigest: "def"})
 		return nil
@@ -100,3 +118,5 @@ func TestRecallRecordForSessionReadsTheSidecar(t *testing.T) {
 		t.Fatalf("a blank path must not resolve: %+v", empty)
 	}
 }
+
+func recallInjectedPtr(v bool) *bool { return &v }

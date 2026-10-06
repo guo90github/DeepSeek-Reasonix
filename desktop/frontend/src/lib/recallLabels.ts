@@ -22,3 +22,39 @@ export function buildRecallLabels(facts: readonly MemoryFact[]): RecallLabels {
   }
   return labels;
 }
+
+/** The record's own tri-state: a hit written before the injected field existed is
+ *  neither injected nor dropped, so the display must say so instead of guessing. */
+export type RecallHitState = "injected" | "dropped" | "unrecorded";
+
+export function recallHitState(hit: { injected?: boolean | null }): RecallHitState {
+	if (hit.injected === true) return "injected";
+	if (hit.injected === false) return "dropped";
+	return "unrecorded";
+}
+
+/** The three keys the state maps to, typed as literals so `t()` accepts them. */
+export type RecallHitStateKey =
+  | "history.recallStripInjected"
+  | "history.recallStripDropped"
+  | "history.recallStripUnrecorded";
+
+export function recallHitStateKey(state: RecallHitState): RecallHitStateKey {
+	if (state === "injected") return "history.recallStripInjected";
+	if (state === "dropped") return "history.recallStripDropped";
+	return "history.recallStripUnrecorded";
+}
+
+/** Counts every hit decision, so a surface never has to fold "unrecorded" into one
+ *  of the two real states. */
+export function countRecallHitStates(
+	turns: readonly { hits?: readonly { injected?: boolean | null }[] }[],
+): Record<RecallHitState, number> {
+	const counts: Record<RecallHitState, number> = { injected: 0, dropped: 0, unrecorded: 0 };
+	for (const turn of turns) {
+		for (const hit of turn.hits ?? []) {
+			counts[recallHitState(hit)] += 1;
+		}
+	}
+	return counts;
+}

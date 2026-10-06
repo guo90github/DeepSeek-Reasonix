@@ -333,18 +333,23 @@ func (c *Controller) recordMemoryRecallTurn(result memory.RecallResult) {
 	}
 	turn := agent.MemoryRecallTurn{
 		TurnSeq: result.TurnSeq, QueryHash: recallQueryHash(result.Query),
-		UsedChars: result.UsedChars, Omitted: result.Omitted, Suppressed: result.Suppressed,
+		SnapshotDigest: c.executorTurnDigest(),
+		UsedChars:      result.UsedChars, Omitted: result.Omitted, Suppressed: result.Suppressed,
 	}
 	for _, hit := range result.Hits {
+		injected := true
 		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
 			ID: hit.Memory.ID, Name: hit.Memory.Name, Title: hit.Memory.Title,
-			Revision: hit.Memory.Revision, Score: hit.Score, Injected: true,
+			Scope: string(hit.Memory.Scope), Type: string(hit.Memory.Type), Freshness: hit.Freshness,
+			Revision: hit.Memory.Revision, Score: hit.Score, Injected: &injected,
 		})
 	}
 	for _, hit := range result.Dropped {
+		injected := false
 		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
 			ID: hit.Memory.ID, Name: hit.Memory.Name, Title: hit.Memory.Title,
-			Revision: hit.Memory.Revision, Score: hit.Score,
+			Scope: string(hit.Memory.Scope), Type: string(hit.Memory.Type), Freshness: hit.Freshness,
+			Revision: hit.Memory.Revision, Score: hit.Score, Injected: &injected,
 		})
 	}
 	if len(turn.Hits) == 0 && turn.Suppressed == "" {
