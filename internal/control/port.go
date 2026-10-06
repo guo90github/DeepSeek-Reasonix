@@ -170,6 +170,7 @@ type SessionHistory interface {
 
 // MemoryControl covers session/project memory reads and mutations.
 type MemoryControl interface {
+	MemoryRecallTurns() []agent.MemoryRecallTurn
 	Memory() *memory.Set
 	QuickAdd(scope memory.Scope, note string) (string, error)
 	SaveDoc(path, body string) (string, error)

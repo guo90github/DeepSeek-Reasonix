@@ -61,6 +61,8 @@ func MemoryCommandText(api MemoryControl, input string) string {
 			return "usage: /memory recall"
 		}
 		return renderMemoryRecall(api.LastMemoryRecall())
+	case "curation":
+		return renderMemoryCuration(api)
 	case "pin", "unpin":
 		ref, err := singleMemoryArgument(rest)
 		if err != nil {
