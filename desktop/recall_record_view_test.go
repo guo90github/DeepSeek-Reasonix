@@ -15,7 +15,7 @@ func TestRecallRecordViewCarriesFingerprintsOnly(t *testing.T) {
 		MemoryRecall: []agent.MemoryRecallTurn{{
 			TurnSeq: 4, QueryHash: "9f9f9f9f9f9f9f9f", UsedChars: 210, Omitted: 1, SnapshotDigest: "sha256:abc",
 			Hits: []agent.MemoryRecallTurnHit{
-				{ID: "mem-a", Revision: 2, Score: 0.9, Injected: recallInjectedPtr(true), Scope: "project", Type: "project", Freshness: "stale"},
+				{ID: "mem-a", Revision: 2, Score: 0.9, Injected: recallInjectedPtr(true), Scope: "project", Type: "project", Freshness: "stale", Description: "release target"},
 				{ID: "mem-b", Revision: 1, Score: 0.4, Injected: recallInjectedPtr(false)},
 				{ID: "mem-c", Revision: 1, Score: 0.2},
 			},
@@ -51,6 +51,9 @@ func TestRecallRecordViewCarriesFingerprintsOnly(t *testing.T) {
 	}
 	if hits[0].Scope != "project" || hits[0].Type != "project" || hits[0].Freshness != "stale" {
 		t.Fatalf("hits = %+v, want the fact's scope/type/freshness carried through", hits[0])
+	}
+	if hits[0].Description != "release target" {
+		t.Fatalf("hits = %+v, want the fact's description carried through", hits[0])
 	}
 	if view.Turns[0].SnapshotDigest != "sha256:abc" {
 		t.Fatalf("snapshotDigest = %q, want the turn's context fingerprint", view.Turns[0].SnapshotDigest)

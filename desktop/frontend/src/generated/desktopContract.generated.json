@@ -29934,6 +29934,13 @@
           }
         },
         {
+          "name": "description",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "scope",
           "optional": true,
           "type": {

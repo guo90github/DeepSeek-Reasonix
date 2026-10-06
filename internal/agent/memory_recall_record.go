@@ -28,6 +28,9 @@ type MemoryRecallTurnHit struct {
 	ID    string `json:"id"`
 	Name  string `json:"name,omitempty"`
 	Title string `json:"title,omitempty"`
+	// Description is the fact's one-line hook, never its body (docs/50 §2.2): the
+	// review page cross-checks a hit against what it claimed to be about.
+	Description string `json:"description,omitempty"`
 	// Scope, Type and Freshness are the fact's own state as of that turn, so the
 	// review page can explain why a fact did or did not apply.
 	Scope     string  `json:"scope,omitempty"`

@@ -130,8 +130,11 @@ func TestRecallTurnLandsOnTheSessionSidecar(t *testing.T) {
 	c.recordMemoryRecallTurn(memory.RecallResult{
 		Query: "release branch", TurnSeq: 3, UsedChars: 55, Suppressed: "budget",
 		Dropped: []memory.RecallHit{{
-			Memory: memory.Memory{ID: "mem-c", Revision: 1, Scope: memory.FactScopeProject, Type: memory.TypeProject},
-			Score:  0.3, Freshness: "stale",
+			Memory: memory.Memory{
+				ID: "mem-c", Revision: 1, Scope: memory.FactScopeProject, Type: memory.TypeProject,
+				Description: "release target",
+			},
+			Score: 0.3, Freshness: "stale",
 		}},
 	})
 
@@ -151,6 +154,9 @@ func TestRecallTurnLandsOnTheSessionSidecar(t *testing.T) {
 	}
 	if hit := turn.Hits[0]; hit.Scope != "project" || hit.Type != "project" || hit.Freshness != "stale" {
 		t.Fatalf("hit state = %+v, want the fact's own scope/type/freshness recorded", hit)
+	}
+	if turn.Hits[0].Description != "release target" {
+		t.Fatalf("hit description = %q, want the fact's own one-line hook", turn.Hits[0].Description)
 	}
 	if turn.SnapshotDigest == "" {
 		t.Fatal("a recorded turn must carry the session-context digest it ran against")
