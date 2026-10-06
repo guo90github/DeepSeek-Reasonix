@@ -8,6 +8,10 @@ package agent
 // a ledger; the oldest turns fall off.
 const MemoryRecallTurnLimit = 200
 
+// MemoryRecallSourceTool marks a record the model asked for through the memory
+// tool, as opposed to the automatic turn-tail injection.
+const MemoryRecallSourceTool = "tool"
+
 // MemoryRecallTurn records one turn's recall decision.
 type MemoryRecallTurn struct {
 	TurnSeq   int    `json:"turn_seq"`
@@ -21,6 +25,9 @@ type MemoryRecallTurn struct {
 	Omitted      int                   `json:"omitted,omitempty"`
 	Suppressed   string                `json:"suppressed,omitempty"`
 	Hits         []MemoryRecallTurnHit `json:"hits,omitempty"`
+	// Source is where the retrieval came from: empty is the automatic turn-tail
+	// injection, MemoryRecallSourceTool is the model asking for it.
+	Source string `json:"source,omitempty"`
 }
 
 // MemoryRecallTurnHit is one fact's fingerprint in that turn. Injected separates
@@ -55,7 +62,7 @@ func AppendMemoryRecallTurn(meta *BranchMeta, turn MemoryRecallTurn) {
 	}
 	kept := meta.MemoryRecall[:0]
 	for _, existing := range meta.MemoryRecall {
-		if existing.TurnSeq != turn.TurnSeq {
+		if existing.TurnSeq != turn.TurnSeq || existing.Source != turn.Source {
 			kept = append(kept, existing)
 		}
 	}

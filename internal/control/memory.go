@@ -400,6 +400,32 @@ func recallQueryExcerpt(query string) string {
 	return line
 }
 
+// RecordMemoryFetch puts a tool-driven retrieval on the session sidecar: with
+// automatic recall off, this is the only thing that tells the review page which
+// facts a session actually reached for. Optional half of memory.Queue.
+func (c *Controller) RecordMemoryFetch(query string, facts []memory.Memory) {
+	path := strings.TrimSpace(c.SessionPath())
+	if path == "" || len(facts) == 0 {
+		return
+	}
+	fetched := true
+	turn := agent.MemoryRecallTurn{
+		TurnSeq: c.Turn(), Source: agent.MemoryRecallSourceTool,
+		QueryHash: recallQueryHash(query), QueryExcerpt: recallQueryExcerpt(query),
+	}
+	for _, fact := range facts {
+		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
+			ID: fact.ID, Name: fact.Name, Title: fact.Title, Description: fact.Description,
+			Scope: string(fact.Scope), Type: string(fact.Type),
+			Revision: fact.Revision, Injected: &fetched,
+		})
+	}
+	_ = agent.UpdateBranchMeta(path, false, func(meta *agent.BranchMeta) error {
+		agent.AppendMemoryRecallTurn(meta, turn)
+		return nil
+	})
+}
+
 // recallQueryHash keeps the record content-free: the query's text stays out.
 func recallQueryHash(query string) string {
 	query = strings.TrimSpace(query)

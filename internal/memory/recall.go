@@ -76,12 +76,20 @@ func (t recallTool) Execute(ctx context.Context, args json.RawMessage) (string, 
 		if err != nil {
 			return "", err
 		}
+		// What a read handed back is a fact the session reached for, and with automatic
+		// recall off it is the only such record.
+		fetched := make([]Memory, 0, len(hits))
+		for _, hit := range hits {
+			fetched = append(fetched, hit.Memory)
+		}
+		RecordMemoryFetchFromContext(ctx, in.Query, fetched)
 		return formatMemoryHits(in.Query, hits), nil
 	case "read":
 		m, ok := readMemoryByName(t.store, in.Name)
 		if !ok {
 			return "", fmt.Errorf("memory %q not found", slug(in.Name))
 		}
+		RecordMemoryFetchFromContext(ctx, in.Name, []Memory{m})
 		return formatMemory(t.store, m), nil
 	case "list":
 		return formatMemoryList(t.store, filterMemories(t.store.ListAll(), memType, memScope), limit), nil

@@ -46,3 +46,23 @@ func ClaimAutoMemoryWriteFromContext(ctx context.Context, args json.RawMessage) 
 	claimer, ok := q.(autoMemoryWriteClaimer)
 	return ok && claimer.ClaimAutoMemoryWrite(args)
 }
+
+// fetchSink is the optional half of a Queue: a queue that can take one is told what
+// the read tool handed back. A queue that cannot — a child session, a test stub —
+// leaves the fetch unrecorded rather than failing the read.
+type fetchSink interface {
+	RecordMemoryFetch(query string, facts []Memory)
+}
+
+// RecordMemoryFetchFromContext reports a completed read to the queue stamped on ctx.
+func RecordMemoryFetchFromContext(ctx context.Context, query string, facts []Memory) {
+	q, ok := QueueFromContext(ctx)
+	if !ok {
+		return
+	}
+	sink, ok := q.(fetchSink)
+	if !ok {
+		return
+	}
+	sink.RecordMemoryFetch(query, facts)
+}
