@@ -132,6 +132,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	ctx = agent.WithReasoningLanguagePreference(ctx, c.reasoningLanguage)
 	ctx = c.withTurnContext(ctx, true)
 
+	turn := c.beginTurn()
 	input := c.compose(task, raw, true)
 	startMessages := c.messageCount()
 	var marker agent.InFlightTurnMeta
@@ -146,10 +147,6 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 		c.guardianSess.ResetTurn()
 	}
 	if c.hooks.Enabled() {
-		c.mu.Lock()
-		c.turn++
-		turn := c.turn
-		c.mu.Unlock()
 		if block, _ := c.hooks.PromptSubmit(ctx, input, turn); block {
 			return nil
 		}
@@ -212,6 +209,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	ctx = agent.WithRawUserInput(ctx, turn.raw)
 	ctx = withTurnInputOrigin(ctx, turn.synthetic)
 	continuation := turn.goalContinuation
+	turnSeq := c.beginTurn()
 	var input string
 	if continuation != nil {
 		input = c.composeWithGoal(
@@ -261,14 +259,10 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	// research + approved-execution sub-turns below): a gating UserPromptSubmit
 	// aborts before any model call; Stop fires once when the turn returns.
 	if c.hooks.Enabled() {
-		c.mu.Lock()
-		c.turn++
-		turn := c.turn
-		c.mu.Unlock()
-		if block, _ := c.hooks.PromptSubmit(ctx, input, turn); block {
+		if block, _ := c.hooks.PromptSubmit(ctx, input, turnSeq); block {
 			return nil // the hook's notify callback already surfaced the reason
 		}
-		defer func() { c.hooks.StopResult(context.Background(), lastAssistantText(c.History()), turn, err) }()
+		defer func() { c.hooks.StopResult(context.Background(), lastAssistantText(c.History()), turnSeq, err) }()
 	}
 	marker = c.markInFlightTurn(startMessages, !turn.synthetic)
 	if continuation != nil {

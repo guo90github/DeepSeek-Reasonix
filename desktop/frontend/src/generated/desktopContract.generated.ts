@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:b1b05c782d5a42ea6c8c3d166c0cecf37a051d24503c46eb3ffe6f9d92f140b0";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:0f8ab8f1894cbb3dd45f9378e439faefad8436a0f95e3145555763878c380e11";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3154,6 +3154,7 @@ export interface RecallHitView {
   name?: string;
   title?: string;
   description?: string;
+  reason?: string;
   scope?: string;
   type?: string;
   freshness?: string;

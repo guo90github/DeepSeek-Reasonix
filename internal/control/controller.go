@@ -2282,7 +2282,7 @@ func (c *Controller) RuntimeStatus() RuntimeStatus {
 	}
 }
 
-// Turn returns the current turn number (0 before the first submit).
+// Turn returns the turn being processed: 1 after the first beginTurn, 0 before it.
 func (c *Controller) Turn() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()

@@ -39,6 +39,7 @@ type RecallHitView struct {
 	Name        string  `json:"name,omitempty"`
 	Title       string  `json:"title,omitempty"`
 	Description string  `json:"description,omitempty"`
+	Reason      string  `json:"reason,omitempty"`
 	Scope       string  `json:"scope,omitempty"`
 	Type        string  `json:"type,omitempty"`
 	Freshness   string  `json:"freshness,omitempty"`
@@ -104,7 +105,7 @@ func recallRecordView(meta agent.BranchMeta, path string) RecallRecordView {
 		}
 		for _, hit := range turn.Hits {
 			out.Hits = append(out.Hits, RecallHitView{
-				ID: hit.ID, Name: hit.Name, Title: hit.Title, Description: hit.Description,
+				ID: hit.ID, Name: hit.Name, Title: hit.Title, Description: hit.Description, Reason: hit.Reason,
 				Scope: hit.Scope, Type: hit.Type, Freshness: hit.Freshness,
 				Revision: hit.Revision, Score: hit.Score, Injected: hit.Injected,
 			})

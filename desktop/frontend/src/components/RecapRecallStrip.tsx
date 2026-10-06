@@ -109,7 +109,7 @@ export function RecapRecallStrip({
                         {known.label}
                       </span>
                     )}
-                    <span className="recap-recall__fingerprint" title={hit.id}>
+                    <span className="recap-recall__fingerprint" title={hit.reason ? hit.id + " · " + hit.reason : hit.id}>
                       {hit.id}
                     </span>
                     <span className="recap-recall__meta">

@@ -340,8 +340,8 @@ func (c *Controller) recordMemoryRecallTurn(result memory.RecallResult) {
 		injected := true
 		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
 			ID: hit.Memory.ID, Name: hit.Memory.Name, Title: hit.Memory.Title,
-			Description: hit.Memory.Description,
-			Scope:       string(hit.Memory.Scope), Type: string(hit.Memory.Type), Freshness: hit.Freshness,
+			Description: hit.Memory.Description, Reason: hit.Reason,
+			Scope: string(hit.Memory.Scope), Type: string(hit.Memory.Type), Freshness: hit.Freshness,
 			Revision: hit.Memory.Revision, Score: hit.Score, Injected: &injected,
 		})
 	}
@@ -349,8 +349,8 @@ func (c *Controller) recordMemoryRecallTurn(result memory.RecallResult) {
 		injected := false
 		turn.Hits = append(turn.Hits, agent.MemoryRecallTurnHit{
 			ID: hit.Memory.ID, Name: hit.Memory.Name, Title: hit.Memory.Title,
-			Description: hit.Memory.Description,
-			Scope:       string(hit.Memory.Scope), Type: string(hit.Memory.Type), Freshness: hit.Freshness,
+			Description: hit.Memory.Description, Reason: hit.Reason,
+			Scope: string(hit.Memory.Scope), Type: string(hit.Memory.Type), Freshness: hit.Freshness,
 			Revision: hit.Memory.Revision, Score: hit.Score, Injected: &injected,
 		})
 	}
