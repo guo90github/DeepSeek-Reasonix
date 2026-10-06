@@ -20,7 +20,10 @@ type RecallRecordView struct {
 
 // RecallTurnView is one turn's recall decision.
 type RecallTurnView struct {
-	TurnSeq   int    `json:"turnSeq"`
+	TurnSeq int `json:"turnSeq"`
+	// Source separates the automatic turn-tail injection ("") from a retrieval the
+	// model asked for through the memory tool.
+	Source    string `json:"source,omitempty"`
 	QueryHash string `json:"queryHash,omitempty"`
 	// SnapshotDigest is the session-context fingerprint the turn ran against.
 	SnapshotDigest string `json:"snapshotDigest,omitempty"`
@@ -105,6 +108,7 @@ func recallRecordView(meta agent.BranchMeta, path string) RecallRecordView {
 			TurnSeq: turn.TurnSeq, QueryHash: turn.QueryHash, QueryExcerpt: turn.QueryExcerpt,
 			UsedChars: turn.UsedChars,
 			Omitted:   turn.Omitted, Suppressed: turn.Suppressed, SnapshotDigest: turn.SnapshotDigest,
+			Source: turn.Source,
 		}
 		for _, hit := range turn.Hits {
 			out.Hits = append(out.Hits, RecallHitView{

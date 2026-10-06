@@ -127,5 +127,7 @@ ok(
   withQueries.html.split("chip--warn").length - 1 === 1,
   "only the query that never injected carries the warn chip",
 );
+ok(rendered.text.includes("命中 3 次·从未注入"), "a fact that never injected carries the curation signal");
+
 process.stdout.write(`\nrecall usage list: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

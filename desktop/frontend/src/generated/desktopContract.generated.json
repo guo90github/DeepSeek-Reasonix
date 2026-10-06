@@ -30139,6 +30139,13 @@
           }
         },
         {
+          "name": "source",
+          "optional": true,
+          "type": {
+            "kind": "string"
+          }
+        },
+        {
           "name": "queryHash",
           "optional": true,
           "type": {

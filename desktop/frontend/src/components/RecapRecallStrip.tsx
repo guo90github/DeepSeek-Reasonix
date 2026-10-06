@@ -90,6 +90,7 @@ export function RecapRecallStrip({
               <div className="recap-recall__turn-head">
                 {t("history.recallStripTurn", { turn: String(turn.turnSeq) })}
                 {turn.queryExcerpt ? <span className="recap-recall__query">「{turn.queryExcerpt}」</span> : null}
+                {turn.source === "tool" ? <span className="chip">{t("history.recallStripToolFetch")}</span> : null}
                 {turn.omitted !== undefined && turn.omitted > 0
                   ? ` · ${t("history.recallStripOmitted", { n: String(turn.omitted) })}`
                   : ""}
@@ -114,7 +115,13 @@ export function RecapRecallStrip({
                       {hit.id}
                     </span>
                     <span className="recap-recall__meta">
-                      {`r${hit.revision ?? 1} · ${(hit.score ?? 0).toFixed(2)} · ${t(recallHitStateKey(recallHitState(hit)))}`}
+                      {[
+                        `r${hit.revision ?? 1}`,
+                        (hit.score ?? 0) > 0 ? (hit.score ?? 0).toFixed(2) : "",
+                        t(recallHitStateKey(recallHitState(hit))),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
                   </div>
                 );

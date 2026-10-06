@@ -149,7 +149,7 @@ for (const retired of ["--fg-muted", "--bg-elev-1", "--hover", "--border-strong"
 // A polluted turn has to be traceable to the ask it recalled for.
 await renderStrip({
   ...record,
-  turns: (record.turns ?? []).map((turn) => ({ ...turn, queryExcerpt: "把支付部署到绿色集群" })),
+  turns: (record.turns ?? []).map((turn) => ({ ...turn, queryExcerpt: "把支付部署到绿色集群", source: turn.turnSeq === 4 ? "tool" : "" })),
 });
 // The turn rows only exist once the strip is open.
 const queryHead = host?.querySelector<HTMLButtonElement>(".recap-recall__head");
@@ -158,6 +158,8 @@ await act(async () => {
   await new Promise((resolve) => setTimeout(resolve, 0));
 });
 ok((host?.textContent ?? "").includes("把支付部署到绿色集群"), "a turn shows the ask it recalled for");
+
+ok(rendered.text.includes("模型主动查取"), "a tool-driven retrieval is labelled");
 
 process.stdout.write(`\nrecap recall strip: ${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);

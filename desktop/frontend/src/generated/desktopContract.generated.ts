@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:d3b2764db95e9267304607d2155e4b03fb998ba1914f3726c62cb01a5fd434d5";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:9bea41ce760b50aa87b27af3d146b1a897838ab67ed31b09c11be6e0c8bb952b";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3185,6 +3185,7 @@ export interface RecallRecordView {
 
 export interface RecallTurnView {
   turnSeq: number;
+  source?: string;
   queryHash?: string;
   snapshotDigest?: string;
   queryExcerpt?: string;
