@@ -203,6 +203,34 @@ func TestObserveReportsDeliberations(t *testing.T) {
 	}
 }
 
+// A verdict outlives the step it settled, and on a delivered step it cannot move anything: the row
+// would name work nobody can do, and no op can close it — the same reading stallReason gives a
+// settled node (2026-10-06, found on a board whose last two cards were exactly this).
+func TestObserveIgnoresAVerdictOnAClosedStep(t *testing.T) {
+	state := testState(t,
+		assertOp("publish", "planner"),
+		claimOp("publish", "worker"),
+		doneOp("publish", "worker", "verifier"),
+	)
+	hearings := NewHearingState()
+	if err := ApplyHearing(hearings, openHearing("publish", []string{"alice"}, talkBase), HearingLimits{}); err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := ApplyHearing(hearings, ruleHearing("publish", VerdictEscalate, ReasonEqualWeight, "orchestrator", talkBase.Add(time.Second)), HearingLimits{}); err != nil {
+		t.Fatalf("escalate: %v", err)
+	}
+
+	digest := Observe(state, nil, hearings, talkBase, ObserveLimits{})
+	for _, kind := range []SignalKind{SignalEscalated, SignalUndecided, SignalDisputed} {
+		if got := signalNodes(digest, kind); len(got) != 0 {
+			t.Fatalf("%s = %v, want nothing on a step that is already delivered", kind, got)
+		}
+	}
+	if len(digest.Cards) != 0 {
+		t.Fatalf("cards = %+v, want a board whose only ruling is history to need no card", digest.Cards)
+	}
+}
+
 func TestObserveFoldsBySubtreeAndCountsWhatItHides(t *testing.T) {
 	root := obsNode("root", board.StateOpen)
 	root.Deps = []string{"gone"}

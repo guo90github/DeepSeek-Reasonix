@@ -697,6 +697,7 @@ claimant 成立，宿主那行按层拒绝计数（G3 / T12-3）里的 `slots` �
 - **只给"出事的子树"画卡片**：健康的子树不进卡片，只计入 `HealthySubtrees`——一屏画全部等于什么都没说。
 - **信号封闭集**：`orphan`（依赖已消失或已被放弃 ⇒ 永远无法开工）/ `stalled`（租约已过期、已被记 `no_progress`，或**已指派给某人而对方迟迟未取**——见 §13.4 的 `assign`）/
   `escalated`（审议升级给人）/ `disputed`（有 refute 无判决，或正在审议）/ `undecided`（按规则收口，**谁都不许当它已定论**）。
+  **例外**：裁决所在的步骤已终态（`done`/`abandoned`）时这三条都不出信号——裁决比节点活得久，而没有任何 op 能把它收口（真机：`cm3-window-probe`/`scn-hearing-empty` 恒挂在面板上、`退掉` 无步可退，2026-10-06；用例 `TestObserveIgnoresAVerdictOnAClosedStep`）。
 - **`orphan` 与 `stalled` 是必现信号**（`SignalKind.Mandatory()`）：`MaxSignals` 只裁可选信号，被裁的**计数**（`Hidden`），不静默消失。
 - **排队不是信号**：等槽位是常态，只作为卡片上的计数（`Parked`）；但「指派了却没人来取」不是等槽位——被点名的人没到，且别人不许取，按 `stalled` 报出（窗口 `ObserveLimits.AssignedWait`，默认 10 分钟）。
 - 排序：先按最严重信号，再按信号条数（出的事多的子树先出屏），最后按子树名；卡片超限计入 `HiddenCards`。

@@ -199,6 +199,12 @@ func (f *observeFolder) deliberations(hearings *HearingState) {
 		return
 	}
 	for _, node := range sortedHearingNodes(hearings) {
+		// A verdict outlives the step it settled: an escalated or rule-closed ruling on a delivered
+		// step would keep naming work nobody can move, so it is history rather than a call to act —
+		// the reading stallReason already gives a settled node (2026-10-06).
+		if f.closedStep(node) {
+			continue
+		}
 		h := hearings.Hearings[node]
 		subtree := f.subtreeOf(node, "")
 		c := f.card(subtree)
@@ -215,6 +221,19 @@ func (f *observeFolder) deliberations(hearings *HearingState) {
 			})
 		}
 	}
+}
+
+// closedStep reports whether the step a ruling settled is already closed. An unknown node, or a board
+// this fold cannot see, is never hidden: state nobody can read is not evidence of history.
+func (f *observeFolder) closedStep(node string) bool {
+	if f.state == nil {
+		return false
+	}
+	n := f.state.Nodes[node]
+	if n == nil {
+		return false
+	}
+	return n.State == board.StateDone || n.State == board.StateAbandoned
 }
 
 func (f *observeFolder) queue(queue *QueueState, now time.Time) {
