@@ -30,7 +30,7 @@ func TestToolFetchLandsBesideTheAutomaticRecord(t *testing.T) {
 	var automatic, toolDriven int
 	for _, turn := range meta.MemoryRecall {
 		switch turn.Source {
-		case "":
+		case agent.MemoryRecallSourceAuto:
 			automatic++
 		case agent.MemoryRecallSourceTool:
 			toolDriven++

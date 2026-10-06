@@ -11,7 +11,7 @@ import (
 	"reasonix/internal/memory"
 )
 
-const memoryCommandUsage = "usage: /memory [recall|subjects|pin <id-or-name>|unpin <id-or-name>|verify <id-or-name>|revisions <id-or-name>|restore <id-or-name> <revision>|archived|recover <archive-path>|instructions]"
+const memoryCommandUsage = "usage: /memory [recall|subjects|pin <id-or-name>|unpin <id-or-name>|verify <id-or-name>|revisions <id-or-name>|restore <id-or-name> <revision>|archived|recover <archive-path>|instructions|curation]"
 
 // MemoryCompletionData returns stable references for structured /memory
 // completion. IDs come first because they remain unambiguous if a fact is
@@ -62,6 +62,9 @@ func MemoryCommandText(api MemoryControl, input string) string {
 		}
 		return renderMemoryRecall(api.LastMemoryRecall())
 	case "curation":
+		if rest != "" {
+			return "usage: /memory curation"
+		}
 		return renderMemoryCuration(api)
 	case "pin", "unpin":
 		ref, err := singleMemoryArgument(rest)

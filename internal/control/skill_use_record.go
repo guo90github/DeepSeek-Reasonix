@@ -40,9 +40,36 @@ func skillCatalogDigest(catalog string) string {
 
 // nextTurn starts the next turn and returns its number; see Turn.
 func (c *Controller) nextTurn() int {
+	// Records are keyed on (turn_seq, source): the next number must exceed everything
+	// this session's sidecar already holds, or a restart or a session switch would
+	// replace a previous run's records instead of adding to them.
+	next := lastRecordedTurnSeq(c.SessionPath())
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if next > c.turn {
+		c.turn = next
+	}
 	c.turn++
 	c.readiness.clear()
 	return c.turn
+}
+
+// lastRecordedTurnSeq is the highest turn number this session's sidecar holds, 0 when
+// it holds none yet.
+func lastRecordedTurnSeq(path string) int {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return 0
+	}
+	meta, ok, err := agent.LoadBranchMeta(path)
+	if err != nil || !ok {
+		return 0
+	}
+	max := 0
+	for _, turn := range meta.MemoryRecall {
+		if turn.TurnSeq > max {
+			max = turn.TurnSeq
+		}
+	}
+	return max
 }

@@ -33,8 +33,11 @@ func TestAutoRecallOffLeavesTheTurnExplained(t *testing.T) {
 	if turn.Suppressed == "" || len(turn.Hits) != 0 {
 		t.Fatalf("turn = %+v, want a suppression reason and nothing injected", turn)
 	}
-	if turn.QueryExcerpt == "" {
-		t.Fatalf("turn = %+v, want the ask and its turn recorded", turn)
+	if turn.Source != agent.MemoryRecallSourceAuto {
+		t.Fatalf("turn = %+v, want source %q", turn, agent.MemoryRecallSourceAuto)
+	}
+	if turn.QueryExcerpt != "" || turn.QueryHash != "" {
+		t.Fatalf("turn = %+v, want no query: a suppression is not a retrieval", turn)
 	}
 }
 

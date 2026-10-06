@@ -229,7 +229,7 @@ func (c *Controller) composeWithGoal(
 		// because a model that does not know memory exists cannot ask for it.
 		switch {
 		case !c.memory.autoRecallEnabled():
-			c.recordSuppressedRecall(source, "automatic recall is off; retrieve on demand")
+			c.recordSuppressedRecall("automatic recall is off; retrieve on demand")
 			text = strings.TrimRight(text, "\n") + "\n\n" + memoryOnDemandBlock
 		case len(notes) == 0 && !c.ablation.Off(ablation.Retrieval):
 			result := c.memory.recall(source)
@@ -240,7 +240,7 @@ func (c *Controller) composeWithGoal(
 				text = strings.TrimRight(text, "\n") + "\n\n" + block
 			}
 		case len(notes) > 0:
-			c.recordSuppressedRecall(source, "memory update already supplies the new fact")
+			c.recordSuppressedRecall("memory update already supplies the new fact")
 		}
 		// Unfinished items a person kept from earlier sessions are offered on a
 		// session's first turn and on turns that say they continue something;

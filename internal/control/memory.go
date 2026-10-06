@@ -116,9 +116,8 @@ const memoryOnDemandBlock = "<memory-on-demand>\nAutomatic memory recall is off:
 
 // recordSuppressedRecall notes a turn that recalled nothing on purpose, on both the
 // in-session trace and the session sidecar: an unexplained empty turn looks broken.
-func (c *Controller) recordSuppressedRecall(source, reason string) {
+func (c *Controller) recordSuppressedRecall(reason string) {
 	suppressed := memory.RecallResult{
-		Query:      strings.TrimSpace(source),
 		TurnSeq:    c.Turn(),
 		Suppressed: reason,
 	}
@@ -357,6 +356,7 @@ func (c *Controller) recordMemoryRecallTurn(result memory.RecallResult) {
 	}
 	turn := agent.MemoryRecallTurn{
 		TurnSeq: result.TurnSeq, QueryHash: recallQueryHash(result.Query),
+		Source:         agent.MemoryRecallSourceAuto,
 		QueryExcerpt:   recallQueryExcerpt(result.Query),
 		SnapshotDigest: c.executorTurnDigest(),
 		UsedChars:      result.UsedChars, Omitted: result.Omitted, Suppressed: result.Suppressed,

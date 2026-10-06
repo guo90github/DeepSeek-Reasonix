@@ -12,6 +12,10 @@ const MemoryRecallTurnLimit = 200
 // tool, as opposed to the automatic turn-tail injection.
 const MemoryRecallSourceTool = "tool"
 
+// MemoryRecallSourceAuto marks the turn's own recall decision: the machinery handed the
+// facts over without the model asking.
+const MemoryRecallSourceAuto = "auto"
+
 // MemoryRecallTurn records one turn's recall decision.
 type MemoryRecallTurn struct {
 	TurnSeq   int    `json:"turn_seq"`
