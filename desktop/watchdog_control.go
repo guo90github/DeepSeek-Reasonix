@@ -32,12 +32,9 @@ var watchdogPlatformRunner = func(name string, args ...string) ([]byte, error) {
 type watchdogPolicy struct {
 	SchemaVersion int  `json:"schemaVersion,omitempty"`
 	Enabled       bool `json:"enabled"`
-	// OptOut records an explicit "leave this machine's scheduler alone" — written only by
-	// `--watchdog-disable`. It is the one thing that keeps the OS entry off: the entry used
-	// to follow the unattended switch, which unregistered it on every machine that did not
-	// run unattended — exactly the machines whose dead host a phone now wants back
-	// (2026-10-05). The old `watchdog` field is gone: a legacy `watchdog:false` came from
-	// that switch, so reading it as an opt-out would silently disable the new behaviour.
+	// OptOut records an explicit "leave this machine's scheduler alone", written only by
+	// `--watchdog-disable`: it is the one thing that keeps the OS entry off. A legacy
+	// `watchdog:false` came from the unattended switch and must not read as an opt-out.
 	OptOut bool `json:"optOut,omitempty"`
 }
 

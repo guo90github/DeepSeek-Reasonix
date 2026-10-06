@@ -323,11 +323,9 @@ func TestWatchdogEntryIsRegisteredWhateverTheUnattendedSwitchSays(t *testing.T) 
 	}
 	calls, home := watchdogTestHarness(t)
 
-	// A start with the switch OFF still registers: that is the case a dead host has to
-	// come back from, and the switch has no say in it. It must not write `enabled` on the
-	// way — that field belongs to the login item, and writing it here would turn on login
-	// autostart for a machine whose switch is off, which the login item's own contract
-	// forbids ("nothing here registers itself on a machine that never asked").
+	// A start with the switch OFF still registers — that is the case a dead host has to
+	// come back from, and the switch has no say. It must not write `enabled`, which belongs
+	// to the login item and never registers itself on a machine that never asked.
 	writeHeartbeatSwitch(t, home, false)
 	applyWatchdogPolicyOnStart()
 	if !calls.created || !watchdogEntryWanted(readWatchdogPolicy()) {

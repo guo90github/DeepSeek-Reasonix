@@ -1,6 +1,9 @@
 package board
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 // Whoever writes structure has to be readable off the node they touched: a split recorded its
 // author only on the children, so the one session that made the tree could not see the tree
@@ -46,10 +49,5 @@ func TestARequireRecordsItsAuthorOnBothNodes(t *testing.T) {
 }
 
 func requesters(n *Node, participant string) bool {
-	for _, requester := range n.Requesters {
-		if requester == participant {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(n.Requesters, participant)
 }

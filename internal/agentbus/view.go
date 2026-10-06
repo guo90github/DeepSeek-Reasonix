@@ -2,6 +2,7 @@ package agentbus
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -270,12 +271,7 @@ func requestsNode(n *board.Node, participant string) bool {
 	if participant == "" {
 		return false
 	}
-	for _, requester := range n.Requesters {
-		if requester == participant {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(n.Requesters, participant)
 }
 
 // waitsOnMine reports whether n sits in the reverse closure of my nodes and is

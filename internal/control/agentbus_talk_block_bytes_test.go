@@ -19,7 +19,7 @@ func TestTheTalkBlockStopsAtItsByteBudgetWithoutLosingLines(t *testing.T) {
 	// A shortened line is a few hundred bytes, so this is several budgets' worth of talk.
 	const total = 40
 	payload := strings.Repeat("y", 4*1024)
-	for i := 0; i < total; i++ {
+	for range total {
 		if _, err := me.appendTalk(ctx, agentbus.TalkLine{
 			Topic: "t", Kind: agentbus.TalkSay, To: "bob", Text: payload, At: time.Now().UTC(),
 		}); err != nil {

@@ -13,7 +13,7 @@ import (
 // long case, say what it left out, and cost the ordinary case nothing.
 func TestAWakeNamingALongListStaysInsideItsBudget(t *testing.T) {
 	items := make([]string, 0, 400)
-	for i := 0; i < 400; i++ {
+	for i := range 400 {
 		items = append(items, fmt.Sprintf("scn-step-%03d", i))
 	}
 	block := AgentBusWakePrompt(agentbus.WakeTarget{Participant: "bob", Ready: items})
