@@ -5154,7 +5154,7 @@ function makeMockApp(): AppBindings {
     async WatchdogStatus() { return { supported: true, policy: false, registered: false, platform: "win32", entryPoint: "" }; },
     async SetWatchdogEnabled(enabled: boolean) { return { supported: true, policy: enabled, registered: enabled, platform: "win32", entryPoint: "" }; },
     async AgentBusBriefing() {
-      return { participant: "", cards: [], signals: [], hidden: 0, hiddenCards: 0, healthySubtrees: 0 };
+      return { participant: "", members: [], cards: [], signals: [], hidden: 0, hiddenCards: 0, healthySubtrees: 0 };
     },
     async AgentBusNodeDetail(node: string) {
       return {

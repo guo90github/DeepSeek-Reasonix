@@ -5,8 +5,12 @@ function ok(value: unknown, message: string) {
 }
 
 const source = readFileSync(new URL("../components/MemoryPanel.tsx", import.meta.url), "utf8");
+const labels = readFileSync(new URL("../lib/memoryLabels.ts", import.meta.url), "utf8");
 
-ok(source.includes("function memoryFactKey"), "Context Center must use a stable fact identity helper");
+// The helper moved out of the panel into the shared label module; the contract is
+// that one stable identity helper exists and this surface uses it.
+ok(labels.includes("export function memoryFactKey"), "the fact identity helper lives in one module");
+ok(source.includes("memoryFactKey"), "Context Center must use a stable fact identity helper");
 ok(source.includes("app.MemoryRevisionsForTab"), "Context Center must load revision history for the selected workspace");
 ok(source.includes("app.RestoreMemoryRevisionForTab"), "Context Center must restore a selected revision");
 ok(source.includes("view.lastRecall"), "Context Center must explain the last automatic recall");
