@@ -1687,6 +1687,7 @@ export const zh: Record<DictKey, string> = {
   "memory.title": "记忆",
   "memory.summary": "{facts} 条背景记忆 · {archives} 条归档 · {docs} 个指令文件",
   "memory.summarySettings": "{facts} 条背景记忆 · {archives} 条归档 · {docs} 个指令文件 · 当前工作区",
+  "memory.factCaps": "写入上限：项目 {projectLive}/{projectMax} · 全局 {globalLive}/{globalMax}",
   "memory.unavailable": "记忆功能不可用。",
   "memory.quickAdd": "添加指令",
   "memory.whereToSave": "指令作用域",

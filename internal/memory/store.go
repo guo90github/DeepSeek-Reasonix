@@ -29,6 +29,10 @@ import (
 type Store struct {
 	Dir       string // ...reasonix/projects/<slug>/memory
 	GlobalDir string // ...reasonix/memory/global (shared across projects)
+	// Fact caps from the user-global [memory] table; zero uses the package
+	// default. A hand-written config keeps them out of ratcheted Config.
+	MaxProjectFacts int
+	MaxGlobalFacts  int
 }
 
 // Type classifies a memory, mirroring the auto-memory taxonomy.
@@ -110,9 +114,12 @@ func StoreFor(userDir, cwd string) Store {
 	if userDir == "" {
 		return Store{}
 	}
+	projectCap, globalCap := config.MemoryFactCaps()
 	return Store{
-		Dir:       filepath.Join(userDir, "projects", config.WorkspaceSlug(absOf(cwd)), "memory"),
-		GlobalDir: filepath.Join(userDir, "memory", "global"),
+		Dir:             filepath.Join(userDir, "projects", config.WorkspaceSlug(absOf(cwd)), "memory"),
+		GlobalDir:       filepath.Join(userDir, "memory", "global"),
+		MaxProjectFacts: projectCap,
+		MaxGlobalFacts:  globalCap,
 	}
 }
 
@@ -237,19 +244,6 @@ func (s Store) archiveLocked(name string) (string, error) {
 	return lastPath, nil
 }
 
-func archiveMemoryInDir(dir, name string) (string, error) {
-	path, err := archiveInDir(dir, name)
-	if err != nil {
-		return "", err
-	}
-	if path != "" || indexContainsIn(dir, name) {
-		if err := flushIndexIn(dir, indexLinesExceptIn(dir, name)); err != nil {
-			return "", err
-		}
-	}
-	return path, nil
-}
-
 // Delete removes a memory from the active store and its MEMORY.md line — the
 // model's `forget` path and the user's way to prune a stale fact. It archives
 // the file instead of permanently deleting it so wrong memories remain
@@ -260,42 +254,8 @@ func (s Store) Delete(name string) error {
 	return err
 }
 
-func archiveInDir(dir, name string) (string, error) {
-	root, err := os.OpenRoot(dir)
-	if os.IsNotExist(err) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	defer root.Close()
-
-	file := name + ".md"
-	if _, err := root.Stat(file); err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", err
-	}
-	if err := root.MkdirAll(".archive", 0o755); err != nil {
-		return "", err
-	}
-	dest, err := archivePath(root, name, time.Now().UTC())
-	if err != nil {
-		return "", err
-	}
-	if err := renameMemoryFile(root, file, dest); err != nil {
-		return "", err
-	}
-	out, err := safeJoin(dir, dest)
-	if err != nil {
-		return "", err
-	}
-	return out, nil
-}
-
 func archivePath(root *os.Root, name string, when time.Time) (string, error) {
-	stem := when.Format("20060102-150405.000") + "-" + name
+	stem := archiveStem(name, when)
 	path := filepath.Join(".archive", stem+".md")
 	if _, err := root.Stat(path); os.IsNotExist(err) {
 		return path, nil

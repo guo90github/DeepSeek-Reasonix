@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
-// Index returns the provider-visible index that loads into the cached
-// prefix: every active fact from both scopes, shadowed global facts annotated
+// Index returns the provider-visible index that rides the session-context
+// snapshot — not the cached system prefix, which carries only PolicyBlock —
+// listing every unexpired fact from both scopes, shadowed globals annotated
 // rather than hidden — the index agrees with the project-over-global rule
 // recall enforces (#7995). The per-directory MEMORY.md files keep their
 // unqualified, descriptive format.
@@ -31,7 +33,13 @@ func (s Store) Index() string {
 	})
 	var b strings.Builder
 	seen := map[string]bool{} // collapse legacy migration duplicates (same qualified ref)
+	now := time.Now().UTC()
 	for _, memory := range memories {
+		// An expired fact rides no line: expiry is what makes expires_at and
+		// volatility shrink the resident snapshot, not only gate recall.
+		if memoryFreshness(memory, now) == FreshnessExpired {
+			continue
+		}
 		if ref := providerMemoryReference(memory); seen[ref] {
 			continue
 		} else {

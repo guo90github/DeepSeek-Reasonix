@@ -23,6 +23,10 @@ type SaveOptions struct {
 	RequireExpectedRevision bool
 	RequireCreate           bool
 	ClearExpiry             bool // drop an inherited expires_at instead of preserving it
+	// AllowOverCap lets an explicit, user-confirmed write exceed the fact cap:
+	// the cap bounds model-driven growth, while a human who previewed the
+	// fact is the authority on their own session budget.
+	AllowOverCap bool
 }
 
 type SaveResult struct {
@@ -125,11 +129,72 @@ func inheritOnUpdate(m Memory, existing Memory, clearExpiry bool) Memory {
 
 // validateSave runs the cross-fact invariants once identity, scope, and
 // inheritance are resolved: the pinned budget and subject uniqueness.
-func (s Store) validateSave(m Memory) error {
+func (s Store) validateSave(m Memory, opts SaveOptions) error {
 	if err := s.validatePinnedBudget(m); err != nil {
 		return err
 	}
+	if err := s.validateFactCap(m, opts); err != nil {
+		return err
+	}
 	return s.validateSubjectKey(m)
+}
+
+// validateFactCap rejects a new fact once its scope holds the cap. An update
+// never counts itself and an expired fact holds no slot, so curation can
+// always fold a fact into the store.
+func (s Store) validateFactCap(m Memory, opts SaveOptions) error {
+	scope := NormalizeFactScope(string(m.Scope))
+	limit := s.FactCap(scope)
+	if limit <= 0 || opts.AllowOverCap {
+		return nil
+	}
+	now := time.Now().UTC()
+	held := 0
+	for _, fact := range s.ListAll() {
+		if NormalizeFactScope(string(fact.Scope)) != scope {
+			continue
+		}
+		if memoryFreshness(fact, now) == FreshnessExpired {
+			continue
+		}
+		if fact.ID == m.ID || (m.ID == "" && fact.Name == m.Name) {
+			continue
+		}
+		held++
+	}
+	if held < limit {
+		return nil
+	}
+	return fmt.Errorf("%s memory is at its %d-fact cap (%d live): the index loads into every session in full, so consolidate before adding — forget one of the oldest first (%s), or fold this in with id + expected_revision", scope, limit, held, oldestFactList(s.ListAll(), scope, now))
+}
+
+// oldestFactList names the least recently updated live facts in a scope, so a
+// cap rejection tells the model what to curate instead of leaving it to guess.
+func oldestFactList(all []Memory, scope FactScope, now time.Time) string {
+	var pick []Memory
+	for _, fact := range all {
+		if NormalizeFactScope(string(fact.Scope)) != scope {
+			continue
+		}
+		if memoryFreshness(fact, now) == FreshnessExpired {
+			continue
+		}
+		pick = append(pick, fact)
+	}
+	sort.Slice(pick, func(i, j int) bool {
+		if !pick[i].UpdatedAt.Equal(pick[j].UpdatedAt) {
+			return pick[i].UpdatedAt.Before(pick[j].UpdatedAt)
+		}
+		return pick[i].Name < pick[j].Name
+	})
+	names := make([]string, 0, 3)
+	for _, fact := range pick {
+		if len(names) == 3 {
+			break
+		}
+		names = append(names, fact.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // validatePinnedBudget rejects a save that would push the total pinned-body
@@ -227,7 +292,7 @@ func (s Store) SaveWithOptions(m Memory, opts SaveOptions) (SaveResult, error) {
 	} else {
 		m.Scope = NormalizeFactScope(string(m.Scope))
 	}
-	if err := s.validateSave(m); err != nil {
+	if err := s.validateSave(m, opts); err != nil {
 		return SaveResult{}, err
 	}
 

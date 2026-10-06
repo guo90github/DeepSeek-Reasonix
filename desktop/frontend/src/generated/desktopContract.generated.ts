@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:872dd99baee0fc3eed108e8b5f64b0a26cf57d55b72f8abe2b8fe925a3621ddb";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:e21804c02579a56b1b3b020e26fa3e4d826d6c19f27b5ff7a261f6be52f9205f";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -2625,6 +2625,13 @@ export interface MemoryFact {
   freshness: string;
 }
 
+export interface MemoryFactCaps {
+  projectLive: number;
+  projectMax: number;
+  globalLive: number;
+  globalMax: number;
+}
+
 export interface MemoryImport {
   path: string;
   sourcePath: string;
@@ -2688,6 +2695,7 @@ export interface MemoryView {
   storeDir: string;
   storeGlobalDir?: string;
   available: boolean;
+  factCaps: MemoryFactCaps;
 }
 
 export interface MergeWorktreeBackRequest {

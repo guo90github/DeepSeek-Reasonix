@@ -2833,6 +2833,7 @@ export const zhTW: Record<DictKey, string> = {
   "projectTree.emptyNoTimeFilterMatch": "沒有話題符合時間篩選條件",
   "projectTree.clearTimeFilter": "清除篩選",
   "memory.summarySettings": "{facts} 條背景記憶 · {archives} 條歸檔 · {docs} 個指令檔案 · 當前工作區",
+  "memory.factCaps": "寫入上限：專案 {projectLive}/{projectMax} · 全域 {globalLive}/{globalMax}",
   "memory.showStorage": "儲存位置",
   "memory.hideStorage": "隱藏位置",
   "memory.storagePathLabel": "儲存目錄",

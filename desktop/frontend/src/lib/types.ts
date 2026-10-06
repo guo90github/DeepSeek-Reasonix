@@ -1653,6 +1653,7 @@ export interface MemoryView {
   conflicts: MemoryConflict[];
   lastRecall: MemoryRecallTrace;
   storeDir: string;
+  factCaps?: { projectLive: number; projectMax: number; globalLive: number; globalMax: number };
   storeGlobalDir?: string;
   available: boolean;
 }

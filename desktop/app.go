@@ -11119,6 +11119,16 @@ type MemoryView struct {
 	StoreDir               string                  `json:"storeDir"`
 	StoreGlobalDir         string                  `json:"storeGlobalDir,omitempty"`
 	Available              bool                    `json:"available"`
+	FactCaps               MemoryFactCaps          `json:"factCaps"`
+}
+
+// MemoryFactCaps is how close each scope sits to its curation cap: the live fact
+// count the write gate counts, and the cap itself. Expired facts hold no slot.
+type MemoryFactCaps struct {
+	ProjectLive int `json:"projectLive"`
+	ProjectMax  int `json:"projectMax"`
+	GlobalLive  int `json:"globalLive"`
+	GlobalMax   int `json:"globalMax"`
 }
 
 // writableScopes are the quick-add targets the panel offers, broad → specific.
@@ -11164,6 +11174,8 @@ func (a *App) memoryForCtrl(ctrl control.SessionAPI, fallback bool) MemoryView {
 	view.StoreDir = set.Store.Dir
 	view.StoreGlobalDir = set.Store.GlobalDir
 	view.Available = true
+	view.FactCaps.ProjectLive, view.FactCaps.ProjectMax = set.Store.FactCapUsage(memory.FactScopeProject)
+	view.FactCaps.GlobalLive, view.FactCaps.GlobalMax = set.Store.FactCapUsage(memory.FactScopeGlobal)
 	for _, d := range set.Docs {
 		imports := make([]MemoryImport, 0, len(d.Imports))
 		for _, imported := range d.Imports {

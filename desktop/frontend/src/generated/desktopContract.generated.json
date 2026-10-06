@@ -27018,6 +27018,34 @@
         }
       ]
     },
+    "main.MemoryFactCaps": {
+      "fields": [
+        {
+          "name": "projectLive",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "projectMax",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "globalLive",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
+          "name": "globalMax",
+          "type": {
+            "kind": "integer"
+          }
+        }
+      ]
+    },
     "main.MemoryImport": {
       "fields": [
         {
@@ -27349,6 +27377,13 @@
           "name": "available",
           "type": {
             "kind": "boolean"
+          }
+        },
+        {
+          "name": "factCaps",
+          "type": {
+            "kind": "object",
+            "ref": "main.MemoryFactCaps"
           }
         }
       ]

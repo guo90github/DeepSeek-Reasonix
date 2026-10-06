@@ -1686,6 +1686,7 @@ export const en = {
   "memory.title": "Memory",
   "memory.summary": "{facts} background · {archives} archived · {docs} instruction files",
   "memory.summarySettings": "{facts} background · {archives} archived · {docs} instruction files · current workspace",
+  "memory.factCaps": "Write caps: project {projectLive}/{projectMax} · global {globalLive}/{globalMax}",
   "memory.unavailable": "Memory unavailable.",
   "memory.quickAdd": "Add instruction",
   "memory.whereToSave": "Instruction scope",

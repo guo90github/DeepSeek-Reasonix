@@ -229,12 +229,12 @@ func (m *memoryManager) saveMemory(fact memory.Memory) (string, error) {
 	if mem == nil {
 		return "", nil
 	}
-	path, err := mem.Store.Save(fact)
+	saved, err := mem.Store.SaveWithOptions(fact, memory.SaveOptions{AllowOverCap: true})
 	if err != nil {
 		return "", err
 	}
 	m.applyBackgroundWrite(mem)
-	return path, nil
+	return saved.Path, nil
 }
 
 // forget removes a saved auto-memory by name — the panel/TUI forget action, the

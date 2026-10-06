@@ -1057,6 +1057,16 @@ export function MemorySettingsPage() {
 			<div className="memory-overview" aria-label={t("memory.title")}>
 				<div className="memory-overview__copy">
 					<span>{t("memory.summarySettings", { facts: facts.length, archives: archives.length, docs: view.docs.length })}</span>
+					{view.factCaps && view.factCaps.projectMax > 0 && (
+						<div className="mem-note">
+							{t("memory.factCaps", {
+								projectLive: view.factCaps.projectLive,
+								projectMax: view.factCaps.projectMax,
+								globalLive: view.factCaps.globalLive,
+								globalMax: view.factCaps.globalMax,
+							})}
+						</div>
+					)}
 				</div>
 				{view.storeDir && (
 					<button

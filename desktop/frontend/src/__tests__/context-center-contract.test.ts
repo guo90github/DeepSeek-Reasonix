@@ -12,6 +12,7 @@ ok(source.includes("app.RestoreMemoryRevisionForTab"), "Context Center must rest
 ok(source.includes("view.lastRecall"), "Context Center must explain the last automatic recall");
 ok(source.includes("view.conflicts"), "Context Center must explain project-over-global memory resolution");
 ok(source.includes("view.instructionDiagnostics"), "Context Center must surface instruction diagnostics");
+ok(source.includes("memory.factCaps"), "Context Center must show how close each scope is to its curation cap");
 ok(source.includes("d.precedence"), "Context Center must show resolved instruction precedence");
 
 console.log("context-center-contract: ok");

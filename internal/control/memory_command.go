@@ -267,6 +267,9 @@ func RenderMemorySummary(set *memory.Set, now time.Time) string {
 	}
 	if len(facts) > 0 {
 		b.WriteString("\n" + i18n.M.ListMemorySaved + "\n")
+		projectLive, projectCap := set.Store.FactCapUsage(memory.FactScopeProject)
+		globalLive, globalCap := set.Store.FactCapUsage(memory.FactScopeGlobal)
+		fmt.Fprintf(&b, "  caps project=%d/%d global=%d/%d\n", projectLive, projectCap, globalLive, globalCap)
 		for _, fact := range facts {
 			fmt.Fprintf(&b, "  [%s](%s.md)\n", memoryDisplayTitle(fact.Title, fact.Name), fact.Name)
 			fmt.Fprintf(&b, "    id=%s\n", fact.ID)
