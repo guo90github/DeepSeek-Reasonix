@@ -52,6 +52,9 @@ type MemoryRecallTurnHit struct {
 	Revision  int     `json:"revision,omitempty"`
 	Score     float64 `json:"score,omitempty"`
 	Injected  *bool   `json:"injected,omitempty"`
+	// LikelyUsed is the use proxy: the reply repeated a word only this fact carried.
+	// nil means unjudged — nothing was handed over, or the turn is still running.
+	LikelyUsed *bool `json:"likely_used,omitempty"`
 }
 
 // AppendMemoryRecallTurn records a turn's decision, replacing an earlier entry

@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:9bea41ce760b50aa87b27af3d146b1a897838ab67ed31b09c11be6e0c8bb952b";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:9d001a7cf27d3842d3c078af668a6408bfffa945bddb0b3e24d3aac3ea741ec8";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -3217,6 +3217,7 @@ export interface RecallUsageFact {
   currentRevision?: number;
   superseded?: boolean;
   live: boolean;
+  used?: number;
 }
 
 export interface RecapOpenItemView {

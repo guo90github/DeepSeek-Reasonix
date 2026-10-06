@@ -1796,6 +1796,7 @@ export const zh: Record<DictKey, string> = {
   "memory.usageHint": "本工作区 {sessions} 个会话的召回记录",
   "memory.usageUses": "命中 {uses} 次 · 注入 {injected} · 挤掉 {dropped}",
   "memory.usageNeverInjected": "命中 {uses} 次·从未注入",
+  "memory.usageUnused": "注入 {injected} 次·正文未见使用",
   "memory.usageSuperseded": "已被新版本取代（用 r{used}，现为 r{current}）",
   "memory.usageGone": "已不在记忆库",
   "memory.usageTruncated": "已达显示上限，仅列出使用最多的部分",

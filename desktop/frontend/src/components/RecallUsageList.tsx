@@ -84,6 +84,9 @@ export function RecallUsageList({
               {((fact.uses ?? 0) > 0 && (fact.injected ?? 0) === 0) && (
                 <span className="chip chip--warn">{t("memory.usageNeverInjected", { uses: String(fact.uses ?? 0) })}</span>
               )}
+              {((fact.injected ?? 0) > 0 && (fact.used ?? 0) === 0) && (
+                <span className="chip chip--warn">{t("memory.usageUnused", { injected: String(fact.injected ?? 0) })}</span>
+              )}
             </div>
           ))}
         </>

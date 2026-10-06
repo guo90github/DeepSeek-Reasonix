@@ -2891,6 +2891,7 @@ export const zhTW: Record<DictKey, string> = {
   "memory.usageHint": "本工作區 {sessions} 個會話的召迴記錄",
   "memory.usageUses": "命中 {uses} 次 · 注入 {injected} · 擠掉 {dropped}",
   "memory.usageNeverInjected": "命中 {uses} 次·從未注入",
+  "memory.usageUnused": "注入 {injected} 次·正文未見使用",
   "memory.usageSuperseded": "已被新版本取代（用 r{used}，現為 r{current}）",
   "memory.usageGone": "已不在記憶庫",
   "memory.usageTruncated": "已達顯示上限，僅列出使用最多的部分",

@@ -36,6 +36,8 @@ type RecallUsageFact struct {
 	CurrentRevision int    `json:"currentRevision,omitempty"`
 	Superseded      bool   `json:"superseded,omitempty"`
 	Live            bool   `json:"live"`
+	// Used counts the hand-overs the use proxy read as used; it never feeds a decision.
+	Used int `json:"used,omitempty"`
 }
 
 // RecallQueryUsage is one query fingerprint's repeat pattern: the same question
@@ -153,6 +155,9 @@ func recallUsageForSessions(sessions []SessionMeta, liveFacts []memory.Memory) R
 					fact.Dropped++
 				default:
 					fact.Unrecorded++
+				}
+				if outcome == outcomeInjected && hit.LikelyUsed != nil && *hit.LikelyUsed {
+					fact.Used++
 				}
 				if hit.Revision > fact.UsedRevision {
 					fact.UsedRevision = hit.Revision

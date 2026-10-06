@@ -96,8 +96,10 @@ func (c *Controller) recordTurnOutcome() {
 	if c.executor != nil {
 		outcome.MissingIDs = c.executor.LastMissingObligations()
 	}
+	reply := lastAssistantText(c.History())
 	_ = agent.UpdateBranchMeta(path, false, func(meta *agent.BranchMeta) error {
 		agent.AppendTurnOutcome(meta, outcome)
+		c.markRecallUse(meta, turn, reply)
 		return nil
 	})
 }

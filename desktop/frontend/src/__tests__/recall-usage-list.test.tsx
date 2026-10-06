@@ -87,6 +87,7 @@ const rendered = await render(async () => record);
 ok(rendered.text.includes("3"), `the header reports the scanned sessions: ${rendered.text.trim()}`);
 ok(rendered.text.includes("发布目标仍写 v1"), "a row leads with the fact's own description");
 ok(rendered.text.includes("命中 4 次"), "a row counts the uses");
+ok(rendered.text.includes("注入 3 次·正文未见使用"), "an injected-but-unused fact carries the proxy signal");
 ok(
   rendered.text.includes("已被新版本取代（用 r1，现为 r3）"),
   "a used revision the store moved past is marked superseded",

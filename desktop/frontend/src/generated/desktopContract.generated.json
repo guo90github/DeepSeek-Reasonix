@@ -30333,6 +30333,13 @@
           "type": {
             "kind": "boolean"
           }
+        },
+        {
+          "name": "used",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
         }
       ]
     },

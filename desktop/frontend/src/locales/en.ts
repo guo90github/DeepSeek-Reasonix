@@ -1795,6 +1795,7 @@ export const en = {
   "memory.usageHint": "{sessions} sessions in this workspace",
   "memory.usageUses": "used {uses}× · {injected} injected · {dropped} dropped",
   "memory.usageNeverInjected": "matched {uses}× but never injected",
+  "memory.usageUnused": "injected {injected}× but the reply never mentioned it",
   "memory.usageSuperseded": "superseded (used r{used}, now r{current})",
   "memory.usageGone": "no longer in the store",
   "memory.usageTruncated": "capped at the most-used facts",
