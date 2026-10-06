@@ -40,6 +40,9 @@ type memoryManager struct {
 	pending    []string
 	lastRecall memory.RecallResult
 	autoWrites map[[32]byte]int
+	// autoRecall is fixed at construction: a turn either injects facts by itself or
+	// leaves retrieval to the model, and flipping that mid-turn would be unexplained.
+	autoRecall bool
 
 	// writeMu serializes memory writes so each write+reload+swap is atomic with
 	// respect to the others. Taken OFF mu, so a read (current/drainPending) never
@@ -103,9 +106,30 @@ func (m *memoryManager) lastRecallResult() memory.RecallResult {
 	return m.lastRecall
 }
 
-func newMemoryManager(set *memory.Set) memoryManager {
-	return memoryManager{set: set}
+func newMemoryManager(set *memory.Set, autoRecall bool) memoryManager {
+	return memoryManager{set: set, autoRecall: autoRecall}
 }
+
+// memoryOnDemandBlock rides a turn whose automatic recall is off: without it "on
+// demand" silently becomes "never", because nothing tells the model it can ask.
+const memoryOnDemandBlock = "<memory-on-demand>\nAutomatic memory recall is off: no saved fact was injected. Use the `memory` tool (search or read) when a saved fact would settle the question.\n</memory-on-demand>"
+
+// recordSuppressedRecall notes a turn that recalled nothing on purpose, on both the
+// in-session trace and the session sidecar: an unexplained empty turn looks broken.
+func (c *Controller) recordSuppressedRecall(source, reason string) {
+	suppressed := memory.RecallResult{
+		Query:      strings.TrimSpace(source),
+		TurnSeq:    c.Turn(),
+		Suppressed: reason,
+	}
+	c.memory.recordRecall(suppressed)
+	c.recordMemoryRecallTurn(suppressed)
+}
+
+// autoRecallEnabled reports whether a turn injects facts by itself. Off means
+// retrieval is on demand, so the turn body has to say so or the model is left
+// unaware that anything is missing.
+func (m *memoryManager) autoRecallEnabled() bool { return m.autoRecall }
 
 // memoryRecallAudit strips a recall decision to its content-free fingerprint
 // for the trajectory/telemetry channel.

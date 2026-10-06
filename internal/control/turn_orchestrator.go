@@ -132,7 +132,7 @@ func (o *turnOrchestrator) runSubagentSkillTurns(ctx context.Context, skills []s
 	ctx = agent.WithReasoningLanguagePreference(ctx, c.reasoningLanguage)
 	ctx = c.withTurnContext(ctx, true)
 
-	turn := c.beginTurn()
+	turn := c.nextTurn()
 	input := c.compose(task, raw, true)
 	startMessages := c.messageCount()
 	var marker agent.InFlightTurnMeta
@@ -209,7 +209,7 @@ func (o *turnOrchestrator) runOrchestratedTurn(ctx context.Context, turn orchest
 	ctx = agent.WithRawUserInput(ctx, turn.raw)
 	ctx = withTurnInputOrigin(ctx, turn.synthetic)
 	continuation := turn.goalContinuation
-	turnSeq := c.beginTurn()
+	turnSeq := c.nextTurn()
 	var input string
 	if continuation != nil {
 		input = c.composeWithGoal(

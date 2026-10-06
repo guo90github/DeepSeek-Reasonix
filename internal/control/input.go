@@ -224,7 +224,14 @@ func (c *Controller) composeWithGoal(
 		// Relevant facts ride only the real user-turn tail. This preserves the
 		// stable system/tool prefix and keeps synthetic recovery turns free of
 		// accidental recall. A just-written fact already arrives in memory-update.
-		if len(notes) == 0 && !c.ablation.Off(ablation.Retrieval) {
+
+		// Step 4: with automatic recall off nothing is injected, and the body says so,
+		// because a model that does not know memory exists cannot ask for it.
+		switch {
+		case !c.memory.autoRecallEnabled():
+			c.recordSuppressedRecall(source, "automatic recall is off; retrieve on demand")
+			text = strings.TrimRight(text, "\n") + "\n\n" + memoryOnDemandBlock
+		case len(notes) == 0 && !c.ablation.Off(ablation.Retrieval):
 			result := c.memory.recall(source)
 			result.TurnSeq = c.Turn()
 			event.RecordMemoryRecall(c.sink, memoryRecallAudit(result))
@@ -232,12 +239,8 @@ func (c *Controller) composeWithGoal(
 			if block := result.Block(); block != "" {
 				text = strings.TrimRight(text, "\n") + "\n\n" + block
 			}
-		} else if len(notes) > 0 {
-			c.memory.recordRecall(memory.RecallResult{
-				Query:      strings.TrimSpace(source),
-				TurnSeq:    c.Turn(),
-				Suppressed: "memory update already supplies the new fact",
-			})
+		case len(notes) > 0:
+			c.recordSuppressedRecall(source, "memory update already supplies the new fact")
 		}
 		// Unfinished items a person kept from earlier sessions are offered on a
 		// session's first turn and on turns that say they continue something;

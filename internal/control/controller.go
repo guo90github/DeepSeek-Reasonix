@@ -637,6 +637,9 @@ type Options struct {
 	// host user-turn snapshot rather than the cache-stable system prompt. Only
 	// Environment and Workspace are consumed; memory and skills stay live.
 	SessionContextStatic sessioncontext.Sections
+	// MemoryAutoRecall gates automatic fact injection; nil means on. Turning it off
+	// makes retrieval on demand, which the turn body then says out loud.
+	MemoryAutoRecall *bool
 	// FileBranchesOnly keeps fork, branch, switch, and conversation rewind on
 	// separate session files even for schema-2 logs. The desktop sets it until
 	// its tabs bind to heads; every other frontend branches inside the log.
@@ -776,7 +779,7 @@ func New(opts Options) *Controller {
 		readOnlySkillRunner:               opts.ReadOnlySkillRunner,
 		skillProfile:                      opts.SkillProfile,
 		hooks:                             opts.Hooks,
-		memory:                            newMemoryManager(opts.Memory),
+		memory:                            newMemoryManager(opts.Memory, opts.MemoryAutoRecall == nil || *opts.MemoryAutoRecall),
 		cleanup:                           opts.Cleanup,
 		responseLanguage:                  config.NormalizeLanguage(opts.ResponseLanguage),
 		reasoningLanguage:                 config.NormalizeReasoningLanguage(opts.ReasoningLanguage),
@@ -2145,6 +2148,7 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	rawInput := input
 	ctx = c.withTurnImages(ctx, rawInput)
 	ctx = agent.WithRawUserInput(ctx, rawInput)
+	turn := c.nextTurn()
 	input = c.Compose(input)
 	// input.receive: same interception seam as the orchestrated turn — the
 	// composed headless input crosses the extension chain before it enters
@@ -2163,7 +2167,6 @@ func (c *Controller) runReady(ctx context.Context, input string) (err error) {
 	if c.guardianSess != nil {
 		c.guardianSess.ResetTurn()
 	}
-	turn := c.nextTurn()
 	if c.hooks.Enabled() {
 		if block, _ := c.hooks.PromptSubmit(ctx, input, turn); block {
 			return nil
@@ -2282,7 +2285,7 @@ func (c *Controller) RuntimeStatus() RuntimeStatus {
 	}
 }
 
-// Turn returns the turn being processed: 1 after the first beginTurn, 0 before it.
+// Turn returns the turn being processed: 1 after the first nextTurn, 0 before it.
 func (c *Controller) Turn() int {
 	c.mu.Lock()
 	defer c.mu.Unlock()

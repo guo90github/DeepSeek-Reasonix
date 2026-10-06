@@ -1814,10 +1814,12 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		imageEnabled = infoProvider.ModelInfo().SupportsInput(provider.ModalityImage)
 	}
 	imageSnapshot := config.ModelCapabilitySnapshot(cfg, modelCapabilities)
+	memoryAutoRecall := config.MemoryAutoRecallEnabled()
 	ctrlOpts := control.Options{
 		ModelSettingsRevision:          cfg.ModelRuntimeFingerprint(modelRef),
 		ModelSettingsCurrent:           runtimeModelSettingsReader(root, modelName, modelRef, opts.ModelSettings),
 		FrozenImageInput:               &imageEnabled,
+		MemoryAutoRecall:               &memoryAutoRecall,
 		ImageCapabilityChanged:         runtimeImageCapabilityReader(root, modelName, imageSnapshot, opts.ModelSettings),
 		TaskBudget:                     taskBudgetFromConfig(cfg),
 		GoalTokenBudget:                cfg.Agent.GoalTokenBudget,

@@ -20,3 +20,22 @@ func MemoryFactCaps() (project, global int) {
 	}
 	return partial.Memory.MaxProjectFacts, partial.Memory.MaxGlobalFacts
 }
+
+// MemoryAutoRecallEnabled reports whether a turn injects recalled facts by itself.
+// Unset means on: turning it off makes retrieval on demand — pollution-free by
+// construction, but a fact then reaches the model only when the model asks.
+func MemoryAutoRecallEnabled() bool {
+	path := userConfigLoadPath()
+	if path == "" {
+		return true
+	}
+	var partial struct {
+		Memory struct {
+			AutoRecall *bool `toml:"auto_recall"`
+		} `toml:"memory"`
+	}
+	if _, err := decodeTOMLFile(path, &partial); err != nil {
+		return true
+	}
+	return partial.Memory.AutoRecall == nil || *partial.Memory.AutoRecall
+}

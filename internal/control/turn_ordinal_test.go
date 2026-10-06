@@ -22,9 +22,9 @@ func TestTurnOrdinalAdvancesWithoutHooks(t *testing.T) {
 		t.Fatalf("turn = %d before any submit, want 0", got)
 	}
 
-	c.beginTurn()
+	c.nextTurn()
 	c.RecordSkillUse("hot", "abc123")
-	c.beginTurn()
+	c.nextTurn()
 	c.RecordSkillUse("hot", "abc123")
 
 	meta, ok, err := agent.LoadBranchMeta(path)
@@ -46,12 +46,12 @@ func TestTurnOrdinalAdvancesWithoutHooks(t *testing.T) {
 	}
 
 	// The recall record travels on the same ordinal: two turns, two records.
-	c.beginTurn()
+	c.nextTurn()
 	c.recordMemoryRecallTurn(memory.RecallResult{
 		TurnSeq: c.Turn(),
 		Hits:    []memory.RecallHit{{Memory: memory.Memory{ID: "mem-a", Revision: 1}}},
 	})
-	c.beginTurn()
+	c.nextTurn()
 	c.recordMemoryRecallTurn(memory.RecallResult{
 		TurnSeq: c.Turn(),
 		Hits:    []memory.RecallHit{{Memory: memory.Memory{ID: "mem-b", Revision: 1}}},
