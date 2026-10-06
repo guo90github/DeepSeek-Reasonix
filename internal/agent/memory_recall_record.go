@@ -13,11 +13,14 @@ type MemoryRecallTurn struct {
 	TurnSeq   int    `json:"turn_seq"`
 	QueryHash string `json:"query_hash,omitempty"`
 	// SnapshotDigest fingerprints the session-context the turn actually saw.
-	SnapshotDigest string                `json:"snapshot_digest,omitempty"`
-	UsedChars      int                   `json:"used_chars,omitempty"`
-	Omitted        int                   `json:"omitted,omitempty"`
-	Suppressed     string                `json:"suppressed,omitempty"`
-	Hits           []MemoryRecallTurnHit `json:"hits,omitempty"`
+	SnapshotDigest string `json:"snapshot_digest,omitempty"`
+	// QueryExcerpt is the local half of the record: the ask, one line at most, so a
+	// polluted turn can be traced back to it. The sidecar sits beside the transcript.
+	QueryExcerpt string                `json:"query_excerpt,omitempty"`
+	UsedChars    int                   `json:"used_chars,omitempty"`
+	Omitted      int                   `json:"omitted,omitempty"`
+	Suppressed   string                `json:"suppressed,omitempty"`
+	Hits         []MemoryRecallTurnHit `json:"hits,omitempty"`
 }
 
 // MemoryRecallTurnHit is one fact's fingerprint in that turn. Injected separates

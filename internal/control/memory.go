@@ -333,6 +333,7 @@ func (c *Controller) recordMemoryRecallTurn(result memory.RecallResult) {
 	}
 	turn := agent.MemoryRecallTurn{
 		TurnSeq: result.TurnSeq, QueryHash: recallQueryHash(result.Query),
+		QueryExcerpt:   recallQueryExcerpt(result.Query),
 		SnapshotDigest: c.executorTurnDigest(),
 		UsedChars:      result.UsedChars, Omitted: result.Omitted, Suppressed: result.Suppressed,
 	}
@@ -361,6 +362,18 @@ func (c *Controller) recordMemoryRecallTurn(result memory.RecallResult) {
 		agent.AppendMemoryRecallTurn(meta, turn)
 		return nil
 	})
+}
+
+// recallQueryExcerptRunes bounds the local excerpt so a long turn cannot bloat the
+// sidecar; the transcript beside it still holds the whole text.
+const recallQueryExcerptRunes = 60
+
+func recallQueryExcerpt(query string) string {
+	line := strings.Join(strings.Fields(query), " ")
+	if runes := []rune(line); len(runes) > recallQueryExcerptRunes {
+		return string(runes[:recallQueryExcerptRunes]) + "…"
+	}
+	return line
 }
 
 // recallQueryHash keeps the record content-free: the query's text stays out.

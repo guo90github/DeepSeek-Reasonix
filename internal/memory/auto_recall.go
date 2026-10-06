@@ -185,6 +185,9 @@ func autoRecallIndexed(index *RecallIndex, result RecallResult, opts RecallOptio
 		if !strongRecallMatch(result.Query, queryTerms, matched) {
 			continue
 		}
+		if !discriminativeMatch(matched, df, len(docs)) {
+			continue
+		}
 		score := retrieval.BM25Score(doc.counts, doc.length, queryTerms, df, len(docs), avgLen)
 		if score <= 0 {
 			continue
@@ -293,6 +296,32 @@ func matchedRecallTerms(queryTerms []string, counts map[string]int) []string {
 		}
 	}
 	return matched
+}
+
+// A matched term carries evidence only if it is rare in the pool: at most
+// recallDiscriminativeFacts facts may carry it, or the pool's share below. Both
+// bounds are deliberate — precision over completeness is the point.
+const (
+	recallDiscriminativeFacts = 3
+	recallDiscriminativeRatio = 8
+)
+
+// discriminativeMatch requires a term that says something about this turn rather
+// than about the library. Sharing two words every fact carries ("记忆"/"预算")
+// passes the ≥2-term gate, which is how unrelated facts reached the top of a
+// turn's ranking; measured on a real session: three unrelated facts injected, all
+// eleven candidates passing the old gate.
+func discriminativeMatch(matched []string, df map[string]int, docs int) bool {
+	limit := recallDiscriminativeFacts
+	if share := docs / recallDiscriminativeRatio; share > limit {
+		limit = share
+	}
+	for _, term := range matched {
+		if df[term] <= limit {
+			return true
+		}
+	}
+	return false
 }
 
 // strongRecallMatch keeps automatic recall out of one-common-word territory.

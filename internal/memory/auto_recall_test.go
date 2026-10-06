@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -225,5 +226,32 @@ func TestAutoRecallRecordsDroppedHits(t *testing.T) {
 		if hit.Memory.ID == "" {
 			t.Fatalf("dropped hit lacks an identity: %+v", hit)
 		}
+	}
+}
+
+// A turn whose words are shared by the whole library must not pull facts in: two
+// common terms used to be enough, which is how unrelated facts reached the top of a
+// turn's ranking. A term owned by one fact must still recall it — the fix must not
+// trade pollution for silence.
+func TestAutoRecallNeedsADiscriminativeTerm(t *testing.T) {
+	store := recallTestStore(t)
+	for i := range 6 {
+		recallTestWrite(t, store.Dir, Memory{
+			ID: fmt.Sprintf("mem-common-%d", i), Name: fmt.Sprintf("common-%d", i),
+			Description: "项目记忆自动召回预算", Type: TypeProject, Scope: FactScopeProject,
+			Body: "自动召回的记忆预算与过滤规则。",
+		})
+	}
+	if result := AutoRecall(store, "项目记忆自动召回预算规则", RecallOptions{}); len(result.Hits) != 0 {
+		t.Fatalf("hits = %+v, want words the whole library shares to recall nothing", result.Hits)
+	}
+
+	recallTestWrite(t, store.Dir, Memory{
+		ID: "mem-unique", Name: "unique", Description: "支付部署到绿色集群",
+		Type: TypeProject, Scope: FactScopeProject, Body: "把支付部署到绿色集群。",
+	})
+	result := AutoRecall(store, "把支付部署到绿色集群", RecallOptions{})
+	if len(result.Hits) == 0 || result.Hits[0].Memory.ID != "mem-unique" {
+		t.Fatalf("hits = %+v, want the fact that owns the distinctive terms", result.Hits)
 	}
 }
