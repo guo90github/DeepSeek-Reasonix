@@ -17,6 +17,16 @@ import type { AgentBusBriefingView } from "./AgentBusPanel";
 /** The badge is a convenience, not a live view: one cheap local board read per tick. */
 const BADGE_POLL_MS = 30000;
 
+// Leftover subtrees are history the panel folds away, so they never charge the badge: a card kept
+// alive by a hearing verdict has no step a retirement could close, and a count nobody can clear is
+// not a reading (2026-10-06).
+function liveSignals(briefing: AgentBusBriefingView) {
+  const leftover = new Set(
+    (briefing.cards ?? []).filter((card) => card.leftover).map((card) => card.subtree),
+  );
+  return (briefing.signals ?? []).filter((signal) => signal.subtree === "" || !leftover.has(signal.subtree));
+}
+
 export function AgentBusStatusItem({ loadBriefing, loadStatus, join, leave }: {
   /** Injected so the chip's two states can be tested without the host. */
   loadBriefing?: () => Promise<AgentBusBriefingView>;
@@ -32,7 +42,7 @@ export function AgentBusStatusItem({ loadBriefing, loadStatus, join, leave }: {
   const readAttention = useCallback(async () => {
     try {
       const briefing = await (loadBriefing ? loadBriefing() : app.AgentBusBriefing());
-      setAttention((briefing.signals ?? []).length);
+      setAttention(liveSignals(briefing).length);
     } catch {
       setAttention(null);
     }

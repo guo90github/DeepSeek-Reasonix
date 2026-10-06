@@ -83,6 +83,72 @@ await act(async () => {
   second.unmount();
 });
 
+// A card whose parties have all left is history the panel folds away, so it is no longer a call to
+// work: the badge stays silent for it, and a live step beside it is still counted (2026-10-06).
+const leftoverCard = {
+  subtree: "ghost-hearing",
+  nodes: 1,
+  atWork: 0,
+  parked: 0,
+  done: 1,
+  worst: "escalated",
+  signals: 1,
+  orphans: 0,
+  stalled: 0,
+  disputed: 0,
+  leftover: true,
+};
+const liveCard = { ...leftoverCard, subtree: "mine", worst: "stalled", leftover: false };
+// One row per card, so the history-only brief really carries only history.
+const briefWith = (cards: (typeof leftoverCard)[]) => ({
+  participant: "alice",
+  cards,
+  signals: cards.map((card) => ({
+    kind: card.worst,
+    subtree: card.subtree,
+    node: card.subtree,
+    detail: card.leftover ? "escalated to a human (equal-weight)" : "needs handoff: lease lapsed",
+  })),
+  hidden: 0,
+  hiddenCards: 0,
+  healthySubtrees: 0,
+});
+
+const historyOnly = dom.window.document.createElement("div");
+const fourth = createRoot(historyOnly);
+await act(async () => {
+  fourth.render(
+    <LocaleProvider>
+      <AgentBusStatusItem loadBriefing={async () => briefWith([leftoverCard])} loadStatus={async () => onBoard} />
+    </LocaleProvider>,
+  );
+});
+ok(
+  historyOnly.querySelector(".statusbar__collab-badge") === null,
+  "a card nobody here can act on never charges the badge",
+);
+await act(async () => {
+  fourth.unmount();
+});
+
+const withLive = dom.window.document.createElement("div");
+const fifth = createRoot(withLive);
+await act(async () => {
+  fifth.render(
+    <LocaleProvider>
+      <AgentBusStatusItem loadBriefing={async () => briefWith([leftoverCard, liveCard])} loadStatus={async () => onBoard} />
+    </LocaleProvider>,
+  );
+});
+const liveBadge = withLive.querySelector(".statusbar__collab-badge");
+ok(
+  liveBadge !== null && liveBadge.textContent === "1",
+  "the live step beside the history is what the badge counts",
+);
+await act(async () => {
+  fifth.unmount();
+});
+
 // Clicking the entry has to reach the same surface the workspace panel shows —
 // enrolment included — or the entry would be a dead end for a new session.
 const opened = dom.window.document.createElement("div");

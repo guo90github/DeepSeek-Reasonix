@@ -145,7 +145,13 @@ func TestTheUnreachableRowFollowsTheBoardAndNotTheProcess(t *testing.T) {
 	if idle := rowFor(); idle != "" {
 		t.Fatalf("row = %q, want nobody named while the step is just startable", idle)
 	}
-	// Make it attention-worthy — and let every party to it be a departed session.
+	// Make it attention-worthy. This session stakes a claim of its own first: a refutation alone
+	// records no participant of its own, so the card would read as history and the next test's rule
+	// would hide the row this one is about.
+	writeAs(t, ctrl, board.Op{
+		Verb: board.VerbAssert, Node: "ghost-open-work", Actor: ctrl.AgentBusParticipant(),
+		Evidence: []board.Evidence{{Kind: "test", Ref: "mine"}},
+	})
 	writeAs(t, ctrl, board.Op{
 		Verb: board.VerbRefute, Node: "ghost-open-work", Actor: "skeptic-ghost",
 		Reason: "cannot check it",
@@ -159,5 +165,39 @@ func TestTheUnreachableRowFollowsTheBoardAndNotTheProcess(t *testing.T) {
 	}
 	if after := rowFor(); after != "" {
 		t.Fatalf("row = %q, want no unreachable row once that work is retired", after)
+	}
+}
+
+// History is not a call to work. A card whose every party has left is folded as leftover, and the row
+// must not report it as blocked work: a verdict outlives the node it settled (a hearing verdict is
+// the production shape), so no retirement can close those cards and the row would never clear.
+func TestALeftoverOnlyBoardNamesNobody(t *testing.T) {
+	app, ctrl, _ := agentBusEnrolApp(t)
+	if _, err := app.AgentBusJoin(); err != nil {
+		t.Fatalf("join: %v", err)
+	}
+	evidence := []board.Evidence{{Kind: "test", Ref: "leftover"}}
+	writeAs(t, ctrl, board.Op{Verb: board.VerbAssert, Node: "ghost-only", Actor: "ghost", Evidence: evidence})
+	writeAs(t, ctrl, board.Op{
+		Verb: board.VerbRefute, Node: "ghost-only", Actor: "skeptic-ghost", Reason: "cannot check it",
+	})
+
+	view, err := app.AgentBusBriefing()
+	if err != nil {
+		t.Fatalf("briefing: %v", err)
+	}
+	folded := false
+	for _, card := range view.Cards {
+		if card.Subtree == "ghost-only" {
+			folded = card.Leftover
+		}
+	}
+	if !folded {
+		t.Fatalf("cards = %+v, want the departed participants' step folded as leftover", view.Cards)
+	}
+	for _, signal := range view.Signals {
+		if signal.Kind == "wake_unreachable" {
+			t.Fatalf("row = %q, want nobody named while the only attention is history", signal.Detail)
+		}
 	}
 }
