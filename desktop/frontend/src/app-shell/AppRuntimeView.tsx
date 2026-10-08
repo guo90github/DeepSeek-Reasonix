@@ -32,6 +32,7 @@ import { FloatingViewLayer } from "../components/FloatingViewLayer";
 import { dockViewToMain, flushViewPlacements, tearOffView, useViewPlacementStore } from "../store/viewPlacements";
 import { noticePreviewMockEnabled } from "./NoticePreviewPanel";
 import { DecisionFooterRegion } from "./DecisionFooterRegion";
+import { PendingDecisionBanner } from "./PendingDecisionBanner";
 import { FOOTER_PANEL_MODULES } from "../components/footerPanelModules";
 import { WorkspaceDockRegion } from "./WorkspaceDockRegion";
 import { AppBottomRegions } from "./AppBottomRegions";
@@ -397,6 +398,13 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
           <SessionStatusBanners {...buildSessionStatusBannerProps({
             t,
             activeTab,
+            pendingDecisions: (
+              <PendingDecisionBanner
+                t={t}
+                activeTabId={activeTabId ?? ""}
+                onOpen={(tabId) => session.sessionTabs.onTabChange(tabId)}
+              />
+            ),
             leaseBlocked: session.leaseBlockedTab ? { tabId: session.leaseBlockedTab.id, message: session.leaseBlockedTab.runtime!.issue!.message } : null,
             meta: state.meta,
             configWarnings: shell.preferences.configLoadWarnings,

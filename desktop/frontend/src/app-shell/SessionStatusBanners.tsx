@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import type { Translator } from "../lib/i18n";
 import { RemoteReclaimBanner } from "../components/RemoteReclaimBanner";
 import { UpdateBanner } from "../components/UpdateBanner";
@@ -25,6 +25,7 @@ export type SessionStatusBannersProps = {
   onConfigureProvider: () => void;
   updateChecksEnabled: boolean;
   onShowReleaseNotes: (latest: string) => void;
+  pendingDecisions?: ReactNode;
 };
 
 /** Presentation-only banner stack between the topic bar and the main pane. */
@@ -57,6 +58,7 @@ export function SessionStatusBanners(props: SessionStatusBannersProps) {
           <SessionTakeoverDialog tabId={props.takeoverDialogTabId} onClose={props.onCloseTakeover} />
         </Suspense>
       ) : null}
+      {props.pendingDecisions}
       {props.configWarnings.length > 0 && (
         <div className="banner banner--warning banner--actionable">
           <span className="banner__msg" title={props.configWarnings.join("\n")}>

@@ -2974,6 +2974,12 @@ a[href] {
 .banner--actionable .btn {
   flex: 0 0 auto;
 }
+.pending-decisions__open {
+  max-width: 16em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .banner__progress {
   width: 180px;
   height: 8px;

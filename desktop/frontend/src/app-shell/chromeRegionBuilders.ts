@@ -101,6 +101,7 @@ export function buildSessionStatusBannerProps(input: {
   shell: ShellStores;
   banners: BannerCommands;
   onboarding: OnboardingCommands;
+  pendingDecisions?: SessionStatusBannersProps["pendingDecisions"];
 }): SessionStatusBannersProps {
   const { banners, shell, onboarding } = input;
   return {
@@ -125,6 +126,7 @@ export function buildSessionStatusBannerProps(input: {
     },
     updateChecksEnabled: input.updateChecksEnabled,
     onShowReleaseNotes: banners.showReleaseNotes,
+    pendingDecisions: input.pendingDecisions,
   };
 }
 
