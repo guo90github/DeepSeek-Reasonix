@@ -35,6 +35,7 @@ import { ServiceSupervisor } from "./service.js";
 import { claimShellInstance } from "./singleInstance.js";
 import { TrayHost } from "./tray.js";
 import { DEFAULT_GEOMETRY, MainWindow } from "./window.js";
+import { RendererTrust } from "./windowTrust.js";
 import { AppZoomStore } from "./zoomStore.js";
 import { GraphicsSettingsStore, loadGraphicsBootstrap } from "./graphics.js";
 
@@ -131,6 +132,11 @@ function bootstrap(dataHome: string): void {
     zoomStore,
   });
 
+  // The browser window is a second trusted renderer: the IPC gate and the
+  // session permission handler both read this one decision.
+  const trust = new RendererTrust(() => mainWindow.browserWindow);
+  mainWindow.setTrustGate((sender, frame) => trust.isTrusted(sender, frame));
+
   let browserWindowRef: BrowserWindow | null = null;
   // The browser window owns the website views while it is open; a single owner
   // keeps two renderers from fighting over the same native view.
@@ -217,10 +223,12 @@ function bootstrap(dataHome: string): void {
     // yet — the protocol has no browserWindow.* entry and Go has no consumer.
     onOpened: (win) => {
       browserWindowRef = win as unknown as BrowserWindow;
+      trust.trust(browserWindowRef.webContents);
       routing.setOwner(browserWindowRef);
       reparentSurface();
     },
     onClosed: () => {
+      trust.forget(browserWindowRef?.webContents ?? null);
       browserWindowRef = null;
       routing.setOwner(null);
       reparentSurface();

@@ -38,6 +38,7 @@ export class MainWindow {
   private closeAllowed = false;
   private readonly appOrigin: string;
   private readonly mover: WindowMover;
+  private trustGate: ((sender: WebContents, frame: WebFrameMain | null | undefined) => boolean) | null = null;
 
   constructor(private readonly deps: MainWindowDeps) {
     let origin = APP_ORIGIN;
@@ -174,7 +175,14 @@ export class MainWindow {
     this.closeAllowed = true;
   }
 
+  /** The shell widens the trusted renderer set for its second window. The IPC
+   *  gate and the session permission handler read this one decision. */
+  setTrustGate(gate: ((sender: WebContents, frame: WebFrameMain | null | undefined) => boolean) | null): void {
+    this.trustGate = gate;
+  }
+
   isTrustedSender(sender: WebContents, frame: WebFrameMain | null | undefined): boolean {
+    if (this.trustGate?.(sender, frame)) return true;
     const win = this.browserWindow;
     return Boolean(win) && sender === win?.webContents && frame != null && frame === win.webContents.mainFrame;
   }
