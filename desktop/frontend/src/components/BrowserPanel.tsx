@@ -26,6 +26,42 @@ export function BrowserDockTab({ active, onSelect }: { active: boolean; onSelect
   );
 }
 
+/**
+ * The dock's browser tab body now that pages live in their own window: live
+ * status plus the one action that matters. Views and take-over belong to the
+ * window, so nothing here embeds a website view.
+ */
+export function BrowserWindowEntry() {
+  const copy = useBrowserCopy();
+  const host = desktopHost().browser;
+  const tabs = useBrowserPanelStore((state) => state.shown);
+  useEffect(() => {
+    if (!host) return;
+    return useBrowserPanelStore.getState().attach(host, () => {});
+  }, [host]);
+  const openWindow = host?.openWindow;
+  return (
+    <section className="browser-entry" aria-label={copy.panel}>
+      <p className="browser-entry__title">{copy.windowTitle}</p>
+      <p className="browser-entry__hint">{copy.windowHint}</p>
+      <p className="browser-entry__count">{copy.windowTabCount(tabs.length)}</p>
+      <button type="button" className="browser-entry__open" disabled={!openWindow} onClick={() => openWindow?.()}>
+        {copy.windowOpen}
+      </button>
+      {tabs.length > 0 && (
+        <ul className="browser-entry__list">
+          {tabs.slice(0, 5).map((tab) => (
+            <li key={tab.id} className="browser-entry__item" title={tab.url}>
+              <span className="browser-entry__item-title">{tab.title || tab.url || copy.untitled}</span>
+              {tab.temporary && <span className="browser-entry__badge">{copy.temporary}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export function BrowserPanel({ taskId }: { taskId: string | undefined }) {
   const copy = useBrowserCopy();
   const { showToast } = useToast();

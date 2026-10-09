@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useCommittedCommand } from "../lib/useCommittedCommand";
+import { desktopHost } from "../lib/desktopHost";
 import { DOCK_ENTRIES } from "../lib/dockEntries";
 import { launcherCardSpaceModeFor, resolveLauncherCardState, type SpaceMode } from "../lib/launcherCardState";
 import type { Translator } from "../lib/i18n";
@@ -124,10 +125,16 @@ export function useWorkspacePanelCommands(input: Input) {
     // Seed the destination preference before project restoration can run.
     saveWorkspacePanelOpen(false, workspaceRoot);
   });
-  // Opening a launcher entry expands the dock to that entry's tab.
+  // Opening a launcher entry expands the dock to that entry's tab, except the
+  // browser: its pages live in their own window, so that entry opens the window.
   const openDockEntry = useCommittedCommand((entryId: string) => {
     const entry = DOCK_ENTRIES.find(candidate => candidate.id === entryId);
     if (!entry) return;
+    const openWindow = entry.defaultTab === "browser" ? desktopHost().browser?.openWindow : undefined;
+    if (openWindow) {
+      openWindow();
+      return;
+    }
     openRightDockMode(dockModeForTab(entry.defaultTab));
   });
   // Plain open/close: expanding restores whatever tabs the project had and

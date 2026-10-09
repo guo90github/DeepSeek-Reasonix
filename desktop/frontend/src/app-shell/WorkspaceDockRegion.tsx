@@ -47,8 +47,9 @@ export type WorkspaceDockRegionProps = {
  * workspace panel with its own files/changed view tabs filling the rest — so
  * 文件/改动 stay inside the 概览 tab instead of being top-level tabs. Creation
  * shows only the files tab and the plain workspace panel. A shell that exposes
- * an embedded browser adds its tab beside them, and a browser tab opened from
- * the launcher card renders here too.
+ * an embedded browser adds its tab beside them; that tab carries the browser
+ * window's status and the action that opens it, because the pages themselves
+ * live in their own window.
  */
 export function WorkspaceDockRegion(props: WorkspaceDockRegionProps) {
   const { visible, overlay, mode, creation, remoteAvailable, showContext, t, onMode, onRemote, onClose } = props;
@@ -88,7 +89,7 @@ export function WorkspaceDockRegion(props: WorkspaceDockRegionProps) {
             {mode === "remote" ? (
               <Suspense fallback={null}><RemotePanel {...props.remote} /></Suspense>
             ) : mode === "browser" ? (
-              <Suspense fallback={null}><BrowserSurface surface="panel" taskId={props.workspace.tabId} /></Suspense>
+              <Suspense fallback={null}><BrowserSurface surface="entry" /></Suspense>
             ) : merged ? (
               <>
                 <Suspense fallback={null}><ContextPanel {...props.context} /></Suspense>

@@ -301,3 +301,82 @@
   height: 3px;
   accent-color: var(--accent);
 }
+
+/* The dock keeps the window's status; the pages themselves live in the
+   independent browser window. */
+.browser-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 12px;
+  color: var(--fg);
+}
+
+.browser-entry__title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.browser-entry__hint,
+.browser-entry__count {
+  margin: 0;
+  color: var(--fg-dim);
+  line-height: 1.35;
+}
+
+.browser-entry__count {
+  color: var(--fg-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.browser-entry__open {
+  align-self: flex-start;
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  cursor: pointer;
+}
+
+.browser-entry__open:hover:not([disabled]) {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.browser-entry__open[disabled] {
+  border-color: var(--border-soft);
+  color: var(--fg-faint);
+  background: transparent;
+  cursor: default;
+}
+
+.browser-entry__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.browser-entry__item {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.browser-entry__item-title {
+  overflow-wrap: anywhere;
+  color: var(--fg-dim);
+}
+
+.browser-entry__badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius);
+  color: var(--fg-faint);
+  background: var(--bg-soft);
+  white-space: nowrap;
+}

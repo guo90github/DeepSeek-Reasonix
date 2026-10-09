@@ -17,10 +17,12 @@ class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
 (dom.window as unknown as { ResizeObserver: unknown }).ResizeObserver = TestResizeObserver;
 
 const noop = () => {};
+let openedWindows = 0;
 const browser: DesktopBrowserHost = {
   list: async () => [], open: async () => { throw new Error("unused"); }, close: async () => {}, activate: async () => {},
   navigate: async () => {}, setZoom: async () => {}, toggleDevTools: async () => {}, resume: async () => {},
   setLayout: noop, setOverlay: noop, onTabs: () => noop, onDownload: () => noop,
+  openWindow: () => { openedWindows += 1; },
 };
 const electron: ReasonixDesktopHost = {
   kind: "electron",
@@ -77,7 +79,8 @@ try {
   await paint("browser");
   await settle();
   assert.deepEqual(tabLabels(), ["rightDock.overview"], "no shell host: browser mode offers no browser tab");
-  assert.equal(present(".browser-panel"), true, "the panel shell is host-independent");
+  assert.equal(present(".browser-entry"), true, "browser mode still renders the window entry");
+  assert.equal(document.querySelector<HTMLButtonElement>(".browser-entry__open")?.disabled, true, "without a host the open action is inert");
 
   window.reasonixDesktop = electron;
   await paint("files");
@@ -94,7 +97,10 @@ try {
   await settle();
   assert.equal(tabSelected("rightDock.overview"), "false", "the 概览 tab yields to the browser tab");
   assert.equal(tabSelected(label), "true");
-  assert.equal(present(".browser-panel"), true, "browser mode mounts the lazy panel in the dock body");
+  assert.equal(present(".browser-entry"), true, "browser mode mounts the window entry in the dock body");
+  assert.equal(present(".browser-panel"), false, "the panel itself is no longer embedded in the dock");
+  await act(async () => document.querySelector<HTMLButtonElement>(".browser-entry__open")!.click());
+  assert.equal(openedWindows, 1, "the entry opens the independent window");
   assert.equal(present(".workbench-dock--browser"), true, "the dock carries the mode modifier");
   assert.equal(present(".workbench-dock__body--merged"), false, "the merged overview body is not rendered for the browser tab");
 
@@ -109,7 +115,7 @@ try {
 
   delete window.reasonixDesktop;
   await act(async () => root.unmount());
-  console.log("browser dock mode: gating, mode switch, lazy mount and creation shape passed");
+  console.log("browser dock mode: gating, mode switch, window entry and creation shape passed");
 } catch (error) {
   console.error(error);
   process.exitCode = 1;
