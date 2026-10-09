@@ -103,6 +103,7 @@ export function FooterRecallModule({ tabId }: FooterPanelModuleProps) {
     const live = liveFacts.get(hit.id);
     const liveBody = live ? [live.description, live.body].filter(Boolean).join("\n\n").trim() : "";
     const slug = (hit.name ?? "").trim();
+    const reason = (hit.reason ?? "").trim();
     // The record's own label wins; the live fact list only supplies this row's
     // tooltip and the body the modal can still resolve today.
     const hint = own === "" ? (resolved?.hint ?? null) : slug === "" || slug === own ? (resolved?.hint ?? null) : slug;
@@ -123,8 +124,18 @@ export function FooterRecallModule({ tabId }: FooterPanelModuleProps) {
           t(recallHitStateKey(recallHitState(hit))),
           ...(liveBody === "" ? [] : [t("footerPanel.recallLiveFact")]),
         ],
-        body: liveBody === "" ? hit.id : liveBody,
-        bodyStyle: liveBody === "" ? "mono" : "prose",
+        // Why the fact was kept is secondary information: it gets its own muted
+        // line rather than another tag in the state row.
+        body:
+          reason === "" ? (
+            liveBody === "" ? hit.id : liveBody
+          ) : (
+            <>
+              <p className="footer-panel__note">{t("footerPanel.recallEvidence", { reason })}</p>
+              {liveBody === "" ? hit.id : liveBody}
+            </>
+          ),
+        bodyStyle: reason === "" && liveBody === "" ? "mono" : "prose",
       },
       hint,
     };

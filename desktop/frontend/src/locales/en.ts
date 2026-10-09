@@ -364,6 +364,7 @@ export const en = {
   "footerPanel.showLess": "Show less",
   "footerPanel.recallSkills": "Skill",
   "footerPanel.recallLiveFact": "Current fact",
+  "footerPanel.recallEvidence": "Evidence: {reason}",
 
   // topic bar
   "topicBar.renameSession": "Rename session",

@@ -285,6 +285,7 @@ export const zhTW: Record<DictKey, string> = {
   "footerPanel.showLess": "收合",
   "footerPanel.recallSkills": "技能",
   "footerPanel.recallLiveFact": "現行記憶",
+  "footerPanel.recallEvidence": "召回依據：{reason}",
 
   // 話題欄
   "topicBar.renameSession": "重新命名會話",

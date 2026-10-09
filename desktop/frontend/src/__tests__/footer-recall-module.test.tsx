@@ -80,7 +80,13 @@ const record: RecallRecordView = {
       turnSeq: 4,
       omitted: 2,
       hits: [
-        { id: "mem-injected", revision: 3, score: 0.81, injected: true },
+        {
+          id: "mem-injected",
+          revision: 3,
+          score: 0.81,
+          injected: true,
+          reason: "matched 方案与决策 in label fields (6 of 4 runes needed); project scope",
+        },
         { id: "mem-dropped", revision: 1, score: 0.22, injected: false },
         { id: "mem-labeled", name: "slug-only", title: "只读落盘也能读的名字", injected: true },
       ],
@@ -187,6 +193,16 @@ console.log("\nfooter recall module");
   );
   ok(document.body.textContent?.includes(t("footerPanel.recallLiveFact")) === true, "a body taken from today's fact list is marked as such");
   ok(document.body.textContent?.includes("整条事实的正文") === true, "the dialog carries the fact the id resolves to today");
+  ok(
+    document.body.textContent?.includes(
+      t("footerPanel.recallEvidence", { reason: "matched 方案与决策 in label fields (6 of 4 runes needed); project scope" }),
+    ) === true,
+    "the dialog says why the hit was kept, in the record's own words",
+  );
+  ok(
+    document.querySelectorAll(".footer-detail__body .footer-panel__note").length === 1,
+    "the evidence rides one muted line of its own, not another tag in the state row",
+  );
   await escape();
   ok(document.querySelector('[role="dialog"]') === null, "Escape closes the dialog");
 

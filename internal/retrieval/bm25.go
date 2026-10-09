@@ -57,6 +57,25 @@ func isCJK(r rune) bool {
 	return unicode.In(r, unicode.Han, unicode.Hiragana, unicode.Katakana, unicode.Hangul)
 }
 
+// ContentRunes counts the letters, digits and CJK runes a string contributes.
+// It is the denominator a matcher measures how much of a turn a fact shares.
+func ContentRunes(s string) int {
+	n := 0
+	for _, r := range s {
+		if isCJK(r) || unicode.IsLetter(r) || unicode.IsDigit(r) {
+			n++
+		}
+	}
+	return n
+}
+
+// CJKBigram reports whether a token is one overlapping bigram of a CJK run —
+// the unit that can chain with its neighbours into a shared phrase.
+func CJKBigram(term string) bool {
+	runes := []rune(term)
+	return len(runes) == 2 && isCJK(runes[0]) && isCJK(runes[1])
+}
+
 // Unique returns terms in first-seen order.
 func Unique(in []string) []string {
 	seen := map[string]bool{}

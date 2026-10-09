@@ -365,6 +365,7 @@ export const zh: Record<DictKey, string> = {
   "footerPanel.showLess": "收起",
   "footerPanel.recallSkills": "技能",
   "footerPanel.recallLiveFact": "现行记忆",
+  "footerPanel.recallEvidence": "召回依据：{reason}",
 
   // 话题栏
   "topicBar.renameSession": "重命名会话",

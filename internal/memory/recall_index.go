@@ -35,10 +35,12 @@ func BuildRecallIndex(store Store) *RecallIndex {
 			continue
 		}
 		index.docs = append(index.docs, autoRecallDoc{
-			memory: memory,
-			text:   text,
-			counts: retrieval.Counts(terms),
-			length: len(terms),
+			memory:   memory,
+			text:     text,
+			lower:    strings.ToLower(text),
+			identity: strings.ToLower(autoRecallIdentityText(memory)),
+			counts:   retrieval.Counts(terms),
+			length:   len(terms),
 		})
 	}
 	return index
