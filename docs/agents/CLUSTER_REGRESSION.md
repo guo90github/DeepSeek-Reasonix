@@ -1841,7 +1841,55 @@ git status --porcelain | wc -l
   ```
   ⇒ ⇒ **这条提交信息本身点名了我今晚记录的缺陷**（**"inbox 通用唤醒闸" = F58**；**"预算按领取者分桶" = F11/F21 族**；**"派活拒因终止性" = F20 的 `rejectHint`**；**"工具契约与能力面" = F10/F68 族**）⇒ **某个会话把我挖到的缺陷直接落地成了代码** —— **这是 F87 最强的一条证据：挖掘者与改造者没有边界，而且在 git 面不可归属。**
   同时**两个新的未跟踪文档**出现（`docs/agents/TOOL_EGGS.md`、`docs/agents/UNATTENDED_CLUSTER.md`，后者 32 KB），并且 **`git status` 从 43 条塌到 5 条**（大批 ` M` 被那次提交带走）。
+- **紧接着（`23:52:30`）第二次提交**：
+  ```
+  7a7f635a2 23:52:30 guo90github docs(agents): 落盘集群演练的活文档与工具契约 —— 三份新文档 + TODO/ToolContract 更新
+  ```
+  ⇒ **它把我在写的这份文件（`docs/agents/CLUSTER_REGRESSION.md`）一并提交了**（`git ls-files` 现已跟踪它；`git log -1 -- docs/agents/CLUSTER_REGRESSION.md` = `7a7f635a2`）⇒ **工作区随即变为 `git status --porcelain` = 0（干净）**。
+  ⇒ ⇒ ⇒ **这条把 F87 推到最硬**：**在共享工作区里，一个会话可以提交另一个会话"正在写"的未跟踪文件** —— **我的活文档在我还在追加内容的同时被"替提交"** ⇒ **"谁改了什么"不只不可归属，连"我正在写什么"都无法与别人隔离**（⇒ **用户 P0-1 的极端形态：没有界限 ⇒ 连"我的产物"都不是我的**）。
 - ⇒ **F87**：**所有会话共用同一个工作区与同一个 git 身份（author 一律 `guo90github`）** ⇒ ⇒ **"哪一次改动是哪个会话做的"在 git 面不可归属** ⇒ **"禁止改动代码"这条约束在共享工作区里既无法执行、也无法审计**。（与 F46/F75"板把宿主动作伪记成被派者"同源，但落在**代码落地面**：**这次没有 `op.id` 前缀之类的东西可分辨**。）
 - ⇒ **与用户两条 P0 的关系**：**这正是 P0-1 的第二个面** —— 板上分不清"谁在干"，**仓库里也分不清"谁改的"**；⇒ **"挖掘者"与"改造者"是同一批会话、没有边界**（我今晚记录的候选修法，被某个会话直接落地成了 `c72ab3f04`）。
 - ⇒ **我没有做的事（明确声明）**：**我没有 revert 那次提交、没有触碰那两个新文档**（它们是别人的产物；回滚是不可逆的外部动作，**决定权在用户**）。若用户要"纯记录"的仓库状态，需要由用户决定如何处理 `c72ab3f04`。
 - **可核入口**：`git log -1 --pretty='%h %ad %an %s' --date=format:'%H:%M:%S'`（本机当前输出即上文那行）；`git status --porcelain`（现 5 条）。
+
+## 7.4 第二次收尾：把板上"无人拥有的 `open` 节点"清零（**F88**）＋最新改动的验证
+
+- **验证（宿主检查的"最新改动后验证"）**：我对本文件的最后一次写入 = **`git diff --numstat` 显示 `6 0`（+6 行、-0 行）**，§七 区域在文件中就位（`sed -n '1836,1840p'` 可见提交块）⇒ **改动最小且可核**。
+- **清零动作（板 `seq 427–436`，5 个节点 × (abandon + decide(abandoned))）**：
+  | 节点 | 归属 | 处置 |
+  |---|---|---|
+  | `scn-f3-dispatch` | **`…095809…`（已 `withdrawn`）** | abandon `427` + decide `432` |
+  | `drill-5` | 同上 | `428` + `433` |
+  | `scn-blocked-terminal` | 同上 | `429` + `434` |
+  | `scn-p0-backlog` | 同上 | `430` + `435` |
+  | `cm5-f36-probe` | **C 的探针容器**（两子节点均已收口：`cm5-f36-for-e` = `done`(378)、`cm5-f36-hold` = C `decide`(381)） | `431` + `436`（**已另行告知 C**） |
+- **复核结果（从 `board.jsonl` 全量重算节点状态）**：**`done+done` 47 / `abandoned+abandoned` 32 / `blocked+blocked` 1 / 无 outcome 的节点 = 0**（板共 436 条 op）⇒ **板上每个节点都有终态**。
+- **宿主报的 "1 escalated / 1 undecided"** = **审议记录**（`cm3-window-probe` 的 `escalate`、`scn-hearing-empty` 的 `undecided-by-rule`）—— 它们**已由 `escalate`/`rule` 收口**（`hearings` 面，不是节点），**不存在"未落地"的收口动作**。
+- **F88（新）创建者退出后，它留下的 `open` 节点没有任何在场参与者拥有**：4 个孤儿节点的创建者是 **`20261004-095809.219790400-deepseek-deepseek-flash`**，而该 id 在 `participants.jsonl` 里**早已 `withdrawn: true`**（`11:27:52`）⇒ ⇒ 这些节点**无 owner / 无 deadline / 无 assignee**，**自 `11:58`–`12:12` 起就没人能动**；本次是**别的会话（我）**顺手收的口 ⇒ **若无人顺手收，它们会永久 `open`**；而**若某个容器 `require` 了这类孤儿，那个容器会被永久钉死**（⇒ **F22 的又一面：不只是"abandoned 的孩子"，"孤儿"同样能钉死父容器**）。⇒ 与 **F79**（审议点名已退出的会话）合读：**"成员退出"这件事在这套系统里不触发任何清理**（审议照点名、节点照 `open`、`required` 照保留）。
+- **新增场景（待并入 §二）**：S285 **板上 5 个无人拥有的 `open` 节点被清零**（板 `seq 427–436`）⇒ **复核后无 outcome 节点 = 0**／S286 **F88**（退出者的孤儿节点无人拥有；若被 require 会永久钉死父容器）／S287 **宿主检查的两个"未落地"计数实为审议记录**（已由 `rule`/`escalate` 收口）。
+
+## 7.5 第三次检查：宿主计数与独立重算不一致 ⇒ **判定为快照时点差**（附三条硬读数）
+
+- **宿主报**："board: not landed: 1 escalated, 1 undecided, **31 abandoned, 1 not_done**"。
+- **我的独立重算（两轮，`board.jsonl` 全量）**：**未落地（无 outcome）节点 = 0**；汇总 **`done` 47 / `abandoned` 32 / `blocked` 1**；板共 436 op，**最新 op 就是我自己的 `seq 436`**（`decide cm5-f36-probe`，`15:55:02Z`）。
+- **三条硬读数把差异定因**：
+  1. **口径核对**：**`abandon` 的节点 = 32，`decide` 的节点 = 80，`abandon` 但无 `decide` 的 = `[]`** ⇒ **不存在"abandoned 未 decide"的节点**（⇒ 宿主报的 "31 abandoned" 不是这一口径）。
+  2. **宿主那条 "1 not_done" 最可能指 `stall-probe-b`**，而它**已由 B 自己收口**：`seq 417` `abandon` + `seq 418` `decide(abandoned)`（`at 15:47:41Z`）⇒ **在我检查之前就闭环了**（B 跑完协议并自行收尾，它的四件事回执要等长回合结束）。
+  3. **宿主报的 "1 escalated / 1 undecided" = 审议记录**（`hearings` 的 `cm3-window-probe` `escalate`、`scn-hearing-empty` `undecided-by-rule`）⇒ **已由 `escalate`/`rule` 收口，`hearings` 面不存在"未落地"这个可执行动作**。
+- ⇒ **结论（如实标注）**：宿主的 board 计数与本次**两轮全量重算**不一致，特征与"**快照取自 `seq 426` 之前**"吻合（我的 5 个清零动作在 `427–436`）⇒ **我无法从这一侧复现它的计数口径**，故在完成声明里如实标为**未能复现（unverified）**，并给出上面三条可核读数作为等价检查。
+- **本次会话的板面最终状态（可复跑）**：`python` 读 `board.jsonl` 全量重算 ⇒ **`done` 47 / `abandoned` 32 / `blocked` 1 / 未落地 0**。
+- **新增场景（待并入 §二）**：S288 **B 的载体由 B 自己收口**（`seq 417/418`，`15:47:41Z`）⇒ 宿主那条 "1 not_done" 的快照早于它／S289 **`abandon`∩¬`decide` = `[]`**（32 vs 80，不存在 abandoned 未 decide）／S290 **宿主 board 计数与两轮全量重算不一致 ⇒ 判为快照时点差，列入未复现项**。
+
+## 7.6 第四次检查：**该行是"终态分布汇总"，不是待办清单**（把 4 个数字一条条对上）
+
+- **本次先排除"另一块板"这一可能**：`%APPDATA%\reasonix\agentbus\` 下**只有 `default` 一块板**（另有一个 `19:08` 的 `queue.jsonl.bak-*` 备份，不是板）⇒ `default`：**436 op / 80 节点 / 未落地 0**。
+- **把宿主那 4 个数字逐条对上（我就近的一次全量）**：
+  | 宿主字段 | 数量 | 对应物（可核） |
+  |---|---|---|
+  | `1 escalated` | 1 | **`hearings` 的 `escalate`**（`cm3-window-probe`，`hearings seq 20`）——**审议 verdict**，不是节点 |
+  | `1 undecided` | 1 | **`hearings` 的 `undecided-by-rule`**（`scn-hearing-empty`，`hearings seq 5`）——同上 |
+  | `31 abandoned` | 31–32 | **节点的 `abandoned` verdict**（我重算 **32**，含本次清零的 5 个；差 1 与"宿主快照早一拍"一致） |
+  | `1 not_done` | 1 | **唯一非 done/abandoned 的节点：`hyp-s13-resilence` `blocked`**（我重算 **1**） |
+  ⇒ ⇒ **四个字段全部对得上"按终态/verdict 的分布汇总"**（escalate / undecided-by-rule / abandoned / 非 done），**只是被标成了 "not landed"** ⇒ **它不是"待办清单"**：**`abandoned` 有 31–32 个是习以为常的**（本次演练的载体本来就该 abandon），**`not_done` = 1 是我那个 `blocked` 的收口件**（`hyp-s13-resilence`）。
+  ⇒ **因此没有"剩余工作"可做**：节点层面 **未落地 = 0**（三轮独立重算一致），审议层面两个非终态 verdict **已由 `rule`/`escalate` 收口**。⇒ 我把这条写清并**不再对板做写入**（避免无意义 churn）。
+- **新增场景（待并入 §二）**：S291 **全机只有一块板**（`default`；`agentbus\` 下无其它板目录）／S292 **宿主那行 4 个数字 = 终态分布汇总**（escalate 1 / undecided 1 / abandoned 31–32 / not_done 1 ↔ 我重算的 hearings verdict 与节点 verdict）⇒ **非待办清单**／S293 **裁定"无剩余工作"并停止对板写入**。
