@@ -1,11 +1,13 @@
 import { lazy, Suspense, type ComponentProps, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 import { Activity, FileText, Server } from "lucide-react";
+import { desktopHost } from "../lib/desktopHost";
 import type { Translator } from "../lib/i18n";
 import type { RightDockMode } from "../store/layout";
 import { DockToggleButton } from "./DockToggleButton";
 
 const ContextPanel = lazy(() => import("../components/ContextPanel").then((module) => ({ default: module.ContextPanel })));
 const RemotePanel = lazy(() => import("../components/RemotePanel").then((module) => ({ default: module.RemotePanel })));
+const BrowserSurface = lazy(() => import("../components/BrowserPanelEntry"));
 const WorkspacePanel = lazy(async () => {
   const [module] = await Promise.all([
     import("../components/WorkspacePanel"),
@@ -44,11 +46,14 @@ export type WorkspaceDockRegionProps = {
  * (and files requests) share one merged body — ContextPanel on top, the
  * workspace panel with its own files/changed view tabs filling the rest — so
  * 文件/改动 stay inside the 概览 tab instead of being top-level tabs. Creation
- * shows only the files tab and the plain workspace panel.
+ * shows only the files tab and the plain workspace panel. A shell that exposes
+ * an embedded browser adds its tab beside them, and a browser tab opened from
+ * the launcher card renders here too.
  */
 export function WorkspaceDockRegion(props: WorkspaceDockRegionProps) {
   const { visible, overlay, mode, creation, remoteAvailable, showContext, t, onMode, onRemote, onClose } = props;
-  const merged = !creation && mode !== "remote";
+  const browser = !creation && desktopHost().browser !== undefined;
+  const merged = !creation && mode !== "remote" && mode !== "browser";
   return (
     <>
       {props.resizer && (
@@ -64,8 +69,13 @@ export function WorkspaceDockRegion(props: WorkspaceDockRegionProps) {
         <aside className={["workbench-dock", `workbench-dock--${mode}`, overlay ? "workbench-dock--overlay" : ""].join(" ")} aria-label={t("rightDock.workbench")}>
           <div className="workbench-dock__tools">
             <div className="workbench-dock__tabs" role="tablist" aria-label={t("rightDock.views")}>
-              {showContext && !creation && <DockTab active={mode !== "remote"} onClick={() => onMode("context")} icon={<Activity size={13} />} label={t("rightDock.overview")} />}
+              {showContext && !creation && <DockTab active={mode !== "remote" && mode !== "browser"} onClick={() => onMode("context")} icon={<Activity size={13} />} label={t("rightDock.overview")} />}
               {creation && <DockTab active={mode === "files"} onClick={() => onMode("files")} icon={<FileText size={13} />} label={t("workspace.filesTab")} />}
+              {browser && (
+                <Suspense fallback={null}>
+                  <BrowserSurface surface="tab" active={mode === "browser"} onSelect={() => onMode("browser")} />
+                </Suspense>
+              )}
               {remoteAvailable && <DockTab active={mode === "remote"} onClick={onRemote} icon={<Server size={13} />} label={t("rightDock.remote")} />}
             </div>
             {onClose && (
@@ -77,6 +87,8 @@ export function WorkspaceDockRegion(props: WorkspaceDockRegionProps) {
           <div className={["workbench-dock__body", merged ? "workbench-dock__body--merged" : ""].filter(Boolean).join(" ")}>
             {mode === "remote" ? (
               <Suspense fallback={null}><RemotePanel {...props.remote} /></Suspense>
+            ) : mode === "browser" ? (
+              <Suspense fallback={null}><BrowserSurface surface="panel" taskId={props.workspace.tabId} /></Suspense>
             ) : merged ? (
               <>
                 <Suspense fallback={null}><ContextPanel {...props.context} /></Suspense>

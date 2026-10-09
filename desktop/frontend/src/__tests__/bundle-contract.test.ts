@@ -79,14 +79,12 @@ ok(
   lazyRuntimeImport("../app-shell/SidebarRegion.tsx", "../components/ProjectTree"),
   "Sidebar Region owns the lazy project tree import without an eager runtime edge",
 );
-// Upstream's tab dock lazy-loads BrowserPanelEntry from the dock region; this
-// branch's dock carries no browser tab, so the guarantee that still holds — and
-// still matters for the first-paint bundle — is that nothing imports the entry.
+// The dock owns the browser entry's lazy import: the panel, its copy and its
+// store stay out of the first-paint bundle, and a browser tab opened from the
+// launcher card has a body to render into.
 ok(
-  ts.sys.readDirectory(resolve(here, ".."), [".ts", ".tsx"])
-    .filter((file) => !file.includes("__tests__"))
-    .every((file) => !readFileSync(file, "utf8").includes("components/BrowserPanelEntry")),
-  "the browser panel entry has no importer, so it cannot enter any first-paint bundle",
+  lazyRuntimeImport("../app-shell/WorkspaceDockRegion.tsx", "../components/BrowserPanelEntry"),
+  "the dock lazy-loads the browser panel entry without an eager runtime edge",
 );
 ok(
   lazyRuntimeImport("../lib/controllerEventRecovery.ts", "./controllerEventRecoveryWorker"),
