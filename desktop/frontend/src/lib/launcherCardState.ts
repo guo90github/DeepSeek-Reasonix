@@ -26,3 +26,15 @@ export function resolveLauncherCardState({ spaceMode, dismissed }: LauncherCardI
   const renderable = spaceMode === "full";
   return { renderable, visible: renderable && !dismissed };
 }
+
+// The width gate protects the card while it competes for layout space. Over an
+// open dock column, and in the split layout (which positions the card
+// absolutely — components/splitWorkspace.css), it takes none, so the measured
+// yield must not make its toggle inert.
+export function launcherCardSpaceModeFor({ gridOpen, overlayHost, measured }: {
+  gridOpen: boolean;
+  overlayHost: boolean;
+  measured: SpaceMode;
+}): SpaceMode {
+  return gridOpen || overlayHost ? "full" : measured;
+}

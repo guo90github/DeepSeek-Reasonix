@@ -597,6 +597,7 @@ export function useAppSessionComposition(input: AppSessionCompositionInput) {
     closeOverlays: closeTransientOverlays, clearLiveWidth: setLiveWorkspacePanelRenderWidth,
     availableWidth: workspacePanelAvailableWidth, clampTreeWidth: rightDockTreeWidthClamp, setTreeWidth: setRightDockTreeWidth,
     gridOpen: surfaceWorkspacePanelGridOpen,
+    overlayHost: desktopLayoutStyle === "split",
     t,
   });
   const { openRightDockMode } = workspacePanelCommands;

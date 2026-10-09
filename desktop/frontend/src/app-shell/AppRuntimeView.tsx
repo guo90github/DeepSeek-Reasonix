@@ -387,11 +387,11 @@ export function AppRuntimeView(props: AppRuntimeViewProps) {
               onOpenTaskSession={navigationCommands.openTaskMonitorSession}
               creation={sidebarCreation}
               dockToggle={<DockToggleButton renderable={surfaceWorkspacePanelRenderable} t={t} onToggle={session.workspacePanelCommands.toggleWorkspacePanel} />}
-              launcherToggle={<LauncherToggleButton
+              launcherToggle={session.workspacePanelCommands.launcherCard.renderable ? <LauncherToggleButton
                 visible={session.workspacePanelCommands.launcherCard.visible}
                 t={t}
                 onToggle={session.workspacePanelCommands.toggleLauncherCard}
-              />}
+              /> : null}
             />
           </TopicbarRegion>
 

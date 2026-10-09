@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 import { useCommittedCommand } from "../lib/useCommittedCommand";
 import { DOCK_ENTRIES } from "../lib/dockEntries";
-import { resolveLauncherCardState, type SpaceMode } from "../lib/launcherCardState";
+import { launcherCardSpaceModeFor, resolveLauncherCardState, type SpaceMode } from "../lib/launcherCardState";
 import type { Translator } from "../lib/i18n";
 import { loadWorkspacePanelOpen, saveWorkspacePanelOpen, useLayoutStore, type RightDockMode } from "../store/layout";
 import { useActivityBarStore, type TabType } from "../store/activityBar";
@@ -19,6 +19,9 @@ type Input = {
   /** True while the dock column occupies grid space: the card then overlays
    *  the transcript instead of taking layout space from it. */
   gridOpen: boolean;
+  /** True while the layout renders the card as an overlay (the split surface):
+   *  it never competes for layout space there, so the yield rule does not apply. */
+  overlayHost: boolean;
   t: Translator;
 };
 
@@ -67,8 +70,10 @@ export function useWorkspacePanelCommands(input: Input) {
   const [launcherDismissed, setLauncherDismissed] = useState(false);
   const [launcherSpaceMode, setLauncherSpaceMode] = useState<SpaceMode>("full");
   // The narrow-surface yield only matters while the card takes layout space
-  // from the chat column; over an open dock it overlays and never squeezes.
-  const launcherCardSpaceMode = input.gridOpen ? "full" : launcherSpaceMode;
+  // from the chat column; over an open dock, or over the split surface's panes,
+  // it overlays and never squeezes.
+  const launcherCardOverlay = input.gridOpen || input.overlayHost;
+  const launcherCardSpaceMode = launcherCardSpaceModeFor({ gridOpen: input.gridOpen, overlayHost: input.overlayHost, measured: launcherSpaceMode });
   const launcherCard = resolveLauncherCardState({ spaceMode: launcherCardSpaceMode, dismissed: launcherDismissed });
   // The card stays mounted whenever it could be shown, even while the space
   // mode hides it: only the mounted card measures its host, so unmounting on
@@ -190,7 +195,7 @@ export function useWorkspacePanelCommands(input: Input) {
     openRightDockMode, closeWorkspacePanel, prepareBlankWorkspace, openDockEntry,
     toggleWorkspacePanel, toggleWorkspaceMaximized, handleWorkspacePreviewModeChange,
     openRemoteDock, restoreWorkspaceDockWidths,
-    launcherCard, launcherCardMounted, launcherCardOverlay: input.gridOpen,
+    launcherCard, launcherCardMounted, launcherCardOverlay,
     toggleLauncherCard, setLauncherSpaceMode,
   };
 }

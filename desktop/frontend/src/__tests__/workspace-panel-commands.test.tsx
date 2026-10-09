@@ -21,9 +21,9 @@ const globalRoot = "/fixture/global-workspace";
 let navigation!: ReturnType<typeof useSessionNavigationCommands>;
 let navigationRequest: unknown;
 const setTreeWidth = (width: number) => { restoredWidth = width; };
-function Probe({ workspace, creation, visible }: { workspace: string; creation: boolean; visible: boolean }) {
+function Probe({ workspace, creation, visible, overlayHost = false }: { workspace: string; creation: boolean; visible: boolean; overlayHost?: boolean }) {
   commands = useWorkspacePanelCommands({ workspaceRoot: workspace, creation, visible, closeOverlays, clearLiveWidth,
-    availableWidth: 800, clampTreeWidth: (width) => width, setTreeWidth, gridOpen: visible, t: (key: string) => key } as never);
+    availableWidth: 800, clampTreeWidth: (width) => width, setTreeWidth, gridOpen: visible, overlayHost, t: (key: string) => key } as never);
   navigation = useSessionNavigationCommands({
     activeTab: { id: "fixture", scope: workspace === globalRoot ? "global" : "project", workspaceRoot: workspace },
     closeTransientOverlays: closeOverlays, clearImDetail: () => {}, prepareBlankWorkspace: commands.prepareBlankWorkspace,
@@ -31,7 +31,8 @@ function Probe({ workspace, creation, visible }: { workspace: string; creation: 
   } as SessionNavigationCommandsInput);
   return null;
 }
-const paint = (workspace: string, creation = false, visible = false) => act(async () => root.render(<Probe workspace={workspace} creation={creation} visible={visible} />));
+const paint = (workspace: string, creation = false, visible = false, overlayHost = false) =>
+  act(async () => root.render(<Probe workspace={workspace} creation={creation} visible={visible} overlayHost={overlayHost} />));
 try {
   saveWorkspacePanelOpen(false, "A"); saveWorkspacePanelOpen(true, "B");
   await paint("A");
@@ -103,9 +104,25 @@ try {
   assert.deepEqual(navigationRequest, { kind: "blank", scope: "global", workspaceRoot: "" });
   await paint("A");
   assert.equal(useLayoutStore.getState().workspacePanelOpen, true, "global creation preserves the source project's preference");
+  // The split surface renders the card as an overlay, so a measured narrow
+  // surface must leave its toggle actionable — the in-flow card still yields.
+  await paint("A");
+  await act(async () => { commands.setLauncherSpaceMode("full"); });
+  if (!commands.launcherCardMounted) await act(async () => { commands.toggleLauncherCard(); });
+  assert.equal(commands.launcherCardMounted, true, "a wide surface's toggle brings the card back");
+  await act(async () => { commands.setLauncherSpaceMode("hidden"); });
+  assert.equal(commands.launcherCard.renderable, false, "an in-flow card yields a narrow surface");
+  await act(async () => { commands.toggleLauncherCard(); });
+  assert.equal(commands.launcherCardMounted, true, "an inert narrow-surface toggle must not dismiss the card");
+  await paint("A", false, false, true);
+  assert.equal(commands.launcherCard.visible, true, "an overlay host keeps the card on screen over a narrow surface");
+  await act(async () => { commands.toggleLauncherCard(); });
+  assert.equal(commands.launcherCardMounted, false, "the overlay host's toggle dismisses the card");
+  await act(async () => { commands.toggleLauncherCard(); });
+  assert.equal(commands.launcherCardMounted, true, "and summons it back");
   await act(async () => root.unmount());
   const before = { closes, widthClears, layout: useLayoutStore.getState() };
   first.openRightDockMode("changed"); first.toggleWorkspaceMaximized(); first.closeWorkspacePanel();
   assert.deepEqual({ closes, widthClears, layout: useLayoutStore.getState() }, before, "disposed entries cannot change layout or project preferences");
-  console.log("workspace commands: scoped restoration, Creation, preview/maximize, remote requests and synchronous disposal passed");
+  console.log("workspace commands: scoped restoration, Creation, preview/maximize, remote requests, launcher overlay and synchronous disposal passed");
 } finally { dom.window.close(); }
