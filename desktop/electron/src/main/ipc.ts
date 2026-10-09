@@ -48,6 +48,13 @@ export interface BrowserRendererApi {
   setOverlay(active: boolean): void;
 }
 
+// The independent browser window: opening it is a user action, so it carries no
+// grant; like the panel, every call is gated on the trusted sender.
+export interface BrowserWindowRendererApi {
+  open(): void;
+  close(): void;
+}
+
 export interface RendererIpcDeps {
   ipcMain: IpcMain;
   contract: LoadedContract;
@@ -58,6 +65,7 @@ export interface RendererIpcDeps {
   graphics?: GraphicsSettingsStore;
   openExternal(url: string): Promise<void>;
   browser?: BrowserRendererApi;
+  browserWindow?: BrowserWindowRendererApi;
   log: Logger;
 }
 
@@ -149,6 +157,14 @@ export function registerRendererIpc(deps: RendererIpcDeps): void {
     if (!deps.graphics) throw new Error("graphics settings unavailable");
     return deps.graphics.setHardwareAcceleration(enabled);
   });
+
+  // Registered ahead of the panel's early return: the window host stands on its
+  // own and the panel is optional.
+  const browserWindow = deps.browserWindow;
+  if (browserWindow) {
+    handle(IPC.browserWindowOpen, () => browserWindow.open());
+    handle(IPC.browserWindowClose, () => browserWindow.close());
+  }
 
   const browser = deps.browser;
   if (!browser) return;

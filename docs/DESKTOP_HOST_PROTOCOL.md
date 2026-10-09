@@ -265,6 +265,8 @@ interface ReasonixDesktopHost {
     resume(tabId: string): Promise<void>;          // hand a taken-over tab back to the agent
     setLayout(rect: { x: number; y: number; width: number; height: number } | null): void;
     setOverlay(active: boolean): void;             // app overlays hide every website view
+    openWindow(): void;                            // opens (or focuses) the independent browser window
+    closeWindow(): void;
     onTabs(cb: (tabs: BrowserTabView[]) => void): () => void;
     onDownload(cb: (download: BrowserDownloadView) => void): () => void;
   };

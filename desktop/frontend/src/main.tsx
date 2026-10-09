@@ -70,6 +70,11 @@ prewarmFontFallbacks();
 
 installMessageSelectionCopy(document);
 
+// The independent browser window loads this same bundle with ?surface=browser:
+// the dock surface is the whole window there, so the app shell and its larger
+// chunk graph never load.
+const browserSurfaceOnly = new URLSearchParams(window.location.search).get("surface") === "browser";
+
 // Inside the desktop shell, suppress the webview's default right-click menu — its
 // Reload / Back / Inspect entries are easy to hit by accident and can reset or
 // navigate away from the app. Text inputs keep their native Cut/Copy/Paste menu;
@@ -110,6 +115,21 @@ async function mountApp() {
     return;
   }
   if (localeResult.status === "rejected") console.error("failed to preload desktop locale", localeResult.reason);
+  if (browserSurfaceOnly) {
+    const { default: BrowserSurface } = await import("./components/BrowserPanelEntry");
+    createRoot(rootElement).render(
+      <StrictMode>
+        <ErrorBoundary>
+          <LocaleProvider>
+            <ToastProvider>
+              <BrowserSurface surface="panel" taskId={undefined} />
+            </ToastProvider>
+          </LocaleProvider>
+        </ErrorBoundary>
+      </StrictMode>,
+    );
+    return;
+  }
   createRoot(rootElement).render(
     <StrictMode>
       <ErrorBoundary>

@@ -173,6 +173,8 @@ const browser = {
   takeover: (tabId: string) => call(IPC.browserUserTakeover, tabId).then(() => undefined),
   setLayout: (rect: BrowserLayoutRect | null) => fire(IPC.browserSetLayout, rect),
   setOverlay: (active: boolean) => fire(IPC.browserSetOverlay, active),
+  openWindow: () => fire(IPC.browserWindowOpen),
+  closeWindow: () => fire(IPC.browserWindowClose),
   onTabs,
   onDownload,
 };

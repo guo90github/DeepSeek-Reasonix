@@ -1,4 +1,4 @@
-import { app, clipboard, dialog, ipcMain, net, protocol, screen, session, shell } from "electron";
+import { BrowserWindow, app, clipboard, dialog, ipcMain, net, protocol, screen, session, shell } from "electron";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { IPC, type BrowserTakeoverKind } from "../shared/ipc.js";
@@ -10,6 +10,7 @@ import { GrantRegistry } from "./browser/grants.js";
 import { buildBrowserHostCalls } from "./browser/hostCalls.js";
 import { browserLayoutInDIP } from "./browser/layout.js";
 import { BrowserSurfaceManager } from "./browser/surfaceManager.js";
+import { BrowserWindowHost } from "./browserWindow.js";
 import { loadBuildIdentity } from "./buildIdentity.js";
 import { emptyContract, loadContract, type LoadedContract } from "./contract.js";
 import { DialogHost } from "./dialogs.js";
@@ -175,6 +176,17 @@ function bootstrap(dataHome: string): void {
     log,
   });
   const dialogs = new DialogHost(dialog, () => mainWindow.browserWindow ?? undefined);
+  const browserWindow = new BrowserWindowHost({
+    platform: process.platform,
+    icon: windowIcon,
+    appURL,
+    preloadPath: join(__dirname, "preload.cjs"),
+    createWindow: (options) => new BrowserWindow(options),
+    log,
+    // No host event yet: the protocol has no browserWindow.* entry, and the Go
+    // side has no consumer until the window state sync lands.
+    onClosed: () => log.info("browser window closed"),
+  });
 
   const lifecycle = new QuitSequencer({
     service: {
@@ -192,6 +204,7 @@ function bootstrap(dataHome: string): void {
     // gone is the ordering that left orphaned renderers in the prototype.
     onCloseAllowed: () => {
       browser.destroyAll();
+      browserWindow.closeAll();
       mainWindow.allowClose();
       remote.closeAll();
       tray.destroy();
@@ -367,6 +380,7 @@ function bootstrap(dataHome: string): void {
         setLayout: (rect) => browser.setLayout(browserLayoutInDIP(rect, mainWindow.browserWindow?.webContents.getZoomFactor() ?? 1)),
         setOverlay: (active) => browser.setOverlay(active),
       },
+      browserWindow: { open: () => browserWindow.open(), close: () => browserWindow.close() },
       log,
     });
     // Reports from the guest preload: the sender must be one of our website

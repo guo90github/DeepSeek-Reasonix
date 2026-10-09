@@ -229,6 +229,8 @@ interface ReasonixDesktopHost {
     resume(tabId: string): Promise<void>;          // 把接管的标签交还给 Agent
     setLayout(rect: { x: number; y: number; width: number; height: number } | null): void;
     setOverlay(active: boolean): void;             // 应用覆盖层隐藏所有网站视图
+    openWindow(): void;                            // 打开（或聚焦）独立浏览器窗口
+    closeWindow(): void;
     onTabs(cb: (tabs: BrowserTabView[]) => void): () => void;
     onDownload(cb: (download: BrowserDownloadView) => void): () => void;
   };

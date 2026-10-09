@@ -35,6 +35,8 @@ export const IPC = {
   browserTabs: "reasonix:browser:tabs",
   browserDownload: "reasonix:browser:download",
   browserTakeover: "reasonix:browser:takeover",
+  browserWindowOpen: "reasonix:browser-window:open",
+  browserWindowClose: "reasonix:browser-window:close",
 } as const;
 
 export type ServicePhase = "starting" | "ready" | "restarting" | "failed" | "exited";
