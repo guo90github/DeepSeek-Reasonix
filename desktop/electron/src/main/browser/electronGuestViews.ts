@@ -1,6 +1,6 @@
 import { WebContentsView, session as electronSession, type BrowserWindow, type Session, type WebContents, type WebPreferences } from "electron";
 import type { Logger } from "../log.js";
-import { isBlockedNavigation, isPopupURL, type GuestView, type GuestViewEvents, type GuestViewFactory } from "./guestView.js";
+import { isBlockedNavigation, isPopupURL, type GuestView, type GuestViewEvents, type GuestViewFactory, type GuestWindow } from "./guestView.js";
 
 const GUEST_PERMISSIONS = new Set(["clipboard-sanitized-write", "fullscreen"]);
 
@@ -58,7 +58,7 @@ class ElectronGuestView implements GuestView {
 
   constructor(
     private readonly view: WebContentsView,
-    private readonly win: BrowserWindow,
+    private win: GuestWindow,
     private readonly factory: GuestViewFactory,
     private readonly log: Logger,
   ) {}
@@ -112,6 +112,23 @@ class ElectronGuestView implements GuestView {
 
   setVisible(visible: boolean): void {
     if (!this.destroyed) this.view.setVisible(visible);
+  }
+
+  // Detach from the old window before attaching to the new one, so neither ever
+  // paints a view it no longer owns; the manager re-applies visibility once it
+  // hands over the layout.
+  moveTo(win: GuestWindow): void {
+    if (this.destroyed || this.win === win) return;
+    if (!this.win.isDestroyed()) {
+      try {
+        this.win.contentView.removeChildView(this.view);
+      } catch (error) {
+        this.log.warn(`removeChildView failed: ${String(error)}`);
+      }
+    }
+    this.win = win;
+    win.contentView.addChildView(this.view);
+    this.view.setVisible(false);
   }
 
   // Detach first so the window never paints a closing view, then close the

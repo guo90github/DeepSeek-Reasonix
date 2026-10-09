@@ -10,6 +10,7 @@ import { GrantRegistry } from "./browser/grants.js";
 import { buildBrowserHostCalls } from "./browser/hostCalls.js";
 import { browserLayoutInDIP } from "./browser/layout.js";
 import { BrowserSurfaceManager } from "./browser/surfaceManager.js";
+import { BrowserSurfaceRouting } from "./browserSurfaceRouting.js";
 import { BrowserWindowHost } from "./browserWindow.js";
 import { loadBuildIdentity } from "./buildIdentity.js";
 import { emptyContract, loadContract, type LoadedContract } from "./contract.js";
@@ -130,17 +131,35 @@ function bootstrap(dataHome: string): void {
     zoomStore,
   });
 
+  let browserWindowRef: BrowserWindow | null = null;
+  // The browser window owns the website views while it is open; a single owner
+  // keeps two renderers from fighting over the same native view.
+  const routing = new BrowserSurfaceRouting(() => mainWindow.browserWindow?.webContents.id ?? null);
+  const surfaceWindows = (): BrowserWindow[] => [browserWindowRef, mainWindow.browserWindow]
+    .filter((win): win is BrowserWindow => win !== null && !win.isDestroyed());
+  const surfaceWindow = (): BrowserWindow | null => surfaceWindows()[0] ?? null;
+  // Mirrors MainWindow.contentSize for whichever window owns the views.
+  const surfaceContentSize = (): { width: number; height: number } | null => {
+    const win = surfaceWindow();
+    if (!win) return null;
+    const [width, height] = win.getContentSize();
+    return { width, height };
+  };
+  const broadcast = (channel: string, payload: unknown): void => {
+    for (const win of surfaceWindows()) win.webContents.send(channel, payload);
+  };
+
   const downloads = new DownloadTracker({
     tabForWebContents: (id) => {
       const tab = browser.all().find((entry) => entry.view.page.id === id);
       return tab ? { id: tab.id, taskId: tab.taskId } : undefined;
     },
     defaultDirectory: (taskId) => join(app.getPath("userData"), "downloads", safeDirName(taskId)),
-    onUpdate: (download) => mainWindow.send(IPC.browserDownload, download),
+    onUpdate: (download) => broadcast(IPC.browserDownload, download),
     log,
   });
   const guestViews = new ElectronGuestViewFactory({
-    window: () => mainWindow.browserWindow,
+    window: () => surfaceWindow(),
     preloadPath: join(__dirname, "guest-preload.cjs"),
     log,
     onSession: (_partition, guestSession) => {
@@ -149,12 +168,22 @@ function bootstrap(dataHome: string): void {
   });
   const browser = new BrowserSurfaceManager({
     views: guestViews,
-    contentSize: () => mainWindow.contentSize(),
+    contentSize: () => surfaceContentSize(),
     onTakeover: (tab, reason) => void service.hostEvent("browser.takeover", { tabId: tab.id, epoch: tab.epoch, reason }),
     onCrash: (tab, reason) => void service.hostEvent("browser.crash", { tabId: tab.id, epoch: tab.epoch, reason }),
     log,
   });
-  browser.subscribe((tabs) => mainWindow.send(IPC.browserTabs, tabs));
+  browser.subscribe((tabs) => broadcast(IPC.browserTabs, tabs));
+  // Ownership moved (the website window opened or closed): hand the live views
+  // to the new owner and drop the stale rect — it reports its own on the next
+  // measure, and until then nothing is painted in the wrong place.
+  const reparentSurface = (): void => {
+    const target = surfaceWindow();
+    if (!target) return;
+    for (const tab of browser.all()) tab.view.moveTo(target);
+    browser.setLayout(null);
+    broadcast(IPC.browserTabs, browser.list());
+  };
   const grants = new GrantRegistry({ generation: () => service.generation });
   const documents = new DocumentRegistry();
   const actions = new ActionExecutor({ surfaces: browser, documents });
@@ -183,9 +212,19 @@ function bootstrap(dataHome: string): void {
     preloadPath: join(__dirname, "preload.cjs"),
     createWindow: (options) => new BrowserWindow(options),
     log,
-    // No host event yet: the protocol has no browserWindow.* entry, and the Go
-    // side has no consumer until the window state sync lands.
-    onClosed: () => log.info("browser window closed"),
+    // The host hands back the window it created: the shell re-parents the live
+    // website views onto it and takes them back when it closes. No host event
+    // yet — the protocol has no browserWindow.* entry and Go has no consumer.
+    onOpened: (win) => {
+      browserWindowRef = win as unknown as BrowserWindow;
+      routing.setOwner(browserWindowRef);
+      reparentSurface();
+    },
+    onClosed: () => {
+      browserWindowRef = null;
+      routing.setOwner(null);
+      reparentSurface();
+    },
   });
 
   const lifecycle = new QuitSequencer({
@@ -377,7 +416,10 @@ function bootstrap(dataHome: string): void {
         toggleDevTools: (tabId) => browser.toggleDevTools(tabId),
         resume: (tabId) => browser.resume(tabId),
         takeover: (tabId) => browser.takeover(tabId, "user takeover"),
-        setLayout: (rect) => browser.setLayout(browserLayoutInDIP(rect, mainWindow.browserWindow?.webContents.getZoomFactor() ?? 1)),
+        setLayout: (rect, senderId) => {
+          if (!routing.accepts(senderId)) return;
+          browser.setLayout(browserLayoutInDIP(rect, surfaceWindow()?.webContents.getZoomFactor() ?? 1));
+        },
         setOverlay: (active) => browser.setOverlay(active),
       },
       browserWindow: { open: () => browserWindow.open(), close: () => browserWindow.close() },

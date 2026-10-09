@@ -46,6 +46,8 @@ export interface BrowserWindowHostDeps {
   preloadPath: string;
   createWindow(options: BrowserWindowConstructorOptions): BrowserWindowView;
   log: Logger;
+  /** Reports the window it just created, so the shell can re-parent the views. */
+  onOpened?(win: BrowserWindowView): void;
   onClosed?(): void;
 }
 
@@ -94,6 +96,7 @@ export class BrowserWindowHost {
       },
     });
     this.win = win;
+    this.deps.onOpened?.(win);
     if (this.deps.platform !== "darwin") win.setMenuBarVisibility(false);
     win.once("ready-to-show", () => {
       if (this.win === win) win.show();

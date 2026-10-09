@@ -62,6 +62,7 @@ class FakeWindow implements BrowserWindowView {
 
 function host(overrides: Partial<{ platform: NodeJS.Platform; icon: string }> = {}) {
   const closed: number[] = [];
+  const opened: FakeWindow[] = [];
   const instance = new BrowserWindowHost({
     platform: overrides.platform ?? "win32",
     ...(overrides.icon ? { icon: overrides.icon } : {}),
@@ -69,9 +70,10 @@ function host(overrides: Partial<{ platform: NodeJS.Platform; icon: string }> = 
     preloadPath: "/tmp/preload.cjs",
     createWindow: (options) => new FakeWindow(options as BrowserWindowOptions),
     log: silentLog,
+    onOpened: (win) => opened.push(win as FakeWindow),
     onClosed: () => closed.push(1),
   });
-  return { instance, closed };
+  return { instance, closed, opened };
 }
 
 test("the browser surface marker survives an existing query", () => {
@@ -82,10 +84,11 @@ test("the browser surface marker survives an existing query", () => {
 
 test("open creates one window, loads the browser surface and shows it when ready", async () => {
   FakeWindow.reset();
-  const { instance } = host({ icon: "/tmp/icon.png" });
+  const { instance, opened } = host({ icon: "/tmp/icon.png" });
   instance.open();
   assert.equal(FakeWindow.created.length, 1, "one window per open");
   const win = FakeWindow.last();
+  assert.deepEqual(opened, [win], "the shell learns which window opened, so it can re-parent the views");
   assert.deepEqual(win.loaded, ["reasonix://app/index.html?surface=browser"], "the browser surface is selected by URL");
   assert.equal(win.visible, false, "the window stays hidden until the surface is paintable");
   assert.equal(win.options.show, false);
@@ -117,7 +120,7 @@ test("darwin keeps its menu bar and open focuses an existing window", () => {
 
 test("close runs the closed bookkeeping once and a later open starts a new window", () => {
   FakeWindow.reset();
-  const { instance, closed } = host();
+  const { instance, closed, opened } = host();
   instance.open();
   const first = FakeWindow.last();
   instance.close();
@@ -127,6 +130,7 @@ test("close runs the closed bookkeeping once and a later open starts a new windo
   instance.open();
   assert.equal(FakeWindow.created.length, 2, "reopening creates a fresh window");
   assert.equal(instance.isOpen(), true);
+  assert.equal(opened.length, 2, "each open reports its window once");
 });
 
 test("closeAll destroys the window for the quit path and tolerates an empty host", () => {

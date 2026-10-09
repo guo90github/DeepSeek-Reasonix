@@ -63,11 +63,20 @@ export interface GuestViewEvents {
   onPopup(url: string, disposition: string): ((view: GuestView) => void) | null;
 }
 
+// The window a view is parented to. Structural on purpose: this module stays
+// free of runtime Electron imports so the browser modules run under node:test.
+export interface GuestWindow {
+  readonly contentView: { addChildView(view: unknown): void; removeChildView(view: unknown): void };
+  isDestroyed(): boolean;
+}
+
 export interface GuestView {
   readonly page: GuestPage;
   bind(events: GuestViewEvents): void;
   setBounds(bounds: Rectangle): void;
   setVisible(visible: boolean): void;
+  /** Re-parents the view to another window (dock ↔ independent window). */
+  moveTo(win: GuestWindow): void;
   destroy(): void;
 }
 

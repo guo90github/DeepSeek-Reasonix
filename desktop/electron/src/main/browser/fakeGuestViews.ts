@@ -1,5 +1,5 @@
 import type { KeyboardInputEvent, MouseInputEvent, MouseWheelInputEvent, Rectangle, WebPreferences } from "electron";
-import type { GuestDebugger, GuestFrame, GuestImage, GuestPage, GuestView, GuestViewEvents, GuestViewFactory } from "./guestView.js";
+import type { GuestDebugger, GuestFrame, GuestImage, GuestPage, GuestView, GuestViewEvents, GuestViewFactory, GuestWindow } from "./guestView.js";
 
 // In-memory stand-ins for WebContentsView so the browser modules run under
 // plain node --test. Scripts are answered by the injected `run` callback.
@@ -165,6 +165,7 @@ export class FakeGuestView implements GuestView {
   bounds: Rectangle | null = null;
   visible = false;
   destroyed = false;
+  readonly parents: GuestWindow[] = [];
 
   constructor(id: number, readonly partition: string, readonly inherited?: WebPreferences) {
     this.page = new FakePage(id);
@@ -180,6 +181,10 @@ export class FakeGuestView implements GuestView {
 
   setVisible(visible: boolean): void {
     this.visible = visible;
+  }
+
+  moveTo(win: GuestWindow): void {
+    this.parents.push(win);
   }
 
   destroy(): void {

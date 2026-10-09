@@ -44,7 +44,7 @@ export interface BrowserRendererApi {
   toggleDevTools(tabId: string): void;
   resume(tabId: string): void;
   takeover(tabId: string): void;
-  setLayout(rect: BrowserLayoutRect | null): void;
+  setLayout(rect: BrowserLayoutRect | null, senderId: number): void;
   setOverlay(active: boolean): void;
 }
 
@@ -101,15 +101,20 @@ export function registerRendererIpc(deps: RendererIpcDeps): void {
     if (!ok) deps.log.warn(`rejected IPC from untrusted sender (webContents ${event.sender.id})`);
     return ok;
   };
-  const handle = (channel: string, run: (...args: unknown[]) => Promise<unknown> | unknown) => {
+  // handleFrom is the form that knows which renderer called: a layout report
+  // must be attributed to a window, and only the surface owner's is accepted.
+  const handleFrom = (channel: string, run: (senderId: number, ...args: unknown[]) => Promise<unknown> | unknown) => {
     deps.ipcMain.handle(channel, async (event, ...args: unknown[]): Promise<IpcResult> => {
       if (!trusted(event)) return { ok: false, message: "untrusted sender" };
       try {
-        return { ok: true, value: await run(...args) };
+        return { ok: true, value: await run(event.sender.id, ...args) };
       } catch (error) {
         return { ok: false, message: errorText(error) };
       }
     });
+  };
+  const handle = (channel: string, run: (...args: unknown[]) => Promise<unknown> | unknown) => {
+    handleFrom(channel, (_senderId, ...args) => run(...args));
   };
 
   deps.ipcMain.on(IPC.contract, (event) => {
@@ -185,6 +190,6 @@ export function registerRendererIpc(deps: RendererIpcDeps): void {
   handle(IPC.browserToggleDevTools, (id) => browser.toggleDevTools(tabId(id)));
   handle(IPC.browserResume, (id) => browser.resume(tabId(id)));
   handle(IPC.browserUserTakeover, (id) => browser.takeover(tabId(id)));
-  handle(IPC.browserSetLayout, (rect) => browser.setLayout(parseLayout(rect)));
+  handleFrom(IPC.browserSetLayout, (senderId, rect) => browser.setLayout(parseLayout(rect), senderId));
   handle(IPC.browserSetOverlay, (active) => browser.setOverlay(active === true));
 }
