@@ -371,7 +371,12 @@ func inputImagePart(ref string) map[string]string {
 	switch provider.ClassifyImage(ref) {
 	case provider.ImageFileID:
 		return map[string]string{"type": "input_image", "file_id": ref}
-	case provider.ImageDataURL, provider.ImageHTTPURL:
+	case provider.ImageDataURL:
+		if provider.UnsendableImageReason(ref) != "" {
+			return nil
+		}
+		return map[string]string{"type": "input_image", "image_url": ref}
+	case provider.ImageHTTPURL:
 		return map[string]string{"type": "input_image", "image_url": ref}
 	default:
 		return nil

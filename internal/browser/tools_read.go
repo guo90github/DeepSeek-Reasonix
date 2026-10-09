@@ -190,6 +190,11 @@ func encodeScreenshot(tabID string, shot Screenshot) (string, []string, error) {
 	if len(data) > screenshotMaxBytes {
 		return oversizeText(shot.Path, int64(len(data))), nil, nil
 	}
+	// A page that has not painted yet yields a zero-byte capture; embedding it
+	// would fail the whole provider request with HTTP 400.
+	if len(data) == 0 {
+		return "", nil, fmt.Errorf("screenshot of tab %s is empty (the page had not painted yet); take a fresh browser_snapshot and retry", tabID)
+	}
 	mime := shot.MIME
 	if mime == "" {
 		mime = "image/png"

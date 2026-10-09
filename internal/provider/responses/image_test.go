@@ -238,3 +238,18 @@ func TestToolImagesFollowCompleteToolRun(t *testing.T) {
 		}
 	}
 }
+
+func TestInputImagePartOmitsUnsendableDataURL(t *testing.T) {
+	if part := inputImagePart("data:image/png;base64,"); part != nil {
+		t.Fatalf("empty payload produced %+v", part)
+	}
+	if part := inputImagePart("data:image/tiff;base64,AAAA"); part != nil {
+		t.Fatalf("unsupported type produced %+v", part)
+	}
+	if part := inputImagePart("data:image/png;base64,AAAA"); part == nil || part["image_url"] != "data:image/png;base64,AAAA" {
+		t.Fatalf("valid image part = %+v", part)
+	}
+	if part := inputImagePart("https://cdn.example.com/cat.png"); part == nil || part["image_url"] != "https://cdn.example.com/cat.png" {
+		t.Fatalf("http image part = %+v", part)
+	}
+}

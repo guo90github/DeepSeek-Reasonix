@@ -1139,7 +1139,13 @@ func imageContentParts(text string, images []string, detail string) []chatConten
 		switch provider.ClassifyImage(ref) {
 		case provider.ImageFileID:
 			parts = append(parts, chatContentPart{Type: "file", FileID: ref})
-		case provider.ImageDataURL, provider.ImageHTTPURL:
+		case provider.ImageDataURL:
+			if reason := provider.UnsendableImageReason(ref); reason != "" {
+				parts = append(parts, chatContentPart{Type: "text", Text: "[image omitted: " + reason + "]"})
+				continue
+			}
+			parts = append(parts, chatContentPart{Type: "image_url", ImageURL: &chatImageURL{URL: ref, Detail: detail}})
+		case provider.ImageHTTPURL:
 			parts = append(parts, chatContentPart{Type: "image_url", ImageURL: &chatImageURL{URL: ref, Detail: detail}})
 		}
 	}

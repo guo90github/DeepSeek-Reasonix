@@ -453,3 +453,35 @@ func TestBuildRequestSkipsToolImagesWithoutVision(t *testing.T) {
 		t.Fatalf("tool content = %#v, want the plain placeholder string", req.Messages[2].Content)
 	}
 }
+
+func TestBuildRequestOmitsUnsendableImageDataURL(t *testing.T) {
+	c := &client{model: "gpt-4o", vision: true}
+	req := c.buildRequest(provider.Request{
+		Messages: []provider.Message{{
+			Role:    provider.RoleUser,
+			Content: "what is this",
+			Images: []string{
+				"data:image/png;base64,",
+				"data:image/tiff;base64,AAAA",
+				"data:image/png;base64,AAAA",
+			},
+		}},
+	})
+	parts, ok := req.Messages[0].Content.([]chatContentPart)
+	if !ok || len(parts) != 4 {
+		t.Fatalf("parts = %+v, want [text, note, note, image_url]", req.Messages[0].Content)
+	}
+	if parts[1].Type != "text" || parts[1].Text != "[image omitted: empty payload]" {
+		t.Fatalf("empty-payload part = %+v", parts[1])
+	}
+	if parts[2].Type != "text" || parts[2].Text != "[image omitted: unsupported type image/tiff]" {
+		t.Fatalf("unsupported-type part = %+v", parts[2])
+	}
+	if parts[3].Type != "image_url" || parts[3].ImageURL == nil || parts[3].ImageURL.URL != "data:image/png;base64,AAAA" {
+		t.Fatalf("valid image part = %+v", parts[3])
+	}
+	body, _ := json.Marshal(req.Messages[0])
+	if got := strings.Count(string(body), `"type":"image_url"`); got != 1 {
+		t.Fatalf("wire carries %d image_url parts, want only the valid one: %s", got, body)
+	}
+}

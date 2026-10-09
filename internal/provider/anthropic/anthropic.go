@@ -745,6 +745,9 @@ type imageSource struct {
 func toolResultBlocks(text string, images []string) []contentBlock {
 	var imgs []contentBlock
 	for _, url := range images {
+		if provider.UnsendableImageReason(url) != "" {
+			continue
+		}
 		if mt, data, ok := provider.ParseImageDataURL(url); ok {
 			imgs = append(imgs, contentBlock{Type: "image", Source: &imageSource{Type: "base64", MediaType: mt, Data: data}})
 		}

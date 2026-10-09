@@ -5,6 +5,9 @@ import "reasonix/internal/provider"
 func imageSourceFromRef(ref string) *imageSource {
 	switch provider.ClassifyImage(ref) {
 	case provider.ImageDataURL:
+		if provider.UnsendableImageReason(ref) != "" {
+			return nil
+		}
 		mt, data, ok := provider.ParseImageDataURL(ref)
 		if !ok {
 			return nil

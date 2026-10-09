@@ -198,6 +198,21 @@ func TestOfficialDeepSeekIgnoresVisionMetadata(t *testing.T) {
 	}
 }
 
+func TestAnthropicOmitsUnsendableDataURLImages(t *testing.T) {
+	if src := imageSourceFromRef("data:image/png;base64,"); src != nil {
+		t.Fatalf("empty payload produced %+v", src)
+	}
+	if src := imageSourceFromRef("data:image/tiff;base64,AAAA"); src != nil {
+		t.Fatalf("unsupported type produced %+v", src)
+	}
+	if src := imageSourceFromRef("data:image/png;base64,AAAA"); src == nil || src.Data != "AAAA" {
+		t.Fatalf("valid image source = %+v", src)
+	}
+	if blocks := toolResultBlocks("[image: image/png, 0x0]", []string{"data:image/png;base64,"}); blocks != nil {
+		t.Fatalf("tool result blocks = %+v, want nil for an empty capture", blocks)
+	}
+}
+
 func TestOfficialDeepSeekImageMetadataMatchesTextOnlyWireBytes(t *testing.T) {
 	p, err := New(provider.Config{
 		Name:    "deepseek-anthropic",

@@ -89,3 +89,30 @@ func IsImageHTTPURL(s string) bool {
 		return false
 	}
 }
+
+// wireImageMediaTypes are the still-image formats every vision endpoint Reasonix
+// speaks accepts; the strictest of them rejects the whole request over one image.
+var wireImageMediaTypes = map[string]bool{
+	"image/gif":  true,
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+}
+
+// UnsendableImageReason reports why a data URL would be rejected by a vision
+// endpoint, "" when it is safe to send. An empty payload or an unlisted media
+// type fails the entire request with HTTP 400 — and, replayed from a session's
+// history, fails every later request too — so serializers omit the part.
+func UnsendableImageReason(ref string) string {
+	mediaType, payload, ok := ParseImageDataURL(ref)
+	if !ok {
+		return ""
+	}
+	if payload == "" {
+		return "empty payload"
+	}
+	if !wireImageMediaTypes[mediaType] {
+		return "unsupported type " + mediaType
+	}
+	return ""
+}

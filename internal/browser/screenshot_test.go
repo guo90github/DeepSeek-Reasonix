@@ -82,3 +82,18 @@ func TestScreenshotMissingFileIsError(t *testing.T) {
 		t.Fatalf("missing file rendered as blocked: %v", err)
 	}
 }
+
+func TestScreenshotRefusesEmptyCapture(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "empty.png")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeExecutor{screenshot: Screenshot{Path: path}}
+	text, images, err := toolByName(t, fake, "browser_screenshot").(tool.ImageTool).ExecuteWithImages(context.Background(), json.RawMessage(`{"tabId":"t1"}`))
+	if err == nil || !strings.Contains(err.Error(), "is empty") {
+		t.Fatalf("text = %q, images = %d, err = %v", text, len(images), err)
+	}
+	if len(images) != 0 {
+		t.Fatalf("empty capture produced images = %v", images)
+	}
+}
