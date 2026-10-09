@@ -117,6 +117,9 @@ async function mountApp() {
   if (localeResult.status === "rejected") console.error("failed to preload desktop locale", localeResult.reason);
   if (browserSurfaceOnly) {
     rootElement.classList.add("app-root--browser-surface");
+    // Loaded lazily: this window must not grow the entry bundle for one call.
+    void import("./lib/browserSurfaceAppearance").then(({ applyBrowserSurfaceAppearance }) => applyBrowserSurfaceAppearance())
+      .catch((error: unknown) => console.error("failed to apply the browser window appearance", error));
     const { default: BrowserSurface } = await import("./components/BrowserPanelEntry");
     createRoot(rootElement).render(
       <StrictMode>
