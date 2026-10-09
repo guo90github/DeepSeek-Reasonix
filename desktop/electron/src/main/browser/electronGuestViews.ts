@@ -38,6 +38,10 @@ export class ElectronGuestViewFactory implements GuestViewFactory {
         backgroundThrottling: false,
       },
     });
+    // A view paints nothing until its page does; without a colour of its own
+    // Electron's default white covers the window while it loads or stays blank.
+    // Kept equal to the colour BrowserWindowHost paints its window with.
+    view.setBackgroundColor("#1a1a2e");
     win.contentView.addChildView(view);
     view.setVisible(false);
     return new ElectronGuestView(view, win, this, this.deps.log);

@@ -11,6 +11,13 @@
   background: var(--bg-elev);
 }
 
+/* The panel is the whole surface of the independent browser window, where no
+   ancestor sizes it. Without this its height collapses to the content, the
+   `[data-browser-surface]` rect measures 0 and the shell never shows a view. */
+.app-root--browser-surface > .browser-panel {
+  height: 100%;
+}
+
 .browser-panel__tabs {
   display: flex;
   align-items: stretch;

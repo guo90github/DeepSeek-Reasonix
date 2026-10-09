@@ -96,6 +96,8 @@ try {
   assert.ok(document.querySelector(".browser-panel__empty"), "no tabs renders the compact empty state");
   assert.ok(byLabel("Address"), "the empty state carries the address bar");
   assert.equal(document.querySelector("[data-browser-surface]"), null, "no native surface without a tab");
+  assert.equal((document.getElementById("root")!.firstElementChild as HTMLElement | null)?.className, "browser-panel",
+    "the panel is the mount root's own element, so the browser window can size it with a direct-child rule");
   assert.deepEqual(overlays, [false], "the overlay gate reports its initial state");
   assert.deepEqual(layouts, [], "no layout is reported without a surface");
   assert.ok(tabsCb, "the panel subscribes to tab updates");

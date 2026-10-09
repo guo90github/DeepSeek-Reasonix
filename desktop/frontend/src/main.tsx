@@ -116,6 +116,7 @@ async function mountApp() {
   }
   if (localeResult.status === "rejected") console.error("failed to preload desktop locale", localeResult.reason);
   if (browserSurfaceOnly) {
+    rootElement.classList.add("app-root--browser-surface");
     const { default: BrowserSurface } = await import("./components/BrowserPanelEntry");
     createRoot(rootElement).render(
       <StrictMode>
