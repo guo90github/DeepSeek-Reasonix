@@ -12,27 +12,43 @@ import (
 // it — the hint rides the round tail and never touches the cached prefix.
 const batchNudgeStreak = 3
 
-// applyBatchNudge asks the model to fold independent read-only calls into one
-// message once a run of single-call rounds makes the waste visible. It fires at
-// most once per turn, and only for a run of productive, unblocked read-only
-// rounds — a stuck round belongs to the loop guards, and batching a loop would
-// only multiply its wasted calls.
+// fanoutNudgeMinRounds is the second, later hint: a read-only turn that already
+// batched its calls and still runs this long is work that may split into
+// independent areas, where sub-agents overlap the model's own time instead of
+// paying round trip after round trip in one stream.
+const fanoutNudgeMinRounds = 8
+
+// applyBatchNudge points at the cheaper fix first: fold independent read-only
+// calls into one message (or recognize that the model already batches), and only
+// then, on a turn that still runs long, offer the fan-out alternative that
+// overlaps work at a token cost. Each hint fires at most once per turn, and only
+// while the round was productive, unblocked and read-only.
 func (a *Agent) applyBatchNudge(calls []provider.ToolCall, outcomes []toolOutcome, receiptMark int) intervention {
 	if a == nil {
 		return intervention{}
 	}
-	if len(calls) != 1 || !batchOutcomesAreReadOnly(outcomes) || !batchOutcomesSucceeded(outcomes) || !a.batchRoundMadeProgress(receiptMark) {
+	if !batchOutcomesAreReadOnly(outcomes) || !batchOutcomesSucceeded(outcomes) || !a.batchRoundMadeProgress(receiptMark) {
 		a.turn.loop.resetBatchingStreak()
 		return intervention{}
 	}
-	streak := a.turn.loop.bumpBatchingStreak()
-	if streak < batchNudgeStreak || !a.turn.loop.markBatchingNudged() {
-		return intervention{}
+	if len(calls) != 1 {
+		a.turn.loop.markBatchingInUse()
+		a.turn.loop.resetBatchingStreak()
+	} else if streak := a.turn.loop.bumpBatchingStreak(); streak >= batchNudgeStreak && a.turn.loop.markBatchingNudged() {
+		return intervention{verdict: verdictAdvise, guidance: batchingHint(streak)}
 	}
-	return intervention{
-		verdict:  verdictAdvise,
-		guidance: fmt.Sprintf("Host batching hint: the last %d rounds each sent a single read-only call, and every round is a full model round-trip. When the remaining work is independent, send those calls together in one message instead of one per round.", streak),
+	if a.turn.budget.rounds >= fanoutNudgeMinRounds && a.turn.loop.batchingAddressed() && a.turn.loop.markFanoutNudged() {
+		return intervention{verdict: verdictAdvise, guidance: fanoutHint(a.turn.budget.rounds)}
 	}
+	return intervention{}
+}
+
+func batchingHint(streak int) string {
+	return fmt.Sprintf("Host batching hint: the last %d rounds each sent a single read-only call, and every round is a full model round-trip. When the remaining work is independent, send those calls together in one message instead of one per round.", streak)
+}
+
+func fanoutHint(rounds int) string {
+	return fmt.Sprintf("Host fan-out hint: this turn has taken %d rounds of read-only work. If the remaining work splits into independent areas, parallel_tasks runs them as concurrent sub-agents, so the wall clock is the slowest branch instead of the sum of rounds. Keep the calls in this message when they depend on each other, and prefer batching when the work is small; fan-out costs extra tokens because every branch has its own context.", rounds)
 }
 
 // batchRoundMadeProgress reports whether this round earned at least one
