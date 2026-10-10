@@ -24,6 +24,7 @@ var English = Messages{
 	ProgressGuard:                    "The assistant keeps repeating work without new evidence; asking it to change approach.",
 	OperationNeedsUser:               "The same change failed the same way twice; it is paused for you instead of being retried.",
 	SoftBudgetConverge:               "Converging a long read-only investigation.",
+	TurnMetrics:                      "Where this turn's time went (rounds / model / tools).",
 	EvidenceNudge:                    "Several mutations are unverified; asking for the cheapest discriminating check.",
 	ReasoningGovernor:                "Exploration phase with expensive thinking; riding reduced reasoning depth until evidence work starts.",
 	UnappliedSteerFmt:                "Guidance was not applied because the turn ended before it could be processed. Send it again if it is still needed:\n%s",

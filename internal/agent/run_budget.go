@@ -49,6 +49,8 @@ type runBudget struct {
 	cost          float64
 	pricedRounds  int
 	unpricedTurns bool
+	// toolBusyMs sums the turn's tool windows — its tool critical path.
+	toolBusyMs int64
 	// limit is configuration, not accumulation: it survives the reset that
 	// starts a new task.
 	limit TaskBudget

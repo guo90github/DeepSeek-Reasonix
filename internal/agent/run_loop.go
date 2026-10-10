@@ -179,6 +179,7 @@ func (a *Agent) runToolLoop(ctx context.Context, state *turnRuntime) (runErr err
 	releaseMCPListObserver := a.activateMCPListObserver()
 	defer func() {
 		a.recordReadonlySoftBudgetSample(state, runErr)
+		a.emitTurnMetrics()
 		releaseMCPListObserver()
 	}()
 	ctx = a.withAgentContext(ctx)

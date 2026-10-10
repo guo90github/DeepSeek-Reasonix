@@ -49,6 +49,7 @@ type Messages struct {
 	ProgressGuard                    string // progress_guard: repeated work without new evidence
 	OperationNeedsUser               string // operation_needs_user: host stopped retrying one operation
 	SoftBudgetConverge               string // loop_guard: converging a long read-only investigation
+	TurnMetrics                      string // turn_metrics: where a long turn's time went
 	EvidenceNudge                    string // evidence_nudge: unverified mutations
 	ReasoningGovernor                string // reasoning_governor engaged
 	UnappliedSteerFmt                string // unapplied_steer — %s = the dropped guidance

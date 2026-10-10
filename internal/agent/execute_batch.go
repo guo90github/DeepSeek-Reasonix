@@ -350,6 +350,7 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 			}
 		}
 	}
+	turn.budget.toolBusyMs += time.Since(batchStart).Milliseconds()
 	return batchExecution{
 		results:            results,
 		outcomes:           outcomes,
