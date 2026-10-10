@@ -68,11 +68,9 @@ func (a *Agent) readonlySoftBudgetApplies(outcomes []toolOutcome) bool {
 	if a.planMode.Load() {
 		return true
 	}
-	for _, outcome := range outcomes {
-		if outcome.workspaceMutation != nil || (outcome.resolved && !outcome.resolvedReadOnly) {
-			a.turn.softBudgetMutation = true
-			return false
-		}
+	if !batchOutcomesAreReadOnly(outcomes) {
+		a.turn.softBudgetMutation = true
+		return false
 	}
 	if a.task.ledger == nil {
 		return true

@@ -17,6 +17,7 @@ type turnLoopState struct {
 	previousErrorCategories map[string]struct{}
 	softBudgetNudged        bool
 	softBudgetNudgeRound    int
+	batching                batchNudgeState
 }
 
 func (s *turnLoopState) setDispatchClasses(classes map[string]tool.CallClass) {
