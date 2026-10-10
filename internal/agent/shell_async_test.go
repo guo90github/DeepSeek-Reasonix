@@ -13,10 +13,14 @@ import (
 )
 
 // countingShell stands in for bash so the promotion rule can be measured
-// without launching a process. It records the arguments it was handed.
+// without launching a process. It records the arguments it was handed and
+// whether the host moved the call off the critical path, mirroring the real
+// tool: the branch is taken for the model's own request or for the mark.
 type countingShell struct {
 	mu      sync.Mutex
 	runs    int
+	offPath bool
+	raw     string
 	lastArg map[string]any
 }
 
@@ -25,14 +29,17 @@ func (*countingShell) Description() string     { return "fake shell" }
 func (*countingShell) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 func (*countingShell) ReadOnly() bool          { return false }
 
-func (s *countingShell) Execute(_ context.Context, args json.RawMessage) (string, error) {
+func (s *countingShell) Execute(ctx context.Context, args json.RawMessage) (string, error) {
 	var parsed map[string]any
 	_ = json.Unmarshal(args, &parsed)
+	offPath := tool.OffPathLaunchFrom(ctx)
 	s.mu.Lock()
 	s.runs++
+	s.offPath = offPath
+	s.raw = string(args)
 	s.lastArg = parsed
 	s.mu.Unlock()
-	if background, _ := parsed["run_in_background"].(bool); background {
+	if background, _ := parsed["run_in_background"].(bool); background || offPath {
 		return `Started background job "job-1". It keeps running across turns.`, nil
 	}
 	return "command output", nil
@@ -42,6 +49,18 @@ func (s *countingShell) calls() (int, map[string]any) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.runs, s.lastArg
+}
+
+func (s *countingShell) offPathLaunch() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.offPath
+}
+
+func (s *countingShell) rawArguments() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.raw
 }
 
 // countingReader stands in for a later call in the same batch: what matters is
@@ -102,8 +121,8 @@ func TestShellAsyncPromotesTheSlowCallAndDefersTheRest(t *testing.T) {
 	if runs != 1 {
 		t.Fatalf("shell ran %d times", runs)
 	}
-	if background, _ := args["run_in_background"].(bool); !background {
-		t.Fatalf("the shell call was not promoted to the background: %v", args)
+	if !shell.offPathLaunch() {
+		t.Fatalf("the shell call was not moved off the critical path: %v", args)
 	}
 	if !strings.Contains(results[0], "Started background job") {
 		t.Fatalf("the promoted call's result must say so: %q", results[0])
@@ -113,6 +132,27 @@ func TestShellAsyncPromotesTheSlowCallAndDefersTheRest(t *testing.T) {
 	}
 	if got := reader.executions(); got != 0 {
 		t.Fatalf("a call behind a background job ran %d times; it must wait", got)
+	}
+}
+
+// TestShellAsyncPromotesWithoutRewritingTheCall pins the channel: the host
+// carries its decision out of band, so the tool sees the arguments the model
+// wrote, byte for byte, even when the call is lifted.
+func TestShellAsyncPromotesWithoutRewritingTheCall(t *testing.T) {
+	shell, reader := &countingShell{}, &countingReader{}
+	a := shellAsyncAgent(t, ShellAsyncFast, shell, reader)
+
+	written := `{"command":"go test ./...","timeout":30}`
+	runBatch(t, a,
+		provider.ToolCall{ID: "s1", Name: "bash", Arguments: written},
+		provider.ToolCall{ID: "r1", Name: "read_file", Arguments: `{"path":"note.txt"}`},
+	)
+
+	if !shell.offPathLaunch() {
+		t.Fatal("the call was not moved off the critical path")
+	}
+	if got := shell.rawArguments(); got != written {
+		t.Fatalf("the host edited the call the model wrote: %q, want %q", got, written)
 	}
 }
 
@@ -129,6 +169,9 @@ func TestShellAsyncOffLeavesTheBatchAlone(t *testing.T) {
 
 	if _, args := shell.calls(); args["run_in_background"] != nil {
 		t.Fatalf("the tier is off but the call was rewritten: %v", args)
+	}
+	if shell.offPathLaunch() {
+		t.Fatal("the tier is off but the call was moved off the critical path")
 	}
 	if got := reader.executions(); got != 1 {
 		t.Fatalf("the later call ran %d times, want 1", got)
@@ -155,16 +198,15 @@ func TestShellAsyncBalancedOnlyPromotesChecks(t *testing.T) {
 			provider.ToolCall{ID: "s1", Name: "bash", Arguments: `{"command":"` + tc.command + `"}`},
 			provider.ToolCall{ID: "r1", Name: "read_file", Arguments: `{"path":"note.txt"}`},
 		)
-		_, args := shell.calls()
-		background, _ := args["run_in_background"].(bool)
-		if background != tc.promoted {
-			t.Errorf("%q: promoted=%v, want %v (%s)", tc.command, background, tc.promoted, tc.why)
+		if got := shell.offPathLaunch(); got != tc.promoted {
+			t.Errorf("%q: promoted=%v, want %v (%s)", tc.command, got, tc.promoted, tc.why)
 		}
 	}
 }
 
 // TestShellAsyncNeverRewritesAnExplicitBackgroundCall keeps the model's own
-// choice intact: it asked for the background and owns the ordering that follows.
+// choice intact: it asked for the background, so the host neither edits the call
+// nor marks it as its own decision.
 func TestShellAsyncNeverRewritesAnExplicitBackgroundCall(t *testing.T) {
 	shell, reader := &countingShell{}, &countingReader{}
 	a := shellAsyncAgent(t, ShellAsyncFast, shell, reader)
@@ -176,6 +218,9 @@ func TestShellAsyncNeverRewritesAnExplicitBackgroundCall(t *testing.T) {
 
 	if _, args := shell.calls(); args["run_in_background"] != true || len(args) != 2 {
 		t.Fatalf("an explicit background call was rewritten: %v", args)
+	}
+	if shell.offPathLaunch() {
+		t.Fatal("the host marked the model's own background call as its decision")
 	}
 	if got := reader.executions(); got != 1 {
 		t.Fatalf("the later call ran %d times, want 1: an explicit background call is the model's own parallelism", got)
@@ -192,5 +237,8 @@ func TestShellAsyncLeavesALoneCallAlone(t *testing.T) {
 
 	if _, args := shell.calls(); args["run_in_background"] != nil {
 		t.Fatalf("a lone call was promoted: %v", args)
+	}
+	if shell.offPathLaunch() {
+		t.Fatal("a lone call was moved off the critical path")
 	}
 }

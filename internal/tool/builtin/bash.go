@@ -240,7 +240,7 @@ func (b bash) ExecuteDetailed(ctx context.Context, args json.RawMessage) (tool.D
 	argv, wrapped := prepared.Argv, prepared.Wrapped
 	cmdEnv := applyEnvOverrides(bashCommandEnv(ctx), prepared.EnvOverrides)
 
-	if p.RunInBackground {
+	if p.RunInBackground || tool.OffPathLaunchFrom(ctx) {
 		jm, ok := jobs.FromContext(ctx)
 		if !ok {
 			ex.State = tool.ShellStateNotRun

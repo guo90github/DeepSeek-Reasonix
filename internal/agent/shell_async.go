@@ -49,48 +49,40 @@ func (t ShellAsyncTier) String() string {
 	}
 }
 
-// promoteShellCallToBackground starts a shell call as a background job when the
-// tier says the calls after it should not wait. The decision has to be made
-// before launch: a foreground process cannot be handed over later, and killing
-// and restarting it would repeat its side effects. Only a call with a later
-// pending call in the same batch is promoted — with nothing left to continue
-// with, waiting is the honest thing to do.
+// promoteShellCallToBackground decides whether a shell call starts off the
+// critical path. The verdict travels out of band (tool.WithOffPathLaunch) and
+// never edits the call the model wrote — the descriptor reports the launch
+// instead. The decision has to be made before launch: a foreground process
+// cannot be handed over later.
 func (a *Agent) promoteShellCallToBackground(calls []provider.ToolCall, results []string, i int) bool {
-	if a == nil || a.shellAsync == ShellAsyncOff || i+1 >= len(calls) {
-		return false
-	}
-	call := &calls[i]
-	if call.Name != "bash" && call.Name != "shell" {
+	if a == nil || i < 0 || i >= len(calls) || !offPathShellTool(calls[i].Name) {
 		return false
 	}
 	var args map[string]any
-	if json.Unmarshal([]byte(call.Arguments), &args) != nil {
+	if json.Unmarshal([]byte(calls[i].Arguments), &args) != nil {
 		return false
 	}
-	if background, _ := args["run_in_background"].(bool); background {
-		// The model asked for it itself, so it owns the ordering from here.
-		return false
+	background, _ := args["run_in_background"].(bool)
+	return a.shellAsync.DecideOffPath(OffPathRequest{
+		Kind:          OffPathShellCall,
+		Tool:          calls[i].Name,
+		HostKnowsLong: evidence.IsVerificationCommand(bashCommandFromArgs(json.RawMessage(calls[i].Arguments))),
+		ModelAsked:    background,
+		Later:         a.offPathLater(results, i+1, len(calls)),
+	}).OffPath
+}
+
+// offPathLater is what the policy reads as work to continue with: a pending
+// call in this batch, or planned work the turn still owes. A finished checklist
+// leaves nothing to overlap, so a lone call keeps its place.
+func (a *Agent) offPathLater(results []string, start, end int) LaterWork {
+	if later := offPathLaterWork(results, start, end); later != LaterWorkNone {
+		return later
 	}
-	if a.shellAsync == ShellAsyncBalanced && !evidence.IsVerificationCommand(bashCommandFromArgs(json.RawMessage(call.Arguments))) {
-		return false
+	if _, incomplete := a.canonicalTodoProgress(); incomplete {
+		return LaterWorkTurnPending
 	}
-	later := false
-	for j := i + 1; j < len(calls); j++ {
-		if results[j] == "" {
-			later = true
-			break
-		}
-	}
-	if !later {
-		return false
-	}
-	args["run_in_background"] = true
-	encoded, err := json.Marshal(args)
-	if err != nil {
-		return false
-	}
-	call.Arguments = string(encoded)
-	return true
+	return LaterWorkNone
 }
 
 // deferCallsAfterBackground fills the calls a promotion left behind. They must

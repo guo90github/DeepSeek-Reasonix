@@ -287,6 +287,11 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# max_parallel_writers = 3   # concurrent writers with non-overlapping write_paths\n")
 	}
+	if c.Agent.ShellAsync != "" {
+		fmt.Fprintf(&b, "shell_async = %q   # off|balanced|fast: long shell calls may leave the critical path\n", c.Agent.ShellAsync)
+	} else {
+		b.WriteString("# shell_async = \"off\"   # off|balanced|fast: long checks/builds may run in the background\n")
+	}
 	if c.Agent.OutputStyle != "" {
 		fmt.Fprintf(&b, "output_style = %q   # persona/tone folded into the prompt\n", c.Agent.OutputStyle)
 	} else {

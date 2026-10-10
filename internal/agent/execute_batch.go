@@ -302,10 +302,10 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 				finalize(i)
 				continue
 			}
-			promoted := a.promoteShellCallToBackground(calls, results, i)
+			slots.offPath[i] = a.promoteShellCallToBackground(calls, results, i)
 			run(slots, i)
 			finalize(i)
-			asyncDeferred = a.promotedShellDefers(calls, outcomes, results, durations, i, promoted)
+			asyncDeferred = a.promotedShellDefers(calls, outcomes, results, durations, i, slots.offPath[i])
 			if asyncDeferred {
 				break
 			}
@@ -369,6 +369,10 @@ func (a *Agent) executeBatch(ctx context.Context, turn *turnRuntime, calls []pro
 func (a *Agent) runBatchCall(ctx context.Context, turn *turnRuntime, s *batchSlots, i int) {
 	start := time.Now()
 	s.startedAt[i] = start.UnixMilli()
+	if s.offPath[i] {
+		// Out of band: the call the model wrote is not edited to carry this.
+		ctx = tool.WithOffPathLaunch(ctx)
+	}
 	s.outcomes[i] = a.executeOne(ctx, turn, s.calls[i])
 	recordWorkspaceMutation(a.svc.sink, s.outcomes[i].workspaceMutation)
 	if s.outcomes[i].executed {
@@ -631,6 +635,10 @@ type batchSlots struct {
 	durations      []int64
 	startedAt      []int64
 	surfaceWriters []bool
+	// offPath marks the calls the host starts off the critical path. The
+	// decision stays in memory and reaches the tool through its context, so the
+	// call the model wrote is never edited to carry it.
+	offPath []bool
 }
 
 func newBatchSlots(calls []provider.ToolCall) *batchSlots {
@@ -638,6 +646,7 @@ func newBatchSlots(calls []provider.ToolCall) *batchSlots {
 	return &batchSlots{
 		calls: calls, outcomes: make([]toolOutcome, n), results: make([]string, n),
 		durations: make([]int64, n), startedAt: make([]int64, n), surfaceWriters: make([]bool, n),
+		offPath: make([]bool, n),
 	}
 }
 
@@ -648,6 +657,7 @@ func (s *batchSlots) fork() *batchSlots {
 func (s *batchSlots) adopt(from *batchSlots, i int) {
 	s.calls[i], s.outcomes[i], s.results[i] = from.calls[i], from.outcomes[i], from.results[i]
 	s.durations[i], s.startedAt[i], s.surfaceWriters[i] = from.durations[i], from.startedAt[i], from.surfaceWriters[i]
+	s.offPath[i] = from.offPath[i]
 }
 
 const abandonedToolOutput = "interrupted: the tool did not stop after cancellation; its effect is unknown"
