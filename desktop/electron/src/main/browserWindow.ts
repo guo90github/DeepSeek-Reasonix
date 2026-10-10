@@ -52,24 +52,30 @@ export interface BrowserWindowHostDeps {
 }
 
 const SURFACE_PARAM = "surface=browser";
+const TASK_PARAM = "taskId=";
 
-/** Appends the browser-surface marker without dropping an existing query. */
-export function browserSurfaceURL(appURL: string): string {
+/** Appends the browser-surface marker and the session task whose tabs the
+ *  window lists, without dropping an existing query. */
+export function browserSurfaceURL(appURL: string, taskId?: string): string {
   const separator = appURL.includes("?") ? "&" : "?";
-  return appURL.includes(SURFACE_PARAM) ? appURL : `${appURL}${separator}${SURFACE_PARAM}`;
+  const withSurface = appURL.includes(SURFACE_PARAM) ? appURL : `${appURL}${separator}${SURFACE_PARAM}`;
+  if (!taskId || withSurface.includes(TASK_PARAM)) return withSurface;
+  const join = withSurface.includes("?") ? "&" : "?";
+  return `${withSurface}${join}${TASK_PARAM}${encodeURIComponent(taskId)}`;
 }
 
 /**
  * The independent browser window. One window for now, so a second open focuses
- * the first instead of stacking duplicates; the guest views themselves stay
- * owned by BrowserSurfaceManager and are re-parented in a later step.
+ * the first instead of stacking duplicates and keeps the task it was opened
+ * with; the guest views themselves stay owned by BrowserSurfaceManager and are
+ * re-parented in a later step.
  */
 export class BrowserWindowHost {
   private win: BrowserWindowView | null = null;
 
   constructor(private readonly deps: BrowserWindowHostDeps) {}
 
-  open(): void {
+  open(taskId?: string): void {
     const existing = this.view();
     if (existing) {
       if (existing.isMinimized()) existing.restore();
@@ -106,7 +112,7 @@ export class BrowserWindowHost {
       this.win = null;
       this.deps.onClosed?.();
     });
-    void win.loadURL(browserSurfaceURL(this.deps.appURL)).catch((error: unknown) => {
+    void win.loadURL(browserSurfaceURL(this.deps.appURL, taskId)).catch((error: unknown) => {
       this.deps.log.warn(`browser window load failed: ${errorText(error)}`);
     });
   }

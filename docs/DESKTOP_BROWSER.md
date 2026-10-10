@@ -44,6 +44,12 @@ no form state, credentials or replayable submissions are persisted. Tab
 metadata and the operation log are new versioned files under the desktop
 state directory (`browser/tabs-v1.json`, `browser/operations-v1.json`).
 
+The independent browser window is opened for the session that asked for it and
+lists that session's tabs beside the manually opened ones, so a tab the agent
+opened is visible, take-over ready, and laid out; a window opened without a
+session shows manual tabs only. An agent that opens a tab also reveals the
+window, so the page needs no second user action.
+
 ## Agent capabilities
 
 Tools are registered through the existing capability registry as one

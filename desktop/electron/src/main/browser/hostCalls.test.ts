@@ -26,12 +26,14 @@ async function setup() {
     onUpdate() {},
     log: silentLog,
   });
+  const openedFor: string[] = [];
   const table = buildBrowserHostCalls({
     surfaces,
     grants,
     documents,
     actions,
     downloads,
+    onTabOpened: (taskId) => openedFor.push(taskId),
     snapshot: async (tab, selector) => ({ tabId: tab.id, selector }) as never,
     screenshot: async (tab, request) => ({ tabId: tab.id, ...request }) as never,
   });
@@ -41,7 +43,7 @@ async function setup() {
     directories.set(taskId, directory);
     setDirs(taskId, directory);
   };
-  return { surfaces, grants, documents, downloads, directories, table, call };
+  return { surfaces, grants, documents, downloads, directories, table, call, openedFor };
 }
 
 test("grant, list and open are scoped to the grant's task", async () => {
@@ -53,6 +55,7 @@ test("grant, list and open are scoped to the grant's task", async () => {
   const opened = (await s.call("host/browser.tabs.open", { grantId: "g", url: "https://a.test" })) as HostBrowserTab;
   assert.equal(opened.url, "https://a.test/");
   assert.equal(s.surfaces.require(opened.id).taskId, "task-1", "the tab belongs to the grant's task");
+  assert.deepEqual(s.openedFor, ["task-1"], "the shell is told to reveal the window for that task");
   await s.surfaces.open("https://b.test", { taskId: "task-2", temporary: false });
 
   const listed = (await s.call("host/browser.tabs.list", { grantId: "g" })) as { tabs: HostBrowserTab[] };

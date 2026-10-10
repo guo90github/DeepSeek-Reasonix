@@ -73,7 +73,11 @@ installMessageSelectionCopy(document);
 // The independent browser window loads this same bundle with ?surface=browser:
 // the dock surface is the whole window there, so the app shell and its larger
 // chunk graph never load.
-const browserSurfaceOnly = new URLSearchParams(window.location.search).get("surface") === "browser";
+const browserSurfaceParams = new URLSearchParams(window.location.search);
+const browserSurfaceOnly = browserSurfaceParams.get("surface") === "browser";
+// The session task whose browser tabs this window lists; a window opened
+// without one lists manually opened tabs only.
+const browserSurfaceTaskId = browserSurfaceParams.get("taskId") ?? undefined;
 
 // Inside the desktop shell, suppress the webview's default right-click menu — its
 // Reload / Back / Inspect entries are easy to hit by accident and can reset or
@@ -126,7 +130,7 @@ async function mountApp() {
         <ErrorBoundary>
           <LocaleProvider>
             <ToastProvider>
-              <BrowserSurface surface="panel" taskId={undefined} />
+              <BrowserSurface surface="panel" taskId={browserSurfaceTaskId} />
             </ToastProvider>
           </LocaleProvider>
         </ErrorBoundary>

@@ -284,7 +284,12 @@ function bootstrap(dataHome: string): void {
         primary: display.id === primary,
       }));
     },
-    browser: buildBrowserHostCalls({ surfaces: browser, grants, documents, actions, downloads }),
+    browser: buildBrowserHostCalls({
+      surfaces: browser, grants, documents, actions, downloads,
+      // An agent-opened tab only helps once the user can see it: reveal the
+      // window (an already-open one just comes to the front).
+      onTabOpened: (taskId) => browserWindow.open(taskId),
+    }),
   });
 
   // Relaunching the whole shell is the last resort for an unattended run; the
@@ -430,7 +435,7 @@ function bootstrap(dataHome: string): void {
         },
         setOverlay: (active) => browser.setOverlay(active),
       },
-      browserWindow: { open: () => browserWindow.open(), close: () => browserWindow.close() },
+      browserWindow: { open: (taskId) => browserWindow.open(taskId), close: () => browserWindow.close() },
       log,
     });
     // Reports from the guest preload: the sender must be one of our website

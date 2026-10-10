@@ -326,11 +326,17 @@ export class BrowserSurfaceManager {
         this.forget(tab);
         this.broadcast();
       },
-      onPopup: () => {
+      onPopup: (url) => {
         if (!this.tabs.has(tab.id)) return null;
         return (view) => {
           this.register(this.nextId(), view, tab.taskId, tab.partition, tab.temporary);
           this.broadcast();
+          // Electron never navigates the view createWindow returns, so a
+          // target=_blank tab would stay at about:blank without this load.
+          if (url === "" || url === "about:blank") return;
+          void view.page.loadURL(url).catch((error: unknown) => {
+            this.deps.log.warn(`browser popup ${url.slice(0, 120)} failed: ${String(error)}`);
+          });
         };
       },
     };

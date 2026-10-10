@@ -27,6 +27,9 @@ export interface BrowserHostDeps {
   snapshot?(tab: BrowserTab, selector: string): Promise<SnapshotResult>;
   screenshot?(tab: BrowserTab, request: { ref: string; fullPage: boolean; directory: string }): Promise<ScreenshotResult>;
   screenshotDeps?: ScreenshotDeps;
+  // The shell reveals the independent window, so a tab the agent opens is
+  // visible instead of running off-screen. Absent in protocol-only tests.
+  onTabOpened?(taskId: string): void;
 }
 
 export function hostTab(surfaces: BrowserSurfaceManager, tab: BrowserTab): HostBrowserTab {
@@ -73,6 +76,7 @@ export function buildBrowserHostCalls(deps: BrowserHostDeps): HostCallTable {
     "host/browser.tabs.open": async (params) => {
       const grant = grants.verify(str(params, "grantId"));
       const tab = await surfaces.open(str(params, "url"), { taskId: grant.taskId, temporary: bool(params, "temporary") });
+      deps.onTabOpened?.(grant.taskId);
       return hostTab(surfaces, tab);
     },
     "host/browser.tabs.navigate": async (params) => {

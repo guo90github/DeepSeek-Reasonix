@@ -23,6 +23,8 @@ type Input = {
   /** True while the layout renders the card as an overlay (the split surface):
    *  it never competes for layout space there, so the yield rule does not apply. */
   overlayHost: boolean;
+  /** Session task whose browser tabs the window lists. */
+  activeTabId?: string;
   t: Translator;
 };
 
@@ -132,7 +134,7 @@ export function useWorkspacePanelCommands(input: Input) {
     if (!entry) return;
     const openWindow = entry.defaultTab === "browser" ? desktopHost().browser?.openWindow : undefined;
     if (openWindow) {
-      openWindow();
+      openWindow(input.activeTabId);
       return;
     }
     openRightDockMode(dockModeForTab(entry.defaultTab));

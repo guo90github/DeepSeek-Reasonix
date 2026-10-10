@@ -23,6 +23,9 @@ export type WorkspaceDockRegionProps = {
   creation: boolean;
   remoteAvailable: boolean;
   showContext: boolean;
+  /** Session task whose browser tabs the window lists; undefined shows only
+   *  manually opened tabs. */
+  browserTaskId?: string;
   t: Translator;
   onMode: (mode: RightDockMode) => void;
   onRemote: () => void;
@@ -89,7 +92,7 @@ export function WorkspaceDockRegion(props: WorkspaceDockRegionProps) {
             {mode === "remote" ? (
               <Suspense fallback={null}><RemotePanel {...props.remote} /></Suspense>
             ) : mode === "browser" ? (
-              <Suspense fallback={null}><BrowserSurface surface="entry" /></Suspense>
+              <Suspense fallback={null}><BrowserSurface surface="entry" taskId={props.browserTaskId} /></Suspense>
             ) : merged ? (
               <>
                 <Suspense fallback={null}><ContextPanel {...props.context} /></Suspense>

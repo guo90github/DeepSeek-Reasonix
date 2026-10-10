@@ -51,7 +51,7 @@ export interface BrowserRendererApi {
 // The independent browser window: opening it is a user action, so it carries no
 // grant; like the panel, every call is gated on the trusted sender.
 export interface BrowserWindowRendererApi {
-  open(): void;
+  open(taskId?: string): void;
   close(): void;
 }
 
@@ -167,7 +167,7 @@ export function registerRendererIpc(deps: RendererIpcDeps): void {
   // own and the panel is optional.
   const browserWindow = deps.browserWindow;
   if (browserWindow) {
-    handle(IPC.browserWindowOpen, () => browserWindow.open());
+    handle(IPC.browserWindowOpen, (taskId) => browserWindow.open(typeof taskId === "string" && taskId !== "" ? taskId : undefined));
     handle(IPC.browserWindowClose, () => browserWindow.close());
   }
 

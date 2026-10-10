@@ -31,7 +31,7 @@ export function BrowserDockTab({ active, onSelect }: { active: boolean; onSelect
  * status plus the one action that matters. Views and take-over belong to the
  * window, so nothing here embeds a website view.
  */
-export function BrowserWindowEntry() {
+export function BrowserWindowEntry({ taskId }: { taskId?: string }) {
   const copy = useBrowserCopy();
   const host = desktopHost().browser;
   const tabs = useBrowserPanelStore((state) => state.shown);
@@ -45,7 +45,7 @@ export function BrowserWindowEntry() {
       <p className="browser-entry__title">{copy.windowTitle}</p>
       <p className="browser-entry__hint">{copy.windowHint}</p>
       <p className="browser-entry__count">{copy.windowTabCount(tabs.length)}</p>
-      <button type="button" className="browser-entry__open" disabled={!openWindow} onClick={() => openWindow?.()}>
+      <button type="button" className="browser-entry__open" disabled={!openWindow} onClick={() => openWindow?.(taskId)}>
         {copy.windowOpen}
       </button>
       {tabs.length > 0 && (

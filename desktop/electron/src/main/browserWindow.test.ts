@@ -82,6 +82,19 @@ test("the browser surface marker survives an existing query", () => {
   assert.equal(browserSurfaceURL("reasonix://app/index.html?surface=browser"), "reasonix://app/index.html?surface=browser");
 });
 
+test("the window carries the session task it was opened for", () => {
+  assert.equal(browserSurfaceURL("reasonix://app/index.html", "tab_ab12"), "reasonix://app/index.html?surface=browser&taskId=tab_ab12");
+  assert.equal(browserSurfaceURL("http://localhost:5173/?platform=windows", "tab_ab12"), "http://localhost:5173/?platform=windows&surface=browser&taskId=tab_ab12");
+  assert.equal(browserSurfaceURL("reasonix://app/index.html", ""), "reasonix://app/index.html?surface=browser", "no task keeps the manual-tabs-only window");
+});
+
+test("open loads the task the renderer asked for", () => {
+  FakeWindow.reset();
+  const { instance } = host();
+  instance.open("tab_ab12");
+  assert.deepEqual(FakeWindow.last().loaded, ["reasonix://app/index.html?surface=browser&taskId=tab_ab12"]);
+});
+
 test("open creates one window, loads the browser surface and shows it when ready", async () => {
   FakeWindow.reset();
   const { instance, opened } = host({ icon: "/tmp/icon.png" });

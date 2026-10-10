@@ -18,11 +18,12 @@ class TestResizeObserver { observe() {} unobserve() {} disconnect() {} }
 
 const noop = () => {};
 let openedWindows = 0;
+const openedTasks: Array<string | undefined> = [];
 const browser: DesktopBrowserHost = {
   list: async () => [], open: async () => { throw new Error("unused"); }, close: async () => {}, activate: async () => {},
   navigate: async () => {}, setZoom: async () => {}, toggleDevTools: async () => {}, resume: async () => {},
   setLayout: noop, setOverlay: noop, onTabs: () => noop, onDownload: () => noop,
-  openWindow: () => { openedWindows += 1; },
+  openWindow: (taskId?: string) => { openedWindows += 1; openedTasks.push(taskId); },
 };
 const electron: ReasonixDesktopHost = {
   kind: "electron",
@@ -43,7 +44,7 @@ const electron: ReasonixDesktopHost = {
 
 const modes: RightDockMode[] = [];
 const props = (mode: RightDockMode, creation = false): WorkspaceDockRegionProps => ({
-  visible: true, overlay: false, mode, creation, remoteAvailable: false, showContext: true,
+  visible: true, overlay: false, mode, creation, remoteAvailable: false, showContext: true, browserTaskId: "tab_ab12",
   t: ((key: string) => key) as Translator,
   onMode: (next) => { modes.push(next); }, onRemote: noop,
   remote: {} as WorkspaceDockRegionProps["remote"], context: {} as WorkspaceDockRegionProps["context"],
@@ -101,6 +102,8 @@ try {
   assert.equal(present(".browser-panel"), false, "the panel itself is no longer embedded in the dock");
   await act(async () => document.querySelector<HTMLButtonElement>(".browser-entry__open")!.click());
   assert.equal(openedWindows, 1, "the entry opens the independent window");
+  // The window must know the session task, otherwise it lists manual tabs only.
+  assert.deepEqual(openedTasks, ["tab_ab12"], "the window opens for the session task");
   assert.equal(present(".workbench-dock--browser"), true, "the dock carries the mode modifier");
   assert.equal(present(".workbench-dock__body--merged"), false, "the merged overview body is not rendered for the browser tab");
 

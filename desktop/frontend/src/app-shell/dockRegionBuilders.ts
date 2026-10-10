@@ -60,6 +60,7 @@ export function buildWorkspaceDockProps(input: {
     creation: input.creation,
     remoteAvailable: input.remoteAvailable,
     showContext: input.showContext,
+    browserTaskId: input.tabId,
     t: input.t,
     onMode: panels.openRightDockMode,
     onRemote: panels.openRemoteDock,

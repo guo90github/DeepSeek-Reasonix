@@ -156,8 +156,19 @@ test("popups retain task and partition without stealing the application selectio
   assert.equal(tabs[1].temporary, true);
   assert.equal(manager.activeTabId, tab.id);
   assert.ok(child.events, "the popup view is bound to its own tab record");
+  assert.equal(child.page.calls.at(-1), "load:https://login.test/oauth", "the popup loads its target instead of staying at about:blank");
   manager.close(tab.id);
   assert.equal(viewOf(tab).fire().onPopup("https://x", "new-window"), null, "a closed tab cannot spawn popups");
+});
+
+test("an about:blank popup is left for the opener to write", async () => {
+  const { manager, viewOf, factory } = setup();
+  const tab = await manager.open("https://a.test", { taskId: "t", temporary: false });
+  const adopt = viewOf(tab).fire().onPopup("about:blank", "new-window");
+  assert.ok(adopt);
+  const child = factory.create(tab.partition) as FakeGuestView;
+  adopt(child);
+  assert.deepEqual(child.page.calls.filter((call) => call.startsWith("load:")), [], "about:blank popups are written by the opener");
 });
 
 test("close and destroyAll tear views down and leave replacement selection to the renderer", async () => {

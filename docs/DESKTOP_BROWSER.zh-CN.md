@@ -35,6 +35,10 @@ Agent 工具调用 ─▶ Go BrowserExecutor ─▶ ledger.reserve ─▶ host/b
 持久化表单状态、凭据或可重放提交。标签元数据与操作日志是桌面状态目录下新增的带
 版本文件（`browser/tabs-v1.json`、`browser/operations-v1.json`）。
 
+独立浏览器窗口按"打开它的那个会话"归属：标签栏列出该会话的标签，以及手动打开的
+标签 —— 因此 agent 打开的标签是可见的、可接管的、会被布局的；没有会话身份的窗口
+只列手动标签。agent 打开标签时会主动把窗口带到前台，页面无需用户再点一次。
+
 ## Agent 能力
 
 工具通过现有 capability 注册表注册为一个 `browser` 能力，包含下列操作。每个写操作

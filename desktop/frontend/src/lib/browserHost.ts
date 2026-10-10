@@ -54,9 +54,10 @@ export interface DesktopBrowserHost {
   takeover(tabId: string): Promise<void>;
   setLayout(rect: BrowserLayoutRect | null): void;
   setOverlay(active: boolean): void;
-  /** Opens (or focuses) the shell's independent browser window. Optional so
-   *  mocks and older preloads keep satisfying this contract. */
-  openWindow?(): void;
+  /** Opens (or focuses) the shell's independent browser window, listing the
+   *  tabs of the given session task. Optional so mocks and older preloads keep
+   *  satisfying this contract. */
+  openWindow?(taskId?: string): void;
   closeWindow?(): void;
   onTabs(cb: (tabs: BrowserTabView[]) => void): () => void;
   onDownload(cb: (download: BrowserDownloadView) => void): () => void;
