@@ -120,10 +120,13 @@ export function BrowserPanel({ taskId }: { taskId: string | undefined }) {
             onClick={() => activeTab && void store().navigate(activeTab.id, { action: "back" })}><ArrowLeft size={14} /></button>
           <button type="button" className="browser-panel__icon-btn" aria-label={copy.forward} disabled={!activeTab?.canGoForward}
             onClick={() => activeTab && void store().navigate(activeTab.id, { action: "forward" })}><ArrowRight size={14} /></button>
-          {activeTab?.loading
-            ? <button type="button" className="browser-panel__icon-btn" aria-label={copy.stop} onClick={() => void store().navigate(activeTab.id, { action: "stop" })}><X size={14} /></button>
-            : <button type="button" className="browser-panel__icon-btn" aria-label={copy.reload} disabled={!activeTab}
-              onClick={() => activeTab && void store().navigate(activeTab.id, { action: "reload" })}><RotateCw size={14} /></button>}
+          {/* Reload keeps its place while loading: a button that morphs into
+              stop gets clicked by muscle memory and silently does nothing. */}
+          <button type="button" className="browser-panel__icon-btn" aria-label={copy.reload} disabled={!activeTab}
+            onClick={() => activeTab && void store().navigate(activeTab.id, { action: "reload" })}><RotateCw size={14} /></button>
+          {activeTab?.loading && (
+            <button type="button" className="browser-panel__icon-btn" aria-label={copy.stop} onClick={() => void store().navigate(activeTab.id, { action: "stop" })}><X size={14} /></button>
+          )}
           {addressBar}
           {activeTab?.mode === "agent" && (
             <button type="button" className="btn btn--small" onClick={() => void store().takeover(activeTab.id)}>{copy.takeControl}</button>

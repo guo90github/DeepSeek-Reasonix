@@ -113,10 +113,12 @@ try {
   await emitTabs([tab({ id: "t1", loading: true, canGoBack: true }), tab({ id: "other", taskId: "B", title: "Other task" })]);
   assert.equal(document.querySelectorAll("[role='tab']").length, 1, "another task's tab is not shown");
   assert.ok(byLabel("Loading"), "a loading tab shows its spinner");
-  assert.ok(byLabel("Stop loading"), "loading swaps reload for stop");
-  assert.equal(byLabel("Reload"), undefined);
+  assert.ok(byLabel("Reload"), "reload keeps its place while loading, so a click cannot land on stop by mistake");
+  assert.ok(byLabel("Stop loading"), "loading adds a separate stop control beside it");
   assert.equal((byLabel("Back") as HTMLButtonElement).disabled, false);
   assert.equal((byLabel("Forward") as HTMLButtonElement).disabled, true);
+  await act(async () => byLabel("Reload")!.click());
+  assert.equal(calls.at(-1), "navigate t1 reload", "reload works even while the tab is loading");
   await act(async () => byLabel("Stop loading")!.click());
   assert.equal(calls.at(-1), "navigate t1 stop");
 
