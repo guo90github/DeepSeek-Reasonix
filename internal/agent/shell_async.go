@@ -94,8 +94,8 @@ func (a *Agent) deferCallsAfterBackground(calls []provider.ToolCall, outcomes []
 		if results[j] != "" {
 			continue
 		}
-		msg := fmt.Sprintf("blocked: not run — an earlier call in this batch was moved to the background and is still running. "+
-			"Collect it first (bash_output with its job id, or wait), then send %s again.", calls[j].Name)
+		msg := fmt.Sprintf("blocked: not run yet — an earlier call was moved to the background and is still running, so this call waits to keep the batch in order "+
+			"(running it now could observe a half-applied state). Collect it first (bash_output with its job id, or wait), then send %s again.", calls[j].Name)
 		var ex *tool.ShellExecution
 		if calls[j].Name == "bash" || calls[j].Name == "shell" {
 			ex = &tool.ShellExecution{
