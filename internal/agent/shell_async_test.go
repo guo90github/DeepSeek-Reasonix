@@ -88,6 +88,32 @@ func (r *countingReader) executions() int {
 	return r.runs
 }
 
+// TestShellAsyncRunsFollowersAfterAProvenlyInertCall pins the narrow case: a
+// lifted command the host can prove writes nothing (go vet) cannot make a
+// trailing call observe a half-applied change, so the trailing call runs
+// instead of paying a round to be sent again. The deferral side is covered by
+// TestShellAsyncPromotesTheSlowCallAndDefersTheRest, whose command (go test) is
+// not statically known and therefore may write.
+func TestShellAsyncRunsFollowersAfterAProvenlyInertCall(t *testing.T) {
+	shell, reader := &countingShell{}, &countingReader{}
+	a := shellAsyncAgent(t, ShellAsyncFast, shell, reader)
+
+	results := runBatch(t, a,
+		provider.ToolCall{ID: "s1", Name: "bash", Arguments: `{"command":"go vet ./..."}`},
+		provider.ToolCall{ID: "r1", Name: "read_file", Arguments: `{"path":"note.txt"}`},
+	)
+
+	if !shell.offPathLaunch() {
+		t.Fatal("the inert check was not moved off the critical path")
+	}
+	if got := reader.executions(); got != 1 {
+		t.Fatalf("the trailing read ran %d times, want 1: an inert command cannot make it stale", got)
+	}
+	if strings.Contains(results[1], "moved to the background") {
+		t.Fatalf("the trailing read was deferred behind an inert command: %q", results[1])
+	}
+}
+
 func shellAsyncAgent(t *testing.T, tier ShellAsyncTier, shell tool.Tool, reader tool.Tool) *Agent {
 	t.Helper()
 	reg := tool.NewRegistry()

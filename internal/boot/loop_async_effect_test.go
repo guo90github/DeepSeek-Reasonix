@@ -157,9 +157,11 @@ func TestEffectBalancedTierOnlyLiftsChecks(t *testing.T) {
 		name    string
 		command string
 		lifted  bool
+		defers  bool
 	}{
-		{name: "check", command: "go vet ./...", lifted: true},
-		{name: "ordinary", command: "sleep 2", lifted: false},
+		{name: "check", command: "go vet ./...", lifted: true, defers: false},
+		{name: "check that may write", command: "go test ./...", lifted: true, defers: true},
+		{name: "ordinary", command: "sleep 2", lifted: false, defers: false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			isolateConfigHome(t)
@@ -218,8 +220,8 @@ model = "x"
 				t.Fatalf("the later call produced no result")
 			}
 			deferred := strings.Contains(later, "moved to the background")
-			if deferred != tc.lifted {
-				t.Fatalf("later deferred=%v, want %v: %q", deferred, tc.lifted, later)
+			if deferred != tc.defers {
+				t.Fatalf("later deferred=%v, want %v: %q", deferred, tc.defers, later)
 			}
 		})
 	}

@@ -7,6 +7,7 @@ import (
 
 	"reasonix/internal/evidence"
 	"reasonix/internal/provider"
+	"reasonix/internal/shellsafe"
 	"reasonix/internal/tool"
 )
 
@@ -122,9 +123,15 @@ func (a *Agent) settlePromotedBatch(calls []provider.ToolCall, outcomes []toolOu
 }
 
 // promotedShellDefers reports whether a promoted shell call must suspend this
-// batch so its trailing calls wait for the job it started.
+// batch so its trailing calls wait for the job it started. A command the host
+// can prove leaves durable state alone (and unknown commands never qualify as
+// proven) cannot make a trailing call observe a half-applied change, so only
+// the ones that might mutate keep their batch behind them.
 func (a *Agent) promotedShellDefers(calls []provider.ToolCall, outcomes []toolOutcome, results []string, durations []int64, i int, promoted bool) bool {
 	if !promoted || outcomes[i].errMsg != "" {
+		return false
+	}
+	if !shellsafe.ClassifyBash(bashCommandFromArgs(json.RawMessage(calls[i].Arguments))).AnyMutation() {
 		return false
 	}
 	a.deferCallsAfterBackground(calls, outcomes, results, durations, i+1)
