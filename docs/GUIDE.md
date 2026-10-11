@@ -75,6 +75,9 @@ reasoning_language = "auto"      # visible reasoning text: auto|zh|en
 # shell_async = "fast"             # off|balanced|fast: a long shell call may run in the background instead of holding the loop
 # balanced lifts recognized checks/builds; fast lifts any call with later work
 # net win only when the turn does not need that output next: measured 2194 ms → 54 ms, at the cost of one extra round
+# plan_execute = "on"              # on: the host runs a round's concrete read-only calls itself (parallel_calls)
+# two independent reads cost one round instead of two; off ships the tool surface unchanged
+# nodes may only name statically read-only tools; bash and plugin tools are refused
 # compact_ratio = 0.80             # sole auto trigger; presets 0.70 / 0.80 / 0.85
 # max_output_tokens = 0            # auto: official DeepSeek omits the field (server 384K) until the window is tight
 # max_output_tokens = 32768        # optional cost cap; still clipped to physical remaining

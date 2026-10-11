@@ -1,6 +1,7 @@
 package boot
 
 import (
+	"reasonix/internal/agent"
 	"reasonix/internal/agentpreset"
 	"reasonix/internal/tool"
 )
@@ -81,6 +82,10 @@ func HostControlToolNames() []string {
 		"todo_write",
 		"complete_step",
 		"agent_bus",
+		// Only registered when plan_execute is on: applyUnifiedProviderToolSurface
+		// drops allowlist names the registry does not hold, so the off surface is
+		// unchanged by this line.
+		"parallel_calls",
 	}
 }
 
@@ -98,9 +103,15 @@ func UnifiedProviderToolNames() []string {
 // applyUnifiedProviderToolSurface restricts Schemas/ContractEntries to the
 // shared core + host-control tools. use_capability can still Get every
 // registered tool, including those hidden from the provider schema.
-func applyUnifiedProviderToolSurface(reg *tool.Registry) {
+func applyUnifiedProviderToolSurface(reg *tool.Registry, planExecute string) {
 	if reg == nil {
 		return
+	}
+	// The host-executed call surface is tier-gated: adding its name to the
+	// allowlist below is harmless while it is unregistered, so the off surface
+	// stays byte-identical.
+	if agent.ParsePlanExecuteTier(planExecute).Enabled() {
+		reg.Add(agent.NewParallelCallsTool(reg))
 	}
 	allow := make([]string, 0, 16)
 	for _, name := range UnifiedProviderToolNames() {

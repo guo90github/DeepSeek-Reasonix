@@ -70,6 +70,9 @@ reasoning_language = "auto"      # 可见思考过程语言：auto|zh|en
 # shell_async = "fast"             # off|balanced|fast：长命令可转后台运行，不再占住循环
 # balanced 只抬宿主识别的检查/构建；fast 抬任何“后面还有活”的调用
 # 只在“本回合不需要它的输出”时净赚：实测 2194 ms → 54 ms，代价是多 1 轮模型往返
+# plan_execute = "on"              # on：宿主自己执行本回合的具体只读调用（parallel_calls）
+# 两个独立读只需 1 轮而不是 2 轮；off 时工具面逐字节不变
+# 节点只能写静态只读工具；bash 与插件工具一律拒绝
 # compact_ratio 是唯一自动维护阈值（默认 0.80；预设 0.70/0.80/0.85）
 # max_output_tokens = 0            # 自动：官方 DeepSeek 空间充足时省略字段（服务端 384K），临界时裁剪
 # max_output_tokens = 32768        # 可选控费上限，仍可按物理剩余继续下调

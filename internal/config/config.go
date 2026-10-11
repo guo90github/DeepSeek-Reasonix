@@ -1323,12 +1323,12 @@ type AgentConfig struct {
 	TaskCostBudget float64 `toml:"task_cost_budget"`
 	// TaskTimeBudgetMinutes is the same gate on wall clock. Both ship off.
 	TaskTimeBudgetMinutes float64 `toml:"task_time_budget_minutes"`
-	// ShellAsync is the speed tier for long shell calls: off (default) runs
-	// everything in the foreground, balanced backgrounds host-recognized checks
-	// and builds, fast backgrounds any call sharing a batch. Unknown stays off.
+	// ShellAsync: off (default) keeps long shell calls in the foreground;
+	// balanced/fast lift recognized checks or any call with later work. Unknown stays off.
 	ShellAsync string `toml:"shell_async"`
-	// GoalTokenBudget bounds an unattended Goal loop by cumulative tokens.
-	// Off unless set: a Goal runs until it finishes or you stop it.
+	// PlanExecute: on registers parallel_calls (host-executed read-only calls).
+	PlanExecute string `toml:"plan_execute"`
+	// GoalTokenBudget bounds an unattended Goal loop by cumulative tokens; off unless set.
 	GoalTokenBudget int `toml:"goal_token_budget"`
 	// MaxSubagentConcurrency bounds how many sub-agents (task, fleet items,
 	// profile skills, nested children) may run at once in one session.

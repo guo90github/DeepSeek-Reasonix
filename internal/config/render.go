@@ -292,6 +292,11 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# shell_async = \"off\"   # off|balanced|fast: long checks/builds may run in the background\n")
 	}
+	if c.Agent.PlanExecute != "" {
+		fmt.Fprintf(&b, "plan_execute = %q   # off|on: the host runs a round's concrete read-only calls itself\n", c.Agent.PlanExecute)
+	} else {
+		b.WriteString("# plan_execute = \"off\"   # off|on: fewer model rounds for independent reads\n")
+	}
 	if c.Agent.OutputStyle != "" {
 		fmt.Fprintf(&b, "output_style = %q   # persona/tone folded into the prompt\n", c.Agent.OutputStyle)
 	} else {

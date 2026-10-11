@@ -2003,7 +2003,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 
 	// Provider-visible tool surface is identical for every role setting before
 	// the extension snapshot freezes registry schemas for cache diagnostics.
-	applyUnifiedProviderToolSurface(reg)
+	applyUnifiedProviderToolSurface(reg, cfg.Agent.PlanExecute)
 
 	// Freeze the extension kernel's snapshot of exactly what this build wired.
 	// The snapshot is assembled from the in-hand objects above — discovery
