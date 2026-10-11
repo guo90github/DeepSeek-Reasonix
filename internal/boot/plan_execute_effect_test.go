@@ -137,6 +137,9 @@ func TestEffectPlanExecuteOffLeavesTheToolSurfaceByteIdentical(t *testing.T) {
 	if strings.Contains(string(offTools[0]), "parallel_calls") {
 		t.Fatalf("the off surface offers the host-executed tool: %s", offTools[0])
 	}
+	if strings.Contains(string(offTools[0]), `"parallel_tasks"`) || strings.Contains(string(offTools[0]), `"fleet"`) {
+		t.Fatalf("the off surface offers the fan-out tools: %s", offTools[0])
+	}
 }
 
 // TestEffectPlanExecuteOnRunsBothReadsInOneRound is the point of the tier: two
@@ -156,6 +159,13 @@ func TestEffectPlanExecuteOnRunsBothReadsInOneRound(t *testing.T) {
 	}
 	if !strings.Contains(string(hostTools[0]), "parallel_calls") {
 		t.Fatalf("the on surface does not offer the host-executed tool: %s", hostTools[0])
+	}
+	// The tier is also what finally puts the sub-agent fan-out in front of the
+	// model: before it, parallel_tasks and fleet were registered but hidden.
+	for _, want := range []string{`"parallel_tasks"`, `"fleet"`} {
+		if !strings.Contains(string(hostTools[0]), want) {
+			t.Fatalf("the on surface does not offer %s: %s", want, hostTools[0])
+		}
 	}
 	if len(hostRequests) < 2 {
 		t.Fatalf("captured %d requests, want the tool round and the answer round", len(hostRequests))

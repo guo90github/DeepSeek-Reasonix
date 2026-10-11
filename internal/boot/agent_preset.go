@@ -113,8 +113,15 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, planExecute string) {
 	if agent.ParsePlanExecuteTier(planExecute).Enabled() {
 		reg.Add(agent.NewParallelCallsTool(reg))
 	}
-	allow := make([]string, 0, 16)
-	for _, name := range UnifiedProviderToolNames() {
+	// Fan-out tools are registered on every build yet stay off the surface; opting
+	// into plan_execute is what puts them in front of the model, which is why
+	// fan-out never fired before.
+	candidates := UnifiedProviderToolNames()
+	if agent.ParsePlanExecuteTier(planExecute).Enabled() {
+		candidates = append(append([]string(nil), candidates...), tool.HostParallelTasks, tool.HostFleet)
+	}
+	allow := make([]string, 0, len(candidates))
+	for _, name := range candidates {
 		if _, ok := reg.Get(name); ok {
 			allow = append(allow, name)
 		}
