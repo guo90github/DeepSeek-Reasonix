@@ -31,6 +31,7 @@ func (a *Agent) applyBatchNudge(calls []provider.ToolCall, outcomes []toolOutcom
 	if a == nil {
 		return intervention{}
 	}
+	a.turn.budget.parallelism.observe(calls)
 	if !batchOutcomesAreReadOnly(outcomes) || !batchOutcomesSucceeded(outcomes) || !a.batchRoundMadeProgress(receiptMark) {
 		a.turn.loop.resetBatchingStreak()
 		return intervention{}

@@ -115,7 +115,7 @@ model = "x"
 		t.Fatalf("a %d-round turn reported %d metrics notices, want exactly 1: %v", turnMetricsReads, len(long), long)
 	}
 	t.Logf("MEASURED: turn metrics notice detail = %q", long[0])
-	for _, want := range []string{"rounds=", "wall=", "model=", "tools="} {
+	for _, want := range []string{"rounds=", "wall=", "model=", "tools=", "calls=1 fanout=false"} {
 		if !strings.Contains(long[0], want) {
 			t.Fatalf("detail %q is missing %q", long[0], want)
 		}

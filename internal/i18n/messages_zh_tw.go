@@ -25,7 +25,7 @@ var ChineseTraditional = Messages{
 	ProgressGuard:                    "助手在沒有新證據的情況下反覆做重複工作，已要求它更換方法。",
 	OperationNeedsUser:               "同一處變更連續兩次以相同原因失敗，已暫停並交給你處理，不再自動重試。",
 	SoftBudgetConverge:               "正在收斂這場耗時較長的唯讀調查。",
-	TurnMetrics:                      "本回合讀數（輪數 / 模型時間 / 工具關鍵路徑）。",
+	TurnMetrics:                      "本回合讀數（輪數 / 模型時間 / 工具關鍵路徑 / 單輪最寬呼叫數 / 是否扇出）。",
 	EvidenceNudge:                    "有多處改動尚未驗證，已要求執行成本最低的判別性檢查。",
 	ReasoningGovernor:                "目前處於高思考開銷的探索階段，在開始實證工作前將保持較低的推理深度。",
 	UnappliedSteerFmt:                "本條引導未能套用，因為目前回合在處理它之前已結束。如仍需要，請重新傳送：\n%s",

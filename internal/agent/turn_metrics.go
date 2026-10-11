@@ -38,7 +38,7 @@ func (a *Agent) emitTurnMetrics() {
 		Level:  event.LevelInfo,
 		Code:   event.NoticeCodeTurnMetrics,
 		Text:   i18n.M.TurnMetrics,
-		Detail: turnMetricsDetail(rounds, wall, tools),
+		Detail: turnMetricsDetail(rounds, wall, tools, a.turn.budget.parallelism),
 	})
 }
 
@@ -46,7 +46,7 @@ func (a *Agent) emitTurnMetrics() {
 // does not know the code still shows something readable. The two shares are
 // complements of one another: a readout whose parts do not add up to the whole
 // is a bug the user can see.
-func turnMetricsDetail(rounds int, wall, tools time.Duration) string {
+func turnMetricsDetail(rounds int, wall, tools time.Duration, parallelism parallelismSample) string {
 	if tools < 0 {
 		tools = 0
 	}
@@ -65,7 +65,7 @@ func turnMetricsDetail(rounds int, wall, tools time.Duration) string {
 	if wall > 0 {
 		modelShare = 100 - toolsShare
 	}
-	return fmt.Sprintf("rounds=%d wall=%s model=%s (%d%%) tools=%s (%d%%)",
+	return fmt.Sprintf("rounds=%d wall=%s model=%s (%d%%) tools=%s (%d%%) calls=%d fanout=%t",
 		rounds, wall.Round(time.Second), model.Round(time.Second), modelShare,
-		tools.Round(time.Second), toolsShare)
+		tools.Round(time.Second), toolsShare, parallelism.maxCallsPerRound, parallelism.delegated)
 }

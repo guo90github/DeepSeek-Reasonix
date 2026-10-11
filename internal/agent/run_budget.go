@@ -51,6 +51,8 @@ type runBudget struct {
 	unpricedTurns bool
 	// toolBusyMs sums the turn's tool windows — its tool critical path.
 	toolBusyMs int64
+	// parallelism records how wide the turn's rounds were, for the readout.
+	parallelism parallelismSample
 	// limit is configuration, not accumulation: it survives the reset that
 	// starts a new task.
 	limit TaskBudget

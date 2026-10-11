@@ -32,15 +32,35 @@ func TestTurnMetricsWorthReporting(t *testing.T) {
 // whatever the tool windows left over, and a bogus tool total cannot make it
 // negative.
 func TestTurnMetricsDetailSplitsTheWallClock(t *testing.T) {
-	got := turnMetricsDetail(7, 100*time.Second, 20*time.Second)
-	for _, want := range []string{"rounds=7", "wall=1m40s", "model=1m20s (80%)", "tools=20s (20%)"} {
+	got := turnMetricsDetail(7, 100*time.Second, 20*time.Second, parallelismSample{maxCallsPerRound: 3, delegated: true})
+	for _, want := range []string{"rounds=7", "wall=1m40s", "model=1m20s (80%)", "tools=20s (20%)", "calls=3", "fanout=true"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("detail = %q, want it to contain %q", got, want)
 		}
 	}
 
-	clamped := turnMetricsDetail(5, 10*time.Second, 40*time.Second)
+	clamped := turnMetricsDetail(5, 10*time.Second, 40*time.Second, parallelismSample{})
 	if !strings.Contains(clamped, "model=0s (0%)") {
 		t.Fatalf("a tool total past the wall clock did not clamp: %q", clamped)
+	}
+	if !strings.Contains(clamped, "calls=0 fanout=false") {
+		t.Fatalf("an all-serial turn did not read as such: %q", clamped)
+	}
+}
+
+// TestParallelismSampleTracksTheWidestBatch: the readout reports the widest round
+// the host dispatched and whether any call delegated — never the sum of calls.
+func TestParallelismSampleTracksTheWidestBatch(t *testing.T) {
+	var p parallelismSample
+	p.observe(oneReadCall())
+	p.observe(twoReadCalls())
+	if p.maxCallsPerRound != 2 || p.delegated {
+		t.Fatalf("sample after batched reads = %+v, want widest 2 and no delegation", p)
+	}
+	delegating := oneReadCall()
+	delegating[0].Name = "parallel_tasks"
+	p.observe(delegating)
+	if !p.delegated || p.maxCallsPerRound != 2 {
+		t.Fatalf("sample after a delegating round = %+v, want delegation recorded", p)
 	}
 }
