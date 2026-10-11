@@ -19,7 +19,17 @@ import (
 // clock, which is the whole point of the tier that registers this tool.
 type ParallelCallsTool struct {
 	reg *tool.Registry
+	// prefetch moves the same opt-in one step further: the host also reads the
+	// paths the model named, on the round tail.
+	prefetch bool
 }
+
+// SetPrefetch arms the host-side prefetch. It is set from the tier at
+// registration, so "tier ⇒ registration ⇒ behaviour" stays one chain.
+func (p *ParallelCallsTool) SetPrefetch(on bool) { p.prefetch = on }
+
+// Prefetch reports whether this run reads named paths for the model.
+func (p *ParallelCallsTool) Prefetch() bool { return p.prefetch }
 
 // NewParallelCallsTool builds the host-executed call surface. The registry is
 // the only dependency: every node resolves through it and is rejected unless it

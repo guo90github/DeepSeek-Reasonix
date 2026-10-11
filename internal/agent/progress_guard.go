@@ -63,9 +63,10 @@ func (a *Agent) applyBatchGuards(ctx context.Context, cancelled bool, calls []pr
 	progress := a.applyProgressGuard(outcomes, receiptMark, goalScoped)
 	shadow := a.observeOutcomeShadow(receiptMark, outcomes)
 	batch := a.applyBatchNudge(calls, outcomes, receiptMark)
+	prefetch := a.applyPlanPrefetch(ctx, calls, outcomes, receiptMark)
 	budget := a.applySoftBudget(outcomes)
 	operation := a.applyOperationBreaker(receiptMark)
-	a.applyInterventions(results, outcomes, storm, progress, shadow, batch, budget, operation)
+	a.applyInterventions(results, outcomes, storm, progress, shadow, batch, prefetch, budget, operation)
 	a.observeDelegationAdmission(calls)
 }
 

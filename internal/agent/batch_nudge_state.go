@@ -5,10 +5,11 @@ package agent
 // already spoke. They live together because they share one lifetime — the
 // struct-state ratchet exists to stop loose fields growing one per case.
 type batchNudgeState struct {
-	streak  int
-	nudged  bool
-	batched bool
-	fanout  bool
+	streak   int
+	nudged   bool
+	batched  bool
+	fanout   bool
+	prefetch bool
 }
 
 func (s *turnLoopState) bumpBatchingStreak() int {
@@ -62,4 +63,16 @@ func (s *turnLoopState) fanoutWorthOffering(rounds int) bool {
 		return false
 	}
 	return rounds >= fanoutNudgeMinRounds || s.batching.streak >= batchNudgeStreak+fanoutIgnoredFixRounds
+}
+
+// markPrefetched reports whether this turn may still prefetch. One per turn
+// keeps the tail from filling with host reads the model never asked for.
+func (s *turnLoopState) markPrefetched() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.batching.prefetch {
+		return false
+	}
+	s.batching.prefetch = true
+	return true
 }

@@ -110,8 +110,10 @@ func applyUnifiedProviderToolSurface(reg *tool.Registry, planExecute string) {
 	// The host-executed call surface is tier-gated: adding its name to the
 	// allowlist below is harmless while it is unregistered, so the off surface
 	// stays byte-identical.
-	if agent.ParsePlanExecuteTier(planExecute).Enabled() {
-		reg.Add(agent.NewParallelCallsTool(reg))
+	if tier := agent.ParsePlanExecuteTier(planExecute); tier.Enabled() {
+		hostCalls := agent.NewParallelCallsTool(reg)
+		hostCalls.SetPrefetch(tier.Prefetch())
+		reg.Add(hostCalls)
 	}
 	// Fan-out tools are registered on every build yet stay off the surface; opting
 	// into plan_execute is what puts them in front of the model, which is why
