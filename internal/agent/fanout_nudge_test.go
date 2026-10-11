@@ -66,6 +66,38 @@ func TestFanoutNudgeStaysQuietOnAShortTurn(t *testing.T) {
 	}
 }
 
+// TestFanoutNudgeEscalatesWhenTheCheapFixIsIgnored: a model that keeps sending
+// single calls after the batching hint has spoken has shown the cheap fix is not
+// coming, so the escalation does not wait for the long-turn round count.
+func TestFanoutNudgeEscalatesWhenTheCheapFixIsIgnored(t *testing.T) {
+	a := &Agent{}
+	a.turn.budget.rounds = batchNudgeStreak + fanoutIgnoredFixRounds
+	read := []toolOutcome{{output: "note"}}
+
+	var last intervention
+	for round := 1; round <= batchNudgeStreak+fanoutIgnoredFixRounds; round++ {
+		last = a.applyBatchNudge(oneReadCall(), read, 0)
+	}
+	if !strings.Contains(last.guidance, "Host fan-out hint") {
+		t.Fatalf("an ignored cheap fix never escalated to fan-out: %q", last.guidance)
+	}
+}
+
+// TestFanoutNudgeHoldsUntilTheCheapFixWasIgnored pins the other side of that
+// escalation: before the second patience window a turn shorter than the long
+// gate still hears nothing, even though the batching hint already spoke.
+func TestFanoutNudgeHoldsUntilTheCheapFixWasIgnored(t *testing.T) {
+	a := &Agent{}
+	a.turn.budget.rounds = batchNudgeStreak + fanoutIgnoredFixRounds - 1
+	read := []toolOutcome{{output: "note"}}
+
+	for round := 1; round <= batchNudgeStreak+fanoutIgnoredFixRounds-1; round++ {
+		if iv := a.applyBatchNudge(oneReadCall(), read, 0); strings.Contains(iv.guidance, "fan-out") {
+			t.Fatalf("round %d offered fan-out before the cheap fix was ignored: %q", round, iv.guidance)
+		}
+	}
+}
+
 // TestFanoutNudgeStaysQuietOffTheReadOnlyPath keeps it away from rounds that
 // touch state or fail: sub-agents on a mutating turn would race each other, and
 // a stuck round belongs to the guards.

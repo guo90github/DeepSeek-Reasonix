@@ -52,10 +52,14 @@ func (s *turnLoopState) markBatchingInUse() {
 	s.batching.batched = true
 }
 
-// batchingAddressed reports whether the cheaper fix is already suggested (the
-// hint spoke) or already in use (a round carried several calls).
-func (s *turnLoopState) batchingAddressed() bool {
+// fanoutWorthOffering reports whether the expensive hint may follow: the cheap
+// fix is already suggested or in use, and either the turn is long enough on its
+// own or the cheap fix has been ignored for another full patience window.
+func (s *turnLoopState) fanoutWorthOffering(rounds int) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.batching.nudged || s.batching.batched
+	if !s.batching.nudged && !s.batching.batched {
+		return false
+	}
+	return rounds >= fanoutNudgeMinRounds || s.batching.streak >= batchNudgeStreak+fanoutIgnoredFixRounds
 }

@@ -12,11 +12,15 @@ import (
 // it — the hint rides the round tail and never touches the cached prefix.
 const batchNudgeStreak = 3
 
-// fanoutNudgeMinRounds is the second, later hint: a read-only turn that already
-// batched its calls and still runs this long is work that may split into
-// independent areas, where sub-agents overlap the model's own time instead of
-// paying round trip after round trip in one stream.
+// fanoutNudgeMinRounds is the round count at which a read-only turn that
+// already batched its calls is long enough that its work may split into
+// independent areas for sub-agents.
 const fanoutNudgeMinRounds = 8
+
+// fanoutIgnoredFixRounds is how many further single-call rounds after the
+// batching hint count as the model ignoring it — the same patience that hint
+// showed, so the escalation keeps the same rhythm.
+const fanoutIgnoredFixRounds = batchNudgeStreak
 
 // applyBatchNudge points at the cheaper fix first: fold independent read-only
 // calls into one message (or recognize that the model already batches), and only
@@ -37,7 +41,7 @@ func (a *Agent) applyBatchNudge(calls []provider.ToolCall, outcomes []toolOutcom
 	} else if streak := a.turn.loop.bumpBatchingStreak(); streak >= batchNudgeStreak && a.turn.loop.markBatchingNudged() {
 		return intervention{verdict: verdictAdvise, guidance: batchingHint(streak)}
 	}
-	if a.turn.budget.rounds >= fanoutNudgeMinRounds && a.turn.loop.batchingAddressed() && a.turn.loop.markFanoutNudged() {
+	if a.turn.loop.fanoutWorthOffering(a.turn.budget.rounds) && a.turn.loop.markFanoutNudged() {
 		return intervention{verdict: verdictAdvise, guidance: fanoutHint(a.turn.budget.rounds)}
 	}
 	return intervention{}
