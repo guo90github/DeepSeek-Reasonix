@@ -124,13 +124,11 @@ func (p *ParallelCallsTool) Execute(ctx context.Context, args json.RawMessage) (
 	}
 
 	settled := 0
-	cancelled := false
 	for settled < n {
 		select {
 		case <-doneCh:
 			settled++
 		case <-ctx.Done():
-			cancelled = true
 			wg.Wait()
 			for i := range calls {
 				if errs[i] == nil && outputs[i] == "" {
@@ -141,9 +139,6 @@ func (p *ParallelCallsTool) Execute(ctx context.Context, args json.RawMessage) (
 		}
 	}
 	wg.Wait()
-	if cancelled {
-		return formatParallelCallsAggregate(calls, outputs, errs), ctx.Err()
-	}
 	return formatParallelCallsAggregate(calls, outputs, errs), nil
 }
 

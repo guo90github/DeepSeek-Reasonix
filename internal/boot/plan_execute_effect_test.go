@@ -160,13 +160,14 @@ func TestEffectPlanExecuteOnRunsBothReadsInOneRound(t *testing.T) {
 	if len(hostRequests) < 2 {
 		t.Fatalf("captured %d requests, want the tool round and the answer round", len(hostRequests))
 	}
-	answerPrompt := ""
+	var answerPrompt strings.Builder
 	for _, msg := range hostRequests[1].Messages {
-		answerPrompt += msg.Content + "\n"
+		answerPrompt.WriteString(msg.Content)
+		answerPrompt.WriteString("\n")
 	}
 	for _, want := range []string{"alpha", "beta"} {
-		if !strings.Contains(answerPrompt, want) {
-			t.Fatalf("the round after the call is missing %q:\n%s", want, answerPrompt)
+		if !strings.Contains(answerPrompt.String(), want) {
+			t.Fatalf("the round after the call is missing %q:\n%s", want, answerPrompt.String())
 		}
 	}
 }
