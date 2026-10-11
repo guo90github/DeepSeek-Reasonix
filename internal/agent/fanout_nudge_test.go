@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/tool"
 )
 
 func twoReadCalls() []provider.ToolCall {
@@ -95,6 +96,30 @@ func TestFanoutNudgeHoldsUntilTheCheapFixWasIgnored(t *testing.T) {
 		if iv := a.applyBatchNudge(oneReadCall(), read, 0); strings.Contains(iv.guidance, "fan-out") {
 			t.Fatalf("round %d offered fan-out before the cheap fix was ignored: %q", round, iv.guidance)
 		}
+	}
+}
+
+// TestFanoutHintNamesTheHostCallSurfaceOnlyWhenItExists pins both halves of the
+// tier promise at the hint itself: a run without parallel_calls hears exactly
+// the old words, and a run that registered it is told about the cheaper option.
+func TestFanoutHintNamesTheHostCallSurfaceOnlyWhenItExists(t *testing.T) {
+	const offHint = "Host fan-out hint: this turn has taken 7 rounds of read-only work. If the remaining work splits into independent areas, parallel_tasks runs them as concurrent sub-agents, so the wall clock is the slowest branch instead of the sum of rounds. Keep the calls in this message when they depend on each other, and prefer batching when the work is small; fan-out costs extra tokens because every branch has its own context."
+
+	bare := &Agent{}
+	if got := bare.fanoutHint(7); got != offHint {
+		t.Fatalf("the tier-less hint changed:\n got: %q\nwant: %q", got, offHint)
+	}
+
+	reg := tool.NewRegistry()
+	reg.Add(stubReadTool{name: "parallel_calls", readOnly: true})
+	hosted := &Agent{}
+	hosted.svc.tools = reg
+	got := hosted.fanoutHint(7)
+	if !strings.Contains(got, "parallel_calls") {
+		t.Fatalf("the host-call hint does not name the tool: %q", got)
+	}
+	if !strings.HasPrefix(got, offHint) {
+		t.Fatalf("the host-call hint rewrote the shared text:\n got: %q", got)
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"reasonix/internal/provider"
+	"reasonix/internal/tool"
 )
 
 // batchNudgeStreak is how many consecutive rounds may carry a single read-only
@@ -43,7 +44,7 @@ func (a *Agent) applyBatchNudge(calls []provider.ToolCall, outcomes []toolOutcom
 		return intervention{verdict: verdictAdvise, guidance: batchingHint(streak)}
 	}
 	if a.turn.loop.fanoutWorthOffering(a.turn.budget.rounds) && a.turn.loop.markFanoutNudged() {
-		return intervention{verdict: verdictAdvise, guidance: fanoutHint(a.turn.budget.rounds)}
+		return intervention{verdict: verdictAdvise, guidance: a.fanoutHint(a.turn.budget.rounds)}
 	}
 	return intervention{}
 }
@@ -52,8 +53,27 @@ func batchingHint(streak int) string {
 	return fmt.Sprintf("Host batching hint: the last %d rounds each sent a single read-only call, and every round is a full model round-trip. When the remaining work is independent, send those calls together in one message instead of one per round.", streak)
 }
 
-func fanoutHint(rounds int) string {
-	return fmt.Sprintf("Host fan-out hint: this turn has taken %d rounds of read-only work. If the remaining work splits into independent areas, parallel_tasks runs them as concurrent sub-agents, so the wall clock is the slowest branch instead of the sum of rounds. Keep the calls in this message when they depend on each other, and prefer batching when the work is small; fan-out costs extra tokens because every branch has its own context.", rounds)
+// fanoutHint names the fan-out options this run actually has. The second
+// sentence appears only when parallel_calls is registered — that tool is what
+// the plan_execute tier adds — so a run without the tier hears the same words it
+// heard before, byte for byte.
+func (a *Agent) fanoutHint(rounds int) string {
+	hint := fmt.Sprintf("Host fan-out hint: this turn has taken %d rounds of read-only work. If the remaining work splits into independent areas, parallel_tasks runs them as concurrent sub-agents, so the wall clock is the slowest branch instead of the sum of rounds. Keep the calls in this message when they depend on each other, and prefer batching when the work is small; fan-out costs extra tokens because every branch has its own context.", rounds)
+	if !a.hostCallsAvailable() {
+		return hint
+	}
+	return hint + " When the nodes are concrete read-only calls you can already spell out, parallel_calls runs them inside this round instead: no sub-agent and no extra round trip."
+}
+
+// hostCallsAvailable reports whether this run registered the host-executed call
+// surface. Asking the registry keeps one source of truth: the tier decides
+// registration, and the hint follows it.
+func (a *Agent) hostCallsAvailable() bool {
+	if a == nil || a.svc.tools == nil {
+		return false
+	}
+	_, ok := a.svc.tools.Get(tool.HostParallelCalls)
+	return ok
 }
 
 // batchRoundMadeProgress reports whether this round earned at least one
