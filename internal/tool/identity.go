@@ -18,6 +18,7 @@ const (
 	HostLspHover                   = "lsp_hover"
 	HostLspReferences              = "lsp_references"
 	HostMemory                     = "memory"
+	HostParallelCalls              = "parallel_calls"
 	HostParallelTasks              = "parallel_tasks"
 	HostReadOnlySkill              = "read_only_skill"
 	HostReadOnlyTask               = "read_only_task"
@@ -59,6 +60,7 @@ func KnownToolNames() []string {
 		HostLspHover,
 		HostLspReferences,
 		HostMemory,
+		HostParallelCalls,
 		HostParallelTasks,
 		HostReadOnlySkill,
 		HostReadOnlyTask,
