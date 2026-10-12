@@ -147,12 +147,9 @@ func (a *App) AgentBusBriefing() (AgentBusBriefingView, error) {
 	if signal, failed := wakeFailureSignal(control.AgentBusWakeFailures()); failed {
 		view.Signals = append(view.Signals, signal)
 	}
-	// The unreachable row has to agree with what the panel calls attention: name a participant only
-	// when the board is showing work their absence blocks. Retiring that work empties the row, and
-	// unowned startable steps never put anyone in it (anyone here may take those).
-	// History is not work: a subtree whose participants are all out of reach is already folded as
-	// leftover, so naming them here would report blocked work where nothing live is blocked — and a
-	// card kept alive by a hearing verdict has no step a retirement could close (2026-10-06).
+	// The unreachable row must agree with what the panel calls attention: name a
+	// participant only when the board shows live work their absence blocks —
+	// folded leftover history is not work, and no step can close an out-of-reach card (2026-10-06).
 	leftover := map[string]bool{}
 	for _, card := range view.Cards {
 		if card.Leftover {
