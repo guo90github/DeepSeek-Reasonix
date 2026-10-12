@@ -177,6 +177,22 @@ export const SELECT_SCRIPT_SOURCE = pageSelect.toString();
 export const FOCUS_SCRIPT_SOURCE = pageFocus.toString();
 export const IDENTITY_SCRIPT_SOURCE = pageIdentity.toString();
 export const LOCATE_SCRIPT_SOURCE = pageLocate.toString();
+export const HAS_TEXT_SCRIPT_SOURCE = pageHasText.toString();
+
+export interface HasTextInput {
+  text: string;
+}
+
+// Presence check for wait: reads rendered text so hidden markup cannot satisfy
+// it, and matches case-insensitively like snapshot names do.
+export function pageHasText(input: HasTextInput): boolean {
+  const body = document.body;
+  if (!body) return false;
+  const needle = input.text.trim().toLowerCase();
+  if (needle === "") return false;
+  const haystack = (body.innerText || body.textContent || "").toLowerCase();
+  return haystack.includes(needle);
+}
 
 export function scriptCall(source: string, input: unknown): string {
   return `(${source})(${JSON.stringify(input)})`;

@@ -125,6 +125,14 @@ test("click dispatches trusted mouse events at the zoomed centre and rotates the
   assert.deepEqual(chained, { executed: true, documentToken: "tok-3" });
 });
 
+test("hover moves to the element's centre without pressing a button", async () => {
+  const s = await setup();
+  s.page.zoom = 2;
+  const result = await s.actions.act(s.tab, s.request({ action: "hover" }), s.verify);
+  assert.deepEqual(result, { executed: true, documentToken: "tok-2" });
+  assert.deepEqual(s.page.inputs, [{ type: "mouseMove", x: 120, y: 80 }], "a move alone, so hover-only UI appears without activating anything");
+});
+
 test("a navigation or document replacement during the act completes it without a token", async () => {
   const s = await setup();
   s.settled.push(() => s.view.fire().onNavigate("https://a.test/after-click", false));

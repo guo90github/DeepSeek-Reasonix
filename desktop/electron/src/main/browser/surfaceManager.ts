@@ -2,6 +2,9 @@ import type { Rectangle } from "electron";
 import type { BrowserLayoutRect, BrowserNavigateTarget, BrowserTabMode, BrowserTabView, BrowserTakeoverKind } from "../../shared/ipc.js";
 import type { Logger } from "../log.js";
 import type { GuestView, GuestViewEvents, GuestViewFactory } from "./guestView.js";
+import { TabLogs, type ConsoleRecord, type NetworkRecord } from "./logs.js";
+import { HAS_TEXT_SCRIPT_SOURCE, scriptCall } from "./pageScripts.js";
+import { runInFrame } from "./snapshot.js";
 
 export const SHARED_PARTITION = "persist:browser";
 export const USER_TASK_ID = "user";
@@ -13,6 +16,9 @@ export const AGENT_INPUT_GRACE_MS = 750;
 export const MAX_CRASH_RELOADS = 3;
 export const MIN_ZOOM = 0.25;
 export const MAX_ZOOM = 5;
+export const WAIT_POLL_MS = 150;
+
+const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export interface BrowserTab {
   id: string;
@@ -29,6 +35,7 @@ export interface BrowserTab {
   lastURL: string;
   crashes: number;
   agentInputUntil: number;
+  logs: TabLogs;
 }
 
 export interface OpenOptions {
@@ -44,6 +51,7 @@ export interface SurfaceManagerDeps {
   log: Logger;
   now?(): number;
   openWaitMs?: number;
+  sleep?(ms: number): Promise<void>;
 }
 
 export function normaliseBrowserURL(input: string): string {
@@ -240,6 +248,47 @@ export class BrowserSurfaceManager {
     this.deps.onTakeover(tab, reason);
   }
 
+  // wait settles a read: it polls until the asked-for text is present (or
+  // gone), or until no text was asked for and the tab stops loading.
+  async wait(tabId: string, text: string, gone: boolean, timeoutMs: number): Promise<{ found: boolean; elapsedMs: number }> {
+    const tab = this.require(tabId);
+    const started = this.now();
+    const deadline = started + Math.max(0, timeoutMs);
+    const sleep = this.deps.sleep ?? defaultSleep;
+    for (;;) {
+      const present = text === "" ? !tab.loading : await this.hasText(tab, text);
+      const met = text === "" ? present : gone ? !present : present;
+      if (met) return { found: true, elapsedMs: this.now() - started };
+      if (this.now() >= deadline) return { found: false, elapsedMs: this.now() - started };
+      await sleep(WAIT_POLL_MS);
+    }
+  }
+
+  private async hasText(tab: BrowserTab, text: string): Promise<boolean> {
+    try {
+      const raw = await runInFrame(tab.view.page, tab.view.page.mainFrame, scriptCall(HAS_TEXT_SCRIPT_SOURCE, { text }));
+      return raw === true;
+    } catch {
+      return false;
+    }
+  }
+
+  // console and network read what the page reported through the debugger.
+  // The first call attaches it, so nothing before that call is captured.
+  console(tabId: string, limit: number): ConsoleRecord[] {
+    const tab = this.require(tabId);
+    tab.logs.attach(tab.view.page);
+    const records = tab.logs.consoleRecords();
+    return limit > 0 ? records.slice(-limit) : records;
+  }
+
+  network(tabId: string, limit: number): NetworkRecord[] {
+    const tab = this.require(tabId);
+    tab.logs.attach(tab.view.page);
+    const records = tab.logs.networkRecords();
+    return limit > 0 ? records.slice(-limit) : records;
+  }
+
   // Called with the guest preload's report; the sender id identifies the tab.
   takeoverFromSender(webContentsId: number, kind: BrowserTakeoverKind): boolean {
     const tab = this.all().find((entry) => entry.view.page.id === webContentsId);
@@ -293,6 +342,7 @@ export class BrowserSurfaceManager {
       lastURL: "",
       crashes: 0,
       agentInputUntil: 0,
+      logs: new TabLogs({ log: this.deps.log, now: this.deps.now }),
     };
     this.tabs.set(id, tab);
     view.bind(this.events(tab));

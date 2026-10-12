@@ -332,6 +332,62 @@ func (e *hostBrowserExecutor) captureDir() (string, error) {
 	return dir, nil
 }
 
+// ScratchDir lets a large read result land where the task's file tools can
+// read it, so browser_snapshot never has to fit in one tool result.
+func (e *hostBrowserExecutor) ScratchDir(context.Context) (string, error) {
+	return e.captureDir()
+}
+
+// Wait polls the tab in the shell; the model never guesses a sleep.
+func (e *hostBrowserExecutor) Wait(ctx context.Context, req browser.WaitRequest) (browser.WaitResult, error) {
+	var out struct {
+		Found     bool `json:"found"`
+		ElapsedMs int  `json:"elapsedMs"`
+	}
+	err := e.call(ctx, "host/browser.wait", map[string]any{
+		"tabId":     req.TabID,
+		"text":      req.Text,
+		"gone":      req.Gone,
+		"timeoutMs": int(req.Timeout / time.Millisecond),
+	}, &out)
+	return browser.WaitResult{Found: out.Found, Elapsed: time.Duration(out.ElapsedMs) * time.Millisecond}, err
+}
+
+// Console and Network read the tab's in-memory buffers; nothing is written to
+// disk, and recording begins with the first call.
+func (e *hostBrowserExecutor) Console(ctx context.Context, req browser.LogsRequest) ([]browser.ConsoleEntry, error) {
+	var out struct {
+		Entries []struct {
+			Level string `json:"level"`
+			Text  string `json:"text"`
+		} `json:"entries"`
+	}
+	err := e.call(ctx, "host/browser.console", map[string]any{"tabId": req.TabID, "limit": req.Limit}, &out)
+	entries := make([]browser.ConsoleEntry, 0, len(out.Entries))
+	for _, entry := range out.Entries {
+		entries = append(entries, browser.ConsoleEntry{Level: entry.Level, Text: entry.Text})
+	}
+	return entries, err
+}
+
+func (e *hostBrowserExecutor) Network(ctx context.Context, req browser.LogsRequest) ([]browser.NetworkEntry, error) {
+	var out struct {
+		Entries []struct {
+			Method string `json:"method"`
+			URL    string `json:"url"`
+			Status int    `json:"status"`
+			MIME   string `json:"mime"`
+			Failed string `json:"failed"`
+		} `json:"entries"`
+	}
+	err := e.call(ctx, "host/browser.network", map[string]any{"tabId": req.TabID, "limit": req.Limit}, &out)
+	entries := make([]browser.NetworkEntry, 0, len(out.Entries))
+	for _, entry := range out.Entries {
+		entries = append(entries, browser.NetworkEntry{Method: entry.Method, URL: entry.URL, Status: entry.Status, MIME: entry.MIME, Failed: entry.Failed})
+	}
+	return entries, err
+}
+
 func (e *hostBrowserExecutor) Downloads(ctx context.Context, req browser.DownloadsRequest) ([]browser.Download, error) {
 	var out struct {
 		Downloads []struct {

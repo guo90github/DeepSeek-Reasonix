@@ -14,13 +14,14 @@ import (
 const clickArgs = `{"operationId":"op-1","tabId":"t1","documentToken":"doc-1","ref":"e12"}`
 
 var readOnlyTools = map[string]bool{
-	"browser_tabs": true, "browser_snapshot": true, "browser_screenshot": true, "browser_download": true,
+	"browser_tabs": true, "browser_snapshot": true, "browser_wait": true, "browser_screenshot": true, "browser_console": true,
+	"browser_network": true, "browser_download": true,
 }
 
 func TestNamesMatchTools(t *testing.T) {
 	names := Names()
-	if len(names) != 13 {
-		t.Fatalf("Names() = %d entries, want 13", len(names))
+	if len(names) != 17 {
+		t.Fatalf("Names() = %d entries, want 17", len(names))
 	}
 	tools := Tools(nil)
 	if len(tools) != len(names) {

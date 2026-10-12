@@ -153,8 +153,11 @@ func TestUseCapabilityListsAndCallsBrowserTools(t *testing.T) {
 	if len(toolOut) != 2 {
 		t.Fatalf("tool outputs = %d, want 2: %q", len(toolOut), toolOut)
 	}
-	if !strings.Contains(toolOut[0], "tool:browser_snapshot") {
-		t.Fatalf("use_capability list omits browser_snapshot:\n%s", toolOut[0])
+	// The list is budget-truncated, so only its head is guaranteed: assert the
+	// browser group is listed without pinning an entry whose position moves
+	// with the tool count (use_capability search covers the rest).
+	if !strings.Contains(toolOut[0], "tool:browser_") {
+		t.Fatalf("use_capability list omits the browser tools:\n%s", toolOut[0])
 	}
 	if !strings.Contains(toolOut[1], "tab tab-1: https://example.test") {
 		t.Fatalf("use_capability call did not reach the executor:\n%s", toolOut[1])

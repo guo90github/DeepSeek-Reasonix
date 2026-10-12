@@ -10,18 +10,20 @@ import (
 // Names lists the tool names in the order Tools returns them.
 func Names() []string {
 	return []string{
-		"browser_tabs", "browser_open", "browser_navigate", "browser_snapshot", "browser_screenshot",
-		"browser_click", "browser_type", "browser_press", "browser_scroll", "browser_select", "browser_upload",
+		"browser_tabs", "browser_open", "browser_navigate", "browser_snapshot", "browser_wait", "browser_screenshot",
+		"browser_console", "browser_network",
+		"browser_click", "browser_hover", "browser_type", "browser_press", "browser_scroll", "browser_select", "browser_upload",
 		"browser_download", "browser_close",
 	}
 }
 
-// Tools builds the thirteen browser tools over exec. A nil exec still yields
+// Tools builds the seventeen browser tools over exec. A nil exec still yields
 // every tool, each reporting ProviderVisible false so it fails closed.
 func Tools(exec Executor) []tool.Tool {
 	return []tool.Tool{
-		tabsTool(exec), openTool(exec), navigateTool(exec), snapshotTool(exec), screenshotTool(exec),
-		clickTool(exec), typeTool(exec), pressTool(exec), scrollTool(exec), selectTool(exec), uploadTool(exec),
+		tabsTool(exec), openTool(exec), navigateTool(exec), snapshotTool(exec), waitTool(exec), screenshotTool(exec),
+		consoleTool(exec), networkTool(exec),
+		clickTool(exec), hoverTool(exec), typeTool(exec), pressTool(exec), scrollTool(exec), selectTool(exec), uploadTool(exec),
 		downloadTool(exec), closeTool(exec),
 	}
 }

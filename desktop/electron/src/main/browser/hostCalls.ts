@@ -124,6 +124,18 @@ export function buildBrowserHostCalls(deps: BrowserHostDeps): HostCallTable {
       if (directory !== "") downloads.setTaskDirectory(tab.taskId, directory);
       return screenshot(tab, { ref: str(params, "ref"), fullPage: bool(params, "fullPage"), directory });
     },
+    "host/browser.wait": (params) => {
+      const tab = agentTab(params);
+      return surfaces.wait(tab.id, str(params, "text"), bool(params, "gone"), num(params, "timeoutMs"));
+    },
+    "host/browser.console": (params) => {
+      const tab = agentTab(params);
+      return { entries: surfaces.console(tab.id, num(params, "limit")) };
+    },
+    "host/browser.network": (params) => {
+      const tab = agentTab(params);
+      return { entries: surfaces.network(tab.id, num(params, "limit")) };
+    },
     "host/browser.downloads": async (params): Promise<{ downloads: HostDownload[] }> => {
       const tab = boundTab(params);
       return { downloads: await downloads.wait(tab.id, num(params, "waitForMs")) };

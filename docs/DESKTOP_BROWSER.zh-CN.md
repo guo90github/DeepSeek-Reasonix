@@ -50,9 +50,13 @@ Agent 工具调用 ─▶ Go BrowserExecutor ─▶ ledger.reserve ─▶ host/b
 | `browser_tabs` | 读 | 列出任务标签及 URL、标题、加载状态 |
 | `browser_open` | 写 | 在共享或临时分区打开标签到某 URL |
 | `browser_navigate` | 写 | 导航绑定标签（URL、后退、前进、刷新） |
-| `browser_snapshot` | 读 | 带元素引用的结构快照 |
+| `browser_snapshot` | 读 | 带元素引用的结构快照；`selector` 缩范围、`search` 只保留匹配行、`save` 写入任务自有文件 |
 | `browser_screenshot` | 读 | 视口或元素的 PNG，作为图像返回 |
+| `browser_wait` | 读 | 等待文本出现（或消失），或等待标签结束加载 |
+| `browser_console` | 读 | 控制台消息与未捕获异常，仅内存 |
+| `browser_network` | 读 | 请求的方法、URL、状态、MIME 与失败原因，仅内存 |
 | `browser_click` | 写 | 点击引用元素（在其中心派发可信鼠标事件） |
+| `browser_hover` | 写 | 把鼠标移到引用元素上，不激活任何东西 |
 | `browser_type` | 写 | 用可信键盘事件向引用元素输入文本；可选提交 |
 | `browser_press` | 写 | 按键或组合键 |
 | `browser_scroll` | 写 | 滚动视口或元素 |
@@ -60,6 +64,9 @@ Agent 工具调用 ─▶ Go BrowserExecutor ─▶ ledger.reserve ─▶ host/b
 | `browser_upload` | 写 | 把任务文件附加到文件输入 |
 | `browser_download` | 读 | 等待或列出标签的下载 |
 | `browser_close` | 写 | 关闭标签 |
+
+两个日志读取工具会在针对某标签的**首次调用**时才 attach 调试器（attach 对页面可见）；
+记录保存在每标签的内存环形缓存里（各 200 条），**从不落盘**，且不读取响应体。
 
 快照格式：在主框架及每个可达框架的隔离世界中生成的无障碍风格树
 （`role "name" [state] ref=e12`）。引用绑定 `{tabId, documentToken}`（token 取自读出这些 ref 的那次快照）；导航、
@@ -98,6 +105,7 @@ Go 通过现有通道把文件转成图像或文件结果。上传只读取任�
 | `host/browser.act` | 一个已预留的动作；返回 `{executed, reason, documentToken}` |
 | `host/browser.screenshot` | 捕获到任务拥有的文件路径 |
 | `host/browser.downloads` | 列出或等待标签的下载 |
+| `host/browser.wait` `console` `network` | 等待页面条件；读取内存中的控制台与网络记录 |
 | `host/browser.layout` | 应用面板矩形与覆盖状态 |
 
 壳发出的事件：`browser:tabs`（标签列表变化）、`browser:takeover`（`{tabID, epoch, reason}`）、

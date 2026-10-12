@@ -27,6 +27,62 @@ type Availability interface {
 	Available(ctx context.Context) bool
 }
 
+// ScratchDir is an optional Executor capability: the host's per-task scratch
+// directory, which the task's file tools can read. Large read results are
+// written there instead of travelling inline.
+type ScratchDir interface {
+	ScratchDir(ctx context.Context) (string, error)
+}
+
+// Waiter is an optional Executor capability: a host that can poll a page
+// condition in place, so waiting never becomes a guessed sleep in the model.
+type Waiter interface {
+	Wait(ctx context.Context, req WaitRequest) (WaitResult, error)
+}
+
+// WaitRequest waits for a page condition; an empty Text waits for the load to
+// finish instead of for content.
+type WaitRequest struct {
+	TabID   string
+	Text    string
+	Gone    bool
+	Timeout time.Duration
+}
+
+// WaitResult reports whether the condition held before the timeout.
+type WaitResult struct {
+	Found   bool
+	Elapsed time.Duration
+}
+
+// Logs is an optional Executor capability: a host that can report what the
+// page logged and fetched, in memory only, reports it here.
+type Logs interface {
+	Console(ctx context.Context, req LogsRequest) ([]ConsoleEntry, error)
+	Network(ctx context.Context, req LogsRequest) ([]NetworkEntry, error)
+}
+
+// LogsRequest reads at most Limit of each buffer; 0 means everything held.
+type LogsRequest struct {
+	TabID string
+	Limit int
+}
+
+// ConsoleEntry is one page log line or uncaught exception.
+type ConsoleEntry struct {
+	Level string
+	Text  string
+}
+
+// NetworkEntry is one request the page made.
+type NetworkEntry struct {
+	Method string
+	URL    string
+	Status int
+	MIME   string
+	Failed string
+}
+
 var (
 	// ErrStaleReference means the ref or documentToken predates a navigation,
 	// page replacement, or take-over; the caller must snapshot again.
@@ -52,6 +108,7 @@ const (
 // Act actions.
 const (
 	ActionClick  = "click"
+	ActionHover  = "hover"
 	ActionType   = "type"
 	ActionPress  = "press"
 	ActionScroll = "scroll"

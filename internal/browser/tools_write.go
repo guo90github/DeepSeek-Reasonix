@@ -221,6 +221,16 @@ func clickTool(exec Executor) tool.Tool {
 	})
 }
 
+func hoverTool(exec Executor) tool.Tool {
+	return actTool(exec, actSpec{name: "browser_hover", action: ActionHover,
+		description: "Move the mouse over an element by its snapshot ref, so hover-only menus, tooltips and CSS states appear; nothing is clicked. Requires the documentToken of the snapshot the ref came from and a fresh operationId; take a new browser_snapshot to see what the hover revealed.",
+		required:    []string{"ref"},
+		props:       []property{refProp("Element ref from browser_snapshot to hover over.")},
+		validate:    func(a actArgs) error { return requireRef(a.Ref) },
+		describe:    func(a actArgs) string { return "hover " + a.Ref },
+	})
+}
+
 func typeTool(exec Executor) tool.Tool {
 	return actTool(exec, actSpec{name: "browser_type", action: ActionType,
 		description: "Type text into an element by its snapshot ref using trusted key events, so controlled inputs and custom widgets behave as they would for a user. Set submit to press Enter afterwards. Never type credentials: login pages are handed over to the user.",

@@ -81,6 +81,9 @@ export class ActionExecutor {
         case "click":
           outcome = await this.click(tab, binding, request, verify, dispatch);
           break;
+        case "hover":
+          outcome = await this.hover(tab, binding, request, verify, dispatch);
+          break;
         case "type":
           outcome = await this.type(tab, binding, request, verify, dispatch);
           break;
@@ -168,6 +171,16 @@ export class ActionExecutor {
     if (target.element.tag === "option") return { executed: false, reason: "use the select action for <option> elements" };
     dispatch();
     this.mouseClick(tab, target.centre);
+    return { executed: true };
+  }
+
+  // Hover dispatches the move alone: hover-only menus and CSS states appear
+  // while nothing can be activated, and the page still sees a trusted event.
+  private async hover(tab: BrowserTab, binding: DocumentBinding, request: ActRequest, verify: () => void, dispatch: () => void): Promise<ActResult> {
+    const target = await this.target(tab, binding, request.ref, verify);
+    if (!target.ok) return { executed: false, reason: target.reason };
+    dispatch();
+    tab.view.page.sendInputEvent({ type: "mouseMove", x: target.centre.x, y: target.centre.y });
     return { executed: true };
   }
 

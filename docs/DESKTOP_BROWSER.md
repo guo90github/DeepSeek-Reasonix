@@ -63,9 +63,13 @@ system.
 | `browser_tabs` | read | list the task's tabs with URL, title, loading state |
 | `browser_open` | write | open a tab (shared or temporary partition) at a URL |
 | `browser_navigate` | write | navigate the bound tab (URL, back, forward, reload) |
-| `browser_snapshot` | read | structural snapshot with element references |
+| `browser_snapshot` | read | structural snapshot with element references; `selector` scopes it, `search` keeps matching lines, `save` writes it to a task-owned file |
 | `browser_screenshot` | read | PNG of the viewport or an element, returned as an image |
+| `browser_wait` | read | wait for text to appear (or disappear), or for the tab to stop loading |
+| `browser_console` | read | console messages and uncaught exceptions, in memory only |
+| `browser_network` | read | requests with method, URL, status, MIME and failure, in memory only |
 | `browser_click` | write | click a referenced element (trusted mouse events at its centre) |
+| `browser_hover` | write | move the mouse over a referenced element, activating nothing |
 | `browser_type` | write | type text into a referenced element with trusted key events; optional submit |
 | `browser_press` | write | press a key or chord |
 | `browser_scroll` | write | scroll the viewport or an element |
@@ -73,6 +77,10 @@ system.
 | `browser_upload` | write | attach task files to a file input |
 | `browser_download` | read | wait for or list downloads of the tab |
 | `browser_close` | write | close a tab |
+
+The two log readers attach the debugger on their first call for a tab, because
+attaching is visible to the page; entries stay in a per-tab ring buffer (200
+each) and never touch disk. Response bodies are not read.
 
 Snapshot format: an accessibility-style tree (`role "name" [state] ref=e12`)
 produced in an isolated world of the main frame and each reachable frame.
@@ -127,6 +135,7 @@ directory, so a remote path is never treated as a local one.
 | `host/browser.act` | one reserved action; returns `{executed, reason, documentToken}` |
 | `host/browser.screenshot` | capture to a task-owned file path |
 | `host/browser.downloads` | list or wait for downloads of a tab |
+| `host/browser.wait` `console` `network` | wait for a page condition; read the in-memory console and network records |
 | `host/browser.layout` | apply the panel rectangle and overlay state |
 
 Events from the shell: `browser:tabs` (tab list changes), `browser:takeover`
