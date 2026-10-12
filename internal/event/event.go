@@ -321,14 +321,6 @@ type AskQuestion struct {
 	Multi   bool // allow selecting more than one option
 }
 
-// Ask carries an AskRequest: a batch of questions and the ID that correlates the
-// controller's AnswerQuestion(ID, …) reply.
-type Ask struct {
-	ID        string
-	Questions []AskQuestion
-	TurnID    string
-}
-
 // MCPInteraction carries one MCPInteractionRequest: a server-initiated
 // elicitation the frontend must answer with accept/decline/cancel. Mode is
 // "form" (RequestedSchema is a flat primitive JSON schema) or "url" (URL is a

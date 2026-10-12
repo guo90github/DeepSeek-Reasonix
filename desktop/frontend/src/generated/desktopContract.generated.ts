@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:9d001a7cf27d3842d3c078af668a6408bfffa945bddb0b3e24d3aac3ea741ec8";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:c867f6faeccd402110752df44596bd45ef3df63d9d5fa88eb8d622703a0740c9";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -456,6 +456,7 @@ export const DESKTOP_COMMANDS = [
   "SetAgentParams",
   "SetAgentPreset",
   "SetAgentPresetForTab",
+  "SetAskTimeoutMinutes",
   "SetAuditEffort",
   "SetAuditMaxChars",
   "SetAuditModel",
@@ -1088,6 +1089,7 @@ export interface Ask {
   id: string;
   questions: AskQuestion[];
   turnId?: string;
+  autoAnswerInMs?: number;
 }
 
 export interface AskOption {
@@ -1631,6 +1633,7 @@ export interface AgentView {
   maxSubagentDepth: number;
   maxSubagentConcurrency: number;
   maxParallelWriters: number;
+  askTimeoutMinutes: number;
   systemPrompt: string;
   reasoningLanguage: string;
   compactRatio?: number;
@@ -5170,6 +5173,7 @@ export interface GeneratedDesktopCommands {
   SetAgentParams(arg0: number, arg1: number, arg2: number, arg3: string): Promise<void>;
   SetAgentPreset(arg0: string): Promise<void>;
   SetAgentPresetForTab(arg0: string, arg1: string): Promise<void>;
+  SetAskTimeoutMinutes(arg0: number): Promise<void>;
   SetAuditEffort(arg0: string): Promise<void>;
   SetAuditMaxChars(arg0: number): Promise<void>;
   SetAuditModel(arg0: string): Promise<void>;

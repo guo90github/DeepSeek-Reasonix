@@ -21,3 +21,16 @@ export interface WireApproval {
   turnId?: string;
   runtimeEpoch?: string;
 }
+
+// Ask-timeout wire fields. They live beside the approval fields rather than in
+// lib/types.ts, whose line budget the repo ratchets; WireAsk and AgentView extend
+// them so the settings panel and the ask card share one definition each.
+export interface AskTimeoutWireFields {
+  // Relative wait until the host auto-answers with the recommended option.
+  // Omitted or <= 0: the host never auto-answers, so no countdown is shown.
+  autoAnswerInMs?: number;
+}
+
+export interface AskTimeoutAgentViewFields {
+  askTimeoutMinutes?: number; // minutes; 0 = default (10), negative = wait forever
+}

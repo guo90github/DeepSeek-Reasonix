@@ -303,6 +303,8 @@ func applyModelPreference(c *config.Config, change ModelSettingsChange) error {
 		return setMaxSubagentConcurrencyConfig(c, change.Number)
 	case "writers":
 		return setMaxParallelWritersConfig(c, change.Number)
+	case "ask_timeout_minutes":
+		return setAskTimeoutMinutesConfig(c, float64(change.Number))
 	case "search":
 		return setWebSearchModelConfig(c, change.Ref)
 	default:

@@ -2638,7 +2638,7 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 	if identity := c.bindOwnedPromptRouting(id, turnID, runtimeEpoch); identity.TurnID != "" {
 		turnID = identity.TurnID
 	}
-	if err := event.EmitChecked(c.sink, event.Event{Kind: event.AskRequest, TurnID: turnID, ItemID: id, Ask: event.Ask{ID: id, Questions: questions, TurnID: turnID}}); err != nil {
+	if err := event.EmitChecked(c.sink, event.Event{Kind: event.AskRequest, TurnID: turnID, ItemID: id, Ask: event.Ask{ID: id, Questions: questions, TurnID: turnID, AutoAnswerIn: c.approval.timeouts.askAutoAnswerWait()}}); err != nil {
 		c.approval.promptEmitMu.Unlock()
 		c.cancelOwnedPrompt(id)
 		return nil, fmt.Errorf("persist ask request: %w", err)

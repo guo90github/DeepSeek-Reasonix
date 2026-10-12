@@ -10381,6 +10381,20 @@ body > .mermaid-diagram--fullscreen {
 .ask-shelf__header-text--progress {
   font-variant-numeric: tabular-nums;
 }
+.ask-shelf__timeout {
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--fg-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.ask-shelf__timeout--expired {
+  color: var(--fg-faint);
+}
 .ask-shelf__crumb {
   max-width: 260px;
   overflow: hidden;

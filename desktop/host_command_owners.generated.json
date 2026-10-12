@@ -6405,6 +6405,20 @@
       ]
     }
   },
+  "SetAskTimeoutMinutes": {
+    "domain": "desktop/settings_ask_timeout.go",
+    "owner": "App.SetAskTimeoutMinutes",
+    "sources": [
+      "desktop/settings_ask_timeout.go"
+    ],
+    "scope": {
+      "kind": "owner-inputs",
+      "resolver": "App.SetAskTimeoutMinutes",
+      "inputs": [
+        "v"
+      ]
+    }
+  },
   "SetAuditEffort": {
     "domain": "desktop/audit_settings_app.go",
     "owner": "App.SetAuditEffort",

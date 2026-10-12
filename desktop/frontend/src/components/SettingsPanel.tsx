@@ -1434,7 +1434,7 @@ function normalizeSettingsView(view: SettingsView | null | undefined): SettingsV
     noProxy: "",
     proxy: { type: "socks5", server: "", port: 0, username: "", password: "" },
   };
-  const agent = view.agent ?? { temperature: 0, maxSteps: 0, plannerMaxSteps: 0, maxSubagentDepth: 2, maxSubagentConcurrency: 6, maxParallelWriters: 3, systemPrompt: "", reasoningLanguage: "auto", compactRatio: 0.80 };
+  const agent = view.agent ?? { temperature: 0, maxSteps: 0, plannerMaxSteps: 0, maxSubagentDepth: 2, maxSubagentConcurrency: 6, maxParallelWriters: 3, askTimeoutMinutes: 0, systemPrompt: "", reasoningLanguage: "auto", compactRatio: 0.80 };
   agent.plannerMaxSteps = Number.isFinite(agent.plannerMaxSteps) ? Math.max(0, Math.trunc(agent.plannerMaxSteps)) : 0;
   agent.maxSteps = Number.isFinite(agent.maxSteps) ? Math.max(0, Math.trunc(agent.maxSteps)) : 0;
   agent.maxSubagentDepth = Number.isFinite(agent.maxSubagentDepth) && agent.maxSubagentDepth <= 1 ? 1 : 2;
@@ -4221,7 +4221,7 @@ export function ModelsSection({ s, busy, apply, backgroundApply, subtab, onboard
     : !providerIsConfigured(defaultProviderView)
       ? t("settings.modelNeedsKey", { provider: modelProviderLabel(defaultProvider, defaultProviderView, t) })
       : "";
-  const agent = s.agent ?? { temperature: 0, maxSteps: 0, plannerMaxSteps: 0, maxSubagentDepth: 2, maxSubagentConcurrency: 6, maxParallelWriters: 3, systemPrompt: "", reasoningLanguage: "auto", compactRatio: 0.80 };
+  const agent = s.agent ?? { temperature: 0, maxSteps: 0, plannerMaxSteps: 0, maxSubagentDepth: 2, maxSubagentConcurrency: 6, maxParallelWriters: 3, askTimeoutMinutes: 0, systemPrompt: "", reasoningLanguage: "auto", compactRatio: 0.80 };
   const compactRatio = agent.compactRatio ?? 0.80;
   const compactRatioPercent = Math.round(compactRatio * 1000) / 10;
   const compactRatioPreset = COMPACT_RATIO_PRESETS.find(([ratio]) => Math.abs(compactRatio - ratio) < 0.0001);
@@ -4532,6 +4532,22 @@ export function ModelsSection({ s, busy, apply, backgroundApply, subtab, onboard
                   const n = Number(e.target.value);
                   if (!Number.isFinite(n)) return;
                   void apply(() => saveModelSettings(s, {kind: "preference", field: "writers", number: n}));
+                }}
+              />
+            </SettingsField>
+
+            <SettingsField label={t("settings.askTimeout")} hint={t("settings.askTimeoutHint")}>
+              <input
+                className="mem-input"
+                type="number"
+                step={1}
+                placeholder="10"
+                value={Number.isFinite(agent.askTimeoutMinutes) ? Number(agent.askTimeoutMinutes) : 0}
+                disabled={busy}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  if (!Number.isFinite(n)) return;
+                  void apply(() => saveModelSettings(s, {kind: "preference", field: "ask_timeout_minutes", number: n}));
                 }}
               />
             </SettingsField>

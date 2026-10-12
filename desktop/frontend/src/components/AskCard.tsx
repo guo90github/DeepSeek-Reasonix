@@ -10,6 +10,15 @@ import {
   PromptShelf,
 } from "./PromptShelf";
 
+// formatCountdown renders a remaining millisecond budget as mm:ss for the ask
+// card's host-fallback countdown.
+function formatCountdown(ms: number): string {
+  const total = Math.max(0, Math.ceil(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = total % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 const askDrafts = new Map<string, AskDraft>();
 const askDraftKey = (scope: string, ask: WireAsk) =>
   JSON.stringify([scope, ask.runtimeEpoch ?? "", ask.turnId ?? "", ask.id]);
@@ -71,6 +80,18 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
   const customInputRef = useRef<HTMLInputElement | null>(null);
   const initializedActiveRef = useRef(false);
   const instanceId = useId();
+  // The host-fallback countdown anchors to this machine's clock at display time
+  // (now + the wire's relative window), so it never trusts a skewed host clock.
+  const autoAnswerInMs = ask.autoAnswerInMs ?? 0;
+  const [autoAnswerDeadline] = useState(() => (autoAnswerInMs > 0 ? Date.now() + autoAnswerInMs : 0));
+  const [autoAnswerRemainingMs, setAutoAnswerRemainingMs] = useState(autoAnswerInMs);
+  useEffect(() => {
+    if (autoAnswerDeadline <= 0) return;
+    const tick = () => setAutoAnswerRemainingMs(Math.max(0, autoAnswerDeadline - Date.now()));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [autoAnswerDeadline]);
 
   const questions = ask.questions;
   const q = questions[Math.min(active, questions.length - 1)];
@@ -333,6 +354,16 @@ function AskCardBody({ ask, onAnswer, onStop, draftKey }: AskCardProps & { draft
           {hasMultipleQuestions && (
             <span className="ask-shelf__header-text ask-shelf__header-text--progress">
               {t("ask.questionProgress", { progress })}
+            </span>
+          )}
+          {autoAnswerInMs > 0 && (
+            <span
+              className={`ask-shelf__timeout${autoAnswerRemainingMs > 0 ? "" : " ask-shelf__timeout--expired"}`}
+              role="status"
+            >
+              {autoAnswerRemainingMs > 0
+                ? t("ask.autoAnswerCountdown", { time: formatCountdown(autoAnswerRemainingMs) })
+                : t("ask.autoAnswered")}
             </span>
           )}
         </span>

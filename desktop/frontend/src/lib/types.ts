@@ -9,7 +9,7 @@ import type { RecoveryEventFields } from "./recoveryStatus";
 import type { HistoryServerSearch } from "./searchSources";
 import type { Todo } from "./tools";
 import type { ContextBudgetInfo, ContextMaintenanceInfo, WireContextMaintenance } from "./contextMaintenanceTypes";
-import type { WireApproval } from "./approvalTypes";
+import type { AskTimeoutAgentViewFields, AskTimeoutWireFields, WireApproval } from "./approvalTypes";
 import type { RemoteProjectNodeFields, RemoteSessionMetaFields, RemoteTabMetaFields } from "./remoteTypes";
 import type { PinnedFileInfo } from "./pinnedContextBridge";
 import type { RecoveryLineageView } from "./sessionRecoveryTypes";
@@ -279,7 +279,7 @@ export interface WireAskQuestion {
   multi?: boolean;
 }
 
-export interface WireAsk {
+export interface WireAsk extends AskTimeoutWireFields {
   id: string;
   questions: WireAskQuestion[];
   turnId?: string;
@@ -2041,7 +2041,7 @@ export interface NetworkView {
   proxy: NetworkProxyView;
 }
 
-export interface AgentView {
+export interface AgentView extends AskTimeoutAgentViewFields {
   temperature: number; shellAsync?: string; // off | balanced | fast
   maxSteps: number;
   plannerMaxSteps: number;

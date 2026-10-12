@@ -625,6 +625,7 @@ export interface AppBindings extends ToolRecoveryBindings, ModelSettingsBindings
   SetMaxSubagentDepth(depth: number): Promise<void>;
   SetMaxSubagentConcurrency(n: number): Promise<void>;
   SetMaxParallelWriters(n: number): Promise<void>;
+  SetAskTimeoutMinutes(n: number): Promise<void>;
   SetAutoPlan(mode: string): Promise<void>;
   SetDefaultToolApprovalMode(mode: string): Promise<void>;
   SetDefaultAutoRecoveryCheckpoint(enabled: boolean): Promise<void>;
@@ -1062,7 +1063,7 @@ function bridgeBreadcrumb(method: string): string {
   if (method === "ReportCrash" || method === "RecordUIPerf") return "";
   if (/^(Submit|SubmitDisplay|RunShell|Steer|Cancel|Approve|AnswerQuestion|ReplayPendingPrompts)/.test(method))
     return `turn ${method}`;
-  if (/^(SetModel|SetEffort|SetDefaultModel|SetPlannerModel|SetVisionModel|SetWebSearchModel|SetSubagentModel|SetSubagentEffort|SetMaxSubagentDepth|SetMaxSubagentConcurrency|SetMaxParallelWriters)/.test(method))
+  if (/^(SetModel|SetEffort|SetDefaultModel|SetPlannerModel|SetVisionModel|SetWebSearchModel|SetSubagentModel|SetSubagentEffort|SetMaxSubagentDepth|SetMaxSubagentConcurrency|SetMaxParallelWriters|SetAskTimeoutMinutes)/.test(method))
     return `model ${method}`;
   if (/^(SetDesktop|SetCloseBehavior|SetDisplayMode|SetStatusBar|SetReasoningDisplayMode|SetExpandThinking|SetAutoPlan|SetDefaultToolApprovalMode|SetCompactRatio|SetShellAsyncSpeedTier|SetReasoningLanguage)/.test(method))
     return `settings ${method}`;
@@ -1677,7 +1678,7 @@ function makeMockApp(): AppBindings {
       noProxy: "",
       proxy: { type: "socks5", server: "127.0.0.1", port: 7890, username: "", password: "" },
     },
-    agent: { temperature: 0.2, maxSteps: 0, plannerMaxSteps: 0, maxSubagentDepth: 2, maxSubagentConcurrency: 6, maxParallelWriters: 3, systemPrompt: "You are Reasonix, a coding agent.", reasoningLanguage: "auto", compactRatio: 0.8, shellAsync: "off" },
+    agent: { temperature: 0.2, maxSteps: 0, plannerMaxSteps: 0, maxSubagentDepth: 2, maxSubagentConcurrency: 6, maxParallelWriters: 3, askTimeoutMinutes: 0, systemPrompt: "You are Reasonix, a coding agent.", reasoningLanguage: "auto", compactRatio: 0.8, shellAsync: "off" },
     bot: {
       enabled: !freshMock,
       model: "",
@@ -4602,6 +4603,9 @@ function makeMockApp(): AppBindings {
       const total = Math.max(1, Math.min(32, settings.agent.maxSubagentConcurrency || 6));
       const writers = Math.max(1, Math.min(total, Math.floor(n) || 3));
       settings.agent = { ...settings.agent, maxParallelWriters: writers };
+    },
+    async SetAskTimeoutMinutes(v: number) {
+      settings.agent = { ...settings.agent, askTimeoutMinutes: v };
     },
     async SetAutoPlan(mode: string) {
       if (mode !== "off") throw new Error("Automatic plan mode has been retired; use Plan Mode explicitly.");

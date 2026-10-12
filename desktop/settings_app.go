@@ -185,6 +185,7 @@ type AgentView struct {
 	MaxSubagentDepth       int     `json:"maxSubagentDepth"`
 	MaxSubagentConcurrency int     `json:"maxSubagentConcurrency"`
 	MaxParallelWriters     int     `json:"maxParallelWriters"`
+	AskTimeoutMinutes      float64 `json:"askTimeoutMinutes"`
 	SystemPrompt           string  `json:"systemPrompt"`
 	ReasoningLanguage      string  `json:"reasoningLanguage"`
 	CompactRatio           float64 `json:"compactRatio,omitempty"`
@@ -1126,6 +1127,7 @@ func (a *App) Settings() SettingsView {
 			MaxSubagentDepth:       desktopMaxSubagentDepth(cfg.Agent.MaxSubagentDepth),
 			MaxSubagentConcurrency: desktopSubagentConcurrency(cfg.Agent.MaxSubagentConcurrency),
 			MaxParallelWriters:     desktopParallelWriters(cfg.Agent.MaxParallelWriters, cfg.Agent.MaxSubagentConcurrency),
+			AskTimeoutMinutes:      cfg.Agent.AskTimeoutMinutes,
 			SystemPrompt:           cfg.Agent.SystemPrompt,
 			ReasoningLanguage:      cfg.ReasoningLanguage(),
 			CompactRatio:           cfg.Agent.CompactRatio,
@@ -2277,16 +2279,6 @@ func desktopMaxSubagentDepth(depth int) int {
 // SetMaxSubagentDepth controls whether first-layer subagents may delegate once more.
 func (a *App) SetMaxSubagentDepth(depth int) error {
 	return a.applyModelConfigChange(func(c *config.Config) error { return setMaxSubagentDepthConfig(c, depth) })
-}
-
-func desktopSubagentConcurrency(n int) int {
-	total, _ := agent.NormalizeConcurrencyLimits(n, 0)
-	return total
-}
-
-func desktopParallelWriters(writers, total int) int {
-	_, w := agent.NormalizeConcurrencyLimits(total, writers)
-	return w
 }
 
 // SetMaxSubagentConcurrency sets the session-wide sub-agent concurrency cap (1–32).

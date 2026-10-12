@@ -11848,6 +11848,28 @@
     },
     {
       "cancellation": "before-dispatch",
+      "domain": "desktop/settings_ask_timeout.go",
+      "name": "SetAskTimeoutMinutes",
+      "owner": "App.SetAskTimeoutMinutes",
+      "params": [
+        {
+          "kind": "number"
+        }
+      ],
+      "returnsError": true,
+      "scope": {
+        "inputs": [
+          "v"
+        ],
+        "kind": "owner-inputs",
+        "resolver": "App.SetAskTimeoutMinutes"
+      },
+      "sources": [
+        "desktop/settings_ask_timeout.go"
+      ]
+    },
+    {
+      "cancellation": "before-dispatch",
       "domain": "desktop/audit_settings_app.go",
       "name": "SetAuditEffort",
       "owner": "App.SetAuditEffort",
@@ -18670,6 +18692,13 @@
           "type": {
             "kind": "string"
           }
+        },
+        {
+          "name": "autoAnswerInMs",
+          "optional": true,
+          "type": {
+            "kind": "integer"
+          }
         }
       ]
     },
@@ -21684,6 +21713,12 @@
           "name": "maxParallelWriters",
           "type": {
             "kind": "integer"
+          }
+        },
+        {
+          "name": "askTimeoutMinutes",
+          "type": {
+            "kind": "number"
           }
         },
         {

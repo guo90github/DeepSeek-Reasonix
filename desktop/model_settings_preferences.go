@@ -163,3 +163,8 @@ func setMaxParallelWritersConfig(c *config.Config, n int) error {
 	c.Agent.MaxParallelWriters = writers
 	return nil
 }
+
+func setAskTimeoutMinutesConfig(c *config.Config, minutes float64) error {
+	c.Agent.AskTimeoutMinutes = minutes
+	return nil
+}

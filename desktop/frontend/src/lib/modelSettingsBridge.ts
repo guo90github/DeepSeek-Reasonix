@@ -58,6 +58,7 @@ export function makeMockModelSettingsBindings(
             case "depth": await this.SetMaxSubagentDepth(change.number); break;
             case "concurrency": await this.SetMaxSubagentConcurrency(change.number); break;
             case "writers": await this.SetMaxParallelWriters(change.number); break;
+            case "ask_timeout_minutes": await this.SetAskTimeoutMinutes(change.number); break;
             case "profile_model": await this.SetSubagentProfileModel(change.name, change.ref); break;
             case "profile_effort": await this.SetSubagentProfileEffort(change.name, change.ref); break;
           }

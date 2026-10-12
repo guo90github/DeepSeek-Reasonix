@@ -311,11 +311,13 @@ type AskQuestion struct {
 	Multi   bool        `json:"multi,omitempty"`
 }
 
-// Ask is the JSON form of an event.Ask.
+// Ask is the JSON form of an event.Ask. AutoAnswerInMs is how long the card waits
+// before the host answers with the recommended option; omitted or zero = never.
 type Ask struct {
-	ID        string        `json:"id"`
-	Questions []AskQuestion `json:"questions"`
-	TurnID    string        `json:"turnId,omitempty"`
+	ID             string        `json:"id"`
+	Questions      []AskQuestion `json:"questions"`
+	TurnID         string        `json:"turnId,omitempty"`
+	AutoAnswerInMs int64         `json:"autoAnswerInMs,omitempty"`
 }
 
 // MCPInteraction is the JSON form of an event.MCPInteraction: one
@@ -502,7 +504,7 @@ func ToWireAsk(a event.Ask) *Ask {
 		}
 		qs[i] = AskQuestion{ID: q.ID, Header: q.Header, Prompt: q.Prompt, Options: opts, Multi: q.Multi}
 	}
-	return &Ask{ID: a.ID, Questions: qs, TurnID: a.TurnID}
+	return &Ask{ID: a.ID, Questions: qs, TurnID: a.TurnID, AutoAnswerInMs: a.AutoAnswerIn.Milliseconds()}
 }
 
 // ToWireCacheDiagnostics converts cache diagnostics into their JSON wire form.
