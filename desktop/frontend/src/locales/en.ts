@@ -4008,6 +4008,7 @@ export const en = {
   "floatingView.activateTab": "Switch to this tab",
   "pendingDecisions.title": "A session is waiting for your answer",
   "pendingDecisions.count": "{count} sessions",
+  "pendingDecisions.queuedInSession": "{count} more question(s) wait behind the one on screen.",
   "pendingDecisions.open": "Switch to {label}",
   "settings.shellAsync": "Long shell commands",
   "settings.shellAsyncHint": "A check or a build can run in the background so the loop keeps moving. Takes effect when a session starts; sessions already running keep their tier.",

@@ -4011,6 +4011,7 @@ export const zh: Record<DictKey, string> = {
   "floatingView.activateTab": "切到这个标签",
   "pendingDecisions.title": "有会话在等你回答",
   "pendingDecisions.count": "{count} 个会话",
+  "pendingDecisions.queuedInSession": "屏幕上这张之后还有 {count} 个问题在排队，答完这张才轮得到它们。",
   "pendingDecisions.open": "切到 {label}",
   "settings.shellAsync": "长命令的异步档位",
   "settings.shellAsyncHint": "校验、构建这类长命令可以转到后台跑，让循环继续往前推。新建会话时生效；已经在跑的会话保持原档位。",

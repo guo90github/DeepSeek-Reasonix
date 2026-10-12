@@ -3,7 +3,7 @@
 
 export const DESKTOP_PROTOCOL_VERSION = 1;
 
-export const DESKTOP_CONTRACT_DIGEST = "sha256:c867f6faeccd402110752df44596bd45ef3df63d9d5fa88eb8d622703a0740c9";
+export const DESKTOP_CONTRACT_DIGEST = "sha256:be5e42a9c4a62cb41369e521c05a24a66f42f41550976fd63dd7c6befa03a685";
 
 export const DESKTOP_COMMANDS = [
   "AIRenameSession",
@@ -1059,6 +1059,7 @@ export interface RuntimeStateSnapshot {
   turnStatus: string;
   turnEventSeq: number;
   pendingPrompt: boolean;
+  queuedPrompts: number;
   cancelRequested: boolean;
   cancellable: boolean;
   backgroundJobs: number;

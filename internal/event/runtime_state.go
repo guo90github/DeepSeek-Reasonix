@@ -14,6 +14,7 @@ type RuntimeStateSnapshot struct {
 	TurnStatus      TurnStatus `json:"turnStatus"`
 	TurnEventSeq    uint64     `json:"turnEventSeq"`
 	PendingPrompt   bool       `json:"pendingPrompt"`
+	QueuedPrompts   int        `json:"queuedPrompts"`
 	CancelRequested bool       `json:"cancelRequested"`
 	Cancellable     bool       `json:"cancellable"`
 	BackgroundJobs  int        `json:"backgroundJobs"`

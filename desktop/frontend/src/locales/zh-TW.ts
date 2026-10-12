@@ -4006,6 +4006,7 @@ export const zhTW: Record<DictKey, string> = {
   "floatingView.activateTab": "切到這個標籤",
   "pendingDecisions.title": "有會話在等你回答",
   "pendingDecisions.count": "{count} 個會話",
+  "pendingDecisions.queuedInSession": "螢幕上這張之後還有 {count} 個問題在排隊，答完這張才輪得到它們。",
   "pendingDecisions.open": "切到 {label}",
   "settings.shellAsync": "長命令的非同步檔位",
   "settings.shellAsyncHint": "檢查、建置這類長命令可以轉到背景跑，讓迴圈繼續往前推。新建會話時生效；已經在跑的會話維持原檔位。",

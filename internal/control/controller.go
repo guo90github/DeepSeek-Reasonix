@@ -2624,7 +2624,7 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 	// Registering after the lock left a queued question invisible everywhere:
 	// no event, absent from the snapshot, unreachable by ReplayPendingPrompts.
 	id, reply := c.approval.registerAsk(questions)
-	c.registerOwnedPrompt(id, PromptAsk)
+	c.registerQueuedAskPrompt(id, PromptAsk)
 
 	if !c.lockPromptFor(ctx, "question") {
 		c.cancelOwnedPrompt(id)
@@ -2643,7 +2643,7 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 		c.cancelOwnedPrompt(id)
 		return nil, fmt.Errorf("persist ask request: %w", err)
 	}
-	c.approval.markAskEmitted(id)
+	c.markAskEmitted(id)
 	c.approval.promptEmitMu.Unlock()
 
 	// The question is on screen now, so the no-answer clock starts here rather

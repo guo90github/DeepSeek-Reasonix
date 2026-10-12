@@ -147,7 +147,7 @@ func (s *Server) ownedRuntimeStatusView(path string) (map[string]any, bool) {
 		return nil, false
 	}
 	state := runtimeStateOf(ctrl)
-	return map[string]any{"runtimeState": state, "running": state.Running, "pendingPrompt": state.PendingPrompt,
+	return map[string]any{"runtimeState": state, "running": state.Running, "pendingPrompt": state.PendingPrompt, "queuedPrompts": state.QueuedPrompts,
 		"backgroundJobs": state.BackgroundJobs, "cancelRequested": state.CancelRequested, "cancellable": state.Cancellable,
 		"sessionPath": path, "takenOver": false, "label": ctrl.Label(), "plan": ctrl.PlanMode(), "toolApprovalMode": ctrl.ToolApprovalMode(), "goal": ctrl.Goal()}, true
 }

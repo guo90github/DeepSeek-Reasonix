@@ -10,6 +10,9 @@ export interface RuntimeState {
   turnStatus: string;
   turnEventSeq: number;
   pendingPrompt: boolean;
+  // Questions this session registered but has not shown yet: they wait behind
+  // whatever prompt is on screen, so the turn cannot move until the user answers.
+  queuedPrompts?: number;
   cancelRequested: boolean;
   cancellable: boolean;
   backgroundJobs: number;

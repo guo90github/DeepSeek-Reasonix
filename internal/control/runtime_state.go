@@ -100,6 +100,7 @@ func (c *Controller) refreshRuntimeState(e event.Event) {
 	next.Running = running || finishing
 	next.CancelRequested = cancelling
 	next.PendingPrompt = c.approval.hasPending()
+	next.QueuedPrompts = c.approval.queuedAsks()
 	next.Cancellable = !finishing && (running || next.PendingPrompt || cancelling)
 	next.BackgroundJobs = 0
 	if c.jobs != nil {

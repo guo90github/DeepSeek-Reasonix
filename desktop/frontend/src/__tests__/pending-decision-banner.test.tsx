@@ -185,5 +185,39 @@ console.log("\npending decision banner");
   });
 }
 
+console.log("\nqueued questions behind the active card");
+{
+  const dom = installDom();
+  const rootEl = document.getElementById("root");
+  if (!rootEl) throw new Error("missing root");
+  const root = createRoot(rootEl);
+  const render = (activeTabId: string) => root.render(React.createElement(
+    LocaleProvider,
+    null,
+    React.createElement(Harness, { activeTabId, onOpen: () => undefined }),
+  ));
+
+  await act(async () => {
+    const active = session("tab-a", "topic-a", "/work/a.jsonl", true);
+    active.state.queuedPrompts = 2;
+    runtimeStateStore.commit(projection([active]));
+    render("tab-a");
+  });
+  const queuedBanner = document.querySelector(".banner");
+  ok(queuedBanner !== null, "a question queued behind the visible one still gets a banner");
+  ok((queuedBanner?.textContent ?? "").includes("2"), "the banner counts the queued questions");
+  ok(document.querySelectorAll(".pending-decisions__open").length === 0, "the active session is never listed as another tab");
+
+  await act(async () => {
+    runtimeStateStore.commit(projection([session("tab-a", "topic-a", "/work/a.jsonl", true)]));
+    render("tab-a");
+  });
+  ok(document.querySelector(".banner") === null, "the banner clears once nothing is queued");
+
+  await act(async () => {
+    root.unmount();
+  });
+}
+
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -237,3 +237,41 @@ func TestAskWithoutTimeoutBlocksUntilCancelled(t *testing.T) {
 		t.Fatal("Ask did not unblock after cancellation")
 	}
 }
+
+// A question registered but not yet shown must be visible on the runtime state
+// surface as queued, then drop back to zero once it reaches the frontend — the
+// count distinguishes "still waiting behind another prompt" from the
+// PendingPrompt flag for "already on screen".
+func TestQueuedAskIsVisibleInRuntimeSnapshot(t *testing.T) {
+	shortenPromptQueueNotice(t)
+	sink := &askProbeSink{}
+	c := New(Options{Sink: sink, SessionDir: t.TempDir()})
+
+	// Stand in for an earlier prompt still awaiting the user.
+	c.approval.promptMu.Lock()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() { _, _ = c.Ask(ctx, askProbeQuestions()) }()
+
+	deadline := time.After(2 * time.Second)
+	for c.RuntimeStateSnapshot().QueuedPrompts != 1 {
+		select {
+		case <-deadline:
+			t.Fatalf("queuedPrompts = %d while queued, want 1", c.RuntimeStateSnapshot().QueuedPrompts)
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+
+	// Once the earlier prompt clears, the question appears and stops counting.
+	c.approval.promptMu.Unlock()
+	for c.RuntimeStateSnapshot().QueuedPrompts != 0 {
+		select {
+		case <-deadline:
+			t.Fatalf("queuedPrompts = %d after display, want 0", c.RuntimeStateSnapshot().QueuedPrompts)
+		default:
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+}

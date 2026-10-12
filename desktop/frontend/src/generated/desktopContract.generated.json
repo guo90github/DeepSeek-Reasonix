@@ -18537,6 +18537,12 @@
           }
         },
         {
+          "name": "queuedPrompts",
+          "type": {
+            "kind": "integer"
+          }
+        },
+        {
           "name": "cancelRequested",
           "type": {
             "kind": "boolean"
