@@ -6,16 +6,21 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
+	"sync"
 	"unicode"
 
 	"reasonix/internal/event"
 )
 
 type acceptedDecision struct {
-	ID        string
-	Question  string
-	Answer    string
+	ID       string
+	Question string
+	Answer   string
+	// Auto marks a decision the host made for the user after the no-answer
+	// timeout. Reuse must report it as a host fallback, not as a user choice.
+	Auto      bool
 	Ambiguity decisionAmbiguity
 }
 
@@ -23,6 +28,82 @@ type decisionAmbiguity struct {
 	Headers map[string]struct{}
 	Options map[string]struct{}
 	Terms   map[string]struct{}
+}
+
+// decisionMemory is the conversation's record of the decisions already settled,
+// by the user or by the host's no-answer fallback. It outlives one Agent.Run, so
+// a later turn reuses the settled answer instead of putting the same question to
+// the user a second time.
+type decisionMemory struct {
+	mu        sync.Mutex
+	decisions map[string]acceptedDecision
+}
+
+func newDecisionMemory() *decisionMemory {
+	return &decisionMemory{decisions: map[string]acceptedDecision{}}
+}
+
+// Every method tolerates a nil receiver: a tool call outside a wired agent
+// context simply carries no decision memory.
+func (m *decisionMemory) remember(d acceptedDecision) {
+	if m == nil || d.ID == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.decisions == nil {
+		m.decisions = map[string]acceptedDecision{}
+	}
+	m.decisions[d.ID] = d
+}
+
+func (m *decisionMemory) get(id string) (acceptedDecision, bool) {
+	if m == nil || id == "" {
+		return acceptedDecision{}, false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	d, ok := m.decisions[id]
+	return d, ok
+}
+
+func (m *decisionMemory) snapshot() []acceptedDecision {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]acceptedDecision, 0, len(m.decisions))
+	for _, decision := range m.decisions {
+		out = append(out, decision)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+type decisionMemoryContextKey struct{}
+
+func withDecisionMemory(ctx context.Context, memory *decisionMemory) context.Context {
+	if memory == nil {
+		return ctx
+	}
+	return context.WithValue(ctx, decisionMemoryContextKey{}, memory)
+}
+
+func decisionMemoryFrom(ctx context.Context) *decisionMemory {
+	memory, _ := ctx.Value(decisionMemoryContextKey{}).(*decisionMemory)
+	return memory
+}
+
+// decisionMemory returns the conversation's accepted-decision memory, created on
+// first use. A tool call carries it through withAgentContext.
+func (r *sessionRuntime) decisionMemory() *decisionMemory {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.decisions == nil {
+		r.decisions = newDecisionMemory()
+	}
+	return r.decisions
 }
 
 func decisionIDForQuestions(qs []event.AskQuestion) string {
@@ -52,46 +133,68 @@ func turnStateFrom(ctx context.Context) *turnRuntime {
 	return turn
 }
 
-func rememberDecisionForQuestions(ctx context.Context, id, question, answer string, qs []event.AskQuestion) {
-	turn := turnStateFrom(ctx)
-	if turn == nil || id == "" {
-		return
-	}
-	turn.loop.rememberDecisionAmbiguity(id, question, answer, decisionAmbiguityForQuestions(qs))
+func rememberDecisionForQuestions(ctx context.Context, id, question, answer string, auto bool, qs []event.AskQuestion) {
+	decisionMemoryFrom(ctx).remember(acceptedDecision{
+		ID:        id,
+		Question:  question,
+		Answer:    answer,
+		Auto:      auto,
+		Ambiguity: decisionAmbiguityForQuestions(qs),
+	})
 }
 
 func existingDecision(ctx context.Context, id string) (acceptedDecision, bool) {
-	turn := turnStateFrom(ctx)
-	if turn == nil || id == "" {
-		return acceptedDecision{}, false
-	}
-	return turn.loop.decision(id)
-}
-
-func firstExistingDecision(ctx context.Context) (acceptedDecision, bool) {
-	turn := turnStateFrom(ctx)
-	if turn == nil {
-		return acceptedDecision{}, false
-	}
-	decisions := turn.loop.snapshotDecisions()
-	if len(decisions) == 0 {
-		return acceptedDecision{}, false
-	}
-	return decisions[0], true
+	return decisionMemoryFrom(ctx).get(id)
 }
 
 func matchingExistingDecision(ctx context.Context, qs []event.AskQuestion) (acceptedDecision, bool) {
-	turn := turnStateFrom(ctx)
-	if turn == nil {
-		return acceptedDecision{}, false
-	}
 	candidate := decisionAmbiguityForQuestions(qs)
-	for _, decision := range turn.loop.snapshotDecisions() {
+	for _, decision := range decisionMemoryFrom(ctx).snapshot() {
 		if sameDecisionAmbiguity(decision.Ambiguity, candidate) {
 			return decision, true
 		}
 	}
 	return acceptedDecision{}, false
+}
+
+// decisionReuseText states what reuse is reusing. An auto-selected answer is the
+// host's fallback; a model reading it as the user's own decision would treat a
+// guess as settled intent.
+func decisionReuseText(dec acceptedDecision) string {
+	if dec.Auto {
+		return "The host auto-selected " + dec.Answer + " after no answer; the user did not choose it."
+	}
+	return "The user already chose: " + dec.Answer + "."
+}
+
+// knownDecisionList names the decisions a rejected decision_id could have meant.
+// One failed call then teaches the model the id it needs, instead of it guessing
+// again — a guess that costs the user another prompt.
+func knownDecisionList(ctx context.Context, limit int) string {
+	decisions := decisionMemoryFrom(ctx).snapshot()
+	if len(decisions) == 0 || limit <= 0 {
+		return ""
+	}
+	parts := make([]string, 0, limit)
+	for _, decision := range decisions {
+		if len(parts) == limit {
+			break
+		}
+		label := decision.Question
+		if label == "" {
+			label = decision.ID
+		}
+		parts = append(parts, decision.ID+" ("+clipDecisionLabel(label, 60)+")")
+	}
+	return strings.Join(parts, ", ")
+}
+
+func clipDecisionLabel(text string, limit int) string {
+	runes := []rune(strings.TrimSpace(text))
+	if len(runes) <= limit {
+		return string(runes)
+	}
+	return strings.TrimSpace(string(runes[:limit])) + "…"
 }
 
 func decisionAmbiguityForQuestions(qs []event.AskQuestion) decisionAmbiguity {

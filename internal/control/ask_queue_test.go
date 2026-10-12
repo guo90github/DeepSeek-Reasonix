@@ -204,12 +204,14 @@ func TestAskCancelledWhileQueuedLeavesNothingBehind(t *testing.T) {
 	c.approval.promptMu.Unlock()
 }
 
-// Ask has no timeout of its own: approvalTimeout defaults to zero, so a
-// question nobody answers blocks its turn until the user cancels.
+// Ask has no approval timeout of its own: the approval timeout defaults to zero,
+// so a question nobody answers blocks its turn until the user cancels or the
+// no-answer fallback (AskTimeout, minutes away) resolves it with the recommended
+// option.
 func TestAskWithoutTimeoutBlocksUntilCancelled(t *testing.T) {
 	c := New(Options{Sink: event.Discard, SessionDir: t.TempDir()})
-	if c.approval.approvalTimeout != 0 {
-		t.Skipf("approvalTimeout is %v; this test pins the unbounded default", c.approval.approvalTimeout)
+	if c.approval.timeouts.approval != 0 {
+		t.Skipf("approval timeout is %v; this test pins the unbounded default", c.approval.timeouts.approval)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

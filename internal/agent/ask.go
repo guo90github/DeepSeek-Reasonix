@@ -112,16 +112,14 @@ func (*AskTool) Execute(ctx context.Context, args json.RawMessage) (string, erro
 	}
 	if dec, ok := existingDecision(ctx, id); ok {
 		if strings.TrimSpace(p.Evidence) == "" {
-			return fmt.Sprintf("Host reused accepted decision %s. The user already chose: %s. Continue with that decision unless you supply decision_id and new_evidence.", dec.ID, dec.Answer), nil
+			return fmt.Sprintf("Host reused accepted decision %s. %s Continue with that decision unless you supply decision_id and new_evidence.", dec.ID, decisionReuseText(dec)), nil
 		}
 	} else if !explicitID {
 		if dec, matched := matchingExistingDecision(ctx, qs); matched {
-			return fmt.Sprintf("Host reused accepted decision %s for the same ambiguity. The user already chose: %s. Continue with that decision; to reopen it, cite decision_id %s and supply new_evidence.", dec.ID, dec.Answer, dec.ID), nil
+			return fmt.Sprintf("Host reused accepted decision %s for the same ambiguity. %s Continue with that decision; to reopen it, cite decision_id %s and supply new_evidence.", dec.ID, decisionReuseText(dec), dec.ID), nil
 		}
-	} else if explicitID {
-		if _, hasAcceptedDecision := firstExistingDecision(ctx); hasAcceptedDecision {
-			return "", fmt.Errorf("unknown decision_id %q; cite the original accepted decision_id and include new_evidence to reopen it", id)
-		}
+	} else if known := knownDecisionList(ctx, 3); known != "" {
+		return "", fmt.Errorf("unknown decision_id %q; known decisions: %s. Cite one of them with new_evidence to reopen it", id, known)
 	}
 
 	_, _, asker, ok := CallContext(ctx)
@@ -131,13 +129,36 @@ func (*AskTool) Execute(ctx context.Context, args json.RawMessage) (string, erro
 		return "No interactive user answered. This is a model-assumption fallback, not a user answer. Proceed with your best judgment, state the assumption you made, and prefer the safest reversible option when choices differ in risk.", nil
 	}
 
+	if turn := turnStateFrom(ctx); turn != nil && turn.loop.askBudgetSpent() {
+		return fmt.Sprintf("You have already asked the user %d questions this turn, and each one stopped the work until they answered. Decide this one yourself: pick the safest reversible option and state the assumption you made.", maxAnsweredAsksPerTurn), nil
+	}
+
 	answers, err := asker.Ask(ctx, qs)
 	if err != nil {
 		return "", fmt.Errorf("ask: %w", err)
 	}
+	if turn := turnStateFrom(ctx); turn != nil {
+		turn.loop.noteAnsweredAsk()
+	}
 	summary := formatAnswers(qs, answers)
-	rememberDecisionForQuestions(ctx, id, qs[0].Prompt, summary, qs)
+	rememberDecisionForQuestions(ctx, id, qs[0].Prompt, summary, askAnswersAuto(answers), qs)
 	return summary + "\n\ndecision_id: " + id, nil
+}
+
+// askAnswersAuto reports whether every selection came from the host's no-answer
+// fallback. A batch with nothing selected is the user's own dismissal instead.
+func askAnswersAuto(answers []event.AskAnswer) bool {
+	selected := 0
+	for _, answer := range answers {
+		if len(answer.Selected) == 0 {
+			continue
+		}
+		if !answer.Auto {
+			return false
+		}
+		selected++
+	}
+	return selected > 0
 }
 
 // formatAnswers renders the user's selections as a compact, model-facing summary,
@@ -146,32 +167,47 @@ func (*AskTool) Execute(ctx context.Context, args json.RawMessage) (string, erro
 // explicit stop signal instead of a per-question "(no answer)" — otherwise the
 // model reads the empty result as license to proceed and acts unasked.
 func formatAnswers(qs []event.AskQuestion, answers []event.AskAnswer) string {
-	pick := make(map[string][]string, len(answers))
+	pick := make(map[string]event.AskAnswer, len(answers))
 	for _, a := range answers {
-		pick[a.QuestionID] = a.Selected
+		pick[a.QuestionID] = a
 	}
 	answered := 0
+	autoOnly := true
 	for _, q := range qs {
-		if len(pick[q.ID]) > 0 {
+		if a, ok := pick[q.ID]; ok && len(a.Selected) > 0 {
 			answered++
+			if !a.Auto {
+				autoOnly = false
+			}
 		}
 	}
 	if answered == 0 {
 		return "The user dismissed the question without choosing — read this as \"don't decide for me, let's just talk.\" Do not pick an option, run a tool, or take any further action toward this; stop and wait for the user's next message."
 	}
 	var b strings.Builder
-	b.WriteString("The user answered:\n")
+	if autoOnly {
+		b.WriteString("The user did not answer before the host's no-answer timeout, so the host picked the recommended option for each question — a host fallback, not a user choice:\n")
+	} else {
+		b.WriteString("The user answered:\n")
+	}
 	for _, q := range qs {
-		sel := pick[q.ID]
+		a, ok := pick[q.ID]
 		label := q.Header
 		if label == "" {
 			label = q.Prompt
 		}
-		if len(sel) == 0 {
+		if !ok || len(a.Selected) == 0 {
 			fmt.Fprintf(&b, "- %s: (left unanswered — don't assume a choice)\n", label)
 			continue
 		}
-		fmt.Fprintf(&b, "- %s: %s\n", label, strings.Join(sel, ", "))
+		if a.Auto {
+			fmt.Fprintf(&b, "- %s: %s (auto-selected after no answer — not a user choice)\n", label, strings.Join(a.Selected, ", "))
+			continue
+		}
+		fmt.Fprintf(&b, "- %s: %s\n", label, strings.Join(a.Selected, ", "))
+	}
+	if autoOnly {
+		b.WriteString("State the assumption you made and prefer the safest reversible option where the choices differ in risk.\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
 }

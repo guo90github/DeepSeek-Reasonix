@@ -36,13 +36,14 @@ func TestApplyReviewBudgetDefaults(t *testing.T) {
 
 func TestFillChildFactsFromParentTurnAndLedger(t *testing.T) {
 	turn := &turnRuntime{}
-	turn.loop.rememberDecision("dec-9", "ship?", "yes")
+	memory := newDecisionMemory()
+	memory.remember(acceptedDecision{ID: "dec-9", Question: "ship?", Answer: "yes"})
 	ledger := evidence.NewLedger()
 	ledger.Record(evidence.Receipt{
 		ToolName: "edit_file", Success: true, Write: true, Mutation: true,
 		Paths: []string{"internal/agent/ask.go"},
 	})
-	ctx := withTurnState(evidence.WithLedger(context.Background(), ledger), turn)
+	ctx := withDecisionMemory(withTurnState(evidence.WithLedger(context.Background(), ledger), turn), memory)
 	spec := ProfileExecSpec{Task: TaskSpec{Objective: "review the gate"}}
 	fillChildFacts(ctx, &spec)
 	if len(spec.Context.Decisions) != 1 || spec.Context.Decisions[0].ID != "dec-9" {

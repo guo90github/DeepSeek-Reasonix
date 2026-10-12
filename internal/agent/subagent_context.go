@@ -102,8 +102,8 @@ func fillChildFacts(ctx context.Context, spec *ProfileExecSpec) {
 		return
 	}
 	if len(spec.Context.Decisions) == 0 {
-		if turn := turnStateFrom(ctx); turn != nil {
-			spec.Context.Decisions = turn.loop.snapshotDecisions()
+		if turnStateFrom(ctx) != nil {
+			spec.Context.Decisions = decisionMemoryFrom(ctx).snapshot()
 		}
 	}
 	ledger, ok := evidence.FromContext(ctx)

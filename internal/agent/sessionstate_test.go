@@ -19,6 +19,7 @@ var sessionReset = map[string]bool{
 	"cacheHit":         true,
 	"cacheMiss":        true,
 	"missingReasoning": true,
+	"decisions":        true,
 	// A strong-projection repair belongs to the corrupted conversation; a new
 	// conversation starts without it.
 	"reasoningReplayStrongProjection":       true,

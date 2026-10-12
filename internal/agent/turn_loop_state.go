@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"sort"
 	"sync"
 
 	"reasonix/internal/tool"
@@ -18,6 +17,7 @@ type turnLoopState struct {
 	softBudgetNudged        bool
 	softBudgetNudgeRound    int
 	batching                batchNudgeState
+	asks                    askBudgetState
 }
 
 func (s *turnLoopState) setDispatchClasses(classes map[string]tool.CallClass) {
@@ -44,37 +44,6 @@ func (s *turnLoopState) rememberFingerprint(fp, callID string) (prev string, see
 		s.resultFingerprints[fp] = callID
 	}
 	return prev, seen
-}
-
-func (s *turnLoopState) rememberDecision(id, question, answer string) {
-	s.rememberDecisionAmbiguity(id, question, answer, decisionAmbiguity{})
-}
-
-func (s *turnLoopState) rememberDecisionAmbiguity(id, question, answer string, ambiguity decisionAmbiguity) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.acceptedDecisions == nil {
-		s.acceptedDecisions = map[string]acceptedDecision{}
-	}
-	s.acceptedDecisions[id] = acceptedDecision{ID: id, Question: question, Answer: answer, Ambiguity: ambiguity}
-}
-
-func (s *turnLoopState) decision(id string) (acceptedDecision, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	dec, ok := s.acceptedDecisions[id]
-	return dec, ok
-}
-
-func (s *turnLoopState) snapshotDecisions() []acceptedDecision {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	out := make([]acceptedDecision, 0, len(s.acceptedDecisions))
-	for _, decision := range s.acceptedDecisions {
-		out = append(out, decision)
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return out
 }
 
 func (s *turnLoopState) advanceErrorCategories(current map[string]int) bool {

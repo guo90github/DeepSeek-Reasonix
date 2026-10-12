@@ -78,6 +78,8 @@ reasoning_language = "auto"      # visible reasoning text: auto|zh|en
 # plan_execute = "on"              # on: the host runs a round's concrete read-only calls itself (parallel_calls)
 # two independent reads cost one round instead of two; off ships the tool surface unchanged
 # nodes may only name statically read-only tools; bash and plugin tools are refused
+# ask_timeout_minutes = 10         # how long a question waits for you before the host answers it with the recommended option
+# 0 keeps the default (10); a negative value waits for you instead of answering for you
 # compact_ratio = 0.80             # sole auto trigger; presets 0.70 / 0.80 / 0.85
 # max_output_tokens = 0            # auto: official DeepSeek omits the field (server 384K) until the window is tight
 # max_output_tokens = 32768        # optional cost cap; still clipped to physical remaining

@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"reasonix/internal/agent"
 	"reasonix/internal/event"
@@ -95,11 +94,9 @@ type approvalManager struct {
 	// rules, and "yolo" skips ordinary tool prompts while deny rules and fresh
 	// decisions remain enforced.
 	toolApprovalMode string
-	// approvalTimeout bounds how long requestApproval/Ask block on a user
-	// decision. Zero means wait indefinitely (correct for an interactive
-	// terminal); bot/headless frontends set it so a walked-away user can't wedge
-	// the session forever (#4626, #4402). Write-once at construction.
-	approvalTimeout time.Duration
+	// timeouts hold the waits a prompt can be bounded by. Write-once at
+	// construction; grouping them keeps the struct-state ratchet at one field.
+	timeouts promptTimeouts
 	// planAutoApprove auto-allows the ordinary writer fallback while a
 	// just-approved plan executes. Explicit ask/deny rules and fresh decisions
 	// remain authoritative, matching Auto rather than YOLO semantics.
@@ -141,7 +138,7 @@ func (r *promptResolution) wait() error {
 	return r.err
 }
 
-func newApprovalManager(policy permission.Policy, mode string, timeout time.Duration) approvalManager {
+func newApprovalManager(policy permission.Policy, mode string, timeouts promptTimeouts) approvalManager {
 	return approvalManager{
 		policy:                   policy,
 		approvals:                map[string]pendingApproval{},
@@ -151,7 +148,7 @@ func newApprovalManager(policy permission.Policy, mode string, timeout time.Dura
 		granted:                  map[string]bool{},
 		planModeReadOnlyCommands: map[string]bool{},
 		toolApprovalMode:         mode,
-		approvalTimeout:          timeout,
+		timeouts:                 timeouts,
 	}
 }
 
@@ -682,12 +679,12 @@ func (a *approvalManager) setPlanAutoApprove(on bool) {
 	a.mu.Unlock()
 }
 
-// waitContext bounds the blocking wait by approvalTimeout when set.
+// waitContext bounds the blocking wait by the configured approval timeout when set.
 func (a *approvalManager) waitContext(ctx context.Context) (context.Context, context.CancelFunc) {
-	if a.approvalTimeout <= 0 {
+	if a.timeouts.approval <= 0 {
 		return ctx, func() {}
 	}
-	return context.WithTimeout(ctx, a.approvalTimeout)
+	return context.WithTimeout(ctx, a.timeouts.approval)
 }
 
 // snapshotPrompts copies the in-flight prompts for re-emission to a reconnected

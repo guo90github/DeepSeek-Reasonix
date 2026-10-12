@@ -297,6 +297,11 @@ func RenderTOMLForScope(c *Config, scope RenderScope) string {
 	} else {
 		b.WriteString("# plan_execute = \"off\"   # off|on: fewer model rounds for independent reads\n")
 	}
+	if c.Agent.AskTimeoutMinutes != 0 {
+		fmt.Fprintf(&b, "ask_timeout_minutes = %g   # minutes a question waits before the host answers with the recommended option\n", c.Agent.AskTimeoutMinutes)
+	} else {
+		b.WriteString("# ask_timeout_minutes = 10   # minutes a question waits; 0 = default (10), negative waits for the user\n")
+	}
 	if c.Agent.OutputStyle != "" {
 		fmt.Fprintf(&b, "output_style = %q   # persona/tone folded into the prompt\n", c.Agent.OutputStyle)
 	} else {

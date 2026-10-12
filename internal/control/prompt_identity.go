@@ -226,7 +226,8 @@ func (c *Controller) registerOwnedPrompt(id string, kind PromptKind) {
 	resolve := func(answer PromptAnswer) error {
 		switch kind {
 		case PromptAsk:
-			return c.answerQuestionCheckedLocked(id, answer.Questions)
+			_, err := c.answerQuestionCheckedLocked(id, answer.Questions)
+			return err
 		case PromptApproval:
 			return c.resolveApprovalLocked(id, answer.Allow, scopeFromApprove(answer.Allow, answer.Session, answer.Persist))
 		case PromptPlan:

@@ -73,6 +73,8 @@ reasoning_language = "auto"      # 可见思考过程语言：auto|zh|en
 # plan_execute = "on"              # on：宿主自己执行本回合的具体只读调用（parallel_calls）
 # 两个独立读只需 1 轮而不是 2 轮；off 时工具面逐字节不变
 # 节点只能写静态只读工具；bash 与插件工具一律拒绝
+# ask_timeout_minutes = 10         # 一个问题等你多久；到点宿主按「推荐项」替你作答
+# 0 表示沿用默认（10）；负值表示一直等你、不替你作答
 # compact_ratio 是唯一自动维护阈值（默认 0.80；预设 0.70/0.80/0.85）
 # max_output_tokens = 0            # 自动：官方 DeepSeek 空间充足时省略字段（服务端 384K），临界时裁剪
 # max_output_tokens = 32768        # 可选控费上限，仍可按物理剩余继续下调

@@ -682,6 +682,10 @@ type Options struct {
 	// terminal. Bot/headless frontends set a positive value so an unanswered
 	// prompt can't wedge the session indefinitely (#4626, #4402).
 	ApprovalTimeout time.Duration
+	// AskTimeout is the no-answer fallback for a displayed question: zero (the
+	// default) waits ten minutes then answers with the recommended option, a
+	// negative value waits for the user; `[agent] ask_timeout_minutes` sets it.
+	AskTimeout time.Duration
 	// Extensions is the frozen extension dispatcher for this controller
 	// generation (Extension Protocol v2, stage 6b1). Nil means no v2 runtime
 	// packages are installed: every extension wiring point takes an untouched
@@ -808,7 +812,7 @@ func New(opts Options) *Controller {
 		providerResolver:                  opts.ProviderResolver,
 		runtimeGeneration:                 opts.RuntimeGeneration,
 		runtimeOwner:                      runtimeOwner,
-		approval:                          newApprovalManager(opts.Policy, ToolApprovalAsk, opts.ApprovalTimeout),
+		approval:                          newApprovalManager(opts.Policy, ToolApprovalAsk, promptTimeouts{approval: opts.ApprovalTimeout, ask: opts.AskTimeout}),
 	}
 	// Session-private temporary directory: reuse a shared Manager on hot
 	// rebuild, otherwise create one. Retain so ReleaseResources/Close drop the
@@ -2642,6 +2646,11 @@ func (c *Controller) Ask(ctx context.Context, questions []event.AskQuestion) ([]
 	c.approval.markAskEmitted(id)
 	c.approval.promptEmitMu.Unlock()
 
+	// The question is on screen now, so the no-answer clock starts here rather
+	// than while it was still queued behind another prompt.
+	stopAutoAnswer := c.scheduleAskAutoAnswer(id, questions)
+	defer stopAutoAnswer()
+
 	waitCtx, cancelWait := c.approval.waitContext(ctx)
 	defer cancelWait()
 
@@ -2663,18 +2672,26 @@ func (c *Controller) AnswerQuestion(id string, answers []event.AskAnswer) {
 // AnswerQuestionChecked persists the prompt transition before releasing the
 // agent loop. A failed ledger write leaves the prompt pending and retryable.
 func (c *Controller) AnswerQuestionChecked(id string, answers []event.AskAnswer) error {
+	_, err := c.answerQuestionChecked(id, answers)
+	return err
+}
+
+// answerQuestionChecked reports whether this call is the one that resolved the
+// prompt: the no-answer fallback races a real answer for the same id, and the
+// loser must not claim an outcome it did not produce.
+func (c *Controller) answerQuestionChecked(id string, answers []event.AskAnswer) (bool, error) {
 	defer c.refreshRuntimeState(event.Event{})
 	c.promptResolveMu.Lock()
 	defer c.promptResolveMu.Unlock()
 	return c.answerQuestionCheckedLocked(id, answers)
 }
 
-func (c *Controller) answerQuestionCheckedLocked(id string, answers []event.AskAnswer) error {
+func (c *Controller) answerQuestionCheckedLocked(id string, answers []event.AskAnswer) (bool, error) {
 	pending, ok, err := c.approval.resolveAskAfter(id, func(p pendingAsk) error {
 		return c.emitTurnEventChecked(event.Event{Kind: event.PromptAnswered, ItemID: id, Status: event.TurnInProgress})
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if ok {
 		c.promptOwner.Remove(id)
@@ -2687,61 +2704,13 @@ func (c *Controller) answerQuestionCheckedLocked(id string, answers []event.AskA
 			c.mu.Unlock()
 			if activeTurn {
 				c.cancelLocked()
-				return nil
+				return true, nil
 			}
 		}
 		c.recordAskDecisionReceipt(id, pending, answers)
 		pending.reply <- answers // buffered, never blocks
 	}
-	return nil
-}
-
-func (c *Controller) recordAskDecisionReceipt(id string, pending pendingAsk, answers []event.AskAnswer) {
-	if c == nil || c.executor == nil {
-		return
-	}
-	selected := make(map[string][]string, len(answers))
-	for _, answer := range answers {
-		selected[answer.QuestionID] = append([]string(nil), answer.Selected...)
-	}
-	parts := make([]string, 0, len(pending.questions))
-	for _, question := range pending.questions {
-		answer := strings.TrimSpace(strings.Join(selected[question.ID], ", "))
-		if answer == "" {
-			answer = "—"
-		}
-		prompt := strings.TrimSpace(question.Prompt)
-		if prompt == "" {
-			prompt = strings.TrimSpace(question.Header)
-		}
-		if prompt == "" {
-			prompt = question.ID
-		}
-		parts = append(parts, prompt+": "+answer)
-	}
-	receipt := &provider.DecisionReceipt{
-		ID:      id,
-		Kind:    "ask",
-		Subject: clipUTF8(strings.Join(parts, " · "), 240),
-		Outcome: "answered",
-	}
-	c.executor.Session().AddDecisionReceipt(receipt)
-	c.sink.Emit(event.Event{
-		Kind:            event.Notice,
-		Code:            event.NoticeCodeDecisionReceipt,
-		Level:           event.LevelInfo,
-		Text:            "Decision recorded: answered",
-		DecisionReceipt: receipt,
-	})
-}
-
-func askAnswersHaveSelection(answers []event.AskAnswer) bool {
-	for _, answer := range answers {
-		if len(answer.Selected) > 0 {
-			return true
-		}
-	}
-	return false
+	return ok, nil
 }
 
 // ReplayPendingPrompts re-emits the ApprovalRequest / AskRequest event for every

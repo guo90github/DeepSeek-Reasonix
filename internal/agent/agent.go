@@ -163,6 +163,7 @@ func (a *Agent) withAgentContext(ctx context.Context) context.Context {
 		ctx = memory.WithoutQueue(ctx)
 	}
 	ctx = skill.WithUseRecorder(ctx, a.svc.skillRecorder)
+	ctx = withDecisionMemory(ctx, a.sess.decisionMemory())
 	return planmode.WithActive(ctx, a.planMode.Load())
 }
 

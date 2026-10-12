@@ -25,7 +25,7 @@ func (r *recordingAsker) Ask(_ context.Context, questions []event.AskQuestion) (
 func TestAskToolReusesAcceptedDecisionAndRejectsSpoofedID(t *testing.T) {
 	turn := &turnRuntime{}
 	asker := &recordingAsker{}
-	ctx := withTurnState(withCallContext(context.Background(), "call", event.Discard, asker, false), turn)
+	ctx := withDecisionMemory(withTurnState(withCallContext(context.Background(), "call", event.Discard, asker, false), turn), newDecisionMemory())
 	args := []byte(`{"decision_id":"dec-original","questions":[{"header":"Direction","question":"Which path?","options":[{"label":"Keep going"},{"label":"Stop"}]}]}`)
 	if _, err := NewAskTool().Execute(ctx, args); err != nil {
 		t.Fatalf("first ask: %v", err)

@@ -1905,6 +1905,7 @@ func build(ctx context.Context, opts Options) (*BuildResult, error) {
 		FileBranchesOnly:       opts.FileBranchesOnly,
 		Shell:                  shell,
 		ApprovalTimeout:        opts.ApprovalTimeout,
+		AskTimeout:             cfg.AskTimeout(),
 		Ablation:               opts.Ablation,
 		WriteRoots:             writeRootSet,
 		BashSandboxEnforced:    bashSpec.Enforce() && sandbox.Available(),

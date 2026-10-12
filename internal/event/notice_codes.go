@@ -11,6 +11,7 @@ const (
 	NoticeCodeExecutorHandoff                                   = "executor_handoff"
 	NoticeCodeToolBudget                                        = "tool_budget"
 	NoticeCodePromptQueued                                      = "prompt_queued"
+	NoticeCodeAskAutoAnswered                                   = "ask_auto_answered"
 	NoticeCodeLoopGuard                                         = "loop_guard"
 	NoticeCodeProgressGuard                                     = "progress_guard"
 	NoticeCodeOperationNeedsUser                                = "operation_needs_user"

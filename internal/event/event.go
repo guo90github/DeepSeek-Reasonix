@@ -481,6 +481,10 @@ type GuardianResult struct {
 type AskAnswer struct {
 	QuestionID string
 	Selected   []string
+	// Auto marks a selection the host made on the user's behalf after the
+	// no-answer timeout. No frontend sets it; the `ask` tool reports it to the
+	// model as a host fallback rather than as a user choice.
+	Auto bool
 }
 
 // FinalReadiness carries machine-readable recovery requirements on TurnDone.

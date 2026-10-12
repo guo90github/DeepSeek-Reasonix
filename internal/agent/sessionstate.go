@@ -13,7 +13,7 @@ import (
 // the whole-value assignment taskRuntime uses illegal, so the "no field is
 // forgotten" property is enforced by sessionstate_test.go instead.
 type sessionRuntime struct {
-	mu           sync.Mutex // guards conversation for external Session()/SetSession
+	mu           sync.Mutex // guards conversation and decisions for external Session()/SetSession
 	conversation *Session
 	output       outputBudgetState
 
@@ -24,6 +24,11 @@ type sessionRuntime struct {
 	cacheMiss atomic.Int64
 
 	missingReasoning missingReasoningWatch
+
+	// decisions is the conversation's accepted-decision memory. It outlives a
+	// single Run so a later turn reuses an answer the user already gave instead
+	// of asking the same question again; a new conversation starts without it.
+	decisions *decisionMemory
 
 	// reasoningReplayStrongProjection records the provider-visible history cutoff
 	// after thinking-400 repair; later messages use normal replay. Its anchor
@@ -70,6 +75,7 @@ type sessionRuntime struct {
 func (r *sessionRuntime) reset(s *Session) {
 	r.mu.Lock()
 	r.conversation = s
+	r.decisions = newDecisionMemory()
 	r.mu.Unlock()
 	r.cacheHit.Store(0)
 	r.cacheMiss.Store(0)

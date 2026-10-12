@@ -56,7 +56,8 @@ Auto still respects:
 - Extending writable roots outside the workspace. Auto, Ask, and YOLO never grant a new directory without an explicit write-access card. File tools request the target parent directory automatically; Bash must pass `additional_write_dirs` plus a `justification`. Approving extends the sandbox write roots; it does not rerun the command unconfined.
 - Human approval for nested or indirect Bash execution, even inside an approved-plan execution window. Guardian and allowing hooks cannot replace it; parameter/arithmetic expansions, assignments, redirects, and globs remain on Auto's fast path.
 - MCP destructive calls when the effective policy is `auto`, `prompt`, or `writes`.
-- Ask questions (never auto-answered).
+- Ask questions: no tool-permission mode answers them for you.
+- A question nobody answers is resolved by the host itself: after `ask_timeout_minutes` (default 10 minutes, `[agent]` config; negative waits for you) it takes the recommended option — the first one, which the `ask` schema asks the model to put first — and says so on screen. The answer stays marked as the host's fallback, not as your choice, both to the model and in the recorded decision.
 
 ### When Auto asks
 

@@ -646,29 +646,6 @@ func (c *Config) ColdResumePruneEnabled() bool {
 	return *c.Agent.ColdResumePrune
 }
 
-// ResponseLanguage normalizes the top-level language preference for final
-// answers. Empty means auto: replies follow the current user turn.
-func (c *Config) ResponseLanguage() string {
-	if c == nil {
-		return "auto"
-	}
-	return NormalizeLanguage(c.Language)
-}
-
-// NormalizeLanguage returns one of auto|zh|en for UI/default reply language settings.
-func NormalizeLanguage(lang string) string {
-	switch strings.ToLower(strings.TrimSpace(lang)) {
-	case "", "auto", "detect", "default":
-		return "auto"
-	case "zh", "cn", "chinese", "中文":
-		return "zh"
-	case "en", "english":
-		return "en"
-	default:
-		return "auto"
-	}
-}
-
 // ReasoningLanguage normalizes agent.reasoning_language. Empty means auto:
 // visible reasoning follows the conversation language already described by the
 // stable LanguagePolicy. Legacy "default" is treated as auto.
@@ -1323,6 +1300,10 @@ type AgentConfig struct {
 	TaskCostBudget float64 `toml:"task_cost_budget"`
 	// TaskTimeBudgetMinutes is the same gate on wall clock. Both ship off.
 	TaskTimeBudgetMinutes float64 `toml:"task_time_budget_minutes"`
+	// AskTimeoutMinutes is how long a question may wait for the user before the
+	// host answers it with the recommended option. 0 keeps the built-in ten
+	// minutes; a negative value waits for the user instead of answering for them.
+	AskTimeoutMinutes float64 `toml:"ask_timeout_minutes"`
 	// ShellAsync: off (default) keeps long shell calls in the foreground;
 	// balanced/fast lift recognized checks or any call with later work. Unknown stays off.
 	ShellAsync string `toml:"shell_async"`
